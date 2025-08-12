@@ -1,0 +1,13 @@
+# Build output
+/target/
+
+# Editor settings
+*.swp
+.idea/
+.vscode/
+
+# OS metadata
+.DS_Store
+
+# Environment files
+.env
