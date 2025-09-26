@@ -1,20 +1,18 @@
-/// This module handles the error types for the distributed system project.
-///
-/// The goal is to provide a central location for defining error types
-/// and handling errors in a structured way.
-
 use std::fmt;
 
 /// Enum to represent different error types in the system
 #[derive(Debug)]
 pub enum SystemError {
-    ConnectionError(String),  // Error when a connection fails
-    TaskAssignmentError(String),  // Error when assigning tasks to workers
-    CommunicationError(String),  // Error in communication between orchestrator and worker
-    InvalidDataError(String),   // Error when receiving or processing invalid data
-    TimeoutError(String),       // Error when a timeout occurs
-    WorkerError(String),        // Error specific to worker execution
-    OrchestratorError(String),  // Error specific to orchestrator behavior
+    ConnectionError(String),           // Error when a connection fails
+    TaskAssignmentError(String),       // Error when assigning tasks to workers
+    CommunicationError(String),        // Error in communication between orchestrator and worker
+    InvalidDataError(String),          // Error when receiving or processing invalid data
+    TimeoutError(String),              // Error when a timeout occurs
+    WorkerError(String),               // Error specific to worker execution
+    OrchestratorError(String),         // Error specific to orchestrator behavior
+    WorkerTimeoutError(String),        // Timeout error for worker processing
+    OrchestratorOverloadError(String), // Error when orchestrator is overloaded
+    NetworkFailureError(String),       // Error when there are network issues
 }
 
 /// Implementing the `fmt::Display` trait for custom error messages
@@ -41,6 +39,15 @@ impl fmt::Display for SystemError {
             }
             SystemError::OrchestratorError(ref msg) => {
                 write!(f, "Orchestrator Error: {}", msg)
+            }
+            SystemError::WorkerTimeoutError(ref msg) => {
+                write!(f, "Worker Timeout Error: {}", msg)
+            }
+            SystemError::OrchestratorOverloadError(ref msg) => {
+                write!(f, "Orchestrator Overload Error: {}", msg)
+            }
+            SystemError::NetworkFailureError(ref msg) => {
+                write!(f, "Network Failure Error: {}", msg)
             }
         }
     }
