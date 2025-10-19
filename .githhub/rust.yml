@@ -10,7 +10,7 @@ on:
       - "feature/*"
 
 jobs:
-  test:
+  Rust:
     runs-on: ubuntu-latest
 
     steps:
