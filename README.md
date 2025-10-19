@@ -1,58 +1,92 @@
-# Final Degree Project – Distributed Training and Inference of Neural Networks in Rust
+# Oxidized Neural Orchestra
 
-This repository contains the development of our Final Degree Project, focused on building a fully distributed, high-performance system for training and inference of neural networks using the Rust programming language.
+A modular, distributed Rust framework for training and inference of neural networks across multiple machines. Designed for reproducible experiments comparing synchronization strategies and communication patterns.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Goals](#goals)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+- [How it Works](#how-it-works)
+- [Usage](#usage)
+- [Evaluation](#evaluation)
+- [Contributing & Project Info](#contributing--project-info)
+
+---
 
 ## Overview
 
-Modern machine learning systems must process massive datasets efficiently and reliably. To address the computational demands of training deep neural networks, this project proposes a distributed solution that scales horizontally across multiple interconnected nodes.
+Oxidized Neural Orchestra aims to provide a research-ready platform that scales deep learning workloads horizontally, enabling controlled comparisons of synchronization methods (All‑Reduce, Parameter Server, hybrids) and their effect on convergence and time-to-train.
 
-The system will be implemented entirely in Rust — a language well-suited for low-level systems programming due to its strong guarantees on memory safety, concurrency, and performance.
+## Goals
 
-## Project Objectives
+- Support distributed training and inference from single-node to clusters.
+- Enable data-parallel experiments with reproducible setups.
+- Provide interchangeable synchronization strategies to compare behavior under realistic network conditions.
+- Offer tooling for experiments, metrics, and Python interoperability.
 
-The main objective is to design and implement a modular and extensible infrastructure capable of training and evaluating neural networks in a distributed environment.
+## Key Features
 
-### Specific Goals
+- Pluggable synchronization implementations:
+  - All‑Reduce (decentralized, synchronous)
+  - Parameter Server (centralized, potentially asynchronous)
+  - Hybrid/adaptive strategies
+- Actor-based orchestration for clear coordination and failure boundaries.
+- Simple TCP communication layer (framing pluggable).
+- Research-oriented instrumentation for throughput, latency, and convergence metrics.
 
-- **Neural Network Library**  
-  Build a neural network library from scratch in Rust, without relying on external machine learning frameworks.
+## Architecture
 
-- **Distributed Architecture**  
-  Design a distributed system with coordinated nodes capable of executing training and inference tasks in parallel.
+- Orchestrator coordinates rounds/epochs, assigns tasks, and aggregates results.
+- Workers execute forward/backward passes on sharded data and participate in the selected sync protocol.
+- Communication is over TCP with an explicit read/write split to avoid lock contention; planned async refactor will replace blocking threads with Tokio-based framed streams.
 
-- **Gradient Synchronization**  
-  Implement at least one distributed gradient synchronization strategy, such as:
-  - **All-Reduce**: a decentralized, synchronous method.
-  - **Parameter Server**: a centralized, typically asynchronous approach.
+Example component layout:
+- `src/orchestrator.rs` — Orchestrator actor and per-connection worker handler
+- `src/worker.rs` — Receiver / Producer / Sender actor pipeline
+- `src/communication.rs` — TCP helpers with read/write split
+- `src/main.rs` — Entrypoint for orchestrator or worker
 
-- **Data Parallelism**  
-  Enable parallel training over large datasets by partitioning data across worker nodes.
+## How it Works
 
-- **Distributed Inference**  
-  Support batch predictions across the cluster with load balancing and minimal latency.
+1. Orchestrator initiates a round (Kickoff).
+2. Tasks are dispatched to all connected workers.
+3. Workers process tasks (local forward/backward, gradient exchange depending on protocol).
+4. Results are collected; Orchestrator emits an AllDone event and advances the loop.
+5. Repeat for subsequent rounds/epochs.
 
-- **Performance Evaluation**  
-  Benchmark the system under various scenarios, including heterogeneous hardware configurations and high data volume loads.
+The current implementation uses blocking reads in separate threads per connection to simplify full‑duplex behavior. An async refactor (Tokio + framed streams) is planned to scale to many connections without per-connection threads.
 
-## Why Rust?
+## Usage
 
-Rust offers an ideal balance between **performance**, **control over system resources**, and **safe concurrency**. These features make it an excellent candidate for developing low-level infrastructure where reliability and efficiency are essential.
+Quick start (conceptual)
+```bash
+# Run orchestrator
+cargo run --bin orchestrator
 
-This project not only explores distributed machine learning but also demonstrates how Rust can serve as a foundation for scalable AI systems.
+# Run a worker
+cargo run --bin worker -- --connect 127.0.0.1:9000
+```
+Refer to the code in `src/` for configuration flags and runtime options.
 
-## Team
+## Evaluation
 
-- **Lorenzo Minervino** – 107863  
-- **Marcos Bianchi** – 108921  
-- **Alejo Ordoñez** – 108397  
+Intended evaluation targets:
+- Convergence speed across synchronization strategies.
+- Throughput and wall-clock time-to-train under varying worker counts.
+- Robustness under network variability (latency, packet loss).
+- Scalability: current blocking I/O supports small-to-medium clusters; async refactor will enable large-scale experiments.
 
-UBA
-Faculty of Engineering – Computer Engineering
+## Contributing & Project Info
 
-## Bibliography
+Faculty of Engineering, University of Buenos Aires — Final Degree Project.
 
-This repository includes a bibliography folder containing academic and technical resources reviewed throughout the project development process.
+Contributions and issues welcome. Suggested next steps:
+- Add framing (line or length-delimited) and tests.
+- Migrate I/O to async (Tokio) with framed streams/sinks.
+- Add heartbeats, reconnection policies, and richer metrics.
 
-## License
-
-This project may be released under an open-source license upon completion. Until then, all rights are reserved to the authors.
+License: (add license file / specify license here)
