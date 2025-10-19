@@ -10,8 +10,8 @@ on:
       - "feature/*"
 
 jobs:
-  Rust:
-    name: Rust
+  build:
+    name: build
     runs-on: ubuntu-latest
 
     steps:
