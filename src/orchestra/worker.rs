@@ -1,208 +1,182 @@
-use crate::orchestra::communication::Communication; // Import Communication struct
-use crate::orchestra::error::SystemError; // Import error handling
-use std::sync::mpsc::{Receiver, Sender, channel};
+use crate::orchestra::communication::Communication; // TCP communication
+use crate::orchestra::error::SystemError; // Error handling
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-/// Struct representing the Worker.
-///
-/// The worker connects to the orchestrator and then listens for incoming data
-/// in a loop. It processes the data in parallel using multiple threads:
-/// - **Receiver**: Listens for incoming data from the orchestrator.
-/// - **Producer**: Processes the data (simulating training of an MLP).
-/// - **Sender**: Sends the results back to the orchestrator.
+use actix::prelude::*; // Actix framework
+
+/// Worker: Receiver -> Producer -> Sender (read/write split)
 pub struct Worker {
-    comm: Arc<Mutex<Communication>>, // Communication struct wrapped in Arc<Mutex> for concurrency
+    comm_read: Arc<Mutex<Communication>>,
+    comm_write: Arc<Mutex<Communication>>,
 }
 
+/* -------------------- Messages -------------------- */
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct IncomingData(pub String); // Receiver -> Producer
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct ProcessedData(pub String); // Producer -> Sender
+
+/* -------------------- Actors -------------------- */
+
+/// Blocking thread that listens TCP forever and forwards to Producer.
+struct ReceiverActor {
+    comm_read: Arc<Mutex<Communication>>,
+    producer: Addr<ProducerActor>,
+}
+
+impl Actor for ReceiverActor {
+    type Context = Context<Self>;
+
+    fn started(&mut self, _ctx: &mut Self::Context) {
+        println!("ReceiverActor started, spawning listening thread...");
+
+        let comm_read = Arc::clone(&self.comm_read);
+        let producer = self.producer.clone();
+
+        thread::spawn(move || loop {
+            match comm_read.lock() {
+                Ok(mut comm) => match comm.receive() {
+                    Ok(data) => {
+                        let s = String::from_utf8_lossy(&data).to_string();
+                        println!("[Receiver] Received: {}", s);
+                        producer.do_send(IncomingData(s));
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "{}",
+                            SystemError::CommunicationError(format!(
+                                "[Receiver] Error receiving data: {}",
+                                e
+                            ))
+                        );
+                        thread::sleep(Duration::from_millis(200));
+                    }
+                },
+                Err(_) => {
+                    eprintln!(
+                        "{}",
+                        SystemError::WorkerError("[Receiver] Failed to lock communication".into())
+                    );
+                    thread::sleep(Duration::from_millis(200));
+                }
+            }
+        });
+    }
+}
+
+struct ProducerActor {
+    sender: Addr<SenderActor>,
+}
+
+impl Actor for ProducerActor {
+    type Context = Context<Self>;
+}
+
+impl Handler<IncomingData> for ProducerActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: IncomingData, ctx: &mut Self::Context) {
+        let data = msg.0;
+        println!("[Producer] Received data: {}", data);
+
+        // Simulate work (e.g., ML step)
+        ctx.run_later(Duration::from_secs(1), move |act, _| {
+            let result = format!("Processed data: {}", data);
+            println!("[Producer] Finished processing: {}", result);
+            act.sender.do_send(ProcessedData(result));
+        });
+    }
+}
+
+/// Sends processed results back to the Orchestrator using the write handle.
+struct SenderActor {
+    comm_write: Arc<Mutex<Communication>>,
+}
+
+impl Actor for SenderActor {
+    type Context = Context<Self>;
+}
+
+impl Handler<ProcessedData> for SenderActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: ProcessedData, _ctx: &mut Self::Context) {
+        let result = msg.0;
+        println!("[Sender] Sending result: {}", result);
+
+        match self.comm_write.lock() {
+            Ok(mut comm) => {
+                if let Err(e) = comm.send(result.as_bytes()) {
+                    eprintln!(
+                        "{}",
+                        SystemError::CommunicationError(format!(
+                            "[Sender] Error sending data: {}",
+                            e
+                        ))
+                    );
+                }
+            }
+            Err(_) => {
+                eprintln!(
+                    "{}",
+                    SystemError::WorkerError("[Sender] Failed to lock communication".into())
+                );
+            }
+        }
+    }
+}
+
+/* -------------------- Worker Implementation -------------------- */
+
 impl Worker {
-    /// Initializes a new worker and connects it to the orchestrator.
-    ///
-    /// # Parameters
-    /// - `address`: The address of the orchestrator to connect to.
-    ///
-    /// # Returns
-    /// A `Result` that returns a `Worker` on success, or a `SystemError` on failure.
+    /// Connect and create two independent handles (read, write).
     pub fn new(address: &str) -> Result<Self, SystemError> {
-        // Try to establish a connection with the orchestrator in a loop until successful
         loop {
-            match Communication::new(address) {
-                Ok(comm) => {
-                    // Wrap the Communication in an Arc<Mutex> for thread-safe shared ownership
+            match Communication::split(address) {
+                Ok((comm_r, comm_w)) => {
                     return Ok(Worker {
-                        comm: Arc::new(Mutex::new(comm)),
+                        comm_read: Arc::new(Mutex::new(comm_r)),
+                        comm_write: Arc::new(Mutex::new(comm_w)),
                     });
                 }
                 Err(e) => {
-                    eprintln!(
-                        "Worker failed to connect to orchestrator: {}. Retrying...",
-                        e
-                    );
+                    eprintln!("Worker failed to connect: {}. Retrying...", e);
                     std::thread::sleep(std::time::Duration::from_millis(500));
                 }
             }
         }
     }
 
-    /// Starts the worker's process: connects to the orchestrator and launches threads.
-    ///
-    /// It creates three threads:
-    /// - A receiver to listen for data from the orchestrator.
-    /// - A producer to process the received data (simulating MLP training).
-    /// - A sender to send the processed data back to the orchestrator.
-    pub fn start(&self) -> Result<(), SystemError> {
+    /// Start the 3-actor pipeline and keep the runtime alive (async).
+    pub async fn start(&self) -> Result<(), SystemError> {
         println!("Worker started, connecting to orchestrator...");
 
-        // Create channels to communicate between threads
-        let (tx_to_producer, rx_from_receiver): (Sender<String>, Receiver<String>) = channel();
-        let (tx_to_sender, rx_from_producer): (Sender<String>, Receiver<String>) = channel();
-
-        // Thread for receiving data from orchestrator
-        let receiver_handle = self.start_receiver(tx_to_producer);
-
-        // Thread for processing the data (simulating MLP training)
-        let producer_handle = self.start_producer(tx_to_sender, rx_from_receiver);
-
-        // Thread for sending results back to orchestrator
-        let sender_handle = self.start_sender(rx_from_producer);
-
-        // Wait for all threads to finish (join threads)
-        if let Err(_) = receiver_handle.join().map(|_| ()) {
-            return Err(SystemError::WorkerError(format!("Receiver thread failed")));
+        let sender_addr = SenderActor {
+            comm_write: Arc::clone(&self.comm_write),
         }
+        .start();
 
-        if let Err(_) = producer_handle.join().map(|_| ()) {
-            return Err(SystemError::WorkerError(format!("Producer thread failed")));
+        let producer_addr = ProducerActor {
+            sender: sender_addr.clone(),
         }
+        .start();
 
-        if let Err(_) = sender_handle.join().map(|_| ()) {
-            return Err(SystemError::WorkerError(format!("Sender thread failed")));
+        let _receiver_addr = ReceiverActor {
+            comm_read: Arc::clone(&self.comm_read),
+            producer: producer_addr,
         }
+        .start();
 
+        // Keep the worker alive forever (or switch to ctrl_c if you prefer graceful shutdown).
+        futures::future::pending::<()>().await;
+
+        #[allow(unreachable_code)]
         Ok(())
-    }
-
-    /// Starts the receiver thread which listens for incoming data from the orchestrator.
-    ///
-    /// This thread listens to the orchestrator and forwards the data to the producer.
-    fn start_receiver(
-        &self,
-        tx_to_producer: Sender<String>,
-    ) -> thread::JoinHandle<Result<(), SystemError>> {
-        let comm = Arc::clone(&self.comm);
-        thread::spawn(move || {
-            loop {
-                // Receive data from the orchestrator
-                match comm.lock() {
-                    Ok(mut comm_locked) => {
-                        match comm_locked.receive() {
-                            Ok(data) => {
-                                let data_str = String::from_utf8_lossy(&data).to_string();
-                                println!("Receiver received: {}", data_str);
-                                // Send data to the producer thread
-                                if let Err(e) = tx_to_producer.send(data_str) {
-                                    return Err(SystemError::CommunicationError(format!(
-                                        "Failed to send data to producer: {}",
-                                        e
-                                    )));
-                                }
-                            }
-                            Err(e) => {
-                                return Err(SystemError::CommunicationError(format!(
-                                    "Failed to receive data: {}",
-                                    e
-                                )));
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        return Err(SystemError::WorkerError(
-                            "Failed to lock communication".to_string(),
-                        ));
-                    }
-                }
-                thread::sleep(Duration::from_secs(1)); // Sleep to simulate time between messages
-            }
-        })
-    }
-
-    /// Starts the producer thread which processes the data received from the receiver.
-    ///
-    /// This thread simulates training an MLP by processing the received data and generating results.
-    fn start_producer(
-        &self,
-        tx_to_sender: Sender<String>,
-        rx_from_receiver: Receiver<String>,
-    ) -> thread::JoinHandle<Result<(), SystemError>> {
-        thread::spawn(move || {
-            loop {
-                match rx_from_receiver.recv() {
-                    Ok(data) => {
-                        println!("Producer received data: {}", data);
-                        // Simulate processing the data (training an MLP)
-                        let result = format!("Processed data: {}", data);
-                        println!("Producer processed: {}", result);
-
-                        // Send result to sender
-                        if let Err(e) = tx_to_sender.send(result) {
-                            return Err(SystemError::CommunicationError(format!(
-                                "Failed to send result to sender: {}",
-                                e
-                            )));
-                        }
-                    }
-                    Err(e) => {
-                        return Err(SystemError::WorkerError(format!(
-                            "Error processing data: {}",
-                            e
-                        )));
-                    }
-                }
-                thread::sleep(Duration::from_secs(1)); // Simulate time taken for processing
-            }
-        })
-    }
-
-    /// Starts the sender thread which sends the processed data back to the orchestrator.
-    ///
-    /// This thread sends the results produced by the producer back to the orchestrator.
-    fn start_sender(
-        &self,
-        rx_from_producer: Receiver<String>,
-    ) -> thread::JoinHandle<Result<(), SystemError>> {
-        let comm = Arc::clone(&self.comm);
-        thread::spawn(move || {
-            loop {
-                match rx_from_producer.recv() {
-                    Ok(result) => {
-                        println!("Sender sending result: {}", result.as_str());
-                        // Send the result to the orchestrator
-                        match comm.lock() {
-                            Ok(mut comm_locked) => {
-                                if let Err(e) = comm_locked.send(result.as_bytes()) {
-                                    return Err(SystemError::CommunicationError(format!(
-                                        "Error sending data to orchestrator: {}",
-                                        e
-                                    )));
-                                }
-                            }
-                            Err(_) => {
-                                return Err(SystemError::WorkerError(
-                                    "Failed to lock communication".to_string(),
-                                ));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        return Err(SystemError::WorkerError(format!(
-                            "Error receiving result from producer: {}",
-                            e
-                        )));
-                    }
-                }
-                thread::sleep(Duration::from_secs(1)); // Simulate time taken to send result
-            }
-        })
     }
 }

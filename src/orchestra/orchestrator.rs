@@ -1,124 +1,271 @@
-use crate::orchestra::communication::Communication; // Use the Communication struct from the communication module
-use crate::orchestra::error::SystemError; // Import error handling
-use std::net::TcpListener; // To listen for incoming TCP connections
-use std::sync::{Arc, Mutex}; // For thread-safety when sharing TcpStream
-use std::thread; // For spawning threads to handle communication
+use crate::orchestra::communication::Communication;
+use crate::orchestra::error::SystemError;
+use actix::prelude::*;
+use actix::System;
+use std::net::TcpListener;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
-/// Structure representing the Orchestrator.
-///
-/// The orchestrator coordinates the connection and communication with workers.
-/// It waits for workers to connect and then manages communication with them in parallel.
-/// Workers are managed using an `Arc<Mutex<Communication>>` to ensure safe and shared access.
+/* -------------------------------------------------------------------------- */
+/*                               Actix messages                               */
+/* -------------------------------------------------------------------------- */
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct TaskMessage(pub String); // orchestrator -> worker
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct WorkerResult {
+    pub worker_id: usize,
+    pub data: String,
+} // worker -> orchestrator
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct SetWorkers(pub Vec<Addr<WorkerHandlerActor>>); // inject worker addrs
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct Kickoff; // orchestrator self-message
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct AllDone; // orchestrator self-message
+
+/* -------------------------------------------------------------------------- */
+/*                             Worker handler actor                            */
+/* -------------------------------------------------------------------------- */
+
+/// One actor per TCP worker. Uses separate read/write handles to avoid lock contention.
+struct WorkerHandlerActor {
+    id: usize,
+    comm_read: Arc<Mutex<Communication>>,
+    comm_write: Arc<Mutex<Communication>>,
+    orchestrator: Addr<OrchestratorActor>,
+}
+
+impl Actor for WorkerHandlerActor {
+    type Context = Context<Self>;
+
+    fn started(&mut self, _ctx: &mut Self::Context) {
+        println!("WorkerHandlerActor {} started.", self.id);
+
+        // Blocking reader loop on a dedicated OS thread (simple and reliable).
+        let comm_read = Arc::clone(&self.comm_read);
+        let orchestrator = self.orchestrator.clone();
+        let worker_id = self.id;
+
+        thread::spawn(move || loop {
+            match comm_read.lock() {
+                Ok(mut guard) => match guard.receive() {
+                    Ok(bytes) => {
+                        let msg = String::from_utf8_lossy(&bytes).to_string();
+                        orchestrator.do_send(WorkerResult { worker_id, data: msg });
+                    }
+                    Err(e) => {
+                        eprintln!("Worker {} receive error: {}", worker_id, e);
+                        thread::sleep(Duration::from_secs(1));
+                    }
+                },
+                Err(_) => {
+                    eprintln!("Worker {}: communication lock failed", worker_id);
+                    thread::sleep(Duration::from_millis(500));
+                }
+            }
+        });
+    }
+}
+
+impl Handler<TaskMessage> for WorkerHandlerActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: TaskMessage, _ctx: &mut Self::Context) {
+        let data = msg.0;
+        println!("Worker {} sending task: {}", self.id, data);
+
+        if let Ok(mut guard) = self.comm_write.lock() {
+            if let Err(e) = guard.send(data.as_bytes()) {
+                eprintln!("Failed to send task to Worker {}: {}", self.id, e);
+            }
+        } else {
+            eprintln!("Worker {}: communication lock failed", self.id);
+        }
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Orchestrator main actor                          */
+/* -------------------------------------------------------------------------- */
+
+pub struct OrchestratorActor {
+    workers: Vec<Addr<WorkerHandlerActor>>,
+    next_task_id: usize,
+
+    // Simple round coordination
+    expected: usize,
+    received: usize,
+    buffer: Vec<(usize, String)>,
+}
+
+impl OrchestratorActor {
+    fn send_batch(&mut self) {
+        self.received = 0;
+        self.buffer.clear();
+        self.expected = self.workers.len();
+
+        println!(
+            "Orchestrator: sending Task {} to {} workers",
+            self.next_task_id, self.expected
+        );
+
+        for (i, w) in self.workers.iter().enumerate() {
+            let payload = format!("task {} for worker {}", self.next_task_id, i + 1);
+            w.do_send(TaskMessage(payload));
+        }
+    }
+}
+
+impl Actor for OrchestratorActor {
+    type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        println!("OrchestratorActor started.");
+        // Keep actor alive (no-op heartbeat).
+        ctx.run_interval(Duration::from_secs(3600), |_, _| {});
+    }
+}
+
+impl Handler<SetWorkers> for OrchestratorActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: SetWorkers, ctx: &mut Self::Context) {
+        self.workers = msg.0;
+        println!("Orchestrator: registered {} workers", self.workers.len());
+
+        // Give workers a brief moment to enter `started()` before first batch.
+        ctx.run_later(Duration::from_millis(100), |_, ctx| {
+            ctx.address().do_send(Kickoff);
+        });
+    }
+}
+
+impl Handler<Kickoff> for OrchestratorActor {
+    type Result = ();
+    fn handle(&mut self, _msg: Kickoff, _ctx: &mut Self::Context) {
+        self.send_batch();
+    }
+}
+
+impl Handler<WorkerResult> for OrchestratorActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: WorkerResult, ctx: &mut Self::Context) {
+        self.buffer.push((msg.worker_id, msg.data));
+        self.received += 1;
+
+        println!("Orchestrator: received {}/{}", self.received, self.expected);
+
+        if self.received >= self.expected {
+            ctx.address().do_send(AllDone);
+        }
+    }
+}
+
+impl Handler<AllDone> for OrchestratorActor {
+    type Result = ();
+
+    fn handle(&mut self, _msg: AllDone, ctx: &mut Self::Context) {
+        // Simulate processing then launch next round.
+        ctx.run_later(Duration::from_millis(300), |act, ctx| {
+            println!("Orchestrator: processing {} responses...", act.buffer.len());
+            for (wid, data) in &act.buffer {
+                println!("  - from worker {} -> {}", wid, data);
+            }
+            act.next_task_id += 1;
+            ctx.address().do_send(Kickoff);
+        });
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                        Public orchestrator interface                        */
+/* -------------------------------------------------------------------------- */
+
 pub struct Orchestrator {
-    workers: Vec<Arc<Mutex<Communication>>>, // Stores worker connections using the `Communication` struct
-    waiting_for: usize,                      // Number of workers the orchestrator is waiting for
+    waiting_for: usize,
 }
 
 impl Orchestrator {
-    /// Creates a new orchestrator that waits for a specific number of workers to connect.
-    ///
-    /// # Parameters
-    /// - `waiting_for`: The number of workers the orchestrator should wait for.
-    ///
-    /// # Returns
-    /// Returns a new instance of `Orchestrator`.
     pub fn new(waiting_for: usize) -> Self {
-        Orchestrator {
-            workers: Vec::new(),
-            waiting_for,
-        }
+        Orchestrator { waiting_for }
     }
 
-    /// Starts the orchestrator and waits for workers to connect.
-    ///
-    /// This method establishes connections with workers and begins listening for them.
-    /// When workers connect, the orchestrator manages communication with them.
-    ///
-    /// # Parameters
-    /// - `address`: Address where the orchestrator expects to receive connections (e.g., "127.0.0.1:5000").
-    ///
-    /// # Returns
-    /// Returns a Result with an error in case of failure.
+    /// Sync entrypoint: accepts N workers, creates actors, runs forever.
     pub fn start(&mut self, address: &str) -> Result<(), SystemError> {
         println!(
             "Orchestrator started, waiting for {} workers...",
             self.waiting_for
         );
 
-        // Bind to the given address and start listening for incoming connections
+        // Accept raw TCP connections (blocking) and split them into (read, write).
         let listener = TcpListener::bind(address).map_err(|e| {
-            SystemError::ConnectionError(format!("Failed to bind to address: {}", e))
+            SystemError::ConnectionError(format!("Failed to bind to {}: {}", address, e))
         })?;
+        println!("Listening on {}", address);
 
-        println!("Orchestrator listening on {}", address);
+        let mut accepted: Vec<(Arc<Mutex<Communication>>, Arc<Mutex<Communication>>)> = Vec::new();
 
-        // Keep listening indefinitely for worker connections
-        while self.workers.len() < self.waiting_for {
+        while accepted.len() < self.waiting_for {
             match listener.accept() {
-                Ok((stream, _)) => {
-                    // For each incoming connection (worker), create a Communication instance
-                    let worker = Communication::new_from_stream(stream)?;
-                    let worker_arc = Arc::new(Mutex::new(worker)); // Wrap the Communication in Arc<Mutex> for thread safety
-                    self.workers.push(worker_arc);
-
-                    println!(
-                        "Worker connected! Total workers connected: {}",
-                        self.workers.len()
-                    );
-
-                    // If the required number of workers is connected, stop listening
-                    if self.workers.len() == self.waiting_for {
-                        break;
-                    }
+                Ok((stream, peer)) => {
+                    println!("Worker connected from {}", peer);
+                    let (comm_read, comm_write) = Communication::split_from_stream(stream)?;
+                    accepted.push((
+                        Arc::new(Mutex::new(comm_read)),
+                        Arc::new(Mutex::new(comm_write)),
+                    ));
+                    println!("Workers connected: {}/{}", accepted.len(), self.waiting_for);
                 }
-                Err(e) => {
-                    eprintln!("Error accepting worker connection: {}", e);
-                }
+                Err(e) => eprintln!("Accept error: {}", e),
             }
         }
 
-        // Once all workers are connected, start handling communication with them
-        self.handle_workers()?;
-        Ok(())
-    }
+        println!("All workers connected. Launching actor system...");
 
-    /// Handles communication with connected workers.
-    ///
-    /// This method runs in a separate thread for each worker.
-    /// It receives data from each worker and sends a response.
-    ///
-    /// # Returns
-    /// Returns a Result with an error in case of failure.
-    fn handle_workers(&self) -> Result<(), SystemError> {
-        // For each worker, create a thread to handle communication
-        for (i, worker) in self.workers.iter().enumerate() {
-            let worker = Arc::clone(worker); // Clone the Arc to share ownership with the thread
-            thread::spawn(move || {
-                println!("Orchestrator handling worker {}...", i + 1);
+        // Create an Actix system and keep it alive indefinitely.
+        System::new().block_on(async move {
+            // Start orchestrator (workers will be injected).
+            let orchestrator = OrchestratorActor {
+                workers: Vec::new(),
+                next_task_id: 0,
+                expected: 0,
+                received: 0,
+                buffer: Vec::new(),
+            }
+            .start();
 
-                let mut worker = worker.lock().unwrap(); // Lock access to the worker for thread safety
-
-                // Receive data from the worker
-                match worker.receive() {
-                    Ok(data) => {
-                        println!(
-                            "Received {} bytes from Worker {}: {:?}",
-                            data.len(),
-                            i + 1,
-                            data
-                        );
-
-                        // Send a response to the worker
-                        if let Err(e) = worker.send(b"Task received. Process completed.\n") {
-                            eprintln!("Error sending response to Worker {}: {}", i + 1, e);
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("Error receiving data from Worker {}: {}", i + 1, e);
-                    }
+            // Create WorkerHandlerActor per connection with separate read/write comms.
+            let mut worker_addrs = Vec::with_capacity(accepted.len());
+            for (i, (comm_read, comm_write)) in accepted.into_iter().enumerate() {
+                let addr = WorkerHandlerActor {
+                    id: i + 1,
+                    comm_read,
+                    comm_write,
+                    orchestrator: orchestrator.clone(),
                 }
-            });
-        }
+                .start();
+                worker_addrs.push(addr);
+            }
+
+            // Inject workers and start loop (Kickoff → wait → AllDone → Kickoff → ...).
+            orchestrator.do_send(SetWorkers(worker_addrs));
+
+            println!("Actix orchestrator system is running indefinitely.");
+            futures::future::pending::<()>().await;
+        });
+
         Ok(())
     }
 }

@@ -1,6 +1,25 @@
 [package]
 name = "neural-network-orchestration"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+# --- Core concurrency and actor system ---
+actix = "0.13"            # Actor framework
+actix-rt = "2"            # Async runtime for Actix
+
+# --- Networking & serialization (optional but recommended) ---
+tokio = { version = "1", features = ["full"] }  # For async networking if needed
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# --- Logging & error handling ---
+log = "0.4"
+env_logger = "0.11"        # Enables RUST_LOG-based logging
+anyhow = "1.0"             # Optional: ergonomic error handling
+
+# --- Testing utilities (optional) ---
+tokio-test = "0.4"
+futures = "0.3.31"
+tokio-util = "0.7.16"
+

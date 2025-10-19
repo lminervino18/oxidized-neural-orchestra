@@ -1,8 +1,10 @@
 use std::fmt;
 
+#[allow(dead_code)]
 /// Enum to represent different error types in the system
 #[derive(Debug)]
 pub enum SystemError {
+    
     ConnectionError(String),           // Error when a connection fails
     TaskAssignmentError(String),       // Error when assigning tasks to workers
     CommunicationError(String),        // Error in communication between orchestrator and worker
@@ -53,9 +55,11 @@ impl fmt::Display for SystemError {
     }
 }
 
+#[allow(dead_code)]
 /// Result type for custom error handling in the system
 pub type Result<T> = std::result::Result<T, SystemError>;
 
+#[allow(dead_code)]
 /// A utility function to handle errors with a custom message
 pub fn handle_error(error: SystemError) {
     eprintln!("Error occurred: {}", error);
