@@ -13,8 +13,6 @@ jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-
-    # 🔒 Permisos explícitos para que el job pueda reportar su estado al check system
     permissions:
       contents: read
       checks: write
@@ -24,10 +22,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ⚙️ Configura Rust de forma moderna y estable
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # 🧪 Ejecuta tests con salida clara
       - name: Run tests
         run: cargo test --verbose
