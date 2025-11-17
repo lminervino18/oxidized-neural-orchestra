@@ -62,20 +62,20 @@ Las principales tareas para llevar a cabo el desarrollo de este trabajo son:
 \hline
 \textbf{Nro.} & \textbf{Tarea} & \textbf{Duración (horas)} & \textbf{Responsables} \\ \hline
 1 & Leer y analizar los trabajos previos, actuales y que surjan & 100 & A, L y M \\ \hline
-2 & Investigar sobre la implementación de \textit{TensorFlow} distribuido & 60 & A, L y M \\ \hline
-3 & Investigar sobre la implementación distribuida de \textit{Pytorch} & 60 & A, L y M \\ \hline
+2 & Investigar sobre la implementación de \textit{TensorFlow} distribuido & 50 & A, L y M \\ \hline
+3 & Investigar sobre la implementación distribuida de \textit{Pytorch} & 50 & A, L y M \\ \hline
 4 & Desarrollar el sistema distribuido en Rust & 150 & A, L y M \\ \hline
 5 & Implementar \textit{Parameter Server} & 100 & A, L y M \\ \hline
 6 & Implementar \textit{All-Reduce} & 100 & A, L y M \\ \hline
 7 & Implementar \textit{Strategy-Switch} & 100 & A, L y M \\ \hline
 8 & Estudiar sobre optimizaciones de comunicación entre nodos e implementarlas & 150 & A, L y M \\ \hline
 9 & Estudiar sobre optimizaciones de sincronización de las copias del modelo en los distintos nodos e implementarlas & 150 & A, L y M \\ \hline
-10 & Implementar una interfaz funcional externa para poder usar el sistema en Python & 60 & A, L y M \\ \hline
+10 & Implementar una interfaz funcional externa para poder usar el sistema en Python & 50 & A, L y M \\ \hline
 11 & Testear el sistema desarrollado, con tests unitarios y de integración & 50 & A, L y M \\ \hline
 12 & Simular la ejecución de los algoritmos en distintas configuraciones de nodos & 100 & A, L y M \\ \hline
 13 & Estudiar sobre optimizaciones de carga de cómputo en configuraciones heterogéneas e implementarlas & 150 & A, L y M \\ \hline
 14 & Analizar los resultados obtenidos y volcar el análisis utilizando gráficos en Python & 100 & A, L y M \\ \hline
 15 & Documentar el código generado y el proceso de desarrollo  & 50 & A, L y M \\ \hline
-16 & Escribir el informe final & 60 & A, L y M \\ \hline
+16 & Escribir el informe final & 50 & A, L y M \\ \hline
  & \textbf{Total} & \textbf{1500} & \\ \hline
 \end{tabular}
