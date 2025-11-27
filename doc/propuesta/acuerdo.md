@@ -10,7 +10,7 @@ El acuerdo consiste en las siguientes pautas:
 
 2. El trabajo a realizar será presentado para cumplir los requisitos de la materia Trabajo Práctico Profesional.
 
-3. El profesor Ing. Ricardo A. Veiga acepta la función de tutor (Facultad de Ingeniería, Universidad de Buenos Aires), y el profesor  Dr. Ing. J. Ignacio Alvarez-Hamelin acepta la función de cotutor para dicho trabajo.
+3. El profesor Ing. Ricardo A. Veiga acepta la función de tutor (Facultad de Ingeniería, Universidad de Buenos Aires), y el profesor  Dr. Ing. J. Ignacio Alvarez-Hamelin acepta la función de co-tutor para dicho trabajo.
 
 \vspace{1cm}
 

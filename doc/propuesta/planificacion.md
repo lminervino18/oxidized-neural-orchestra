@@ -10,7 +10,7 @@ Las principales tareas para llevar a cabo el desarrollo de este trabajo son:
 2. Investigar sobre la implementación de TensorFlow distribuido.
 3. Investigar sobre la implementación distribuida de Pytorch.
 
-Tanto Tensorflow como Pytorch son implementaciones previas del tipo de sistema que se desarrollará en este trabajo.
+Tanto TensorFlow como PyTorch son implementaciones previas del tipo de sistema que se desarrollará en este trabajo.
 
 4. Desarrollar el sistema distribuido que sirva como base para la implementación y análisis de los algoritmos actuales en Rust. Este sistema proveerá una base sobre la cual poder probar distintos algoritmos de entrenamiento distribuido de modelos de machine learning. La idea es hacerlo tan *parametrizable* como sea posible para facilitar la posterior investigación y el desarrollo de estrategias que optimicen los tiempos de ejecución.
 5. Implementar *Parameter Server* sobre el sistema desarrollado en 4.
@@ -25,7 +25,7 @@ Estos tres últimos puntos refieren al punto de partida de la implementación de
 11. Testear el sistema desarrollado, con tests unitarios y de integración.
 12. Simular la ejecución de los algoritmos implementados sobre el sistema distribuido base en distintas configuraciones de nodos; esto es, lograr una métrica que muestre el rendimiento del sistema, según los parámetros que este use, para distintas combinaciones de máquinas, con distintas capacidades de cómputo, que trabajen en la ejecución.
 13. Estudiar sobre optimizaciones de carga de cómputo en configuraciones heterogéneas e implementarlas.
-13. Analizar los resultados obtenidos de la comparación de los algoritmos, documentar y volcar el análisis utilizando gráficos en Python. Esto abarca también los resultados obtenidos las simulaciones mencionadas en 12.
+13. Analizar los resultados obtenidos de la comparación de los algoritmos, documentar y volcar el análisis utilizando gráficos en Python. Esto abarca también los resultados obtenidos en las simulaciones mencionadas en 12.
 14. Documentar el código generado y el proceso de desarrollo (decisiones que se tomaron, inconvenientes encontrados, etc.).
 15. Realizar un informe detallado de la evolución del trabajo y los resultados obtenidos.
 
