@@ -1,22 +1,23 @@
-mod protocol;
-mod serialization;
-mod sink;
-mod source;
+mod deserialize;
+mod proto;
+mod receiver;
+mod sender;
+mod serialize;
 
-use std::{io, net::TcpStream};
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use serialization::{Deserialize, Serialize};
-use sink::Sink;
-use source::Source;
+pub(crate) use deserialize::Deserialize;
+use receiver::OnoReceiver;
+use sender::OnoSender;
+pub(crate) use serialize::Serialize;
 
-/// Creates a `Sink` and `Source` network channel.
+/// Creates both `OnoReceiver` and `OnoSender` network channel parts.
 ///
-/// Given a connection stream will create and return both ends of the communication.
-pub fn channel<T>(id: usize, stream: TcpStream) -> io::Result<(Sink<T>, Source<T>)>
+/// Given a writer and reader creates and returns both ends of the communication.
+pub fn channel<R, W>(rx: R, tx: W) -> (OnoReceiver<R>, OnoSender<W>)
 where
-    T: Serialize<Vec<u8>> + Deserialize + Send + 'static,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
 {
-    let sink = Sink::new(id, stream.try_clone()?);
-    let source = Source::new(id, stream)?;
-    Ok((sink, source))
+    (OnoReceiver::new(rx), OnoSender::new(tx))
 }
