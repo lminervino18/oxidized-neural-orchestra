@@ -1,6 +1,3 @@
-[package]
-name = "neural-network-orchestration"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
+[workspace]
+members = ["comms"]
+resolver = "2"
