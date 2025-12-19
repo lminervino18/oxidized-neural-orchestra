@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 ndarray = "0.16.1"
+
+[workspace]
+members = ["comms", "model"]
+resolver = "2"

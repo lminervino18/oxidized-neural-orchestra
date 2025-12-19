@@ -1,6 +1,6 @@
 use ndarray::prelude::*;
 
-struct Perceptron {
+pub struct Perceptron {
     w: Array1<f32>,
     b: f32,
 }
@@ -39,21 +39,27 @@ impl Perceptron {
             let xi = x.index_axis(Axis(0), i);
             let yi = y.get(i).expect("len(x) > len(y)");
             let prediction = self.forward(xi);
-            total_error = (yi - prediction).powi(2) + total_error;
+            total_error += (yi - prediction).powi(2);
         }
 
         total_error / n as f32
     }
 }
 
-fn main() {
-    let mut p = Perceptron::new(2);
-    let x = array![[1., 1.], [1., -1.], [-1., 1.], [-1., -1.],];
-    let y = array![1., -1., -1., -1.];
-    p.train(x.view(), y.view());
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    println!("1, 1: {}", p.forward(x.index_axis(Axis(0), 0)));
-    println!("1, -1: {}", p.forward(x.index_axis(Axis(0), 1)));
-    println!("-1, 1: {}", p.forward(x.index_axis(Axis(0), 2)));
-    println!("-1, -1: {}", p.forward(x.index_axis(Axis(0), 3)));
+    #[test]
+    fn test_xor() {
+        let mut p = Perceptron::new(2);
+        let x = array![[1., 1.], [1., -1.], [-1., 1.], [-1., -1.],];
+        let y = array![1., -1., -1., -1.];
+        p.train(x.view(), y.view());
+
+        println!("1, 1: {}", p.forward(x.index_axis(Axis(0), 0)));
+        println!("1, -1: {}", p.forward(x.index_axis(Axis(0), 1)));
+        println!("-1, 1: {}", p.forward(x.index_axis(Axis(0), 2)));
+        println!("-1, -1: {}", p.forward(x.index_axis(Axis(0), 3)));
+    }
 }
