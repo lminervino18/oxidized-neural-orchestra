@@ -1,6 +1,6 @@
 use std::sync::{
     Arc,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicU8, Ordering},
 };
 
 use atomic_float::AtomicF32;
@@ -18,8 +18,10 @@ pub type PSClient = Arc<SharedData>;
 /// "active" (receiving updates from workers) while the other is "offline" (being processed by the server).
 #[derive(Debug)]
 pub struct SharedData {
+    /// Two buffers of atomic floats to support double-buffered accumulation.
     grads: [Vec<AtomicF32>; 2],
-    idx: AtomicUsize,
+    /// The index (0 or 1) of the buffer currently designated for accumulation.
+    idx: AtomicU8,
 }
 
 impl SharedData {
@@ -33,16 +35,16 @@ impl SharedData {
                 (0..n).map(|_| AtomicF32::new(0.)).collect(),
                 (0..n).map(|_| AtomicF32::new(0.)).collect(),
             ],
-            idx: AtomicUsize::new(0),
+            idx: AtomicU8::new(0),
         }
     }
 
     /// Accumulates a local gradient into the currently active global buffer.
     ///
     /// # Arguments
-    /// * `gradient` - A slice of gradient computed locally by a worker.
+    /// * `gradient` - A slice of gradient computed by a worker.
     pub fn accumulate(&self, gradient: &[f32]) {
-        let idx = self.idx.load(Ordering::Acquire);
+        let idx = self.idx.load(Ordering::Acquire) as usize;
 
         self.grads[idx]
             .par_iter()
@@ -59,7 +61,7 @@ impl SharedData {
     /// # Returns
     /// A reference to the buffer containing the accumulated gradients for the current epoch.
     pub fn swap_grad(&self) -> &[AtomicF32] {
-        let idx = self.idx.fetch_xor(1, Ordering::Release);
+        let idx = self.idx.fetch_xor(1, Ordering::Release) as usize;
         &self.grads[idx]
     }
 }
@@ -76,7 +78,7 @@ mod tests {
     }
 
     fn get_idx(pc: &PSClient) -> usize {
-        pc.idx.load(Ordering::Relaxed)
+        pc.idx.load(Ordering::Relaxed) as usize
     }
 
     #[test]
