@@ -73,3 +73,38 @@ where
             .update_weights(&mut self.weights, &self.grad_buf);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestOptimizer {}
+
+    impl Optimizer for TestOptimizer {
+        fn update_weights(&mut self, weights: &mut [f32], gradient: &[f32]) {
+            weights
+                .par_iter_mut()
+                .zip(gradient.par_iter())
+                .for_each(|(w, g)| {
+                    *w = *g;
+                });
+        }
+    }
+
+    #[test]
+    fn updates_the_weights() {
+        let mut ps = PSServer::new(3, TestOptimizer {});
+        let pc = ps.client_handle();
+
+        let gradient = [1., 2., 3.];
+        pc.accumulate(&gradient);
+        pc.accumulate(&gradient);
+
+        ps.update_weights();
+
+        let expected_weights = gradient.map(|x| 2. * x);
+        assert_eq!(ps.weights, expected_weights);
+        assert_eq!(ps.grad_buf, expected_weights);
+    }
+}

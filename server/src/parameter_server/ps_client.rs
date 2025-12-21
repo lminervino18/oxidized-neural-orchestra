@@ -63,3 +63,51 @@ impl SharedData {
         &self.grads[idx]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_grad(pc: &PSClient, i: usize) -> Vec<f32> {
+        pc.grads[i]
+            .iter()
+            .map(|x| x.load(Ordering::Relaxed))
+            .collect()
+    }
+
+    fn get_idx(pc: &PSClient) -> usize {
+        pc.idx.load(Ordering::Relaxed)
+    }
+
+    #[test]
+    fn write_to_first_gradient_first() {
+        let pc = PSClient::new(SharedData::new(3));
+        let gradient = [1., 2., 3.];
+        pc.accumulate(&gradient);
+
+        assert_eq!(get_grad(&pc, 0), gradient);
+    }
+
+    #[test]
+    fn swap_gradients() {
+        let pc = PSClient::new(SharedData::new(3));
+        pc.swap_grad();
+        assert_eq!(get_idx(&pc), 1);
+    }
+
+    #[test]
+    fn write_to_second_gradient_second() {
+        let pc = PSClient::new(SharedData::new(3));
+
+        let gradient = [1., 2., 3.];
+        pc.accumulate(&gradient);
+        assert_eq!(get_grad(&pc, 0), gradient);
+        assert_eq!(get_grad(&pc, 1), [0.].repeat(3));
+
+        pc.swap_grad();
+
+        pc.accumulate(&gradient);
+        assert_eq!(get_grad(&pc, 0), gradient);
+        assert_eq!(get_grad(&pc, 1), gradient);
+    }
+}
