@@ -1,110 +1,109 @@
-use std::sync::atomic::Ordering;
-
-use rayon::prelude::*;
-
-use crate::{
-    optimization::Optimizer,
-    parameter_server::{PSClient, SharedData},
+use std::sync::{
+    Arc,
+    atomic::{AtomicU8, AtomicUsize, Ordering},
 };
 
-/// Parameter Server implementation that handles model weights and gradients aggregation.
-///
-/// `PSServer` coordinates the transition between gradient accumulation (performed by worker threads) and weight updates
-/// (peformed by the main server thread). It uses a double-buffering strategy to allow worker threads to continue
-/// accumulating gradients into one buffer while the server thread processes the other.
-///
-/// # Type Parameters
-/// * `O` - An implementation of the `Optimizer` trait used to update weights.
+use rayon::prelude::*;
+use tokio::sync::Notify;
+
+use crate::{optimization::Optimizer, parameter_server::PSClient};
+
+#[derive(Debug)]
+struct SendPtr(*mut f32);
+unsafe impl Send for SendPtr {}
+unsafe impl Sync for SendPtr {}
+
+#[derive(Debug, Default)]
+struct GradientTable {
+    grads: Vec<Box<[f32]>>,
+    notify: Arc<Notify>,
+    ptrs: Vec<SendPtr>,
+    writers: Arc<AtomicUsize>,
+}
+
 #[derive(Debug)]
 pub struct PSServer<O>
 where
     O: Optimizer,
 {
-    /// Shared handle to the atomic gradient buffers and synchronization primitives.
-    client: PSClient,
-    /// Intermediate flat buffer used to store a snapshot of gradients for the optimizer.
-    grad_buf: Vec<f32>,
-    /// The current model parameters being optimized.
-    weights: Vec<f32>,
-    /// The optimization algorithm.
+    active_idx: Arc<AtomicU8>,
+    buf: Box<[f32]>,
+    tables: [GradientTable; 2],
     optimizer: O,
+    weights: Box<[f32]>,
 }
 
 impl<O> PSServer<O>
 where
     O: Optimizer,
 {
-    /// Creates a new `PSServer` instance.
-    ///
-    /// # Arguments
-    /// * `n` - The number of parameters (weights) in the model.
-    /// * `optimizer` - The strategy used to update weights from accumulated gradients.
-    pub fn new(n: usize, optimizer: O) -> Self {
+    pub fn new(params: usize, optimizer: O) -> Self {
         Self {
-            client: PSClient::new(SharedData::new(n)),
-            grad_buf: vec![0.; n],
-            weights: vec![0.; n],
+            active_idx: Default::default(),
+            tables: Default::default(),
+            buf: vec![0.; params].into_boxed_slice(),
+            weights: vec![0.; params].into_boxed_slice(),
             optimizer,
         }
     }
 
-    /// Returns a thread-safe handle `PSClient` that can be distributed to worker threads.
-    ///
-    /// Workers use this handle to call `accumulate` without needing exclusive access to the server.
-    pub fn client_handle(&self) -> PSClient {
-        self.client.clone()
-    }
+    pub fn client_handle(&mut self) -> PSClient {
+        let params = self.weights.len();
+        let worker_id = self.tables[0].grads.len();
 
-    /// Performs a weight update based on all gradients accumulated since the last call.
-    ///
-    /// Will swap the underlying gradient and read it, clearing it in the process, later will call the optimizer on
-    /// this gradient and weights.
-    pub fn update_weights(&mut self) {
-        let grad = self.client.swap_grad();
+        for grad_table in self.tables.iter_mut() {
+            let grad = vec![0.; params].into_boxed_slice();
+            grad_table.grads.push(grad);
 
-        self.grad_buf
-            .par_iter_mut()
-            .zip(grad.par_iter())
-            .for_each(|(dst, src)| {
-                *dst = src.swap(0., Ordering::Relaxed);
-            });
+            let ptr_to_grad = grad_table.grads[worker_id].as_mut_ptr();
+            grad_table.ptrs.push(SendPtr(ptr_to_grad));
+        }
 
-        self.optimizer
-            .update_weights(&mut self.weights, &self.grad_buf);
-    }
-}
+        let active_idx = Arc::clone(&self.active_idx);
+        let grads = self.tables.each_ref().map(|table| table.ptrs[worker_id].0);
+        let writers = self.tables.each_ref().map(|table| table.writers.clone());
+        let notifies = self.tables.each_ref().map(|table| table.notify.clone());
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[derive(Debug)]
-    struct TestOptimizer {}
-
-    impl Optimizer for TestOptimizer {
-        fn update_weights(&mut self, weights: &mut [f32], gradient: &[f32]) {
-            weights
-                .par_iter_mut()
-                .zip(gradient.par_iter())
-                .for_each(|(w, g)| {
-                    *w = *g;
-                });
+        PSClient {
+            active_idx,
+            grads,
+            notifies,
+            params,
+            writers,
         }
     }
 
-    #[test]
-    fn updates_the_weights() {
-        let mut ps = PSServer::new(3, TestOptimizer {});
-        let pc = ps.client_handle();
+    pub async fn update_weights(&mut self) {
+        let frozen_idx = self.active_idx.fetch_xor(1, Ordering::Release) as usize;
+        let GradientTable {
+            writers,
+            notify,
+            ptrs,
+            ..
+        } = &self.tables[frozen_idx];
 
-        let gradient = [1., 2., 3.];
-        pc.accumulate(&gradient);
-        pc.accumulate(&gradient);
+        while writers.load(Ordering::Acquire) > 0 {
+            notify.notified().await;
+        }
 
-        ps.update_weights();
+        self.buf.par_iter_mut().enumerate().for_each(|(i, g)| {
+            let mut sum = 0.;
 
-        let expected_weights = gradient.map(|x| 2. * x);
-        assert_eq!(ps.weights, expected_weights);
-        assert_eq!(ps.grad_buf, expected_weights);
+            for SendPtr(ptr) in ptrs {
+                unsafe {
+                    let val_ptr = ptr.add(i);
+                    sum += *val_ptr;
+                    *val_ptr = 0.;
+                }
+            }
+
+            *g = sum;
+        });
+
+        self.optimizer.update_weights(&mut self.weights, &self.buf);
+    }
+
+    pub fn get_weights(&self) -> &[f32] {
+        &self.weights
     }
 }
