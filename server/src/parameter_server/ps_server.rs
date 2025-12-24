@@ -20,30 +20,21 @@ use crate::{
 /// 2. The server processes and resets the `frozen`.
 ///
 /// This lets both server and workers work simultaneously.
-pub struct PSServer<O>
-where
-    O: Optimizer,
-{
+#[derive(Debug)]
+pub struct PSServer {
     active_idx: Arc<AtomicU8>,
     tables: [Arc<ShardedGradient>; 2],
     weights: Box<[f32]>,
     buf: Box<[f32]>,
-    optimizer: O,
 }
 
-impl<O> PSServer<O>
-where
-    O: Optimizer,
-{
+impl PSServer {
     /// Creates a new `PSServer`.
     ///
     /// # Arguments
-    /// * `weights` - The initialized starting weights.
+    /// * `params` - Total number of parameters in the model.
     /// * `shards_amount` - The amount of shards to partition the gradient.
-    /// * `optimizer` - The optimization algorithm.
-    pub fn new(weights: Vec<f32>, shards_amount: NonZeroUsize, optimizer: O) -> Self {
-        let params = weights.len();
-
+    pub fn new(params: usize, shards_amount: NonZeroUsize) -> Self {
         Self {
             active_idx: Arc::new(AtomicU8::new(0)),
             tables: [
@@ -51,8 +42,7 @@ where
                 Arc::new(ShardedGradient::new(params, shards_amount)),
             ],
             buf: vec![0.; params].into_boxed_slice(),
-            weights: weights.into_boxed_slice(),
-            optimizer,
+            weights: vec![0.; params].into_boxed_slice(),
         }
     }
 
@@ -70,7 +60,13 @@ where
     /// Performs the weight update cycle.
     ///
     /// Will swap the underlying active/frozen gradient tables.
-    pub fn update_weights(&mut self) {
+    ///
+    /// # Arguments
+    /// * `optimizer` - The optimization algorithm.
+    pub fn update_weights<O>(&mut self, optimizer: &mut O)
+    where
+        O: Optimizer,
+    {
         let frozen_idx = self.active_idx.fetch_xor(1, Ordering::AcqRel) as usize;
         let &ShardedGradient {
             ref shards,
@@ -88,6 +84,10 @@ where
                 }
             });
 
-        self.optimizer.update_weights(&mut self.weights, &self.buf);
+        optimizer.update_weights(&mut self.weights, &self.buf);
+    }
+
+    pub fn get_weights(&self) -> &[f32] {
+        &self.weights
     }
 }
