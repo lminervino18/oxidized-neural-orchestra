@@ -1,4 +1,5 @@
 mod deserialize;
+pub mod msg;
 mod proto;
 mod receiver;
 mod sender;
