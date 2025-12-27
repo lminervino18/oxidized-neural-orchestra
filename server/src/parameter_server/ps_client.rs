@@ -69,7 +69,16 @@ impl PSClient {
 mod tests {
     use std::num::NonZero;
 
-    use super::{super::PSServer, *};
+    use super::*;
+    use crate::{optimization::Optimizer, parameter_server::PSServer};
+
+    struct TestOptimizer {}
+
+    impl Optimizer for TestOptimizer {
+        fn update_weights(&mut self, _weights: &mut [f32], _gradient: &[f32]) {
+            todo!();
+        }
+    }
 
     fn get_gradient(pc: &PSClient, table_idx: usize) -> Vec<f32> {
         pc.tables[table_idx]
@@ -83,7 +92,7 @@ mod tests {
     #[test]
     fn gradient_accumulation_is_written_to_the_correct_table() {
         const W: usize = 100;
-        let mut ps = PSServer::new(W, NonZero::new(10).unwrap());
+        let mut ps = PSServer::new(W, NonZero::new(10).unwrap(), TestOptimizer {});
         let grad: Vec<_> = (0..W).map(|i| i as f32).collect();
         let pc = ps.client_handle();
 

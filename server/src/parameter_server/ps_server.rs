@@ -21,20 +21,22 @@ use crate::{
 ///
 /// This lets both server and workers work simultaneously.
 #[derive(Debug)]
-pub struct PSServer {
+pub struct PSServer<O: Optimizer> {
     active_idx: Arc<AtomicU8>,
     tables: [Arc<ShardedGradient>; 2],
     weights: Box<[f32]>,
     buf: Box<[f32]>,
+    optimizer: O,
 }
 
-impl PSServer {
+impl<O: Optimizer> PSServer<O> {
     /// Creates a new `PSServer`.
     ///
     /// # Arguments
     /// * `params` - Total number of parameters in the model.
     /// * `shards_amount` - The amount of shards to partition the gradient.
-    pub fn new(params: usize, shards_amount: NonZeroUsize) -> Self {
+    /// * `optimizer` - The optimization algorithm.
+    pub fn new(params: usize, shards_amount: NonZeroUsize, optimizer: O) -> Self {
         Self {
             active_idx: Arc::new(AtomicU8::new(0)),
             tables: [
@@ -43,6 +45,7 @@ impl PSServer {
             ],
             buf: vec![0.; params].into_boxed_slice(),
             weights: vec![0.; params].into_boxed_slice(),
+            optimizer,
         }
     }
 
@@ -60,13 +63,7 @@ impl PSServer {
     /// Performs the weight update cycle.
     ///
     /// Will swap the underlying active/frozen gradient tables.
-    ///
-    /// # Arguments
-    /// * `optimizer` - The optimization algorithm.
-    pub fn update_weights<O>(&mut self, optimizer: &mut O)
-    where
-        O: Optimizer,
-    {
+    pub fn update_weights(&mut self) {
         let frozen_idx = self.active_idx.fetch_xor(1, Ordering::AcqRel) as usize;
         let &ShardedGradient {
             ref shards,
@@ -84,7 +81,7 @@ impl PSServer {
                 }
             });
 
-        optimizer.update_weights(&mut self.weights, &self.buf);
+        self.optimizer.update_weights(&mut self.weights, &self.buf);
     }
 
     pub fn get_weights(&self) -> &[f32] {
