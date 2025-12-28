@@ -7,7 +7,7 @@
 ///
 /// Since the `ParameterStore` shards the model, thismethod will be called concurrently across
 /// different shards.
-pub trait Optimizer: Clone {
+pub trait Optimizer {
     /// Updates the provided slice of weights using the accumulated gradients.
     ///
     /// # Arguments

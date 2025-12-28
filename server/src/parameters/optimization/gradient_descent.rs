@@ -1,6 +1,6 @@
 use super::Optimizer;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct GradientDescent {
     lr: f32,
 }
