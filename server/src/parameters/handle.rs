@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use super::{Optimizer, ParameterShard};
 
 /// Provides the primary interface for workers to contribute gradients and update weights.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ParameterHandle<O: Optimizer> {
     active_idx: Arc<AtomicU8>,
     updating: Arc<AtomicBool>,

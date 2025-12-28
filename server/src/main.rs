@@ -14,7 +14,6 @@ use crate::{
     parameters::{Optimizer, ParameterStore},
 };
 
-#[derive(Clone)]
 struct TestOptimizer {}
 
 impl Optimizer for TestOptimizer {
@@ -50,7 +49,7 @@ async fn main() {
     }
 
     // 2. Run Parameter Server
-    let store = ParameterStore::new(PARAMETERS, SHARDS, TestOptimizer {});
+    let store = ParameterStore::new(PARAMETERS, SHARDS, |_| TestOptimizer {});
     let mut executor = BulkSync::new(store, WORKERS);
 
     for (mut rx, mut tx) in sv_streams {

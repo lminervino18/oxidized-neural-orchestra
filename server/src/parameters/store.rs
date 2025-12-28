@@ -22,8 +22,11 @@ impl<O: Optimizer> ParameterStore<O> {
     /// # Arguments
     /// * `params` - Total number of parameters in the model.
     /// * `shard_amount` - The amount of shards to partition the model.
-    /// * `optimizer` - The optimization algorithm.
-    pub fn new(params: usize, shard_amount: NonZeroUsize, optimizer: O) -> Self {
+    /// * `factory` - An `Optimizer` factory closure.
+    pub fn new<F>(params: usize, shard_amount: NonZeroUsize, mut factory: F) -> Self
+    where
+        F: FnMut(usize) -> O,
+    {
         let n = shard_amount.get();
         let shard_size = (params + n - 1) / n;
 
@@ -31,7 +34,8 @@ impl<O: Optimizer> ParameterStore<O> {
             .map(|i| {
                 let start = i * shard_size;
                 let end = (start + shard_size).min(params);
-                ParameterShard::new(end - start, optimizer.clone())
+                let len = end - start;
+                ParameterShard::new(len, factory(len))
             })
             .collect();
 
