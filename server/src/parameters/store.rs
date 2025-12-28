@@ -64,3 +64,53 @@ impl<O: Optimizer + Send> ParameterStore<O> {
         self.0.update_weights();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct AddOptimizer;
+
+    impl Optimizer for AddOptimizer {
+        fn update_weights(&mut self, weights: &mut [f32], grad: &[f32]) {
+            weights.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
+        }
+    }
+
+    #[test]
+    fn test_store_initialization_and_flow() {
+        const PARAMS: usize = 100;
+        const SHARD_AMOUNT: NonZeroUsize = NonZeroUsize::new(4).unwrap();
+
+        let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, |_| AddOptimizer);
+        let handle = store.handle();
+
+        let grad = [1.0; PARAMS];
+        handle.accumulate(&grad);
+        store.update_weights();
+
+        let mut weights = [0.0; PARAMS];
+        handle.pull_weights(&mut weights);
+
+        for (i, &w) in weights.iter().enumerate() {
+            assert_eq!(w, 1.0, "Weight mismatch at index {i}");
+        }
+    }
+
+    #[test]
+    fn test_ragged_edge_distribution() {
+        const PARAMS: usize = 105;
+        const SHARD_AMOUNT: NonZeroUsize = NonZeroUsize::new(10).unwrap();
+
+        let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, |_| AddOptimizer);
+        let handle = store.handle();
+
+        let grad = [1.0; PARAMS];
+        handle.accumulate(&grad);
+        store.update_weights();
+
+        let mut weights = [0.0; PARAMS];
+        handle.pull_weights(&mut weights);
+        assert_eq!(weights.len(), PARAMS);
+    }
+}
