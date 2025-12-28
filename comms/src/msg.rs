@@ -53,7 +53,7 @@ impl Serialize for Msg<'_> {
         writer.write_all(&len.to_be_bytes())?;
 
         let bytes = bytemuck::cast_slice(nums);
-        writer.write_all(&bytes)?;
+        writer.write_all(bytes)?;
 
         Ok(())
     }
