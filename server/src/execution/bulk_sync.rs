@@ -35,7 +35,7 @@ impl<O: Optimizer> BulkSync<O> {
     /// * `train_fn` - A closure that manages the server side training loop.
     pub fn spawn<F, Fut>(&mut self, train_fn: F)
     where
-        F: FnOnce(ParameterHandle<O>, Arc<Barrier>) -> Fut + Send + 'static,
+        F: FnOnce(ParameterHandle<O>, Arc<Barrier>) -> Fut,
         Fut: Future<Output = ()> + Send + 'static,
     {
         self.futs
@@ -49,7 +49,7 @@ impl<O: Optimizer + Send> BulkSync<O> {
     /// This should be called at the end of traning to ensure that any straggling gradients are
     /// applied to the final model state in the `store`.
     pub async fn join_all(&mut self) {
-        while let Some(..) = self.futs.join_next().await {}
+        while self.futs.join_next().await.is_some() {}
         self.store.update_weights();
     }
 }

@@ -40,7 +40,7 @@ impl<O: Optimizer + Send> WaitFree<O> {
     /// This should be called at the end of traning to ensure that any straggling gradients are
     /// applied to the final model state in the `store`.
     pub async fn join_all(&mut self) {
-        while let Some(..) = self.futs.join_next().await {}
+        while self.futs.join_next().await.is_some() {}
         self.store.update_weights();
     }
 }

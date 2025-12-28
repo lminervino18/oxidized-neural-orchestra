@@ -17,6 +17,18 @@ pub struct ParameterHandle<O: Optimizer> {
     params: usize,
 }
 
+impl<O: Optimizer> Clone for ParameterHandle<O> {
+    fn clone(&self) -> Self {
+        Self {
+            active_idx: self.active_idx.clone(),
+            updating: self.updating.clone(),
+            shards: self.shards.clone(),
+            shard_size: self.shard_size,
+            params: self.params,
+        }
+    }
+}
+
 impl<O: Optimizer> ParameterHandle<O> {
     /// Creates a new `ParameterHandle`.
     ///
@@ -64,7 +76,7 @@ impl<O: Optimizer + Send> ParameterHandle<O> {
             .is_ok();
 
         if success {
-            let frozen_idx = self.active_idx.fetch_xor(1, Ordering::SeqCst) as usize;
+            let frozen_idx = self.active_idx.fetch_xor(1, Ordering::AcqRel) as usize;
 
             self.shards
                 .par_iter()

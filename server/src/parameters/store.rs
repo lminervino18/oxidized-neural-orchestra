@@ -28,7 +28,7 @@ impl<O: Optimizer> ParameterStore<O> {
         F: FnMut(usize) -> O,
     {
         let n = shard_amount.get();
-        let shard_size = (params + n - 1) / n;
+        let shard_size = params.div_ceil(n);
 
         let shards: Vec<_> = (0..n)
             .map(|i| {
