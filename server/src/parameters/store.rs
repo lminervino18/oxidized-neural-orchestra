@@ -54,3 +54,9 @@ impl<O: Optimizer> ParameterStore<O> {
         self.0.clone()
     }
 }
+
+impl<O: Optimizer + Send> ParameterStore<O> {
+    pub fn update_weights(&self) {
+        self.0.update_weights();
+    }
+}
