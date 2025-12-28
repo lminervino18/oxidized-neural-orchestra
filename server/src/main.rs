@@ -1,5 +1,4 @@
-mod optimization;
-mod parameter_server;
+mod parameters;
 
 fn main() {
     println!("Hello, world!");
