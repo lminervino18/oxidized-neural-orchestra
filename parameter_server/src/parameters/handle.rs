@@ -20,9 +20,9 @@ pub struct ParameterHandle<O: Optimizer> {
 impl<O: Optimizer> Clone for ParameterHandle<O> {
     fn clone(&self) -> Self {
         Self {
-            active_idx: self.active_idx.clone(),
-            updating: self.updating.clone(),
-            shards: self.shards.clone(),
+            active_idx: Arc::clone(&self.active_idx),
+            updating: Arc::clone(&self.updating),
+            shards: Arc::clone(&self.shards),
             shard_size: self.shard_size,
             params: self.params,
         }
