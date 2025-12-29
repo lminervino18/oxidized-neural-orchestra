@@ -5,7 +5,7 @@ use std::sync::{
 
 use rayon::prelude::*;
 
-use super::{Optimizer, ParameterShard};
+use super::{ParameterShard, optimization::Optimizer};
 
 /// Provides the primary interface for workers to contribute gradients and update weights.
 #[derive(Debug)]

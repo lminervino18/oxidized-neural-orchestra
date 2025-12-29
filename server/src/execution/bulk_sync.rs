@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::{sync::Barrier, task::JoinSet};
 
-use crate::parameters::{Optimizer, ParameterHandle, ParameterStore};
+use crate::parameters::{ParameterHandle, ParameterStore, optimization::Optimizer};
 
 /// A Bulk Synchrnous Parallel executor for distributed parameter training.
 ///

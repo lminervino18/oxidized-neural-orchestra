@@ -1,6 +1,6 @@
 use tokio::task::JoinSet;
 
-use crate::parameters::{Optimizer, ParameterHandle, ParameterStore};
+use crate::parameters::{ParameterHandle, ParameterStore, optimization::Optimizer};
 
 /// An Asynchronous Parallel executor for high-throughput parameter training.
 ///

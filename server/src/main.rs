@@ -11,7 +11,7 @@ use tokio::{
 
 use crate::{
     execution::BulkSync,
-    parameters::{Optimizer, ParameterStore},
+    parameters::{ParameterStore, optimization::Optimizer},
 };
 
 struct TestOptimizer {}

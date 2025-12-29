@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use crate::parameters::{Optimizer, ParameterHandle, ParameterShard};
+use super::{ParameterHandle, ParameterShard, optimization::Optimizer};
 
 /// A `ParameterHandle` factory.
 ///
