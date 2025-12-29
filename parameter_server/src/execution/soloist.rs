@@ -4,12 +4,19 @@ use crate::{
 };
 
 /// An executor that doesn't synchronize it's operations, will process incoming gradients as a "soloist".
-#[derive(Clone)]
 pub struct SoloistExec<O: Optimizer> {
     engine: ParameterEngine<O>,
 }
 
-impl<O: Optimizer + Send> SoloistExec<O> {
+impl<O: Optimizer> Clone for SoloistExec<O> {
+    fn clone(&self) -> Self {
+        Self {
+            engine: self.engine.clone(),
+        }
+    }
+}
+
+impl<O: Optimizer> SoloistExec<O> {
     /// Creates a new `SoloistExec`.
     ///
     /// # Arguments

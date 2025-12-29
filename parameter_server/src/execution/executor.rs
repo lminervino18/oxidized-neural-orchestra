@@ -2,7 +2,8 @@
 ///
 /// An `Executor` coordinates the application of a gradient and produces
 /// updated model weights, potentially involving asynchronous operations.
-pub trait Executor {
+#[trait_variant::make(Executor: Send)]
+pub trait ExecutorTemplate: Clone {
     /// Should implement a step in the traning process, meaning accumulating this gradient and updating weights.
     ///
     /// # Arguments

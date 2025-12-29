@@ -8,13 +8,21 @@ use crate::{
 };
 
 /// An executor that synchronizes parameter updates across multiple workers using a barrier.
-#[derive(Clone)]
 pub struct EnsembleExec<O: Optimizer> {
     engine: ParameterEngine<O>,
     barrier: Arc<Barrier>,
 }
 
-impl<O: Optimizer + Send> EnsembleExec<O> {
+impl<O: Optimizer> Clone for EnsembleExec<O> {
+    fn clone(&self) -> Self {
+        Self {
+            engine: self.engine.clone(),
+            barrier: Arc::clone(&self.barrier),
+        }
+    }
+}
+
+impl<O: Optimizer> EnsembleExec<O> {
     /// Creates a new `EnsembleExec`.
     ///
     /// # Arguments

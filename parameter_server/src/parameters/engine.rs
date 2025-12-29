@@ -5,8 +5,13 @@ use crate::parameters::{ParameterHandle, optimization::Optimizer};
 /// Drives parameter operations in the async runtime.
 ///
 /// Bridges async execution and CPU-bound parameter updates.
-#[derive(Clone)]
 pub struct ParameterEngine<O: Optimizer>(ParameterHandle<O>);
+
+impl<O: Optimizer> Clone for ParameterEngine<O> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<O: Optimizer> ParameterEngine<O> {
     /// Creates a new `ParameterEngine`
