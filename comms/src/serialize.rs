@@ -1,5 +1,6 @@
-use std::io::{self, Write};
+use bytes::BufMut;
+use std::io;
 
 pub trait Serialize {
-    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()>;
+    fn serialize<B: BufMut>(&self, buf: &mut B) -> io::Result<()>;
 }

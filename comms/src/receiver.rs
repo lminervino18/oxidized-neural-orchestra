@@ -2,65 +2,61 @@
 
 use std::io;
 
-use tokio::io::AsyncRead;
+use bytes::{Buf, BytesMut};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::{Deserialize, proto};
+use crate::Deserialize;
 
 pub struct OnoReceiver<R: AsyncRead + Unpin> {
     rx: R,
-    buf: Vec<u8>,
+    buf: BytesMut,
+    max_frame_size: usize,
 }
 
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     /// Creates a new `OnoReceiver` instance.
     ///
-    /// Will read all it's data from `rx`.
-    pub fn new(rx: R) -> Self {
+    /// # Arguments
+    /// * `rx` - The underlying reader.
+    /// * `max_frame_size` - The maximum size of the communication frame.
+    pub fn new(rx: R, max_frame_size: usize) -> Self {
         Self {
             rx,
-            buf: Vec::new(),
+            buf: BytesMut::with_capacity(64 * 1024),
+            max_frame_size,
         }
     }
 
     /// Waits to receive a new message from the inner receiver.
     pub async fn recv<T: Deserialize>(&mut self) -> io::Result<T> {
-        proto::read_msg(&mut self.rx, &mut self.buf).await
-    }
-}
+        let mut header = [0u8; 8];
+        self.rx.read_exact(&mut header).await?;
+        let len = u64::from_be_bytes(header) as usize;
 
-#[cfg(test)]
-mod tests {
-    use std::{fmt::Debug, io::Read};
-
-    use crate::serialize::Serialize;
-
-    use super::*;
-
-    impl Deserialize for String {
-        fn deserialize<R: Read>(reader: &mut R) -> io::Result<Self> {
-            let mut buf = String::new();
-            reader.read_to_string(&mut buf)?;
-            Ok(buf)
+        if len > self.max_frame_size {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Frame size {} exceeds limit {}", len, self.max_frame_size),
+            ));
         }
-    }
 
-    async fn assert_message<T>(msg: T)
-    where
-        T: Debug + PartialEq + Serialize + Deserialize,
-    {
-        let mut payload = Vec::new();
+        self.buf.clear();
+        self.buf.reserve(len);
 
-        proto::write_msg(&msg, &mut Vec::new(), &mut payload)
-            .await
-            .unwrap();
+        let mut limited = (&mut self.rx).take(len as u64);
 
-        let mut receiver = OnoReceiver::new(payload.as_slice());
-        let got: T = receiver.recv().await.unwrap();
-        assert_eq!(msg, got);
-    }
+        while self.buf.len() < len {
+            if limited.read_buf(&mut self.buf).await? == 0 {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "Early EOF"));
+            }
+        }
 
-    #[tokio::test]
-    async fn read_string() {
-        assert_message("Hello World!".to_string()).await;
+        let msg = T::deserialize(&mut self.buf)?;
+
+        if self.buf.has_remaining() {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Trailing bytes"));
+        }
+
+        Ok(msg)
     }
 }

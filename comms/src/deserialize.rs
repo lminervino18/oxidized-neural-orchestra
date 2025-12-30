@@ -1,5 +1,6 @@
-use std::io::{self, Read};
+use bytes::Buf;
+use std::io;
 
-pub trait Deserialize: Sized {
-    fn deserialize<R: Read>(reader: &mut R) -> io::Result<Self>;
+pub trait Deserialize<'a>: Sized {
+    fn deserialize<B: Buf>(buf: &'a mut B) -> io::Result<Self>;
 }

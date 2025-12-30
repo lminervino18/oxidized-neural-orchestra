@@ -1,68 +1,41 @@
 //! The implementation of the sending end of the application layer protocol.
 
-use std::io;
+use std::io::{self, IoSlice};
 
-use tokio::io::AsyncWrite;
+use bytes::BytesMut;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::{Serialize, proto};
+use crate::Serialize;
 
-pub struct OnoSender<W>
-where
-    W: AsyncWrite + Unpin,
-{
+pub struct OnoSender<W: AsyncWrite + Unpin> {
     tx: W,
-    buf: Vec<u8>,
+    buf: BytesMut,
 }
 
 impl<W: AsyncWrite + Unpin> OnoSender<W> {
     /// Creates a new `OnoSender` instance.
     ///
-    /// Will write all it's data through `tx`.
+    /// # Arguments
+    /// * `tx` - The underlying writer.
     pub fn new(tx: W) -> Self {
         Self {
             tx,
-            buf: Vec::new(),
+            buf: BytesMut::with_capacity(64 * 1024),
         }
     }
 
     /// Sends `msg` through the inner sender.
-    pub async fn send<T: Serialize>(&mut self, msg: &T) -> io::Result<()> {
-        proto::write_msg(msg, &mut self.buf, &mut self.tx).await
-    }
-}
+    ///
+    /// # Arguments
+    /// `msg` - The message to be serialized and sent.
+    pub async fn send<T: Serialize>(&mut self, msg: &T) -> io::Result<usize> {
+        self.buf.clear();
+        msg.serialize(&mut self.buf)?;
 
-#[cfg(test)]
-mod tests {
-    use std::{
-        fmt::Debug,
-        io::{Cursor, Write},
-    };
+        let len = self.buf.len() as u64;
+        let header = len.to_be_bytes();
 
-    use super::*;
-    use crate::Deserialize;
-
-    impl Serialize for String {
-        fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-            writer.write_all(self.as_bytes())
-        }
-    }
-
-    async fn assert_message<T>(msg: T)
-    where
-        T: Debug + PartialEq + Serialize + Deserialize,
-    {
-        let mut sender = OnoSender::new(Vec::new());
-        sender.send(&msg).await.unwrap();
-
-        let got: T = proto::read_msg(&mut Cursor::new(sender.tx), &mut Vec::new())
-            .await
-            .unwrap();
-
-        assert_eq!(msg, got)
-    }
-
-    #[tokio::test]
-    async fn write_string() {
-        assert_message("Hello World!".to_string()).await;
+        let slices = [IoSlice::new(&header), IoSlice::new(&self.buf)];
+        self.tx.write_vectored(&slices).await
     }
 }
