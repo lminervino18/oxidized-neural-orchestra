@@ -47,7 +47,7 @@ impl<O: Optimizer> ParameterShard<O> {
     pub fn update_weights(&self, frozen_idx: usize) {
         let mut weights = self.weights.write();
         let mut grad = self.grads[frozen_idx].lock();
-        self.optimizer.lock().update_weights(&mut weights, &grad);
+        self.optimizer.lock().update_weights(&grad, &mut weights);
         grad.fill(0.);
     }
 
@@ -71,7 +71,7 @@ mod tests {
     struct AddOptimizer;
 
     impl Optimizer for AddOptimizer {
-        fn update_weights(&mut self, weights: &mut [f32], grad: &[f32]) {
+        fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
             weights.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
         }
     }

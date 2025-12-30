@@ -18,7 +18,7 @@ impl GradientDescentWithMomentum {
 }
 
 impl Optimizer for GradientDescentWithMomentum {
-    fn update_weights(&mut self, weights: &mut [f32], grad: &[f32]) {
+    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
         let lr = self.learning_rate;
         let mu = self.momentum;
 

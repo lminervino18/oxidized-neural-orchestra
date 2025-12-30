@@ -12,7 +12,7 @@ impl GradientDescent {
 }
 
 impl Optimizer for GradientDescent {
-    fn update_weights(&mut self, weights: &mut [f32], grad: &[f32]) {
+    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
         let lr = self.learning_rate;
 
         for (w, g) in weights.iter_mut().zip(grad) {

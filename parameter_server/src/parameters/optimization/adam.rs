@@ -28,7 +28,7 @@ impl Adam {
 }
 
 impl Optimizer for Adam {
-    fn update_weights(&mut self, weights: &mut [f32], grad: &[f32]) {
+    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
         let Self {
             learning_rate: lr,
             beta1: b1,
