@@ -9,29 +9,29 @@ use tokio::{
     task::JoinSet,
 };
 
-use crate::execution::Executor;
+use crate::training::Trainer;
 
-/// The central server structure, it manages task spawn/join and io with external worker nodes.
-pub struct ParameterServer<E: Executor> {
+/// The central server structure, it handles task management and io between workers.
+pub struct ParameterServer<T: Trainer> {
     tasks: JoinSet<io::Result<()>>,
     params: usize,
     epochs: usize,
-    executor: E,
+    trainer: T,
 }
 
-impl<E: Executor> ParameterServer<E> {
+impl<T: Trainer> ParameterServer<T> {
     /// Creates a new `ParameterServer`.
     ///
     /// # Arguments
     /// * `params` - The amount of parameters to hold.
     /// * `epochs` - The amount of epochs of training to run.
-    /// * `executor` - The executor to use in training.
-    pub fn new(params: usize, epochs: usize, executor: E) -> Self {
+    /// * `trainer` - The trainer to use.
+    pub fn new(params: usize, epochs: usize, trainer: T) -> Self {
         Self {
             tasks: JoinSet::new(),
             params,
             epochs,
-            executor,
+            trainer,
         }
     }
 
@@ -41,7 +41,7 @@ impl<E: Executor> ParameterServer<E> {
     }
 }
 
-impl<E: Executor + Send + Sync + 'static> ParameterServer<E> {
+impl<T: Trainer + Send + Sync + 'static> ParameterServer<T> {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Arguments
@@ -52,23 +52,28 @@ impl<E: Executor + Send + Sync + 'static> ParameterServer<E> {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let params = self.params;
-        let executor = self.executor.clone();
+        let Self { epochs, params, .. } = *self;
+        let trainer = self.trainer.clone();
         let mut buf = vec![0.; params];
 
         let task = async move {
-            loop {
+            for _ in 0..epochs {
                 let msg: Msg = rx.recv().await?;
 
-                let grad = match msg {
-                    Msg::Data(Payload::Gradient(grad)) => grad,
-                    _ => unreachable!(),
+                let Msg::Data(Payload::Gradient(grad)) = msg else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Received an invalid message kind {msg:?}"),
+                    ));
                 };
 
-                executor.step(&grad, &mut buf).await;
+                trainer.step(&grad, &mut buf).await;
+
                 let msg = Msg::Data(Payload::Weights(Cow::Borrowed(&buf)));
                 tx.send(&msg).await?;
             }
+
+            Ok(())
         };
 
         self.tasks.spawn(task);
