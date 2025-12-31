@@ -28,7 +28,7 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     }
 
     /// Waits to receive a new message from the inner receiver.
-    pub async fn recv<T: Deserialize>(&mut self) -> io::Result<T> {
+    pub async fn recv<T: for<'a> Deserialize<'a>>(&mut self) -> io::Result<T> {
         let mut header = [0u8; 8];
         self.rx.read_exact(&mut header).await?;
         let len = u64::from_be_bytes(header) as usize;

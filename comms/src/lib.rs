@@ -5,10 +5,10 @@ mod serialize;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-pub(crate) use deserialize::Deserialize;
+pub use deserialize::Deserialize;
 pub use receiver::OnoReceiver;
 pub use sender::OnoSender;
-pub(crate) use serialize::Serialize;
+pub use serialize::Serialize;
 
 /// Creates both `OnoReceiver` and `OnoSender` network channel parts.
 ///
