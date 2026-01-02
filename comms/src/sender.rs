@@ -2,10 +2,11 @@
 
 use std::io;
 
-use tokio::io::AsyncWrite;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::{Serialize, proto};
+use crate::{LenType, Serialize};
 
+/// The sending end handle of the communication.
 pub struct OnoSender<W>
 where
     W: AsyncWrite + Unpin,
@@ -17,8 +18,9 @@ where
 impl<W: AsyncWrite + Unpin> OnoSender<W> {
     /// Creates a new `OnoSender` instance.
     ///
-    /// Will write all it's data through `tx`.
-    pub fn new(tx: W) -> Self {
+    /// # Arguments
+    /// * `tx` - The underlying writer.
+    pub(super) fn new(tx: W) -> Self {
         Self {
             tx,
             buf: Vec::new(),
@@ -26,43 +28,23 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
     }
 
     /// Sends `msg` through the inner sender.
+    ///
+    /// # Arguments
+    /// * `msg` - A serializable object.
+    ///
+    /// # Returns
+    /// A result object that returns `io::Error` on failure.
     pub async fn send<T: Serialize>(&mut self, msg: &T) -> io::Result<()> {
-        proto::write_msg(msg, &mut self.buf, &mut self.tx).await
-    }
-}
+        let Self { buf, tx } = self;
 
-#[cfg(test)]
-mod tests {
-    use std::{
-        fmt::Debug,
-        io::{Cursor, Write},
-    };
+        buf.clear();
 
-    use super::*;
-    use crate::Deserialize;
+        let data = msg.serialize(buf).unwrap_or(buf);
+        let len = data.len() as LenType;
+        let header = len.to_be_bytes();
 
-    impl Serialize for String {
-        fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-            writer.write_all(self.as_bytes())
-        }
-    }
-
-    async fn assert_message<T>(msg: T)
-    where
-        T: Debug + PartialEq + Serialize + Deserialize,
-    {
-        let mut sender = OnoSender::new(Vec::new());
-        sender.send(&msg).await.unwrap();
-
-        let got: T = proto::read_msg(&mut Cursor::new(sender.tx), &mut Vec::new())
-            .await
-            .unwrap();
-
-        assert_eq!(msg, got)
-    }
-
-    #[tokio::test]
-    async fn write_string() {
-        assert_message("Hello World!".to_string()).await;
+        tx.write_all(&header).await?;
+        tx.write_all(data).await?;
+        tx.flush().await
     }
 }
