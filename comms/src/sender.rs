@@ -40,7 +40,7 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
         buf.clear();
 
         let zero_copy_data = msg.serialize(buf);
-        let len = buf.len() + zero_copy_data.map(<[u8]>::len).unwrap_or_default();
+        let len = buf.len() + zero_copy_data.map(<[_]>::len).unwrap_or_default();
         let header = (len as LenType).to_be_bytes();
 
         tx.write_all(&header).await?;
