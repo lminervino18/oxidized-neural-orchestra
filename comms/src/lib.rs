@@ -5,10 +5,10 @@ mod serialize;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-pub(crate) use deserialize::Deserialize;
-use receiver::OnoReceiver;
-use sender::OnoSender;
-pub(crate) use serialize::Serialize;
+pub use deserialize::Deserialize;
+pub use receiver::OnoReceiver;
+pub use sender::OnoSender;
+pub use serialize::Serialize;
 
 type LenType = u64;
 const LEN_TYPE_SIZE: usize = size_of::<LenType>();
