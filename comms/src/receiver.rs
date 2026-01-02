@@ -1,10 +1,10 @@
 //! The implementation of the receiving end of the application layer protocol.
 
-use std::io;
+use std::io::{self, Cursor};
 
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::{Deserialize, proto};
+use crate::{Deserialize, LEN_TYPE_SIZE, LenType};
 
 pub struct OnoReceiver<R: AsyncRead + Unpin> {
     rx: R,
@@ -23,44 +23,25 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     }
 
     /// Waits to receive a new message from the inner receiver.
-    pub async fn recv<T: Deserialize>(&mut self) -> io::Result<T> {
-        proto::read_msg(&mut self.rx, &mut self.buf).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{fmt::Debug, io::Read};
-
-    use crate::serialize::Serialize;
-
-    use super::*;
-
-    impl Deserialize for String {
-        fn deserialize<R: Read>(reader: &mut R) -> io::Result<Self> {
-            let mut buf = String::new();
-            reader.read_to_string(&mut buf)?;
-            Ok(buf)
-        }
-    }
-
-    async fn assert_message<T>(msg: T)
+    pub async fn recv<'buf, T>(&'buf mut self) -> io::Result<T>
     where
-        T: Debug + PartialEq + Serialize + Deserialize,
+        T: Deserialize<'buf>,
     {
-        let mut payload = Vec::new();
+        let Self { buf, rx } = self;
 
-        proto::write_msg(&msg, &mut Vec::new(), &mut payload)
-            .await
-            .unwrap();
+        let mut size_buf = [0; LEN_TYPE_SIZE];
+        rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
 
-        let mut receiver = OnoReceiver::new(payload.as_slice());
-        let got: T = receiver.recv().await.unwrap();
-        assert_eq!(msg, got);
-    }
+        if buf.capacity() < len {
+            buf.reserve(len - buf.len());
+        }
 
-    #[tokio::test]
-    async fn read_string() {
-        assert_message("Hello World!".to_string()).await;
+        unsafe {
+            buf.set_len(len);
+        }
+
+        rx.read_exact(buf).await?;
+        T::deserialize(buf)
     }
 }
