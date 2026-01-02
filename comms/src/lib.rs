@@ -16,6 +16,13 @@ const LEN_TYPE_SIZE: usize = size_of::<LenType>();
 /// Creates both `OnoReceiver` and `OnoSender` network channel parts.
 ///
 /// Given a writer and reader creates and returns both ends of the communication.
+///
+/// # Arguments
+/// * `rx` - An async readable.
+/// * `tx` - An async writable.
+///
+/// # Returns
+/// A communication stream in the form of an ono receiver and sender.
 pub fn channel<R, W>(rx: R, tx: W) -> (OnoReceiver<R>, OnoSender<W>)
 where
     R: AsyncRead + Unpin,

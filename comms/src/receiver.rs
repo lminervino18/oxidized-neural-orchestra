@@ -1,11 +1,12 @@
 //! The implementation of the receiving end of the application layer protocol.
 
-use std::io::{self, Cursor};
+use std::io;
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use crate::{Deserialize, LEN_TYPE_SIZE, LenType};
 
+/// The receiving end handle of the communication.
 pub struct OnoReceiver<R: AsyncRead + Unpin> {
     rx: R,
     buf: Vec<u8>,
@@ -14,8 +15,9 @@ pub struct OnoReceiver<R: AsyncRead + Unpin> {
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     /// Creates a new `OnoReceiver` instance.
     ///
-    /// Will read all it's data from `rx`.
-    pub fn new(rx: R) -> Self {
+    /// # Arguments
+    /// * `rx` - The underlying reader.
+    pub(super) fn new(rx: R) -> Self {
         Self {
             rx,
             buf: Vec::new(),
@@ -23,6 +25,9 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     }
 
     /// Waits to receive a new message from the inner receiver.
+    ///
+    /// # Returns
+    /// A result object that returns `T` on success or `io::Error` on failure.
     pub async fn recv<'buf, T>(&'buf mut self) -> io::Result<T>
     where
         T: Deserialize<'buf>,
