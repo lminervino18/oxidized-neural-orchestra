@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    io::{self, Read, Write},
-};
+use std::{borrow::Cow, io};
 
 use crate::{Deserialize, Serialize};
 
