@@ -3,8 +3,8 @@ use tokio::io;
 
 struct MyStr<'a>(&'a str);
 
-impl Serialize for MyStr<'_> {
-    fn serialize<'a>(&'a self, _buf: &mut Vec<u8>) -> Option<&'a [u8]> {
+impl<'a> Serialize<'a> for MyStr<'_> {
+    fn serialize(&'a self, _buf: &mut Vec<u8>) -> Option<&'a [u8]> {
         Some(self.0.as_bytes())
     }
 }
