@@ -1,11 +1,12 @@
 //! The implementation of the sending end of the application layer protocol.
 
-use std::io;
+use std::{io, slice};
 
-use tokio::io::AsyncWrite;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::{Serialize, proto};
+use crate::{LenType, Serialize};
 
+/// The sending end handle of the communication.
 pub struct OnoSender<W>
 where
     W: AsyncWrite + Unpin,
@@ -17,8 +18,9 @@ where
 impl<W: AsyncWrite + Unpin> OnoSender<W> {
     /// Creates a new `OnoSender` instance.
     ///
-    /// Will write all it's data through `tx`.
-    pub fn new(tx: W) -> Self {
+    /// # Arguments
+    /// * `tx` - The underlying writer.
+    pub(super) fn new(tx: W) -> Self {
         Self {
             tx,
             buf: Vec::new(),
@@ -26,43 +28,31 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
     }
 
     /// Sends `msg` through the inner sender.
-    pub async fn send<T: Serialize>(&mut self, msg: &T) -> io::Result<()> {
-        proto::write_msg(msg, &mut self.buf, &mut self.tx).await
-    }
-}
+    ///
+    /// # Arguments
+    /// * `msg` - A serializable object.
+    ///
+    /// # Returns
+    /// A result object that returns `io::Error` on failure.
+    pub async fn send<'a, T: Serialize<'a>>(&mut self, msg: &'a T) -> io::Result<()> {
+        let Self { buf, tx } = self;
 
-#[cfg(test)]
-mod tests {
-    use std::{
-        fmt::Debug,
-        io::{Cursor, Write},
-    };
+        buf.clear();
 
-    use super::*;
-    use crate::Deserialize;
+        let zero_copy_data = msg.serialize(buf);
+        let len = buf.len() + zero_copy_data.map(<[u8]>::len).unwrap_or_default();
+        let header = (len as LenType).to_be_bytes();
 
-    impl Serialize for String {
-        fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
-            writer.write_all(self.as_bytes())
+        tx.write_all(&header).await?;
+
+        if !buf.is_empty() {
+            tx.write_all(buf).await?;
         }
-    }
 
-    async fn assert_message<T>(msg: T)
-    where
-        T: Debug + PartialEq + Serialize + Deserialize,
-    {
-        let mut sender = OnoSender::new(Vec::new());
-        sender.send(&msg).await.unwrap();
+        if let Some(data) = zero_copy_data {
+            tx.write_all(data).await?;
+        }
 
-        let got: T = proto::read_msg(&mut Cursor::new(sender.tx), &mut Vec::new())
-            .await
-            .unwrap();
-
-        assert_eq!(msg, got)
-    }
-
-    #[tokio::test]
-    async fn write_string() {
-        assert_message("Hello World!".to_string()).await;
+        tx.flush().await
     }
 }

@@ -16,45 +16,32 @@ pub enum Msg<'a> {
     Data(Payload<'a>),
 }
 
-impl Deserialize for Msg<'_> {
-    fn deserialize<R: Read>(reader: &mut R) -> io::Result<Self> {
-        let mut kind_buf = [0; 1];
-        reader.read_exact(&mut kind_buf)?;
-        let kind = u8::from_be_bytes(kind_buf);
-
-        let mut len_buf = [0; 8];
-        reader.read_exact(&mut len_buf)?;
-        let len = u64::from_be_bytes(len_buf) as usize;
-
-        let mut nums = vec![0f32; len];
-        let data_buf = bytemuck::cast_slice_mut(&mut nums);
-        reader.read_exact(data_buf)?;
-
-        let payload = match kind {
-            0 => Payload::Gradient(Cow::Owned(nums)),
-            1 => Payload::Weights(Cow::Owned(nums)),
-            x => panic!("wrong message kind {x}"),
-        };
-
-        Ok(Msg::Data(payload))
-    }
-}
-
-impl Serialize for Msg<'_> {
-    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+impl<'a> Serialize<'a> for Msg<'a> {
+    fn serialize(&'a self, buf: &mut Vec<u8>) -> Option<&'a [u8]> {
         let (kind, nums) = match self {
             Msg::Data(Payload::Gradient(grad)) => (0, grad),
             Msg::Data(Payload::Weights(weights)) => (1, weights),
         };
 
-        writer.write_all(&[kind])?;
+        buf.push(kind);
+        Some(bytemuck::cast_slice(nums))
+    }
+}
 
-        let len = nums.len() as u64;
-        writer.write_all(&len.to_be_bytes())?;
+impl<'a> Deserialize<'a> for Msg<'a> {
+    fn deserialize(buf: &'a [u8]) -> io::Result<Self> {
+        let kind = match buf[0] {
+            0 => Payload::Gradient,
+            1 => Payload::Weights,
+            x => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Got an invalid message kind {x}"),
+                ));
+            }
+        };
 
-        let bytes = bytemuck::cast_slice(nums);
-        writer.write_all(bytes)?;
-
-        Ok(())
+        let nums = bytemuck::cast_slice(&buf[1..]);
+        Ok(Msg::Data(kind(Cow::Borrowed(nums))))
     }
 }
