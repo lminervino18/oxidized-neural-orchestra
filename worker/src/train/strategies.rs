@@ -1,5 +1,3 @@
-// worker/src/train/strategies.rs
-
 use std::num::NonZeroUsize;
 
 use crate::{
