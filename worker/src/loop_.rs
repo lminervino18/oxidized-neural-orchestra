@@ -2,17 +2,24 @@ use std::io;
 
 use tokio::task;
 
-use super::{
-    WorkerConfig, WorkerState,
+use crate::{
     metrics::WorkerMetrics,
     net::PsClient,
+    state::WorkerState,
+    WorkerConfig,
 };
 
 /// Orchestrates the worker lifecycle.
 ///
-/// This version is intentionally minimal:
-/// - Uses an injected compute function to fill grads from weights.
-/// - Later we will plug `data/*` and `model/*` here.
+/// Design:
+/// - Keeps persistent buffers in `WorkerState`.
+/// - Receives weights into `state.weights`.
+/// - Computes grads into `state.grads` with no per-step allocations.
+/// - Sends `state.grads`.
+///
+/// Concurrency note:
+/// - Compute is CPU-bound and runs on Tokio's blocking pool via `spawn_blocking`.
+/// - We move the buffers out of `self` (O(1) moves) to satisfy `'static` without cloning.
 pub struct WorkerLoop<C> {
     cfg: WorkerConfig,
     state: WorkerState,
@@ -47,39 +54,36 @@ where
         W: tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
         for _ in 0..self.cfg.steps {
-            // 1) recv weights into persistent buffer
-            let recv_res = {
-                let weights = &mut self.state.weights;
-                tokio::time::timeout(
-                    std::time::Duration::from_secs(30),
-                    async { client.recv_weights_into(weights).await },
-                )
-                .await
-            };
+            // 1) Receive weights into persistent buffer.
+            client.recv_weights_into(&mut self.state.weights).await?;
 
-            match recv_res {
-                Ok(r) => r?,
-                Err(_) => {
-                    return Err(io::Error::new(io::ErrorKind::TimedOut, "timeout waiting for weights"));
-                }
-            }
-
-            // 2) compute grads (CPU-bound)
+            // 2) Compute gradients (CPU-bound) without per-step allocations/clones.
             self.state.zero_grads();
-            let weights_snapshot = self.state.weights.clone(); // temporary (we'll remove later)
-            let mut grads = vec![0.0_f32; self.cfg.num_params]; // temporary (we'll remove later)
             let compute_fn = self.compute.clone();
 
-            let compute_out = task::spawn_blocking(move || {
-                (compute_fn)(&weights_snapshot, &mut grads);
-                grads
+            // Move buffers out to satisfy `'static` for spawn_blocking, without copying.
+            let  weights = std::mem::take(&mut self.state.weights);
+            let mut grads = std::mem::take(&mut self.state.grads);
+
+            // Maintain invariants: lengths must match the declared parameter count.
+            debug_assert_eq!(weights.len(), self.cfg.num_params);
+            debug_assert_eq!(grads.len(), self.cfg.num_params);
+
+            // Run compute on the blocking pool.
+            let (weights_back, grads_back) = task::spawn_blocking(move || {
+                (compute_fn)(&weights, &mut grads);
+                (weights, grads)
             })
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("compute join error: {e}")))?;
+            .map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, format!("compute join error: {e}"))
+            })?;
 
-            self.state.grads = compute_out;
+            // Restore buffers to state (no allocations).
+            self.state.weights = weights_back;
+            self.state.grads = grads_back;
 
-            // 3) send grad
+            // 3) Send gradients.
             client.send_grad(&self.state.grads).await?;
 
             self.state.inc_step();
@@ -89,5 +93,3 @@ where
         Ok(self.metrics)
     }
 }
-
-
