@@ -15,6 +15,9 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
     const PARAMS: usize = 2;
     const STEPS: usize = 3;
     const BUF_SIZE: usize = 4096;
+    const BATCH_SIZE: usize = 2;
+
+    let microbatch_k = NonZeroUsize::new(2).unwrap();
 
     // In-memory duplex link
     let (sv_stream, wk_stream) = tokio_io::duplex(BUF_SIZE);
@@ -34,25 +37,22 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
         vec![3.0_f32, 5.0, 7.0, 9.0, 11.0],
     );
 
-    // Shard: single worker owns whole dataset
     let num_workers = NonZeroUsize::new(1).unwrap();
     let shard = ShardSpec::new(0, num_workers);
 
-    // DataLoader: batch_size=2 => steps will consume batches [2,2,1,... cycling]
-    let loader = DataLoader::new(ds.clone(), shard, 2);
-
-    // Model + strategy
+    // Worker loader + model + strategy
+    let loader = DataLoader::new(ds.clone(), shard, BATCH_SIZE);
     let model = Model::new(ModelSpec::LinearRegression1D);
     assert_eq!(model.num_params(), PARAMS);
 
-    let strategy = SupervisedTrain1D::new(model.clone(), loader);
+    let strategy = SupervisedTrain1D::new(model.clone(), loader, microbatch_k);
 
     let cfg = WorkerConfig {
         worker_id: 0,
         num_workers,
         num_params: PARAMS,
         steps: STEPS,
-        microbatch_k: NonZeroUsize::new(1).unwrap(),
+        microbatch_k,
         prefetch: false,
     };
 
@@ -62,17 +62,8 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
         wl.run(client).await
     });
 
-    // Server drives protocol: send weights, receive grads, validate grads by recomputing expected.
-    //
-    // Important: expected should be computed on the same batch sequence the worker will use:
-    // - batch_size=2
-    // - dataset = full shard
-    // - step1 uses xs[0..2], step2 uses xs[2..4], step3 uses xs[4..5]
-    let batches = [
-        (vec![1.0_f32, 2.0], vec![3.0_f32, 5.0]),
-        (vec![3.0_f32, 4.0], vec![7.0_f32, 9.0]),
-        (vec![5.0_f32], vec![11.0_f32]),
-    ];
+    // Shadow loader to generate expected microbatch consumption pattern.
+    let mut shadow_loader = DataLoader::new(ds, shard, BATCH_SIZE);
 
     for step in 0..STEPS {
         let w = [step as f32 + 1.0, step as f32 + 2.0];
@@ -83,9 +74,33 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
             Msg::Data(Payload::Gradient(g)) => {
                 assert_eq!(g.len(), PARAMS);
 
-                let (xs, ys) = &batches[step];
-                let mut expected = [0.0_f32; PARAMS];
-                model.grad_batch(&w, &mut expected, xs, ys);
+                // Compute expected from k batches with same cycling behavior.
+                let mut expected = vec![0.0_f32; PARAMS];
+                let mut scratch = vec![0.0_f32; PARAMS];
+                let mut total_samples = 0usize;
+
+                for _ in 0..microbatch_k.get() {
+                    let batch = match shadow_loader.next_batch() {
+                        Some(b) => b,
+                        None => {
+                            shadow_loader.reset();
+                            shadow_loader.next_batch().unwrap()
+                        }
+                    };
+
+                    scratch.fill(0.0);
+                    model.grad_batch(&w, &mut scratch, &batch.xs, &batch.ys);
+
+                    expected
+                        .iter_mut()
+                        .zip(scratch.iter())
+                        .for_each(|(e, s)| *e += *s);
+
+                    total_samples += batch.len();
+                }
+
+                let denom = total_samples as f32;
+                expected.iter_mut().for_each(|e| *e /= denom);
 
                 assert!((g[0] - expected[0]).abs() < 1e-6);
                 assert!((g[1] - expected[1]).abs() < 1e-6);
