@@ -2,49 +2,38 @@
 
 use std::num::NonZeroUsize;
 
-use crate::{data::dataloader::DataLoader, model::Model};
+use crate::{
+    data::dataloader::{BatchSpec, DataLoader},
+    model::Model,
+};
 
-/// Per-step statistics produced by a TrainStrategy.
-/// These are used by the WorkerLoop to update metrics counters without
-/// knowing the concrete strategy type.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StepStats {
-    /// How many batches were consumed locally in this worker step.
     pub microbatches: usize,
-    /// How many samples were processed locally in this worker step.
     pub samples: usize,
 }
 
-/// Strategy interface for computing gradients.
-///
-/// Contract:
-/// - must write final gradient into `grads` (flat buffer)
-/// - each call corresponds to exactly one *network step* (one gradient send)
 pub trait TrainStrategy {
     fn compute_step(&mut self, weights: &[f32], grads: &mut [f32]);
-
-    /// Returns stats for the most recent `compute_step` call.
     fn last_step_stats(&self) -> StepStats;
 }
 
 /// Supervised training strategy for 1D regression models with microbatch accumulation.
 ///
-/// Semantics:
-/// - One worker "step" = consume `microbatch_k` batches locally.
-/// - Accumulate gradients over those batches.
-/// - Normalize by total number of samples seen (preferred over /k when batch sizes vary).
-///
-/// The DataLoader is shard-aware and cycles when exhausted.
+/// One worker "step" consumes `microbatch_k` batches locally, accumulates,
+/// and normalizes by total samples.
 #[derive(Debug, Clone)]
 pub struct SupervisedTrain1D {
     model: Model,
     loader: DataLoader,
     microbatch_k: NonZeroUsize,
 
-    /// Scratch buffer for per-batch gradient, reused each iteration (no allocations).
+    /// Scratch buffer for per-batch gradient (reused, no allocations).
     scratch: Vec<f32>,
 
-    /// Diagnostics only.
+    /// Scratch specs for this step (reused, no allocations).
+    specs: Vec<BatchSpec>,
+
     last_microbatch_batches: usize,
     last_microbatch_samples: usize,
 }
@@ -52,11 +41,13 @@ pub struct SupervisedTrain1D {
 impl SupervisedTrain1D {
     pub fn new(model: Model, loader: DataLoader, microbatch_k: NonZeroUsize) -> Self {
         let num_params = model.num_params();
+        let k = microbatch_k.get();
         Self {
             model,
             loader,
             microbatch_k,
             scratch: vec![0.0; num_params],
+            specs: Vec::with_capacity(k),
             last_microbatch_batches: 0,
             last_microbatch_samples: 0,
         }
@@ -88,33 +79,45 @@ impl TrainStrategy for SupervisedTrain1D {
         grads.fill(0.0);
 
         let k = self.microbatch_k.get();
-        let mut total_samples = 0usize;
 
+        // 1) Plan: collect specs (this mutates the loader).
+        self.specs.clear();
         for _ in 0..k {
-            let batch = match self.loader.next_batch() {
-                Some(b) => b,
+            let spec = match self.loader.next_spec() {
+                Some(s) => s,
                 None => {
                     self.loader.reset();
                     self.loader
-                        .next_batch()
+                        .next_spec()
                         .expect("dataset/shard must produce at least one batch")
                 }
             };
+            self.specs.push(spec);
+        }
 
-            // Compute batch gradient into scratch (overwrite), then accumulate into grads.
+        // 2) Execute: now borrow dataset immutably and compute.
+        let ds = self.loader.dataset();
+        let xs_all = ds.xs();
+        let ys_all = ds.ys();
+
+        let mut total_samples = 0usize;
+
+        for spec in self.specs.iter().copied() {
+            let xs = &xs_all[spec.start..spec.end];
+            let ys = &ys_all[spec.start..spec.end];
+
             self.scratch.fill(0.0);
-            self.model
-                .grad_batch(weights, &mut self.scratch, batch.xs, batch.ys);
+            self.model.grad_batch(weights, &mut self.scratch, xs, ys);
 
             grads
                 .iter_mut()
                 .zip(self.scratch.iter())
                 .for_each(|(g_acc, g)| *g_acc += *g);
 
-            total_samples += batch.len();
+            total_samples += spec.len();
         }
 
-        // Normalize by samples (robust even if last batch is smaller).
+        // 3) Normalize by samples (robust even if last batch smaller).
         let denom = total_samples.max(1) as f32;
         grads.iter_mut().for_each(|g| *g /= denom);
 
@@ -143,7 +146,7 @@ mod tests {
 
     #[test]
     fn microbatch_accumulates_and_normalizes_by_samples() {
-        // dataset len 5, batch_size 2 => batches: [2,2,1]
+        // dataset len 5, batch_size 2 => specs: [0..2, 2..4, 4..5]
         let ds = InMemoryDataset::new(vec![1., 2., 3., 4., 5.], vec![3., 5., 7., 9., 11.]);
         let shard = ShardSpec::new(0, NonZeroUsize::new(1).unwrap());
         let loader = DataLoader::new(ds, shard, 2);

@@ -111,8 +111,6 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
 
     let metrics = worker_task.await.unwrap()?;
     assert_eq!(metrics.steps as usize, STEPS);
-
-    assert_eq!(metrics.steps as usize, STEPS);
     assert_eq!(metrics.microbatches as usize, STEPS * microbatch_k.get());
     assert!(metrics.samples > 0);
 
