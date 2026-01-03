@@ -1,11 +1,14 @@
-use std::{borrow::Cow, io};
+use std::io;
 
 use crate::{Deserialize, Serialize};
 
+type Header = u32;
+const HEADER_SIZE: usize = size_of::<Header>();
+
 #[derive(Debug)]
 pub enum Payload<'a> {
-    Gradient(Cow<'a, [f32]>),
-    Weights(Cow<'a, [f32]>),
+    Gradient(&'a [f32]),
+    Weights(&'a [f32]),
 }
 
 #[derive(Debug)]
@@ -20,25 +23,47 @@ impl<'a> Serialize<'a> for Msg<'a> {
             Msg::Data(Payload::Weights(weights)) => (1, weights),
         };
 
-        buf.push(kind);
+        let header = (kind as Header).to_be_bytes();
+        buf.extend_from_slice(&header);
+
         Some(bytemuck::cast_slice(nums))
     }
 }
 
 impl<'a> Deserialize<'a> for Msg<'a> {
     fn deserialize(buf: &'a [u8]) -> io::Result<Self> {
-        let kind = match buf[0] {
-            0 => Payload::Gradient,
-            1 => Payload::Weights,
-            x => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Got an invalid message kind {x}"),
-                ));
-            }
+        if buf.len() < HEADER_SIZE {
+            return Self::buf_is_too_small(buf.len());
+        }
+
+        let (kind_buf, rest) = buf.split_at(HEADER_SIZE);
+
+        // SAFETY: We splitted the buffer to be of size `HEADER_SIZE` just above.
+        let kind = Header::from_be_bytes(kind_buf.try_into().unwrap()) as u8;
+        let nums = bytemuck::cast_slice(rest);
+
+        let payload = match kind {
+            0 => Payload::Gradient(nums),
+            1 => Payload::Weights(nums),
+            byte => return Self::invalid_kind_byte(byte),
         };
 
-        let nums = bytemuck::cast_slice(&buf[1..]);
-        Ok(Msg::Data(kind(Cow::Borrowed(nums))))
+        Ok(Self::Data(payload))
+    }
+}
+
+impl Msg<'_> {
+    fn buf_is_too_small<T>(size: usize) -> io::Result<T> {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("The given buffer is too small {size}, must at least be {HEADER_SIZE} bytes"),
+        ))
+    }
+
+    fn invalid_kind_byte<T>(byte: u8) -> io::Result<T> {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Received an invalid kind byte {byte}"),
+        ))
     }
 }

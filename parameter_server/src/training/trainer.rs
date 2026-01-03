@@ -4,6 +4,12 @@
 /// updated model weights, potentially involving asynchronous operations.
 #[trait_variant::make(Trainer: Send)]
 pub trait TrainerTemplate: Clone {
+    /// Should implement a read into the weights of the model to be written to `weights`.
+    ///
+    /// # Arguments
+    /// * `weights` - A buffer where the weights should be written.
+    async fn pull_weights(&self, weights: &mut [f32]);
+
     /// Should implement a step in the traning process, meaning accumulating this gradient and updating weights.
     ///
     /// # Arguments

@@ -29,6 +29,10 @@ impl<O: Optimizer> NonBlocking<O> {
 }
 
 impl<O: Optimizer + Send> Trainer for NonBlocking<O> {
+    async fn pull_weights(&self, weights: &mut [f32]) {
+        self.handle.pull_weights(weights).await;
+    }
+
     /// The asynchronous implementation of a traning step.
     async fn step(&self, grad: &[f32], weights: &mut [f32]) {
         let Self { handle } = self;

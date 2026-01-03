@@ -18,10 +18,8 @@ impl<'a> Deserialize<'a> for MyStr<'a> {
 #[test]
 fn serialize_deserialize() {
     let s = MyStr("Hello, world!");
-
     let serialized = s.serialize(&mut Vec::new()).unwrap();
     let deserialized = MyStr::deserialize(serialized).unwrap();
-
     assert_eq!(deserialized.0, s.0);
 }
 

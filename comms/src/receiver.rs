@@ -9,7 +9,7 @@ use crate::{Deserialize, LEN_TYPE_SIZE, LenType};
 /// The receiving end handle of the communication.
 pub struct OnoReceiver<R: AsyncRead + Unpin> {
     rx: R,
-    buf: Vec<u8>,
+    buf: Vec<u32>,
 }
 
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
@@ -38,15 +38,16 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
         rx.read_exact(&mut size_buf).await?;
         let len = LenType::from_be_bytes(size_buf) as usize;
 
-        if buf.capacity() < len {
-            buf.reserve(len - buf.len());
+        let needed_u32 = len.div_ceil(4);
+        if buf.len() < needed_u32 {
+            buf.resize(needed_u32, 0);
         }
 
-        unsafe {
-            buf.set_len(len);
-        }
+        let view = bytemuck::cast_slice_mut(buf);
+        let slice = &mut view[..len];
 
-        rx.read_exact(buf).await?;
-        T::deserialize(buf)
+        rx.read_exact(slice).await?;
+
+        T::deserialize(slice)
     }
 }

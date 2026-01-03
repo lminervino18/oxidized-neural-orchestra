@@ -37,6 +37,10 @@ impl<O: Optimizer> BarrierSync<O> {
 }
 
 impl<O: Optimizer + Send> Trainer for BarrierSync<O> {
+    async fn pull_weights(&self, weights: &mut [f32]) {
+        self.handle.pull_weights(weights).await;
+    }
+
     /// The synchronous implementation of a training step.
     async fn step(&self, grad: &[f32], weights: &mut [f32]) {
         let Self { handle, barrier } = self;

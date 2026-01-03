@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io};
+use std::io;
 
 use comms::{
     OnoReceiver, OnoSender,
@@ -39,6 +39,13 @@ impl<T: Trainer> ParameterServer<T> {
     pub async fn run(self) -> Vec<io::Result<()>> {
         self.tasks.join_all().await
     }
+
+    fn unexpected_message_kind<U>(msg: Msg) -> io::Result<U> {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Received an unexpected message kind, got: {msg:?}"),
+        ))
+    }
 }
 
 impl<T: Trainer + Send + Sync + 'static> ParameterServer<T> {
@@ -57,20 +64,18 @@ impl<T: Trainer + Send + Sync + 'static> ParameterServer<T> {
         let mut buf = vec![0.; params];
 
         let task = async move {
-            for _ in 0..epochs {
-                let msg: Msg = rx.recv().await?;
+            trainer.pull_weights(&mut buf).await;
 
+            for _ in 0..epochs {
+                let msg = Msg::Data(Payload::Weights(&buf));
+                tx.send(&msg).await?;
+
+                let msg: Msg = rx.recv().await?;
                 let Msg::Data(Payload::Gradient(grad)) = msg else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("Received an invalid message kind {msg:?}"),
-                    ));
+                    return Self::unexpected_message_kind(msg);
                 };
 
                 trainer.step(&grad, &mut buf).await;
-
-                let msg = Msg::Data(Payload::Weights(Cow::Borrowed(&buf)));
-                tx.send(&msg).await?;
             }
 
             Ok(())
