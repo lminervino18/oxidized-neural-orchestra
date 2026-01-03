@@ -1,9 +1,19 @@
+// worker/src/train/strategies.rs
+
 use std::num::NonZeroUsize;
 
-use crate::{
-    data::dataloader::DataLoader,
-    model::Model,
-};
+use crate::{data::dataloader::DataLoader, model::Model};
+
+/// Per-step statistics produced by a TrainStrategy.
+/// These are used by the WorkerLoop to update metrics counters without
+/// knowing the concrete strategy type.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StepStats {
+    /// How many batches were consumed locally in this worker step.
+    pub microbatches: usize,
+    /// How many samples were processed locally in this worker step.
+    pub samples: usize,
+}
 
 /// Strategy interface for computing gradients.
 ///
@@ -12,6 +22,9 @@ use crate::{
 /// - each call corresponds to exactly one *network step* (one gradient send)
 pub trait TrainStrategy {
     fn compute_step(&mut self, weights: &[f32], grads: &mut [f32]);
+
+    /// Returns stats for the most recent `compute_step` call.
+    fn last_step_stats(&self) -> StepStats;
 }
 
 /// Supervised training strategy for 1D regression models with microbatch accumulation.
@@ -108,6 +121,14 @@ impl TrainStrategy for SupervisedTrain1D {
         self.last_microbatch_batches = k;
         self.last_microbatch_samples = total_samples;
     }
+
+    #[inline]
+    fn last_step_stats(&self) -> StepStats {
+        StepStats {
+            microbatches: self.last_microbatch_batches,
+            samples: self.last_microbatch_samples,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -116,7 +137,7 @@ mod tests {
     use std::num::NonZeroUsize;
 
     use crate::{
-        data::{dataset::InMemoryDataset, shard::ShardSpec, dataloader::DataLoader},
+        data::{dataloader::DataLoader, dataset::InMemoryDataset, shard::ShardSpec},
         model::{spec::ModelSpec, Model},
     };
 
@@ -130,7 +151,8 @@ mod tests {
         let model = Model::new(ModelSpec::LinearRegression1D);
 
         // microbatch_k = 2 => consumes first two batches => total_samples = 4
-        let mut strat = SupervisedTrain1D::new(model.clone(), loader, NonZeroUsize::new(2).unwrap());
+        let mut strat =
+            SupervisedTrain1D::new(model.clone(), loader, NonZeroUsize::new(2).unwrap());
 
         let weights = [0.5_f32, 0.0_f32];
         let mut out = vec![0.0_f32; model.num_params()];
@@ -139,6 +161,13 @@ mod tests {
 
         assert_eq!(strat.last_microbatch_batches(), 2);
         assert_eq!(strat.last_microbatch_samples(), 4);
+        assert_eq!(
+            strat.last_step_stats(),
+            StepStats {
+                microbatches: 2,
+                samples: 4
+            }
+        );
 
         // Validate: expected = (grad(batch1)+grad(batch2)) / total_samples
         let b1_x = vec![1.0, 2.0];

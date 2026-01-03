@@ -21,7 +21,10 @@ pub struct WorkerConfig {
 
 impl WorkerConfig {
     pub fn validate(&self) {
-        assert!(self.worker_id < self.num_workers.get(), "worker_id out of range");
+        assert!(
+            self.worker_id < self.num_workers.get(),
+            "worker_id out of range"
+        );
         assert!(self.num_params > 0, "num_params must be > 0");
         assert!(self.steps > 0, "steps must be > 0");
     }

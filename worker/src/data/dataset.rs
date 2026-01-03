@@ -110,7 +110,6 @@ impl<'a> BatchRef<'a> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,3 +1,3 @@
 pub mod strategies;
 
-pub use strategies::{TrainStrategy, SupervisedTrain1D};
+pub use strategies::{SupervisedTrain1D, TrainStrategy};

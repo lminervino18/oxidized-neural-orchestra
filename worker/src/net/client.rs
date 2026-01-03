@@ -1,8 +1,8 @@
 use std::io;
 
 use comms::{
-    OnoReceiver, OnoSender,
     msg::{Msg, Payload},
+    OnoReceiver, OnoSender,
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -39,7 +39,11 @@ where
                 if w.len() != dst.len() {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
-                        format!("weights length mismatch: got {}, expected {}", w.len(), dst.len()),
+                        format!(
+                            "weights length mismatch: got {}, expected {}",
+                            w.len(),
+                            dst.len()
+                        ),
                     ));
                 }
                 dst.copy_from_slice(w);

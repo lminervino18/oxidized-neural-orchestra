@@ -9,7 +9,7 @@ pub mod loop_;
 pub mod metrics;
 pub mod model;
 pub mod net;
-pub mod schedule; 
+pub mod schedule;
 pub mod state;
 pub mod train;
 

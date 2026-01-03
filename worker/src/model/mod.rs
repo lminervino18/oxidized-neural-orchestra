@@ -36,13 +36,7 @@ impl Model {
 
     /// Compute gradients for a full batch.
     /// Writes into `grads` (flat buffer) using the internal layout.
-    pub fn grad_batch(
-        &self,
-        weights: &[f32],
-        grads: &mut [f32],
-        xs: &[f32],
-        ys: &[f32],
-    ) {
+    pub fn grad_batch(&self, weights: &[f32], grads: &mut [f32], xs: &[f32], ys: &[f32]) {
         match self.spec {
             ModelSpec::LinearRegression1D => {
                 ops::linreg_mse_grad_batch(&self.layout, weights, grads, xs, ys)

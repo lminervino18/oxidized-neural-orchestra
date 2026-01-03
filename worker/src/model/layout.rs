@@ -15,10 +15,7 @@ impl ParameterLayout {
         match spec {
             ModelSpec::LinearRegression1D => {
                 // Flat layout: [w, b]
-                Self {
-                    w: 0..1,
-                    b: 1..2,
-                }
+                Self { w: 0..1, b: 1..2 }
             }
         }
     }

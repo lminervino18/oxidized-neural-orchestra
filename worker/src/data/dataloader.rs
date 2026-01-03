@@ -21,7 +21,13 @@ impl DataLoader {
         let shard_range = shard.range(total);
         let cursor = shard_range.start;
 
-        Self { dataset, shard, shard_range, batch_size, cursor }
+        Self {
+            dataset,
+            shard,
+            shard_range,
+            batch_size,
+            cursor,
+        }
     }
 
     #[inline]

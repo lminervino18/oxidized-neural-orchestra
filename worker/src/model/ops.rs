@@ -22,7 +22,10 @@ pub fn linreg_mse_grad_batch(
 ) {
     assert_eq!(xs.len(), ys.len(), "xs and ys must match");
     assert!(!xs.is_empty(), "batch must be non-empty");
-    assert!(weights.len() >= layout.b.end, "weights too small for layout");
+    assert!(
+        weights.len() >= layout.b.end,
+        "weights too small for layout"
+    );
     assert!(grads.len() >= layout.b.end, "grads too small for layout");
 
     // Make sure we start from a clean accumulator for this call.

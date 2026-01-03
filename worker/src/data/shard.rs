@@ -30,7 +30,10 @@ pub struct ShardSpec {
 impl ShardSpec {
     pub fn new(worker_id: usize, num_workers: NonZeroUsize) -> Self {
         assert!(worker_id < num_workers.get(), "worker_id out of range");
-        Self { worker_id, num_workers }
+        Self {
+            worker_id,
+            num_workers,
+        }
     }
 
     #[inline]
