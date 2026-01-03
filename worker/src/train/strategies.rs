@@ -91,7 +91,7 @@ impl TrainStrategy for SupervisedTrain1D {
             // Compute batch gradient into scratch (overwrite), then accumulate into grads.
             self.scratch.fill(0.0);
             self.model
-                .grad_batch(weights, &mut self.scratch, &batch.xs, &batch.ys);
+                .grad_batch(weights, &mut self.scratch, batch.xs, batch.ys);
 
             grads
                 .iter_mut()

@@ -89,7 +89,7 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
                     };
 
                     scratch.fill(0.0);
-                    model.grad_batch(&w, &mut scratch, &batch.xs, &batch.ys);
+                    model.grad_batch(&w, &mut scratch, batch.xs, batch.ys);
 
                     expected
                         .iter_mut()

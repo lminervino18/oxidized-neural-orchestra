@@ -96,6 +96,21 @@ impl Batch {
     }
 }
 
+/// Borrowed batch view (zero-copy).
+#[derive(Debug, Clone, Copy)]
+pub struct BatchRef<'a> {
+    pub xs: &'a [f32],
+    pub ys: &'a [f32],
+}
+
+impl<'a> BatchRef<'a> {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.xs.len()
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
