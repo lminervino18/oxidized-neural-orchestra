@@ -1,3 +1,3 @@
-//! Training strategies (filled in later).
-
 pub mod strategies;
+
+pub use strategies::{TrainStrategy, SupervisedTrain1D};

@@ -1,7 +1,7 @@
-//! Data subsystem: dataset representation, sharding, dataloader.
-//!
-//! Filled in next step.
-
-pub mod shard;
-pub mod dataset;
 pub mod dataloader;
+pub mod dataset;
+pub mod shard;
+
+pub use dataloader::DataLoader;
+pub use dataset::{Batch, InMemoryDataset, Sample};
+pub use shard::{ShardSpec, shard_range};

@@ -1,5 +1,3 @@
-// worker/src/data/dataset.rs
-
 /// A single supervised sample (x, y).
 ///
 /// Baseline model (LinearRegression1D) uses scalar x and y.

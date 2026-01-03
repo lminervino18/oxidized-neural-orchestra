@@ -1,13 +1,14 @@
-// worker/tests/worker_loop.rs
-
-use std::{io, sync::Arc};
+use std::{io, num::NonZeroUsize};
 
 use tokio::io as tokio_io;
 
 use comms::msg::{Msg, Payload};
-use worker::{PsClient, WorkerConfig, WorkerLoop};
-use worker::data::dataset::Batch;
-use worker::model::{spec::ModelSpec, Model};
+use worker::{
+    PsClient, WorkerConfig, WorkerLoop,
+    data::{InMemoryDataset, ShardSpec, DataLoader},
+    model::{spec::ModelSpec, Model},
+    train::SupervisedTrain1D,
+};
 
 #[tokio::test]
 async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
@@ -27,40 +28,52 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
     let client = PsClient::new(wk_rx, wk_tx);
 
-    // Model + fixed batch (shared safely across tasks)
-    let model = Arc::new(Model::new(ModelSpec::LinearRegression1D));
-    assert_eq!(model.num_params(), PARAMS);
-
-    let batch = Arc::new(Batch::new(
+    // Dataset (global)
+    let ds = InMemoryDataset::new(
         vec![1.0_f32, 2.0, 3.0, 4.0, 5.0],
         vec![3.0_f32, 5.0, 7.0, 9.0, 11.0],
-    ));
+    );
 
-    // Compute closure uses only the stable Model API.
-    // Arc clones are cheap and avoid borrow-checker issues with move closures.
-    let model_c = Arc::clone(&model);
-    let batch_c = Arc::clone(&batch);
+    // Shard: single worker owns whole dataset
+    let num_workers = NonZeroUsize::new(1).unwrap();
+    let shard = ShardSpec::new(0, num_workers);
 
-    let compute = move |weights: &[f32], grads: &mut [f32]| {
-        model_c.grad_batch(weights, grads, &batch_c.xs, &batch_c.ys);
-    };
+    // DataLoader: batch_size=2 => steps will consume batches [2,2,1,... cycling]
+    let loader = DataLoader::new(ds.clone(), shard, 2);
+
+    // Model + strategy
+    let model = Model::new(ModelSpec::LinearRegression1D);
+    assert_eq!(model.num_params(), PARAMS);
+
+    let strategy = SupervisedTrain1D::new(model.clone(), loader);
 
     let cfg = WorkerConfig {
         worker_id: 0,
-        num_workers: std::num::NonZeroUsize::new(1).unwrap(),
+        num_workers,
         num_params: PARAMS,
         steps: STEPS,
-        microbatch_k: std::num::NonZeroUsize::new(1).unwrap(),
+        microbatch_k: NonZeroUsize::new(1).unwrap(),
         prefetch: false,
     };
 
     // Run worker in background
     let worker_task = tokio::spawn(async move {
-        let wl = WorkerLoop::new(cfg, compute);
+        let wl = WorkerLoop::new(cfg, strategy);
         wl.run(client).await
     });
 
-    // Server drives the protocol: send weights, read grads, validate grads.
+    // Server drives protocol: send weights, receive grads, validate grads by recomputing expected.
+    //
+    // Important: expected should be computed on the same batch sequence the worker will use:
+    // - batch_size=2
+    // - dataset = full shard
+    // - step1 uses xs[0..2], step2 uses xs[2..4], step3 uses xs[4..5]
+    let batches = [
+        (vec![1.0_f32, 2.0], vec![3.0_f32, 5.0]),
+        (vec![3.0_f32, 4.0], vec![7.0_f32, 9.0]),
+        (vec![5.0_f32], vec![11.0_f32]),
+    ];
+
     for step in 0..STEPS {
         let w = [step as f32 + 1.0, step as f32 + 2.0];
         sv_tx.send(&Msg::Data(Payload::Weights(&w))).await?;
@@ -70,8 +83,9 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
             Msg::Data(Payload::Gradient(g)) => {
                 assert_eq!(g.len(), PARAMS);
 
+                let (xs, ys) = &batches[step];
                 let mut expected = [0.0_f32; PARAMS];
-                model.grad_batch(&w, &mut expected, &batch.xs, &batch.ys);
+                model.grad_batch(&w, &mut expected, xs, ys);
 
                 assert!((g[0] - expected[0]).abs() < 1e-6);
                 assert!((g[1] - expected[1]).abs() < 1e-6);
@@ -80,7 +94,6 @@ async fn worker_loop_sends_expected_gradients() -> io::Result<()> {
         }
     }
 
-    // Ensure worker finished cleanly
     let metrics = worker_task.await.unwrap()?;
     assert_eq!(metrics.steps as usize, STEPS);
 
