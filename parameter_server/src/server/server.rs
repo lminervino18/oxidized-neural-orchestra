@@ -40,6 +40,10 @@ impl<T: Trainer> ParameterServer<T> {
         self.tasks.join_all().await
     }
 
+    /// Creates an error for when an unexpected message kind is received.
+    ///
+    /// # Returns
+    /// An error.
     fn unexpected_message_kind<U>(msg: Msg) -> io::Result<U> {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,

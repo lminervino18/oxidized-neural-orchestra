@@ -2,6 +2,6 @@ mod barrier_sync;
 mod non_blocking;
 mod trainer;
 
-pub use barrier_sync::BarrierSync;
-pub use non_blocking::NonBlocking;
+pub use barrier_sync::BarrierSyncTrainer;
+pub use non_blocking::NonBlockingTrainer;
 pub use trainer::Trainer;
