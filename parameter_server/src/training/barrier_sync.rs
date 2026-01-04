@@ -8,12 +8,12 @@ use crate::{
 };
 
 /// A trainer that synchronizes parameter updates across multiple workers using a barrier.
-pub struct BarrierSync<O: Optimizer> {
+pub struct BarrierSyncTrainer<O: Optimizer> {
     handle: ParameterHandle<O>,
     barrier: Arc<Barrier>,
 }
 
-impl<O: Optimizer> Clone for BarrierSync<O> {
+impl<O: Optimizer> Clone for BarrierSyncTrainer<O> {
     fn clone(&self) -> Self {
         Self {
             handle: self.handle.clone(),
@@ -22,13 +22,13 @@ impl<O: Optimizer> Clone for BarrierSync<O> {
     }
 }
 
-impl<O: Optimizer> BarrierSync<O> {
-    /// Creates a new `BarrierSync`.
+impl<O: Optimizer> BarrierSyncTrainer<O> {
+    /// Creates a new `BarrierSyncTrainer`.
     ///
     /// # Arguments
-    /// * `store` - A trainable set of parameters.
-    /// * `barrier_size` - The size of the barrier for accumulating workers before and after weight update.
-    pub fn new(store: ParameterStore<O>, barrier_size: usize) -> Self {
+    /// * `barrier_size` - The amount of workers to wait on until updating the weights of the model.
+    /// * `store` - The underlying parameter store.
+    pub fn new(barrier_size: usize, store: ParameterStore<O>) -> Self {
         Self {
             handle: ParameterHandle::new(store),
             barrier: Arc::new(Barrier::new(barrier_size)),
@@ -36,12 +36,11 @@ impl<O: Optimizer> BarrierSync<O> {
     }
 }
 
-impl<O: Optimizer + Send> Trainer for BarrierSync<O> {
+impl<O: Optimizer + Send> Trainer for BarrierSyncTrainer<O> {
     async fn pull_weights(&self, weights: &mut [f32]) {
         self.handle.pull_weights(weights).await;
     }
 
-    /// The synchronous implementation of a training step.
     async fn step(&self, grad: &[f32], weights: &mut [f32]) {
         let Self { handle, barrier } = self;
 

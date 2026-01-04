@@ -2,9 +2,9 @@ use tokio::task;
 
 use crate::parameters::{ParameterStore, optimization::Optimizer};
 
-/// Drives parameter operations in the async runtime.
+/// The actual interface to interact with a `ParameterStore`.
 ///
-/// Bridges async execution and CPU-bound parameter updates.
+/// It bridges the async world with the blocking CPU-bound implementation of the `ParameterStore`.
 pub struct ParameterHandle<O: Optimizer>(ParameterStore<O>);
 
 impl<O: Optimizer> Clone for ParameterHandle<O> {

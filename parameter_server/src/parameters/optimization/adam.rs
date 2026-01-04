@@ -13,6 +13,12 @@ pub struct Adam {
 }
 
 impl Adam {
+    /// Creates a new `Adam` optimizer.
+    ///
+    /// # Arguments
+    /// * `len` - The amount of parameters this instance should hold.
+    /// * `learning_rate` - The small coefficient that modulates the amount of training per update.
+    /// * `beta1`, `beta2`, `epsilon` - Hyperparameters to the optimization algorithm.
     pub fn new(len: usize, learning_rate: f32, beta1: f32, beta2: f32, epsilon: f32) -> Self {
         Self {
             learning_rate,

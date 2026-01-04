@@ -70,7 +70,7 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     ///
     /// # Arguments
     /// * `grad` - A flat slice containing a new model gradient.
-    pub fn accumulate(&self, grad: &[f32]) {
+    pub(super) fn accumulate(&self, grad: &[f32]) {
         let active_idx = self.active_idx.load(Ordering::Acquire) as usize;
 
         self.shards
@@ -84,7 +84,7 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     /// Swaps the active gradient buffer and applies the frozen gradient to the weights.
     ///
     /// This triggers a parallel update across all shards.
-    pub fn update_weights(&self) {
+    pub(super) fn update_weights(&self) {
         let success = self
             .updating
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
@@ -108,7 +108,7 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     ///
     /// # Panics
     /// If the length of `out` doesn't match the total number of parameters.
-    pub fn pull_weights(&self, out: &mut [f32]) {
+    pub(super) fn pull_weights(&self, out: &mut [f32]) {
         self.shards
             .par_iter()
             .zip(out.par_chunks_mut(self.shard_size))
