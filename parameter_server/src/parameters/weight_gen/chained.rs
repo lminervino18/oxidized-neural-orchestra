@@ -8,6 +8,7 @@ use super::WeightGen;
 pub struct ChainedWeightGen {
     weight_gens: Vec<Box<dyn WeightGen>>,
     curr: usize,
+    remaining: usize,
 }
 
 impl ChainedWeightGen {
@@ -16,8 +17,14 @@ impl ChainedWeightGen {
     /// # Arguments
     /// * `weight_gens` - A vec of potentially different weight generators.
     pub fn new(weight_gens: Vec<Box<dyn WeightGen>>) -> Self {
+        let remaining = weight_gens
+            .iter()
+            .map(|weight_gen| weight_gen.remaining())
+            .sum();
+
         Self {
             weight_gens,
+            remaining,
             curr: 0,
         }
     }
@@ -25,13 +32,17 @@ impl ChainedWeightGen {
 
 impl WeightGen for ChainedWeightGen {
     fn sample(&mut self, n: usize) -> Option<Vec<f32>> {
-        if self.curr == self.weight_gens.len() {
+        if self.curr == self.weight_gens.len() || self.remaining == 0 {
             return None;
         }
 
         match self.weight_gens[self.curr].sample(n) {
-            Some(sample) if sample.len() == n => Some(sample),
+            Some(sample) if sample.len() == n => {
+                self.remaining -= sample.len();
+                Some(sample)
+            }
             Some(mut sample) => {
+                self.remaining -= sample.len();
                 self.curr += 1;
 
                 if let Some(next_sample) = self.sample(n - sample.len()) {
@@ -48,13 +59,6 @@ impl WeightGen for ChainedWeightGen {
     }
 
     fn remaining(&self) -> usize {
-        if self.curr == self.weight_gens.len() {
-            return 0;
-        }
-
-        self.weight_gens[self.curr..]
-            .iter()
-            .map(|weight_gen| weight_gen.remaining())
-            .sum()
+        self.remaining
     }
 }
