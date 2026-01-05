@@ -1,5 +1,3 @@
-use rand::Rng;
-
 use super::WeightGen;
 
 /// A weight generator that always generates the same value.
@@ -22,8 +20,8 @@ impl ConstWeightGen {
     }
 }
 
-impl<R: Rng> WeightGen<R> for ConstWeightGen {
-    fn sample<'a>(&mut self, _rng: &'a mut R, mut n: usize) -> Option<Vec<f32>> {
+impl WeightGen for ConstWeightGen {
+    fn sample(&mut self, mut n: usize) -> Option<Vec<f32>> {
         if self.remaining == 0 {
             return None;
         }

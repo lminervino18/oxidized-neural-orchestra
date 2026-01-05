@@ -6,12 +6,14 @@ use std::{
     },
 };
 
-use rand::Rng;
 use rayon::prelude::*;
 
 use super::{ParameterShard, optimization::Optimizer, weight_gen::WeightGen};
 
-/// Provides the primary interface for workers to contribute gradients and update weights.
+/// The primary storage of weights and accumulated gradients.
+///
+/// These methods are private to the module, they become callable through
+/// the async interface of a `ParameterHandle`.
 #[derive(Debug)]
 pub struct ParameterStore<O: Optimizer> {
     active_idx: Arc<AtomicU8>,
@@ -36,28 +38,25 @@ impl<O: Optimizer> ParameterStore<O> {
     ///
     /// # Arguments
     /// * `shard_amount` - The amount of shards to partition the model into.
-    /// * `rng` - A random number generator.
     /// * `weight_gen` - A weight generator.
     /// * `optimizer_factory` - An `Optimizer` factory closure.
-    pub fn new<R, W, F>(
+    pub fn new<W, F>(
         shard_amount: NonZeroUsize,
-        mut rng: R,
         mut weight_gen: W,
         mut optimizer_factory: F,
     ) -> Self
     where
-        R: Rng,
-        W: WeightGen<R>,
+        W: WeightGen,
         F: FnMut(usize) -> O,
     {
-        let n = shard_amount.get();
         let params = weight_gen.remaining();
-        let shard_size = params.div_ceil(n);
-        let mut shards = Vec::with_capacity(n);
+        let shard_size = params.div_ceil(shard_amount.get());
+        let mut shards = Vec::with_capacity(shard_amount.get());
 
-        while let Some(shard_weights) = weight_gen.sample(&mut rng, shard_size) {
-            let optimizer = optimizer_factory(shard_weights.len());
-            shards.push(ParameterShard::new(shard_weights, optimizer));
+        while let Some(weights) = weight_gen.sample(shard_size) {
+            let optimizer = optimizer_factory(weights.len());
+            let shard = ParameterShard::new(weights, optimizer);
+            shards.push(shard);
         }
 
         Self {
@@ -140,8 +139,7 @@ mod tests {
     fn create_test_store(params: usize, shard_amount: usize) -> ParameterStore<AddOptimizer> {
         let shard_amount = NonZeroUsize::new(shard_amount).unwrap();
         let weight_gen = ConstWeightGen::new(0., params);
-        let rng = rand::rng();
-        ParameterStore::new(shard_amount, rng, weight_gen, |_| AddOptimizer)
+        ParameterStore::new(shard_amount, weight_gen, |_| AddOptimizer)
     }
 
     #[test]

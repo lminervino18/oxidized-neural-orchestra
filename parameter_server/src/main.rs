@@ -21,10 +21,9 @@ async fn main() -> io::Result<()> {
     const EPOCHS: usize = 500;
     const LR: f32 = 0.01;
 
-    let rng = rand::rng();
     let weight_gen = ConstWeightGen::new(0., PARAMS);
     let optimizer_factory = |_| GradientDescent::new(LR);
-    let store = ParameterStore::new(SHARD_AMOUNT, rng, weight_gen, optimizer_factory);
+    let store = ParameterStore::new(SHARD_AMOUNT, weight_gen, optimizer_factory);
     let trainer = BarrierSyncTrainer::new(WORKERS, store);
     let mut pserver = ParameterServer::new(PARAMS, EPOCHS, trainer);
 
