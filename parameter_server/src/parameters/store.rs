@@ -6,9 +6,10 @@ use std::{
     },
 };
 
+use rand::Rng;
 use rayon::prelude::*;
 
-use super::{ParameterShard, optimization::Optimizer};
+use super::{ParameterShard, optimization::Optimizer, weight_gen::WeightGen};
 
 /// Provides the primary interface for workers to contribute gradients and update weights.
 #[derive(Debug)]
@@ -17,7 +18,6 @@ pub struct ParameterStore<O: Optimizer> {
     updating: Arc<AtomicBool>,
     shards: Arc<[ParameterShard<O>]>,
     shard_size: usize,
-    params: usize,
 }
 
 impl<O: Optimizer> Clone for ParameterStore<O> {
@@ -27,7 +27,6 @@ impl<O: Optimizer> Clone for ParameterStore<O> {
             updating: Arc::clone(&self.updating),
             shards: Arc::clone(&self.shards),
             shard_size: self.shard_size,
-            params: self.params,
         }
     }
 }
@@ -36,31 +35,36 @@ impl<O: Optimizer> ParameterStore<O> {
     /// Creates a new `ParameterStore`.
     ///
     /// # Arguments
-    /// * `params` - Total number of parameters in the model.
-    /// * `shard_amount` - The amount of shards to partition the model.
-    /// * `factory` - An `Optimizer` factory closure.
-    pub fn new<F>(params: usize, shard_amount: NonZeroUsize, mut factory: F) -> Self
+    /// * `shard_amount` - The amount of shards to partition the model into.
+    /// * `rng` - A random number generator.
+    /// * `weight_gen` - A weight generator.
+    /// * `optimizer_factory` - An `Optimizer` factory closure.
+    pub fn new<R, W, F>(
+        shard_amount: NonZeroUsize,
+        mut rng: R,
+        mut weight_gen: W,
+        mut optimizer_factory: F,
+    ) -> Self
     where
+        R: Rng,
+        W: WeightGen<R>,
         F: FnMut(usize) -> O,
     {
         let n = shard_amount.get();
+        let params = weight_gen.remaining();
         let shard_size = params.div_ceil(n);
+        let mut shards = Vec::with_capacity(n);
 
-        let shards: Vec<_> = (0..n)
-            .map(|i| {
-                let start = i * shard_size;
-                let end = (start + shard_size).min(params);
-                let len = end - start;
-                ParameterShard::new(len, factory(len))
-            })
-            .collect();
+        while let Some(shard_weights) = weight_gen.sample(&mut rng, shard_size) {
+            let optimizer = optimizer_factory(shard_weights.len());
+            shards.push(ParameterShard::new(shard_weights, optimizer));
+        }
 
         Self {
             active_idx: Arc::new(AtomicU8::new(0)),
             updating: Arc::new(AtomicBool::new(false)),
             shards: Arc::from(shards),
             shard_size,
-            params,
         }
     }
 }
@@ -123,6 +127,7 @@ mod tests {
     use std::num::NonZeroUsize;
 
     use super::*;
+    use crate::parameters::weight_gen::ConstWeightGen;
 
     struct AddOptimizer;
 
@@ -133,9 +138,10 @@ mod tests {
     }
 
     fn create_test_store(params: usize, shard_amount: usize) -> ParameterStore<AddOptimizer> {
-        ParameterStore::new(params, NonZeroUsize::new(shard_amount).unwrap(), |_| {
-            AddOptimizer
-        })
+        let shard_amount = NonZeroUsize::new(shard_amount).unwrap();
+        let weight_gen = ConstWeightGen::new(0., params);
+        let rng = rand::rng();
+        ParameterStore::new(shard_amount, rng, weight_gen, |_| AddOptimizer)
     }
 
     #[test]
@@ -195,9 +201,9 @@ mod tests {
     #[test]
     fn test_store_initialization_and_flow() {
         const PARAMS: usize = 100;
-        const SHARD_AMOUNT: NonZeroUsize = NonZeroUsize::new(4).unwrap();
+        const SHARD_AMOUNT: usize = 4;
 
-        let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, |_| AddOptimizer);
+        let store = create_test_store(PARAMS, SHARD_AMOUNT);
 
         let grad = [1.0; PARAMS];
         store.accumulate(&grad);
@@ -214,9 +220,9 @@ mod tests {
     #[test]
     fn test_ragged_edge_distribution() {
         const PARAMS: usize = 105;
-        const SHARD_AMOUNT: NonZeroUsize = NonZeroUsize::new(10).unwrap();
+        const SHARD_AMOUNT: usize = 10;
 
-        let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, |_| AddOptimizer);
+        let store = create_test_store(PARAMS, SHARD_AMOUNT);
 
         let grad = [1.0; PARAMS];
         store.accumulate(&grad);

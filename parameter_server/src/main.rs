@@ -2,14 +2,12 @@ mod parameters;
 mod server;
 mod training;
 
-use std::io;
-
-use std::num::NonZeroUsize;
+use std::{io, num::NonZeroUsize};
 
 use tokio::net::TcpListener;
 
 use crate::{
-    parameters::{ParameterStore, optimization::GradientDescent},
+    parameters::{ParameterStore, optimization::GradientDescent, weight_gen::ConstWeightGen},
     server::ParameterServer,
     training::BarrierSyncTrainer,
 };
@@ -23,9 +21,13 @@ async fn main() -> io::Result<()> {
     const EPOCHS: usize = 500;
     const LR: f32 = 0.01;
 
-    let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, |_| GradientDescent::new(LR));
+    let rng = rand::rng();
+    let weight_gen = ConstWeightGen::new(0., PARAMS);
+    let optimizer_factory = |_| GradientDescent::new(LR);
+    let store = ParameterStore::new(SHARD_AMOUNT, rng, weight_gen, optimizer_factory);
     let trainer = BarrierSyncTrainer::new(WORKERS, store);
     let mut pserver = ParameterServer::new(PARAMS, EPOCHS, trainer);
+
     let list = TcpListener::bind(ADDR).await?;
 
     for _ in 0..WORKERS {
