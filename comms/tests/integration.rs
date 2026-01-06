@@ -10,7 +10,7 @@ impl<'a> Serialize<'a> for MyStr<'_> {
 }
 
 impl<'a> Deserialize<'a> for MyStr<'a> {
-    fn deserialize(buf: &'a [u8]) -> std::io::Result<Self> {
+    fn deserialize(buf: &'a mut [u8]) -> io::Result<Self> {
         Ok(Self(str::from_utf8(buf).unwrap()))
     }
 }
@@ -19,7 +19,8 @@ impl<'a> Deserialize<'a> for MyStr<'a> {
 fn serialize_deserialize() {
     let s = MyStr("Hello, world!");
     let serialized = s.serialize(&mut Vec::new()).unwrap();
-    let deserialized = MyStr::deserialize(serialized).unwrap();
+    let mut copied = serialized.to_vec();
+    let deserialized = MyStr::deserialize(&mut copied).unwrap();
     assert_eq!(deserialized.0, s.0);
 }
 

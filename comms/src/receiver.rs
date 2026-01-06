@@ -1,5 +1,3 @@
-//! The implementation of the receiving end of the application layer protocol.
-
 use std::io;
 
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -45,7 +43,6 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
 
         let view = bytemuck::cast_slice_mut(buf);
         let slice = &mut view[..len];
-
         rx.read_exact(slice).await?;
 
         T::deserialize(slice)

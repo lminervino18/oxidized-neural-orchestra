@@ -1,5 +1,3 @@
-//! The implementation of the sending end of the application layer protocol.
-
 use std::io;
 
 use tokio::io::{AsyncWrite, AsyncWriteExt};
@@ -7,10 +5,7 @@ use tokio::io::{AsyncWrite, AsyncWriteExt};
 use crate::{LEN_TYPE_SIZE, LenType, Serialize};
 
 /// The sending end handle of the communication.
-pub struct OnoSender<W>
-where
-    W: AsyncWrite + Unpin,
-{
+pub struct OnoSender<W: AsyncWrite + Unpin> {
     tx: W,
     buf: Vec<u8>,
 }
