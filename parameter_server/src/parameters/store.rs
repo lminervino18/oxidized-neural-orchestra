@@ -37,10 +37,12 @@ impl<O: Optimizer> ParameterStore<O> {
     /// Creates a new `ParameterStore`.
     ///
     /// # Arguments
+    /// * `params` - The total amount of parameters.
     /// * `shard_amount` - The amount of shards to partition the model into.
     /// * `weight_gen` - A weight generator.
     /// * `optimizer_factory` - An `Optimizer` factory closure.
     pub fn new<W, F>(
+        params: usize,
         shard_amount: NonZeroUsize,
         mut weight_gen: W,
         mut optimizer_factory: F,
@@ -49,7 +51,6 @@ impl<O: Optimizer> ParameterStore<O> {
         W: WeightGen,
         F: FnMut(usize) -> O,
     {
-        let params = weight_gen.remaining();
         let shard_size = params.div_ceil(shard_amount.get());
         let mut shards = Vec::with_capacity(shard_amount.get());
 
@@ -139,7 +140,7 @@ mod tests {
     fn create_test_store(params: usize, shard_amount: usize) -> ParameterStore<AddOptimizer> {
         let shard_amount = NonZeroUsize::new(shard_amount).unwrap();
         let weight_gen = ConstWeightGen::new(0., params);
-        ParameterStore::new(shard_amount, weight_gen, |_| AddOptimizer)
+        ParameterStore::new(params, shard_amount, weight_gen, |_| AddOptimizer)
     }
 
     #[test]

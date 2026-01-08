@@ -30,8 +30,4 @@ impl WeightGen for ConstWeightGen {
         self.remaining -= n;
         Some(vec![self.value; n])
     }
-
-    fn remaining(&self) -> usize {
-        self.remaining
-    }
 }

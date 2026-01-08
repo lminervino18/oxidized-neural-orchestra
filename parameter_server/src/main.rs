@@ -23,7 +23,7 @@ async fn main() -> io::Result<()> {
 
     let weight_gen = ConstWeightGen::new(0., PARAMS);
     let optimizer_factory = |_| GradientDescent::new(LR);
-    let store = ParameterStore::new(SHARD_AMOUNT, weight_gen, optimizer_factory);
+    let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, weight_gen, optimizer_factory);
     let trainer = BarrierSyncTrainer::new(WORKERS, store);
     let mut pserver = ParameterServer::new(PARAMS, EPOCHS, trainer);
 

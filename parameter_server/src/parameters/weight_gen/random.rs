@@ -187,8 +187,4 @@ impl<'a, R: Rng, D: Distribution<f32>> WeightGen for RandWeightGen<'a, R, D> {
         let sample = (0..n).map(|_| self.distribution.sample(&mut rng)).collect();
         Some(sample)
     }
-
-    fn remaining(&self) -> usize {
-        self.remaining
-    }
 }
