@@ -14,15 +14,17 @@ impl<O: Optimizer> ParameterShard<O> {
     /// Creates a new `ParameterShard`.
     ///
     /// # Arguments
-    /// * `params` - The amount of parameters to hold.
+    /// * `weights` - The initial state of the weights.
     /// * `optimizer` - The optimization algorithm.
-    pub fn new(params: usize, optimizer: O) -> Self {
+    pub fn new(weights: Vec<f32>, optimizer: O) -> Self {
+        let params = weights.len();
+
         Self {
             grads: [
                 Mutex::new(vec![0.; params].into_boxed_slice()),
                 Mutex::new(vec![0.; params].into_boxed_slice()),
             ],
-            weights: RwLock::new(vec![0.; params].into_boxed_slice()),
+            weights: RwLock::new(weights.into_boxed_slice()),
             optimizer: Mutex::new(optimizer),
         }
     }
@@ -78,7 +80,7 @@ mod tests {
 
     #[test]
     fn test_accumulation_and_update() {
-        let shard = ParameterShard::new(3, AddOptimizer);
+        let shard = ParameterShard::new(vec![0.; 3], AddOptimizer);
 
         shard.accumulate(0, &[1.0, 2.0, 3.0]);
         shard.accumulate(0, &[1.0, 1.0, 1.0]);
@@ -101,7 +103,7 @@ mod tests {
 
     #[test]
     fn test_double_buffering_flow() {
-        let shard = ParameterShard::new(1, AddOptimizer);
+        let shard = ParameterShard::new(vec![0.], AddOptimizer);
 
         shard.accumulate(0, &[10.]);
         shard.accumulate(1, &[5.]);
