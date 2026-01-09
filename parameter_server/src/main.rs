@@ -1,5 +1,6 @@
 mod parameters;
 mod server;
+mod sessions;
 mod training;
 
 use std::{io, num::NonZeroUsize};
