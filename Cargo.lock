@@ -92,6 +92,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ml_core"
+version = "0.1.0"
+
+[[package]]
 name = "parameter_server"
 version = "0.1.0"
 dependencies = [
