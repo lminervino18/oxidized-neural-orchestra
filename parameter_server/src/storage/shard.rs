@@ -1,6 +1,6 @@
 use parking_lot::{Mutex, RwLock};
 
-use super::optimization::Optimizer;
+use crate::optimization::Optimizer;
 
 /// A buffer for accumulating gradients and weights across multiple threads.
 #[derive(Debug)]

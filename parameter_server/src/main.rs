@@ -1,6 +1,7 @@
-mod parameters;
-mod server;
-mod sessions;
+mod initialization;
+mod optimization;
+mod service;
+mod storage;
 mod training;
 
 use std::{io, num::NonZeroUsize};
@@ -8,9 +9,8 @@ use std::{io, num::NonZeroUsize};
 use tokio::net::TcpListener;
 
 use crate::{
-    parameters::{ParameterStore, optimization::GradientDescent, weight_gen::ConstWeightGen},
-    server::ParameterServer,
-    training::BarrierSyncTrainer,
+    initialization::ConstWeightGen, optimization::GradientDescent, service::ParameterServer,
+    storage::ParameterStore, training::BarrierSyncTrainer,
 };
 
 #[tokio::main]
@@ -37,5 +37,5 @@ async fn main() -> io::Result<()> {
         pserver.spawn(rx, tx);
     }
 
-    pserver.run().await.into_iter().collect::<io::Result<_>>()
+    pserver.run().await
 }

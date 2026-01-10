@@ -1,5 +1,6 @@
 use crate::{
-    parameters::{ParameterHandle, ParameterStore, optimization::Optimizer},
+    optimization::Optimizer,
+    storage::{ParameterHandle, ParameterStore},
     training::Trainer,
 };
 

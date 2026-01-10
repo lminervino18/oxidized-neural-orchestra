@@ -8,12 +8,12 @@ use std::{
 
 use rayon::prelude::*;
 
-use super::{ParameterShard, optimization::Optimizer, weight_gen::WeightGen};
+use crate::{initialization::WeightGen, optimization::Optimizer, storage::ParameterShard};
 
 /// The primary storage of weights and accumulated gradients.
 ///
-/// These methods are private to the module, they become callable through
-/// the async interface of a `ParameterHandle`.
+/// These methods are private to the module, they become available
+/// through the async interface of a `ParameterHandle`.
 #[derive(Debug)]
 pub struct ParameterStore<O: Optimizer> {
     active_idx: Arc<AtomicU8>,
@@ -74,6 +74,9 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     ///
     /// # Arguments
     /// * `grad` - A flat slice containing a new model gradient.
+    ///
+    /// # Panics
+    /// If the length of `grad` doesn't match the total number of parameters.
     pub(super) fn accumulate(&self, grad: &[f32]) {
         let active_idx = self.active_idx.load(Ordering::Acquire) as usize;
 
@@ -127,7 +130,7 @@ mod tests {
     use std::num::NonZeroUsize;
 
     use super::*;
-    use crate::parameters::weight_gen::ConstWeightGen;
+    use crate::initialization::ConstWeightGen;
 
     struct AddOptimizer;
 

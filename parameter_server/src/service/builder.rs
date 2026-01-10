@@ -1,19 +1,16 @@
-use std::{cell::RefCell, error::Error, num::NonZeroUsize, rc::Rc};
+use std::{cell::RefCell, error::Error, rc::Rc};
 
 use rand::{Rng, SeedableRng, rngs::StdRng};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
-    parameters::{
-        ParameterStore,
-        optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
-        weight_gen::{ChainedWeightGen, ConstWeightGen, RandWeightGen, WeightGen},
+    initialization::{ChainedWeightGen, ConstWeightGen, RandWeightGen, WeightGen},
+    optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
+    service::{
+        DistributionSpec, OptimizerSpec, ParameterServer, Server, ServerSpec, TrainerSpec,
+        WeightGenSpec,
     },
-    server::ParameterServer,
-    sessions::{
-        Session,
-        session::TrainingSession,
-        specs::{DistributionSpec, OptimizerSpec, ParameterServerSpec, TrainerSpec, WeightGenSpec},
-    },
+    storage::ParameterStore,
     training::{BarrierSyncTrainer, NonBlockingTrainer, Trainer},
 };
 
@@ -25,6 +22,12 @@ use crate::{
 ///
 /// To avoid this duplication, this macro generalizes what it's immediately done with the concrete weight generator,
 /// and thus avoids boxing weight generators unnecessarily.
+///
+/// # Arguments
+/// * `rng` - A random number generator.
+/// * `dist_spec` - A specification for a distribution.
+/// * `limit` - The limit of weights that the `RandWeightGen` can generate.
+/// * `callback` - The closure to call passing in the created weigth gen.
 macro_rules! with_distribution {
     ($rng:expr, $dist_spec:expr, $limit:expr, $callback:expr) => {
         match $dist_spec {
@@ -64,31 +67,33 @@ macro_rules! with_distribution {
     };
 }
 
-/// Builds new `Session`s given a specification.
-pub struct SessionBuilder {
-    built_count: usize,
-}
+/// Builds `Server`s given a specification.
+pub struct ServerBuilder {}
 
-impl SessionBuilder {
-    /// Creates a new `SessionBuilder`.
+impl ServerBuilder {
+    /// Creates a new `ServerBuilder`.
     pub fn new() -> Self {
-        Self { built_count: 0 }
+        Self {}
     }
 
-    /// Builds a parameter server `Session` following a spec.
+    /// Builds a new `Server` following a spec.
     ///
-    /// # Args
+    /// # Arguments
     /// * `spec` - The specification of the parameter server.
     ///
     /// # Returns
-    /// A new session or an error if encountered.
-    pub fn build(&mut self, spec: ParameterServerSpec) -> Result<Box<dyn Session>, Box<dyn Error>> {
+    /// A new server or an error if encountered.
+    pub fn build<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>, Box<dyn Error>>
+    where
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Unpin + Send + 'static,
+    {
         self.resolve_weight_gen(spec)
     }
 
     /// Generates a random number generator given (or not) a seed.
     ///
-    /// # Args
+    /// # Arguments
     /// * `seed` - An optional seed for the rng.
     ///
     /// # Returns
@@ -102,26 +107,21 @@ impl SessionBuilder {
         Rc::new(RefCell::new(rng))
     }
 
-    /// Generates a new incremental id for the session being created.
+    /// Resolves the `WeightGen` for this server.
     ///
-    /// # Returns
-    /// A new id.
-    fn generate_id(&mut self) -> usize {
-        self.built_count += 1;
-        self.built_count - 1
-    }
-
-    /// Resolves the `WeightGen` for this session.
-    ///
-    /// # Args
+    /// # Arguments
     /// * `spec` - The specification of the parameter server.
     ///
     /// # Returns
-    /// A new session or an error if encountered.
-    fn resolve_weight_gen(
-        &mut self,
-        spec: ParameterServerSpec,
-    ) -> Result<Box<dyn Session>, Box<dyn Error>> {
+    /// A new server or an error if encountered.
+    fn resolve_weight_gen<R, W>(
+        &self,
+        spec: ServerSpec,
+    ) -> Result<Box<dyn Server<R, W>>, Box<dyn Error>>
+    where
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Unpin + Send + 'static,
+    {
         match spec.weight_gen {
             WeightGenSpec::Const { value, limit } => {
                 let weight_gen = ConstWeightGen::new(value, limit);
@@ -138,8 +138,7 @@ impl SessionBuilder {
             }
             WeightGenSpec::Chained { ref specs } => {
                 let rng = self.generate_rng(spec.seed);
-                let weight_gens = self.resolve_chained(rng, specs)?;
-                let weight_gen = ChainedWeightGen::new(weight_gens);
+                let weight_gen = self.resolve_chained(rng, specs)?;
                 Ok(self.resolve_optimizer(spec, weight_gen))
             }
         }
@@ -147,17 +146,17 @@ impl SessionBuilder {
 
     /// Resolves the `ChainedWeightGen` weight generator.
     ///
-    /// # Args
+    /// # Arguments
     /// * `rng` - A random number generator.
     /// * `specs` - A list of weight gen specifications.
     ///
     /// # Returns
-    /// A list of dynamic weight generators or an error if encountered.
+    /// A newly configured `ChainedWeightGen`.
     fn resolve_chained<R>(
         &self,
         rng: Rc<RefCell<R>>,
         specs: &[WeightGenSpec],
-    ) -> Result<Vec<Box<dyn WeightGen>>, Box<dyn Error>>
+    ) -> Result<ChainedWeightGen, Box<dyn Error>>
     where
         R: Rng + 'static,
     {
@@ -178,27 +177,28 @@ impl SessionBuilder {
                     });
                 }
                 WeightGenSpec::Chained { specs } => {
-                    let sub_weight_gens = self.resolve_chained(rng.clone(), specs)?;
-                    let weight_gen = ChainedWeightGen::new(sub_weight_gens);
+                    let weight_gen = self.resolve_chained(rng.clone(), specs)?;
                     weight_gens.push(Box::new(weight_gen))
                 }
             }
         }
 
-        Ok(weight_gens)
+        Ok(ChainedWeightGen::new(weight_gens))
     }
 
-    /// Resolves the `Optimizer` for this session.
+    /// Resolves the `Optimizer` for this server.
     ///
-    /// # Args
+    /// # Arguments
     /// * `spec` - The specification for the parameter server.
     /// * `weight_gen` - A resolved weight generator.
     ///
     /// # Returns
-    /// A new session.
-    fn resolve_optimizer<W>(&mut self, spec: ParameterServerSpec, weight_gen: W) -> Box<dyn Session>
+    /// A new server.
+    fn resolve_optimizer<R, W, WG>(&self, spec: ServerSpec, weight_gen: WG) -> Box<dyn Server<R, W>>
     where
-        W: WeightGen,
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Unpin + Send + 'static,
+        WG: WeightGen,
     {
         match spec.optimizer {
             OptimizerSpec::Adam {
@@ -224,23 +224,25 @@ impl SessionBuilder {
         }
     }
 
-    /// Resolves the `Trainer` for this session.
+    /// Resolves the `Trainer` for this server.
     ///
-    /// # Args
+    /// # Arguments
     /// * `spec` - The specification for the parameter server.
     /// * `weight_gen` - A resolved weight generator.
     /// * `optimizer_factory` - A factory of optimizers.
     ///
     /// # Returns
-    /// A new session.
-    fn resolve_trainer<W, O, OF>(
-        &mut self,
-        spec: ParameterServerSpec,
-        weight_gen: W,
+    /// A new server.
+    fn resolve_trainer<R, W, WG, O, OF>(
+        &self,
+        spec: ServerSpec,
+        weight_gen: WG,
         optimizer_factory: OF,
-    ) -> Box<dyn Session>
+    ) -> Box<dyn Server<R, W>>
     where
-        W: WeightGen,
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Unpin + Send + 'static,
+        WG: WeightGen,
         O: Optimizer + Send + 'static,
         OF: FnMut(usize) -> O,
     {
@@ -258,7 +260,7 @@ impl SessionBuilder {
 
     /// Terminates the entire build for this session and finally instanciates all the entities.
     ///
-    /// # Args
+    /// # Arguments
     /// * `spec` - The specification for the parameter server.
     /// * `weight_gen` - A resolved weight generator.
     /// * `optimizer_factory` - A factory of optimzers.
@@ -266,36 +268,32 @@ impl SessionBuilder {
     ///
     /// # Returns
     /// A new session.
-    fn terminate_build<W, O, OF, T, TF>(
-        &mut self,
-        spec: ParameterServerSpec,
-        weight_gen: W,
+    fn terminate_build<R, W, WG, O, OF, T, TF>(
+        &self,
+        spec: ServerSpec,
+        weight_gen: WG,
         optimizer_factory: OF,
         trainer_factory: TF,
-    ) -> Box<dyn Session>
+    ) -> Box<dyn Server<R, W>>
     where
-        W: WeightGen,
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Unpin + Send + 'static,
+        WG: WeightGen,
         O: Optimizer,
         OF: FnMut(usize) -> O,
         T: Trainer + 'static,
         TF: FnOnce(ParameterStore<O>) -> T,
     {
-        let ParameterServerSpec {
+        let ServerSpec {
             params,
             shard_amount,
             epochs,
             ..
         } = spec;
 
-        let shard_amount = shard_amount.unwrap_or_else(|| {
-            let div = NonZeroUsize::new(10_000).unwrap();
-            params.div_ceil(div)
-        });
-
-        let store = ParameterStore::new(params.get(), shard_amount, weight_gen, optimizer_factory);
+        let store = ParameterStore::new(params, shard_amount, weight_gen, optimizer_factory);
         let trainer = trainer_factory(store);
-        let pserver = ParameterServer::new(params.get(), epochs, trainer);
-        let session = TrainingSession::new(self.generate_id(), pserver);
-        Box::new(session)
+        let pserver = ParameterServer::new(params, epochs, trainer);
+        Box::new(pserver)
     }
 }

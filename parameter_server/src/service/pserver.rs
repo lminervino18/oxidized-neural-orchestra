@@ -9,7 +9,7 @@ use tokio::{
     task::JoinSet,
 };
 
-use crate::training::Trainer;
+use crate::{service::Server, training::Trainer};
 
 /// The central server structure, it handles task management and io between workers.
 pub struct ParameterServer<T: Trainer> {
@@ -35,12 +35,19 @@ impl<T: Trainer> ParameterServer<T> {
         }
     }
 
-    /// Starts the actual training by executing the inner tasks.
-    pub async fn run(self) -> Vec<io::Result<()>> {
-        self.tasks.join_all().await
+    /// Starts the training process with the spawned workers.
+    pub async fn run(&mut self) -> io::Result<()> {
+        while let Some(res) = self.tasks.join_next().await {
+            res??
+        }
+
+        Ok(())
     }
 
     /// Creates an error for when an unexpected message kind is received.
+    ///
+    /// # Arguments
+    /// * `msg` - The received message.
     ///
     /// # Returns
     /// An error.
@@ -52,7 +59,7 @@ impl<T: Trainer> ParameterServer<T> {
     }
 }
 
-impl<T: Trainer + Send + Sync + 'static> ParameterServer<T> {
+impl<T: Trainer + 'static> ParameterServer<T> {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Arguments
@@ -79,12 +86,30 @@ impl<T: Trainer + Send + Sync + 'static> ParameterServer<T> {
                     return Self::unexpected_message_kind(msg);
                 };
 
-                trainer.step(&grad, &mut buf).await;
+                trainer.step(grad, &mut buf).await;
             }
 
             Ok(())
         };
 
         self.tasks.spawn(task);
+    }
+}
+
+#[async_trait::async_trait]
+impl<R, W, T> Server<R, W> for ParameterServer<T>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+    T: Trainer + 'static,
+{
+    /// Indirection call to `Self::run`.
+    async fn run(&mut self) -> io::Result<()> {
+        self.run().await
+    }
+
+    /// Indirection call to `Self::spawn`.
+    fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>) {
+        self.spawn(rx, tx)
     }
 }

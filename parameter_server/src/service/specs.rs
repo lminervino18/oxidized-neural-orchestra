@@ -1,0 +1,67 @@
+use std::num::NonZeroUsize;
+
+/// The specification for the `Distribution` trait.
+#[derive(Debug, Clone, Copy)]
+pub enum DistributionSpec {
+    Uniform { low: f32, high: f32 },
+    UniformInclusive { low: f32, high: f32 },
+    XavierUniform { fan_in: usize, fan_out: usize },
+    LecunUniform { fan_in: usize },
+    Normal { mean: f32, std_dev: f32 },
+    Kaiming { fan_in: usize },
+    Xavier { fan_in: usize, fan_out: usize },
+    Lecun { fan_in: usize },
+}
+
+/// The specification for the `WeightGen` trait.
+#[derive(Debug)]
+pub enum WeightGenSpec {
+    Const {
+        value: f32,
+        limit: usize,
+    },
+    Rand {
+        distribution: DistributionSpec,
+        limit: usize,
+    },
+    Chained {
+        specs: Vec<WeightGenSpec>,
+    },
+}
+
+/// The specification for the `Optimizer` trait.
+#[derive(Debug, Clone, Copy)]
+pub enum OptimizerSpec {
+    Adam {
+        learning_rate: f32,
+        beta1: f32,
+        beta2: f32,
+        epsilon: f32,
+    },
+    GradientDescent {
+        learning_rate: f32,
+    },
+    GradientDescentWithMomentum {
+        learning_rate: f32,
+        momentum: f32,
+    },
+}
+
+/// The specification for the `Trainer` trait.
+#[derive(Debug, Clone, Copy)]
+pub enum TrainerSpec {
+    BarrierSync { barrier_size: usize },
+    NonBlocking,
+}
+
+/// The specification for the `Server` trait.
+#[derive(Debug)]
+pub struct ServerSpec {
+    pub params: usize,
+    pub shard_amount: NonZeroUsize,
+    pub epochs: usize,
+    pub weight_gen: WeightGenSpec,
+    pub optimizer: OptimizerSpec,
+    pub trainer: TrainerSpec,
+    pub seed: Option<u64>,
+}

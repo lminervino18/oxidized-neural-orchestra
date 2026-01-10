@@ -1,3 +1,4 @@
+/// A `WeightGen` generates values for the initial state of the model's weights.
 pub trait WeightGen {
     /// Should sample at most `n` weights.
     ///
