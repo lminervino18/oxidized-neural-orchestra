@@ -3,8 +3,18 @@ use std::fmt;
 /// Errors produced by ML plugins when inputs are invalid.
 #[derive(Debug)]
 pub enum MlError {
+    /// An input is invalid for semantic or domain reasons.
     InvalidInput(&'static str),
-    ShapeMismatch { what: &'static str, got: usize, expected: usize },
+
+    /// A shape invariant was violated (e.g. mismatched lengths).
+    ShapeMismatch {
+        /// Human-readable context for the mismatch (e.g. "params", "batch").
+        what: &'static str,
+        /// Observed value.
+        got: usize,
+        /// Expected value.
+        expected: usize,
+    },
 }
 
 impl fmt::Display for MlError {
@@ -20,9 +30,10 @@ impl fmt::Display for MlError {
 
 impl std::error::Error for MlError {}
 
-/// Statistics emitted by one local step.
+/// Statistics produced by a single local training step.
 ///
-/// Fields are private to avoid leaking internal counters as public API.
+/// This type keeps fields private to allow evolving the internal counters
+/// without breaking the public API.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StepStats {
     microbatches: usize,
@@ -30,27 +41,65 @@ pub struct StepStats {
 }
 
 impl StepStats {
+    /// Creates a new `StepStats`.
+    ///
+    /// # Args
+    /// * `microbatches` - Number of microbatches processed during the step.
+    /// * `samples` - Total number of samples processed during the step.
+    ///
+    /// # Returns
+    /// A `StepStats` instance containing the provided counters.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn new(microbatches: usize, samples: usize) -> Self {
         Self { microbatches, samples }
     }
 
+    /// Returns the number of microbatches processed in the last step.
+    ///
+    /// # Returns
+    /// The microbatch count.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn microbatches(&self) -> usize {
         self.microbatches
     }
 
+    /// Returns the number of samples processed in the last step.
+    ///
+    /// # Returns
+    /// The sample count.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn samples(&self) -> usize {
         self.samples
     }
 }
 
-/// A local training step executed by a worker.
+/// Abstraction over a local training computation executed by a worker.
 ///
-/// Contract:
-/// - `weights` is borrowed (must not be copied by the worker).
-/// - `grads` is provided by the worker and is already zeroed.
-/// - The strategy writes gradients into `grads` and returns step statistics.
+/// Implementations encapsulate all model-, data-, and loss-specific logic.
+/// The worker treats this trait as a black box that maps weights to gradients.
 pub trait TrainStrategy: Send {
-    fn num_params(&self) -> usize;
-
+    /// Executes one local training step.
+    ///
+    /// # Args
+    /// * `weights` - Read-only slice containing the current model parameters.
+    /// * `grads` - Mutable gradient buffer provided by the worker. The worker guarantees
+    ///   that this buffer is zeroed before calling `step`.
+    ///
+    /// # Returns
+    /// On success, returns step-level statistics (`StepStats`). On failure, returns an `MlError`.
+    ///
+    /// # Errors
+    /// Implementations should return:
+    /// - `MlError::ShapeMismatch` when shapes/lengths do not match expectations.
+    /// - `MlError::InvalidInput` for invalid domain inputs.
+    ///
+    /// # Panics
+    /// Implementations should not panic; they should report failures via `MlError`.
     fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError>;
 }

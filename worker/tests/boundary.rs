@@ -7,15 +7,9 @@ use comms::msg::{Msg, Payload};
 use ml_core::{MlError, StepStats, TrainStrategy};
 use worker::{Worker, WorkerConfig};
 
-struct NoopStrategy {
-    n: usize,
-}
+struct NoopStrategy;
 
 impl TrainStrategy for NoopStrategy {
-    fn num_params(&self) -> usize {
-        self.n
-    }
-
     fn step(&mut self, _weights: &[f32], _grads: &mut [f32]) -> Result<StepStats, MlError> {
         Ok(StepStats::new(1, 0))
     }
@@ -27,17 +21,17 @@ async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
     let recv_res = timeout(Duration::from_millis(50), sv_rx.recv::<Msg>()).await;
 
     match recv_res {
-        Err(_elapsed) => {
+        Err(_) => {
             // Timeout: no message observed, OK.
         }
-        Ok(Err(_io_err)) => {
+        Ok(Err(_)) => {
             // Channel closed or invalid frame, OK for this test.
         }
         Ok(Ok(Msg::Data(Payload::Gradient(_)))) => {
             panic!("server unexpectedly received a Gradient message");
         }
-        Ok(Ok(_other)) => {
-            // Some other message kind (currently only Data exists, but keep future-proof), OK.
+        Ok(Ok(_)) => {
+            // Some other message kind (future-proof), OK.
         }
     }
 }
@@ -53,9 +47,12 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let cfg = WorkerConfig::new(0, NonZeroUsize::new(1).unwrap());
-    let strat = NoopStrategy { n: 2 };
+    let num_params = NonZeroUsize::new(2).unwrap();
+    let strat = NoopStrategy;
 
-    let worker_task = tokio::spawn(async move { Worker::new(cfg, strat).run(wk_rx, wk_tx).await });
+    let worker_task = tokio::spawn(async move {
+        Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await
+    });
 
     let w = [1.0_f32, 2.0, 3.0];
     sv_tx.send(&Msg::Data(Payload::Weights(&w))).await?;
@@ -78,9 +75,12 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let cfg = WorkerConfig::new(0, NonZeroUsize::new(1).unwrap());
-    let strat = NoopStrategy { n: 2 };
+    let num_params = NonZeroUsize::new(2).unwrap();
+    let strat = NoopStrategy;
 
-    let worker_task = tokio::spawn(async move { Worker::new(cfg, strat).run(wk_rx, wk_tx).await });
+    let worker_task = tokio::spawn(async move {
+        Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await
+    });
 
     let g = [0.1_f32, 0.2];
     sv_tx.send(&Msg::Data(Payload::Gradient(&g))).await?;

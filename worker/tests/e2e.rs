@@ -7,21 +7,9 @@ use ml_core::{MlError, StepStats, TrainStrategy};
 use worker::{Worker, WorkerConfig};
 
 #[derive(Debug)]
-struct MockStrategy {
-    n: usize,
-}
-
-impl MockStrategy {
-    fn new(n: usize) -> Self {
-        Self { n }
-    }
-}
+struct MockStrategy;
 
 impl TrainStrategy for MockStrategy {
-    fn num_params(&self) -> usize {
-        self.n
-    }
-
     fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError> {
         if weights.len() != grads.len() {
             return Err(MlError::ShapeMismatch {
@@ -54,9 +42,12 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let cfg = WorkerConfig::new(0, NonZeroUsize::new(STEPS).unwrap());
-    let strat = MockStrategy::new(PARAMS);
+    let num_params = NonZeroUsize::new(PARAMS).unwrap();
+    let strat = MockStrategy;
 
-    let worker_task = tokio::spawn(async move { Worker::new(cfg, strat).run(wk_rx, wk_tx).await });
+    let worker_task = tokio::spawn(async move {
+        Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await
+    });
 
     for step in 0..STEPS {
         let w = [step as f32 + 1.0, step as f32 + 2.0];
