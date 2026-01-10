@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 comms = { path = "../comms" }
+ml_core = { path = "../ml_core" }
