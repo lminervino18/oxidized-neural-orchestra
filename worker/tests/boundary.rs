@@ -50,12 +50,11 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
     let num_params = NonZeroUsize::new(2).unwrap();
     let strat = NoopStrategy;
 
-    let worker_task = tokio::spawn(async move {
-        Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await
-    });
+    let worker_task =
+        tokio::spawn(async move { Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await });
 
-    let w = [1.0_f32, 2.0, 3.0];
-    sv_tx.send(&Msg::Data(Payload::Weights(&w))).await?;
+    let mut w = [1.0_f32, 2.0, 3.0];
+    sv_tx.send(&Msg::Data(Payload::Weights(&mut w))).await?;
 
     let res = worker_task.await.unwrap();
     assert!(res.is_err());
@@ -78,9 +77,8 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
     let num_params = NonZeroUsize::new(2).unwrap();
     let strat = NoopStrategy;
 
-    let worker_task = tokio::spawn(async move {
-        Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await
-    });
+    let worker_task =
+        tokio::spawn(async move { Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await });
 
     let g = [0.1_f32, 0.2];
     sv_tx.send(&Msg::Data(Payload::Gradient(&g))).await?;
