@@ -8,16 +8,18 @@ use std::{
 
 use rayon::prelude::*;
 
-use super::{ParameterShard, optimization::Optimizer};
+use super::{ParameterShard, optimization::Optimizer, weight_gen::WeightGen};
 
-/// Provides the primary interface for workers to contribute gradients and update weights.
+/// The primary storage of weights and accumulated gradients.
+///
+/// These methods are private to the module, they become callable through
+/// the async interface of a `ParameterHandle`.
 #[derive(Debug)]
 pub struct ParameterStore<O: Optimizer> {
     active_idx: Arc<AtomicU8>,
     updating: Arc<AtomicBool>,
     shards: Arc<[ParameterShard<O>]>,
     shard_size: usize,
-    params: usize,
 }
 
 impl<O: Optimizer> Clone for ParameterStore<O> {
@@ -27,7 +29,6 @@ impl<O: Optimizer> Clone for ParameterStore<O> {
             updating: Arc::clone(&self.updating),
             shards: Arc::clone(&self.shards),
             shard_size: self.shard_size,
-            params: self.params,
         }
     }
 }
@@ -36,31 +37,34 @@ impl<O: Optimizer> ParameterStore<O> {
     /// Creates a new `ParameterStore`.
     ///
     /// # Arguments
-    /// * `params` - Total number of parameters in the model.
-    /// * `shard_amount` - The amount of shards to partition the model.
-    /// * `factory` - An `Optimizer` factory closure.
-    pub fn new<F>(params: usize, shard_amount: NonZeroUsize, mut factory: F) -> Self
+    /// * `params` - The total amount of parameters.
+    /// * `shard_amount` - The amount of shards to partition the model into.
+    /// * `weight_gen` - A weight generator.
+    /// * `optimizer_factory` - An `Optimizer` factory closure.
+    pub fn new<W, F>(
+        params: usize,
+        shard_amount: NonZeroUsize,
+        mut weight_gen: W,
+        mut optimizer_factory: F,
+    ) -> Self
     where
+        W: WeightGen,
         F: FnMut(usize) -> O,
     {
-        let n = shard_amount.get();
-        let shard_size = params.div_ceil(n);
+        let shard_size = params.div_ceil(shard_amount.get());
+        let mut shards = Vec::with_capacity(shard_amount.get());
 
-        let shards: Vec<_> = (0..n)
-            .map(|i| {
-                let start = i * shard_size;
-                let end = (start + shard_size).min(params);
-                let len = end - start;
-                ParameterShard::new(len, factory(len))
-            })
-            .collect();
+        while let Some(weights) = weight_gen.sample(shard_size) {
+            let optimizer = optimizer_factory(weights.len());
+            let shard = ParameterShard::new(weights, optimizer);
+            shards.push(shard);
+        }
 
         Self {
             active_idx: Arc::new(AtomicU8::new(0)),
             updating: Arc::new(AtomicBool::new(false)),
             shards: Arc::from(shards),
             shard_size,
-            params,
         }
     }
 }
@@ -70,7 +74,7 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     ///
     /// # Arguments
     /// * `grad` - A flat slice containing a new model gradient.
-    pub fn accumulate(&self, grad: &[f32]) {
+    pub(super) fn accumulate(&self, grad: &[f32]) {
         let active_idx = self.active_idx.load(Ordering::Acquire) as usize;
 
         self.shards
@@ -84,7 +88,7 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     /// Swaps the active gradient buffer and applies the frozen gradient to the weights.
     ///
     /// This triggers a parallel update across all shards.
-    pub fn update_weights(&self) {
+    pub(super) fn update_weights(&self) {
         let success = self
             .updating
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
@@ -108,7 +112,7 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     ///
     /// # Panics
     /// If the length of `out` doesn't match the total number of parameters.
-    pub fn pull_weights(&self, out: &mut [f32]) {
+    pub(super) fn pull_weights(&self, out: &mut [f32]) {
         self.shards
             .par_iter()
             .zip(out.par_chunks_mut(self.shard_size))
@@ -123,6 +127,7 @@ mod tests {
     use std::num::NonZeroUsize;
 
     use super::*;
+    use crate::parameters::weight_gen::ConstWeightGen;
 
     struct AddOptimizer;
 
@@ -133,9 +138,9 @@ mod tests {
     }
 
     fn create_test_store(params: usize, shard_amount: usize) -> ParameterStore<AddOptimizer> {
-        ParameterStore::new(params, NonZeroUsize::new(shard_amount).unwrap(), |_| {
-            AddOptimizer
-        })
+        let shard_amount = NonZeroUsize::new(shard_amount).unwrap();
+        let weight_gen = ConstWeightGen::new(0., params);
+        ParameterStore::new(params, shard_amount, weight_gen, |_| AddOptimizer)
     }
 
     #[test]
@@ -195,9 +200,9 @@ mod tests {
     #[test]
     fn test_store_initialization_and_flow() {
         const PARAMS: usize = 100;
-        const SHARD_AMOUNT: NonZeroUsize = NonZeroUsize::new(4).unwrap();
+        const SHARD_AMOUNT: usize = 4;
 
-        let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, |_| AddOptimizer);
+        let store = create_test_store(PARAMS, SHARD_AMOUNT);
 
         let grad = [1.0; PARAMS];
         store.accumulate(&grad);
@@ -214,9 +219,9 @@ mod tests {
     #[test]
     fn test_ragged_edge_distribution() {
         const PARAMS: usize = 105;
-        const SHARD_AMOUNT: NonZeroUsize = NonZeroUsize::new(10).unwrap();
+        const SHARD_AMOUNT: usize = 10;
 
-        let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, |_| AddOptimizer);
+        let store = create_test_store(PARAMS, SHARD_AMOUNT);
 
         let grad = [1.0; PARAMS];
         store.accumulate(&grad);

@@ -4,11 +4,11 @@ use crate::{
 };
 
 /// A trainer that doesn't synchronize it's operations, will process incoming gradients immediately.
-pub struct NonBlocking<O: Optimizer> {
+pub struct NonBlockingTrainer<O: Optimizer> {
     handle: ParameterHandle<O>,
 }
 
-impl<O: Optimizer> Clone for NonBlocking<O> {
+impl<O: Optimizer> Clone for NonBlockingTrainer<O> {
     fn clone(&self) -> Self {
         Self {
             handle: self.handle.clone(),
@@ -16,11 +16,11 @@ impl<O: Optimizer> Clone for NonBlocking<O> {
     }
 }
 
-impl<O: Optimizer> NonBlocking<O> {
-    /// Creates a new `NonBlocking`.
+impl<O: Optimizer> NonBlockingTrainer<O> {
+    /// Creates a new `NonBlockingTrainer`.
     ///
     /// # Arguments
-    /// * `store` - A trainable set of parameters.
+    /// * `store` - The underlying parameter store.
     pub fn new(store: ParameterStore<O>) -> Self {
         Self {
             handle: ParameterHandle::new(store),
@@ -28,12 +28,11 @@ impl<O: Optimizer> NonBlocking<O> {
     }
 }
 
-impl<O: Optimizer + Send> Trainer for NonBlocking<O> {
+impl<O: Optimizer + Send> Trainer for NonBlockingTrainer<O> {
     async fn pull_weights(&self, weights: &mut [f32]) {
         self.handle.pull_weights(weights).await;
     }
 
-    /// The asynchronous implementation of a traning step.
     async fn step(&self, grad: &[f32], weights: &mut [f32]) {
         let Self { handle } = self;
 
