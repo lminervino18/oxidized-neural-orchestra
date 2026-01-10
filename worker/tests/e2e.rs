@@ -45,13 +45,12 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     let num_params = NonZeroUsize::new(PARAMS).unwrap();
     let strat = MockStrategy;
 
-    let worker_task = tokio::spawn(async move {
-        Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await
-    });
+    let worker_task =
+        tokio::spawn(async move { Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await });
 
     for step in 0..STEPS {
-        let w = [step as f32 + 1.0, step as f32 + 2.0];
-        sv_tx.send(&Msg::Data(Payload::Weights(&w))).await?;
+        let mut w = [step as f32 + 1.0, step as f32 + 2.0];
+        sv_tx.send(&Msg::Data(Payload::Weights(&mut w))).await?;
 
         let msg: Msg = sv_rx.recv().await?;
         match msg {
