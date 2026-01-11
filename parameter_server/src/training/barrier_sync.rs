@@ -3,7 +3,8 @@ use std::sync::Arc;
 use tokio::sync::Barrier;
 
 use crate::{
-    parameters::{ParameterHandle, ParameterStore, optimization::Optimizer},
+    optimization::Optimizer,
+    storage::{ParameterHandle, ParameterStore},
     training::Trainer,
 };
 
