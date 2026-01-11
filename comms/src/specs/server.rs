@@ -1,7 +1,9 @@
 use std::num::NonZeroUsize;
 
+use serde::{Deserialize, Serialize};
+
 /// The specification for the `Distribution` trait.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum DistributionSpec {
     Uniform { low: f32, high: f32 },
     UniformInclusive { low: f32, high: f32 },
@@ -14,7 +16,7 @@ pub enum DistributionSpec {
 }
 
 /// The specification for the `WeightGen` trait.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum WeightGenSpec {
     Const {
         value: f32,
@@ -30,7 +32,7 @@ pub enum WeightGenSpec {
 }
 
 /// The specification for the `Optimizer` trait.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum OptimizerSpec {
     Adam {
         learning_rate: f32,
@@ -48,15 +50,16 @@ pub enum OptimizerSpec {
 }
 
 /// The specification for the `Trainer` trait.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum TrainerSpec {
     BarrierSync { barrier_size: usize },
     NonBlocking,
 }
 
 /// The specification for the `Server` trait.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ServerSpec {
+    pub workers: usize,
     pub params: usize,
     pub shard_amount: NonZeroUsize,
     pub epochs: usize,

@@ -3,6 +3,7 @@ pub mod msg;
 mod receiver;
 mod sender;
 mod serialize;
+pub mod specs;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 

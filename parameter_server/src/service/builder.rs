@@ -1,15 +1,15 @@
 use std::{cell::RefCell, error::Error, rc::Rc};
 
+use comms::specs::server::{
+    DistributionSpec, OptimizerSpec, ServerSpec, TrainerSpec, WeightGenSpec,
+};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     initialization::{ChainedWeightGen, ConstWeightGen, RandWeightGen, WeightGen},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
-    service::{
-        DistributionSpec, OptimizerSpec, ParameterServer, Server, ServerSpec, TrainerSpec,
-        WeightGenSpec,
-    },
+    service::{ParameterServer, Server},
     storage::ParameterStore,
     training::{BarrierSyncTrainer, NonBlockingTrainer, Trainer},
 };
@@ -68,12 +68,13 @@ macro_rules! with_distribution {
 }
 
 /// Builds `Server`s given a specification.
+#[derive(Default)]
 pub struct ServerBuilder {}
 
 impl ServerBuilder {
     /// Creates a new `ServerBuilder`.
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 
     /// Builds a new `Server` following a spec.
@@ -292,8 +293,7 @@ impl ServerBuilder {
         } = spec;
 
         let store = ParameterStore::new(params, shard_amount, weight_gen, optimizer_factory);
-        let trainer = trainer_factory(store);
-        let pserver = ParameterServer::new(params, epochs, trainer);
+        let pserver = ParameterServer::new(params, epochs, trainer_factory(store));
         Box::new(pserver)
     }
 }
