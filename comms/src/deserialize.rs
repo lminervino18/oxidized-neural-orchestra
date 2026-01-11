@@ -8,5 +8,5 @@ pub trait Deserialize<'a>: Sized {
     ///
     /// # Returns
     /// A result object that returns `Self` on success or `io::Error` on failure.
-    fn deserialize(buf: &'a [u8]) -> io::Result<Self>;
+    fn deserialize(buf: &'a mut [u8]) -> io::Result<Self>;
 }

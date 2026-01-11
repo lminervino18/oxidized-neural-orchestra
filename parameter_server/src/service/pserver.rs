@@ -78,7 +78,7 @@ impl<T: Trainer + 'static> ParameterServer<T> {
             trainer.pull_weights(&mut buf).await;
 
             for _ in 0..epochs {
-                let msg = Msg::Data(Payload::Weights(&buf));
+                let msg = Msg::Data(Payload::Weights(&mut buf));
                 tx.send(&msg).await?;
 
                 let msg: Msg = rx.recv().await?;

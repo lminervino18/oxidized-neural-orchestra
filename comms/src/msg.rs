@@ -8,7 +8,7 @@ const HEADER_SIZE: usize = size_of::<Header>();
 #[derive(Debug)]
 pub enum Payload<'a> {
     Gradient(&'a [f32]),
-    Weights(&'a [f32]),
+    Weights(&'a mut [f32]),
 }
 
 #[derive(Debug)]
@@ -19,8 +19,8 @@ pub enum Msg<'a> {
 impl<'a> Serialize<'a> for Msg<'a> {
     fn serialize(&'a self, buf: &mut Vec<u8>) -> Option<&'a [u8]> {
         let (kind, nums) = match self {
-            Msg::Data(Payload::Gradient(grad)) => (0, grad),
-            Msg::Data(Payload::Weights(weights)) => (1, weights),
+            Msg::Data(Payload::Gradient(grad)) => (0, grad.as_ref()),
+            Msg::Data(Payload::Weights(weights)) => (1, weights.as_ref()),
         };
 
         let header = (kind as Header).to_be_bytes();
@@ -31,16 +31,16 @@ impl<'a> Serialize<'a> for Msg<'a> {
 }
 
 impl<'a> Deserialize<'a> for Msg<'a> {
-    fn deserialize(buf: &'a [u8]) -> io::Result<Self> {
+    fn deserialize(buf: &'a mut [u8]) -> io::Result<Self> {
         if buf.len() < HEADER_SIZE {
             return Self::buf_is_too_small(buf.len());
         }
 
-        let (kind_buf, rest) = buf.split_at(HEADER_SIZE);
+        let (kind_buf, rest) = buf.split_at_mut(HEADER_SIZE);
 
         // SAFETY: We splitted the buffer to be of size `HEADER_SIZE` just above.
         let kind = Header::from_be_bytes(kind_buf.try_into().unwrap()) as u8;
-        let nums = bytemuck::cast_slice(rest);
+        let nums = bytemuck::cast_slice_mut(rest);
 
         let payload = match kind {
             0 => Payload::Gradient(nums),
