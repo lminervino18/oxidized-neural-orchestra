@@ -14,9 +14,11 @@ pub enum Payload<'a> {
 
 /// The command for the `Control` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Command {
-    Connect(usize),
+    Connect,
     CreateServer(ServerSpec),
+    Disconnect,
 }
 
 /// The application layer message for the entire system.

@@ -2,7 +2,7 @@ use std::io;
 
 use comms::{
     OnoReceiver, OnoSender,
-    msg::{Msg, Payload},
+    msg::{Command, Msg, Payload},
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -15,7 +15,6 @@ use crate::{service::Server, training::Trainer};
 pub struct ParameterServer<T: Trainer> {
     tasks: JoinSet<io::Result<()>>,
     params: usize,
-    epochs: usize,
     trainer: T,
 }
 
@@ -24,13 +23,11 @@ impl<T: Trainer> ParameterServer<T> {
     ///
     /// # Arguments
     /// * `params` - The amount of parameters to hold.
-    /// * `epochs` - The amount of epochs of training to run.
     /// * `trainer` - The trainer to use.
-    pub fn new(params: usize, epochs: usize, trainer: T) -> Self {
+    pub fn new(params: usize, trainer: T) -> Self {
         Self {
             tasks: JoinSet::new(),
             params,
-            epochs,
             trainer,
         }
     }
@@ -70,23 +67,23 @@ impl<T: Trainer + 'static> ParameterServer<T> {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let Self { epochs, params, .. } = *self;
         let trainer = self.trainer.clone();
-        let mut buf = vec![0.; params];
+        let mut buf = vec![0.; self.params];
 
         let task = async move {
             trainer.pull_weights(&mut buf).await;
 
-            for _ in 0..epochs {
+            loop {
                 let msg = Msg::Data(Payload::Weights(&mut buf));
                 tx.send(&msg).await?;
 
-                let msg: Msg = rx.recv().await?;
-                let Msg::Data(Payload::Gradient(grad)) = msg else {
-                    return Self::unexpected_message_kind(msg);
-                };
-
-                trainer.step(grad, &mut buf).await;
+                match rx.recv().await? {
+                    Msg::Data(Payload::Gradient(grad)) => {
+                        trainer.step(grad, &mut buf).await;
+                    }
+                    Msg::Control(Command::Disconnect) => break,
+                    _ => return Self::unexpected_message_kind(msg),
+                }
             }
 
             Ok(())

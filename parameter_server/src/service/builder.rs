@@ -288,12 +288,11 @@ impl ServerBuilder {
         let ServerSpec {
             params,
             shard_amount,
-            epochs,
             ..
         } = spec;
 
         let store = ParameterStore::new(params, shard_amount, weight_gen, optimizer_factory);
-        let pserver = ParameterServer::new(params, epochs, trainer_factory(store));
+        let pserver = ParameterServer::new(params, trainer_factory(store));
         Box::new(pserver)
     }
 }

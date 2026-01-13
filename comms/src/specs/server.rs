@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// The specification for the `Distribution` trait.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DistributionSpec {
     Uniform { low: f32, high: f32 },
     UniformInclusive { low: f32, high: f32 },
@@ -17,6 +18,7 @@ pub enum DistributionSpec {
 
 /// The specification for the `WeightGen` trait.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum WeightGenSpec {
     Const {
         value: f32,
@@ -33,6 +35,7 @@ pub enum WeightGenSpec {
 
 /// The specification for the `Optimizer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OptimizerSpec {
     Adam {
         learning_rate: f32,
@@ -51,6 +54,7 @@ pub enum OptimizerSpec {
 
 /// The specification for the `Trainer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TrainerSpec {
     BarrierSync { barrier_size: usize },
     NonBlocking,
@@ -62,7 +66,6 @@ pub struct ServerSpec {
     pub workers: usize,
     pub params: usize,
     pub shard_amount: NonZeroUsize,
-    pub epochs: usize,
     pub weight_gen: WeightGenSpec,
     pub optimizer: OptimizerSpec,
     pub trainer: TrainerSpec,
