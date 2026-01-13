@@ -64,8 +64,7 @@ pub enum TrainerSpec {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerSpec {
     pub workers: usize,
-    pub params: usize,
-    pub shard_amount: NonZeroUsize,
+    pub shard_size: NonZeroUsize,
     pub weight_gen: WeightGenSpec,
     pub optimizer: OptimizerSpec,
     pub trainer: TrainerSpec,

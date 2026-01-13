@@ -16,7 +16,6 @@ pub enum Payload<'a> {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Command {
-    Connect,
     CreateServer(ServerSpec),
     Disconnect,
 }

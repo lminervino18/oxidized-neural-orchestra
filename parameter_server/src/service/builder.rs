@@ -1,4 +1,4 @@
-use std::{cell::RefCell, error::Error, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use comms::specs::server::{
     DistributionSpec, OptimizerSpec, ServerSpec, TrainerSpec, WeightGenSpec,
@@ -7,7 +7,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
-    initialization::{ChainedWeightGen, ConstWeightGen, RandWeightGen, WeightGen},
+    initialization::{ChainedWeightGen, ConstWeightGen, RandWeightGen, Result, WeightGen},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
     service::{ParameterServer, Server},
     storage::ParameterStore,
@@ -84,7 +84,7 @@ impl ServerBuilder {
     ///
     /// # Returns
     /// A new server or an error if encountered.
-    pub fn build<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>, Box<dyn Error>>
+    pub fn build<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>>
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
@@ -115,10 +115,7 @@ impl ServerBuilder {
     ///
     /// # Returns
     /// A new server or an error if encountered.
-    fn resolve_weight_gen<R, W>(
-        &self,
-        spec: ServerSpec,
-    ) -> Result<Box<dyn Server<R, W>>, Box<dyn Error>>
+    fn resolve_weight_gen<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>>
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
@@ -157,7 +154,7 @@ impl ServerBuilder {
         &self,
         rng: Rc<RefCell<R>>,
         specs: &[WeightGenSpec],
-    ) -> Result<ChainedWeightGen, Box<dyn Error>>
+    ) -> Result<ChainedWeightGen>
     where
         R: Rng + 'static,
     {
@@ -249,12 +246,12 @@ impl ServerBuilder {
     {
         match spec.trainer {
             TrainerSpec::BarrierSync { barrier_size } => {
-                let factory = |store| BarrierSyncTrainer::new(barrier_size, store);
-                self.terminate_build(spec, weight_gen, optimizer_factory, factory)
+                let trainer = BarrierSyncTrainer::new(barrier_size);
+                self.terminate_build(spec, weight_gen, optimizer_factory, trainer)
             }
             TrainerSpec::NonBlocking => {
-                let factory = NonBlockingTrainer::new;
-                self.terminate_build(spec, weight_gen, optimizer_factory, factory)
+                let trainer = NonBlockingTrainer::new();
+                self.terminate_build(spec, weight_gen, optimizer_factory, trainer)
             }
         }
     }
@@ -269,30 +266,23 @@ impl ServerBuilder {
     ///
     /// # Returns
     /// A new session.
-    fn terminate_build<R, W, WG, O, OF, T, TF>(
+    fn terminate_build<R, W, WG, O, OF, T>(
         &self,
         spec: ServerSpec,
         weight_gen: WG,
         optimizer_factory: OF,
-        trainer_factory: TF,
+        trainer: T,
     ) -> Box<dyn Server<R, W>>
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
         WG: WeightGen,
-        O: Optimizer,
+        O: Optimizer + Send + 'static,
         OF: FnMut(usize) -> O,
-        T: Trainer + 'static,
-        TF: FnOnce(ParameterStore<O>) -> T,
+        T: Trainer + Send + Sync + 'static,
     {
-        let ServerSpec {
-            params,
-            shard_amount,
-            ..
-        } = spec;
-
-        let store = ParameterStore::new(params, shard_amount, weight_gen, optimizer_factory);
-        let pserver = ParameterServer::new(params, trainer_factory(store));
+        let store = ParameterStore::new(spec.shard_size, weight_gen, optimizer_factory);
+        let pserver = ParameterServer::new(store, trainer);
         Box::new(pserver)
     }
 }

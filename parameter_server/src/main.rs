@@ -4,15 +4,15 @@ mod service;
 mod storage;
 mod training;
 
-use std::io;
+use std::error::Error;
 
-use comms::msg::{Command, Msg};
+use comms::msg::{Command, Msg, Payload};
 use tokio::{net::TcpListener, signal};
 
 use crate::service::ServerBuilder;
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() -> Result<(), Box<dyn Error>> {
     const ADDR: &str = "127.0.0.1:8765";
 
     let list = TcpListener::bind(ADDR).await?;
@@ -20,9 +20,9 @@ async fn main() -> io::Result<()> {
 
     let (stream, _) = list.accept().await?;
     let (rx, tx) = stream.into_split();
-    let (mut rx, _) = comms::channel(rx, tx);
+    let (mut rx, mut tx) = comms::channel(rx, tx);
 
-    loop {
+    let spec = loop {
         let msg = match rx.recv().await {
             Ok(msg) => msg,
             Err(e) => {
@@ -36,26 +36,25 @@ async fn main() -> io::Result<()> {
             continue;
         };
 
-        let workers = spec.workers;
-        let mut pserver = match builder.build(spec) {
-            Ok(pserver) => pserver,
-            Err(e) => {
-                println!("{e:?}");
-                continue;
-            }
-        };
+        break spec;
+    };
 
-        for _ in 0..workers {
-            let (stream, _) = list.accept().await?;
-            let (rx, tx) = stream.into_split();
-            let (rx, tx) = comms::channel(rx, tx);
-            pserver.spawn(rx, tx);
-        }
+    let workers = spec.workers;
+    let mut pserver = builder.build(spec)?;
 
-        tokio::select! {
-            _ = pserver.run() => break,
-            _ = signal::ctrl_c() => {}
-        }
+    for _ in 0..workers {
+        let (stream, _) = list.accept().await?;
+        let (rx, tx) = stream.into_split();
+        let (rx, tx) = comms::channel(rx, tx);
+        pserver.spawn(rx, tx);
+    }
+
+    tokio::select! {
+        Ok(mut weights) = pserver.train() => {
+            let msg = Msg::Data(Payload::Weights(&mut weights));
+            tx.send(&msg).await?;
+        },
+        _ = signal::ctrl_c() => {},
     }
 
     Ok(())

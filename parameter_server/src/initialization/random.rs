@@ -1,9 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
 use rand::Rng;
-use rand_distr::{Distribution, Normal, NormalError, Uniform, uniform::Error as UniformError};
+use rand_distr::{Distribution, Normal, Uniform};
 
-use super::WeightGen;
+use super::{Result, WeightGen};
 
 /// A weight generator that follows a certain probabilistic distribution.
 pub struct RandWeightGen<R: Rng, D: Distribution<f32>> {
@@ -39,12 +39,7 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
     ///
     /// # Returns
     /// An error if the range is invalid (low > high).
-    pub fn uniform(
-        rng: Rc<RefCell<R>>,
-        limit: usize,
-        low: f32,
-        high: f32,
-    ) -> Result<Self, UniformError> {
+    pub fn uniform(rng: Rc<RefCell<R>>, limit: usize, low: f32, high: f32) -> Result<Self> {
         Ok(Self::new(rng, Uniform::new(low, high)?, limit))
     }
 
@@ -63,7 +58,7 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
         limit: usize,
         low: f32,
         high: f32,
-    ) -> Result<Self, UniformError> {
+    ) -> Result<Self> {
         Ok(Self::new(rng, Uniform::new_inclusive(low, high)?, limit))
     }
 
@@ -82,7 +77,7 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
         limit: usize,
         fan_in: usize,
         fan_out: usize,
-    ) -> Result<Self, UniformError> {
+    ) -> Result<Self> {
         let range = (6. / (fan_in + fan_out) as f32).sqrt();
         Self::uniform(rng, limit, -range, range)
     }
@@ -96,11 +91,7 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
     ///
     /// # Returns
     /// An error if the caluculated range is invalid.
-    pub fn lecun_uniform(
-        rng: Rc<RefCell<R>>,
-        limit: usize,
-        fan_in: usize,
-    ) -> Result<Self, UniformError> {
+    pub fn lecun_uniform(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self> {
         let range = (3. / fan_in as f32).sqrt();
         Self::uniform(rng, limit, -range, range)
     }
@@ -117,12 +108,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
     ///
     /// # Returns
     /// An error if `std_dev` is not finite (Nan or infinite).
-    pub fn normal(
-        rng: Rc<RefCell<R>>,
-        limit: usize,
-        mean: f32,
-        std_dev: f32,
-    ) -> Result<Self, NormalError> {
+    pub fn normal(rng: Rc<RefCell<R>>, limit: usize, mean: f32, std_dev: f32) -> Result<Self> {
         Ok(Self::new(rng, Normal::new(mean, std_dev)?, limit))
     }
 
@@ -135,7 +121,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
     ///
     /// # Returns
     /// An error if the calculated standard deviation is not finite (Nan or infinite).
-    pub fn kaiming(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self, NormalError> {
+    pub fn kaiming(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self> {
         let std_dev = (2. / fan_in as f32).sqrt();
         Self::normal(rng, limit, 0., std_dev)
     }
@@ -155,7 +141,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
         limit: usize,
         fan_in: usize,
         fan_out: usize,
-    ) -> Result<Self, NormalError> {
+    ) -> Result<Self> {
         Self::kaiming(rng, limit, fan_in + fan_out)
     }
 
@@ -168,7 +154,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
     ///
     /// # Returns
     /// An error if the calculated standard deviation is not finite (Nan or infinite).
-    pub fn lecun(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self, NormalError> {
+    pub fn lecun(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self> {
         let std_dev = (1. / fan_in as f32).sqrt();
         Self::normal(rng, limit, 0., std_dev)
     }

@@ -11,8 +11,8 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    /// Indirection method for `ParameterServer::run`.
-    async fn run(&mut self) -> io::Result<()>;
+    /// Indirection method for `ParameterServer::train`.
+    async fn train(&mut self) -> io::Result<Vec<f32>>;
 
     /// Indirection method for `ParameterServer::spawn`
     ///

@@ -1,10 +1,13 @@
+use std::ptr;
+
 use parking_lot::{Mutex, RwLock};
 
-use crate::optimization::Optimizer;
+use crate::{optimization::Optimizer, storage::SizeMismatchErr};
 
 /// A buffer for accumulating gradients and weights across multiple threads.
 #[derive(Debug)]
 pub struct ParameterShard<O: Optimizer> {
+    params: usize,
     grads: [Mutex<Box<[f32]>>; 2],
     weights: RwLock<Box<[f32]>>,
     optimizer: Mutex<O>,
@@ -20,6 +23,7 @@ impl<O: Optimizer> ParameterShard<O> {
         let params = weights.len();
 
         Self {
+            params,
             grads: [
                 Mutex::new(vec![0.; params].into_boxed_slice()),
                 Mutex::new(vec![0.; params].into_boxed_slice()),
@@ -36,6 +40,7 @@ impl<O: Optimizer> ParameterShard<O> {
     /// * `grad` - The gradient to accumulate to the active gradient.
     pub fn accumulate(&self, active_idx: usize, grad: &[f32]) {
         let mut active_grad = self.grads[active_idx].lock();
+
         active_grad
             .iter_mut()
             .zip(grad)
@@ -58,11 +63,21 @@ impl<O: Optimizer> ParameterShard<O> {
     /// # Arguments
     /// * `out` - A mutable slice where the weights will be copied.
     ///
-    /// # Panics
-    /// If the length of `out` doesn't match with the length of the shard.
-    pub fn pull_weights(&self, out: &mut [f32]) {
+    /// # Returns
+    /// A `SizeMismatchErr` if `out` isn't the same size as this shard.
+    pub fn pull_weights(&self, out: &mut [f32]) -> Result<(), SizeMismatchErr> {
+        if self.params != out.len() {
+            return Err(SizeMismatchErr);
+        }
+
         let weights = self.weights.read();
-        out.copy_from_slice(&weights);
+
+        // SAFETY: We've already checked that both slices have the same size.
+        unsafe {
+            ptr::copy_nonoverlapping(weights.as_ptr(), out.as_mut_ptr(), out.len());
+        }
+
+        Ok(())
     }
 }
 
@@ -97,7 +112,7 @@ mod tests {
         shard.update_weights(0);
 
         let mut out = [0.; 3];
-        shard.pull_weights(&mut out);
+        shard.pull_weights(&mut out).unwrap();
         assert_eq!(out, [2., 3., 4.]);
     }
 
@@ -110,11 +125,11 @@ mod tests {
         shard.update_weights(0);
 
         let mut out = [0.];
-        shard.pull_weights(&mut out);
+        shard.pull_weights(&mut out).unwrap();
         assert_eq!(out, [10.]);
 
         shard.update_weights(1);
-        shard.pull_weights(&mut out);
+        shard.pull_weights(&mut out).unwrap();
         assert_eq!(out, [15.]);
     }
 }

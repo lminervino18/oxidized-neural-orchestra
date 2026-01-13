@@ -1,6 +1,11 @@
+use std::ops::Deref;
+
 use tokio::task;
 
-use crate::{optimization::Optimizer, storage::ParameterStore};
+use crate::{
+    optimization::Optimizer,
+    storage::{ParameterStore, SizeMismatchErr},
+};
 
 /// The actual interface to interact with a `ParameterStore`.
 ///
@@ -10,6 +15,14 @@ pub struct ParameterHandle<O: Optimizer>(ParameterStore<O>);
 impl<O: Optimizer> Clone for ParameterHandle<O> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+}
+
+impl<O: Optimizer> Deref for ParameterHandle<O> {
+    type Target = ParameterStore<O>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -40,14 +53,14 @@ impl<O: Optimizer + Send> ParameterHandle<O> {
         task::block_in_place(|| self.0.update_weights());
     }
 
-    /// Async call to the CPU-bounded implementatino of `ParameterStore::pull_weights`.
+    /// Async call to the CPU-bounded implementation of `ParameterStore::pull_weights`.
     ///
     /// # Arguments
     /// * `out` - A mutable slice where the weights will be copied.
     ///
-    /// # Panics
-    /// If the length of `out` doesn't match the total number of parameters.
-    pub async fn pull_weights(&self, out: &mut [f32]) {
-        task::block_in_place(|| self.0.pull_weights(out));
+    /// # Returns
+    /// A `SizeMismatchErr` if there is a size mismatch in any of the inner shards.
+    pub async fn pull_weights(&self, out: &mut [f32]) -> Result<(), SizeMismatchErr> {
+        task::block_in_place(|| self.0.pull_weights(out))
     }
 }

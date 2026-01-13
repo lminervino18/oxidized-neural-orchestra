@@ -9,36 +9,32 @@ use tokio::{
     task::JoinSet,
 };
 
-use crate::{service::Server, training::Trainer};
+use crate::{
+    optimization::Optimizer,
+    service::Server,
+    storage::{ParameterHandle, ParameterStore},
+    training::Trainer,
+};
 
 /// The central server structure, it handles task management and io between workers.
-pub struct ParameterServer<T: Trainer> {
+pub struct ParameterServer<O: Optimizer, T: Trainer> {
     tasks: JoinSet<io::Result<()>>,
-    params: usize,
+    handle: ParameterHandle<O>,
     trainer: T,
 }
 
-impl<T: Trainer> ParameterServer<T> {
+impl<O: Optimizer, T: Trainer> ParameterServer<O, T> {
     /// Creates a new `ParameterServer`.
     ///
     /// # Arguments
-    /// * `params` - The amount of parameters to hold.
+    /// * `store` - The underlying parameter store to use.
     /// * `trainer` - The trainer to use.
-    pub fn new(params: usize, trainer: T) -> Self {
+    pub fn new(store: ParameterStore<O>, trainer: T) -> Self {
         Self {
             tasks: JoinSet::new(),
-            params,
+            handle: ParameterHandle::new(store),
             trainer,
         }
-    }
-
-    /// Starts the training process with the spawned workers.
-    pub async fn run(&mut self) -> io::Result<()> {
-        while let Some(res) = self.tasks.join_next().await {
-            res??
-        }
-
-        Ok(())
     }
 
     /// Creates an error for when an unexpected message kind is received.
@@ -56,7 +52,27 @@ impl<T: Trainer> ParameterServer<T> {
     }
 }
 
-impl<T: Trainer + 'static> ParameterServer<T> {
+impl<O: Optimizer + Send, T: Trainer> ParameterServer<O, T> {
+    /// Starts the training process with the spawned workers.
+    ///
+    /// # Returns
+    /// The trained weights of the model.
+    pub async fn train(&mut self) -> io::Result<Vec<f32>> {
+        while let Some(ret) = self.tasks.join_next().await {
+            ret??;
+        }
+
+        // SAFETY: This weight vector is the same size as
+        //         the amount of parameters in the storage.
+        let params = self.handle.len();
+        let mut weights = vec![0.; params];
+        self.handle.pull_weights(&mut weights).await.unwrap();
+
+        Ok(weights)
+    }
+}
+
+impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Arguments
@@ -67,11 +83,14 @@ impl<T: Trainer + 'static> ParameterServer<T> {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
+        let handle = self.handle.clone();
         let trainer = self.trainer.clone();
-        let mut buf = vec![0.; self.params];
+        let mut buf = vec![0.; handle.len()];
 
         let task = async move {
-            trainer.pull_weights(&mut buf).await;
+            // SAFETY: This buffer is the same size as the
+            //         amount of parameters in the storage.
+            handle.pull_weights(&mut buf).await.unwrap();
 
             loop {
                 let msg = Msg::Data(Payload::Weights(&mut buf));
@@ -79,7 +98,7 @@ impl<T: Trainer + 'static> ParameterServer<T> {
 
                 match rx.recv().await? {
                     Msg::Data(Payload::Gradient(grad)) => {
-                        trainer.step(grad, &mut buf).await;
+                        trainer.step(&handle, grad, &mut buf).await;
                     }
                     Msg::Control(Command::Disconnect) => break,
                     _ => return Self::unexpected_message_kind(msg),
@@ -94,18 +113,17 @@ impl<T: Trainer + 'static> ParameterServer<T> {
 }
 
 #[async_trait::async_trait]
-impl<R, W, T> Server<R, W> for ParameterServer<T>
+impl<R, W, O, T> Server<R, W> for ParameterServer<O, T>
 where
     R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
+    O: Optimizer + Send + 'static,
     T: Trainer + 'static,
 {
-    /// Indirection call to `Self::run`.
-    async fn run(&mut self) -> io::Result<()> {
-        self.run().await
+    async fn train(&mut self) -> io::Result<Vec<f32>> {
+        self.train().await
     }
 
-    /// Indirection call to `Self::spawn`.
     fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>) {
         self.spawn(rx, tx)
     }
