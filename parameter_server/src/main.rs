@@ -50,7 +50,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     tokio::select! {
-        Ok(mut weights) = pserver.train() => {
+        ret = pserver.run() => {
+            let mut weights = ret?;
             let msg = Msg::Data(Payload::Weights(&mut weights));
             tx.send(&msg).await?;
         },

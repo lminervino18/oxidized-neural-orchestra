@@ -8,11 +8,8 @@ use std::{
 
 use rayon::prelude::*;
 
-use crate::{
-    initialization::WeightGen,
-    optimization::Optimizer,
-    storage::{ParameterShard, SizeMismatchErr},
-};
+use super::{ParameterShard, Result};
+use crate::{initialization::WeightGen, optimization::Optimizer, storage::SizeMismatchErr};
 
 /// The primary storage of weights and accumulated gradients.
 ///
@@ -85,17 +82,15 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     /// # Arguments
     /// * `grad` - A flat slice containing a new model gradient.
     ///
-    /// # Panics
-    /// If the length of `grad` doesn't match the total number of parameters.
-    pub(super) fn accumulate(&self, grad: &[f32]) {
+    /// # Returns
+    /// A `SizeMismatchErr` if there is a size mismatch in any of the inner shards.
+    pub(super) fn accumulate(&self, grad: &[f32]) -> Result<()> {
         let active_idx = self.active_idx.load(Ordering::Acquire) as usize;
 
         self.shards
             .par_iter()
             .zip(grad.par_chunks(self.shard_size.get()))
-            .for_each(|(shard, grad_slice)| {
-                shard.accumulate(active_idx, grad_slice);
-            });
+            .try_for_each(|(shard, grad_slice)| shard.accumulate(active_idx, grad_slice))
     }
 
     /// Swaps the active gradient buffer and applies the frozen gradient to the weights.
@@ -125,10 +120,12 @@ impl<O: Optimizer + Send> ParameterStore<O> {
     ///
     /// # Returns
     /// A `SizeMismatchErr` if there is a size mismatch in any of the inner shards.
-    pub(super) fn pull_weights(&self, out: &mut [f32]) -> Result<(), SizeMismatchErr> {
+    pub(super) fn pull_weights(&self, out: &mut [f32]) -> Result<()> {
+        let shard_size = self.shard_size.get();
+
         self.shards
             .par_iter()
-            .zip(out.par_chunks_mut(self.shard_size.get()))
+            .zip(out.par_chunks_mut(shard_size))
             .try_for_each(|(shard, out_slice)| shard.pull_weights(out_slice))
     }
 }
@@ -143,8 +140,9 @@ mod tests {
     struct AddOptimizer;
 
     impl Optimizer for AddOptimizer {
-        fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
+        fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
             weights.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
+            Ok(())
         }
     }
 
@@ -162,7 +160,7 @@ mod tests {
         let store = create_test_store(PARAMS, SHARD_SIZE);
         let grad = [1.0; PARAMS];
 
-        store.accumulate(&grad);
+        store.accumulate(&grad).unwrap();
         store.update_weights();
 
         let mut out = [0.0; PARAMS];
@@ -176,11 +174,11 @@ mod tests {
         const SHARD_SIZE: usize = 1;
 
         let store = create_test_store(PARAMS, SHARD_SIZE);
-        store.accumulate(&[1.0; PARAMS]);
+        store.accumulate(&[1.0; PARAMS]).unwrap();
 
         store.update_weights();
         assert_eq!(store.active_idx.load(Ordering::Acquire), 1);
-        store.accumulate(&[5.0; PARAMS]);
+        store.accumulate(&[5.0; PARAMS]).unwrap();
 
         let mut weights = [0.0; PARAMS];
         store.pull_weights(&mut weights).unwrap();
@@ -216,7 +214,7 @@ mod tests {
         let store = create_test_store(PARAMS, SHARD_SIZE);
 
         let grad = [1.0; PARAMS];
-        store.accumulate(&grad);
+        store.accumulate(&grad).unwrap();
         store.update_weights();
 
         let mut weights = [0.0; PARAMS];
@@ -235,7 +233,7 @@ mod tests {
         let store = create_test_store(PARAMS, SHARD_SIZE);
 
         let grad = [1.0; PARAMS];
-        store.accumulate(&grad);
+        store.accumulate(&grad).unwrap();
         store.update_weights();
 
         let mut weights = [0.0; PARAMS];

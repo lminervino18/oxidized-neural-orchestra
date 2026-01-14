@@ -1,4 +1,8 @@
-use crate::{optimization::Optimizer, storage::ParameterHandle, training::Trainer};
+use super::Trainer;
+use crate::{
+    optimization::Optimizer,
+    storage::{ParameterHandle, Result},
+};
 
 /// A trainer that doesn't synchronize it's operations, will process incoming gradients immediately.
 #[derive(Clone)]
@@ -12,12 +16,18 @@ impl NonBlockingTrainer {
 }
 
 impl Trainer for NonBlockingTrainer {
-    async fn step<O>(&self, handle: &ParameterHandle<O>, grad: &[f32], weights: &mut [f32])
+    async fn step<O>(
+        &self,
+        handle: &ParameterHandle<O>,
+        grad: &[f32],
+        weights: &mut [f32],
+    ) -> Result<()>
     where
         O: Optimizer + Send,
     {
-        handle.accumulate(grad).await;
+        handle.accumulate(grad).await?;
         handle.update_weights().await;
-        handle.pull_weights(weights).await;
+        handle.pull_weights(weights).await?;
+        Ok(())
     }
 }

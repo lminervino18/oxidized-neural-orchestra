@@ -2,7 +2,8 @@ use std::ptr;
 
 use parking_lot::{Mutex, RwLock};
 
-use crate::{optimization::Optimizer, storage::SizeMismatchErr};
+use super::{Result, SizeMismatchErr};
+use crate::optimization::Optimizer;
 
 /// A buffer for accumulating gradients and weights across multiple threads.
 #[derive(Debug)]
@@ -38,13 +39,21 @@ impl<O: Optimizer> ParameterShard<O> {
     /// # Arguments
     /// * `active_idx` - The index of the active gradient, must be `0` or `1`.
     /// * `grad` - The gradient to accumulate to the active gradient.
-    pub fn accumulate(&self, active_idx: usize, grad: &[f32]) {
-        let mut active_grad = self.grads[active_idx].lock();
+    ///
+    /// # Returns
+    /// A `SizeMismatchErr` if `grad` isn't the same size as this shard.
+    pub fn accumulate(&self, active_idx: usize, grad: &[f32]) -> Result<()> {
+        if self.params != grad.len() {
+            return Err(SizeMismatchErr);
+        }
 
-        active_grad
+        self.grads[active_idx]
+            .lock()
             .iter_mut()
             .zip(grad)
             .for_each(|(acc, g)| *acc += g);
+
+        Ok(())
     }
 
     /// Updates the weights using the frozen gradient via the optimizer and clears it.
@@ -54,7 +63,13 @@ impl<O: Optimizer> ParameterShard<O> {
     pub fn update_weights(&self, frozen_idx: usize) {
         let mut weights = self.weights.write();
         let mut grad = self.grads[frozen_idx].lock();
-        self.optimizer.lock().update_weights(&grad, &mut weights);
+
+        // SAFETY: Both grad and weights have the same size of params.
+        self.optimizer
+            .lock()
+            .update_weights(&grad, &mut weights)
+            .unwrap();
+
         grad.fill(0.);
     }
 
@@ -65,7 +80,7 @@ impl<O: Optimizer> ParameterShard<O> {
     ///
     /// # Returns
     /// A `SizeMismatchErr` if `out` isn't the same size as this shard.
-    pub fn pull_weights(&self, out: &mut [f32]) -> Result<(), SizeMismatchErr> {
+    pub fn pull_weights(&self, out: &mut [f32]) -> Result<()> {
         if self.params != out.len() {
             return Err(SizeMismatchErr);
         }
@@ -88,8 +103,9 @@ mod tests {
     struct AddOptimizer;
 
     impl Optimizer for AddOptimizer {
-        fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
+        fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
             weights.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
+            Ok(())
         }
     }
 
@@ -97,8 +113,8 @@ mod tests {
     fn test_accumulation_and_update() {
         let shard = ParameterShard::new(vec![0.; 3], AddOptimizer);
 
-        shard.accumulate(0, &[1.0, 2.0, 3.0]);
-        shard.accumulate(0, &[1.0, 1.0, 1.0]);
+        shard.accumulate(0, &[1.0, 2.0, 3.0]).unwrap();
+        shard.accumulate(0, &[1.0, 1.0, 1.0]).unwrap();
 
         {
             let grad0 = shard.grads[0].lock();
@@ -120,8 +136,8 @@ mod tests {
     fn test_double_buffering_flow() {
         let shard = ParameterShard::new(vec![0.], AddOptimizer);
 
-        shard.accumulate(0, &[10.]);
-        shard.accumulate(1, &[5.]);
+        shard.accumulate(0, &[10.]).unwrap();
+        shard.accumulate(1, &[5.]).unwrap();
         shard.update_weights(0);
 
         let mut out = [0.];

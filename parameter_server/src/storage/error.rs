@@ -3,6 +3,9 @@ use std::{
     fmt::{self, Display},
 };
 
+/// The specific result type for size mismatch checks inside the storage module.
+pub type Result<T> = std::result::Result<T, SizeMismatchErr>;
+
 /// Error returned by `pull_weights` methods when there is a mismatch between the given
 /// output slice and the amount of parameters that the `ParameterShard` holds.
 #[derive(Debug)]

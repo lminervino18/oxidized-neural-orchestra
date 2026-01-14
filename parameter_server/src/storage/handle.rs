@@ -2,10 +2,8 @@ use std::ops::Deref;
 
 use tokio::task;
 
-use crate::{
-    optimization::Optimizer,
-    storage::{ParameterStore, SizeMismatchErr},
-};
+use super::{ParameterStore, Result};
+use crate::optimization::Optimizer;
 
 /// The actual interface to interact with a `ParameterStore`.
 ///
@@ -42,10 +40,10 @@ impl<O: Optimizer + Send> ParameterHandle<O> {
     /// # Arguments
     /// * `grad` - A flat slice containing a new model gradient.
     ///
-    /// # Panics
-    /// If the length of `grad` doesn't match the total number of parameters.
-    pub async fn accumulate(&self, grad: &[f32]) {
-        task::block_in_place(|| self.0.accumulate(grad));
+    /// # Returns
+    /// A `SizeMismatchErr` if `grad` isn't the same size as this shard.
+    pub async fn accumulate(&self, grad: &[f32]) -> Result<()> {
+        task::block_in_place(|| self.0.accumulate(grad))
     }
 
     /// Async call to the CPU-bounded implementation of `ParameterStore::update_weights`.
@@ -60,7 +58,7 @@ impl<O: Optimizer + Send> ParameterHandle<O> {
     ///
     /// # Returns
     /// A `SizeMismatchErr` if there is a size mismatch in any of the inner shards.
-    pub async fn pull_weights(&self, out: &mut [f32]) -> Result<(), SizeMismatchErr> {
+    pub async fn pull_weights(&self, out: &mut [f32]) -> Result<()> {
         task::block_in_place(|| self.0.pull_weights(out))
     }
 }

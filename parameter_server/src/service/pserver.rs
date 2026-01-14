@@ -2,16 +2,16 @@ use std::io;
 
 use comms::{
     OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
+    msg::{Command, Detail, Msg, Payload},
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     task::JoinSet,
 };
 
+use super::Server;
 use crate::{
     optimization::Optimizer,
-    service::Server,
     storage::{ParameterHandle, ParameterStore},
     training::Trainer,
 };
@@ -57,7 +57,7 @@ impl<O: Optimizer + Send, T: Trainer> ParameterServer<O, T> {
     ///
     /// # Returns
     /// The trained weights of the model.
-    pub async fn train(&mut self) -> io::Result<Vec<f32>> {
+    pub async fn run(&mut self) -> io::Result<Vec<f32>> {
         while let Some(ret) = self.tasks.join_next().await {
             ret??;
         }
@@ -85,9 +85,11 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
     {
         let handle = self.handle.clone();
         let trainer = self.trainer.clone();
-        let mut buf = vec![0.; handle.len()];
 
         let task = async move {
+            let params = handle.len();
+            let mut buf = vec![0.; params];
+
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
             handle.pull_weights(&mut buf).await.unwrap();
@@ -97,10 +99,20 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
                 tx.send(&msg).await?;
 
                 match rx.recv().await? {
-                    Msg::Data(Payload::Gradient(grad)) => {
-                        trainer.step(&handle, grad, &mut buf).await;
-                    }
                     Msg::Control(Command::Disconnect) => break,
+                    Msg::Data(Payload::Gradient(grad)) if params == grad.len() => {
+                        // SAFETY: We checked that the gradient is the same
+                        //         size as the buffer and the storage.
+                        trainer.step(&handle, grad, &mut buf).await.unwrap();
+                    }
+                    Msg::Data(Payload::Gradient(grad)) => {
+                        let msg = Msg::Err(Detail::GradSizeMismatch {
+                            expected: params,
+                            got: grad.len(),
+                        });
+
+                        tx.send(&msg).await?;
+                    }
                     _ => return Self::unexpected_message_kind(msg),
                 }
             }
@@ -120,8 +132,8 @@ where
     O: Optimizer + Send + 'static,
     T: Trainer + 'static,
 {
-    async fn train(&mut self) -> io::Result<Vec<f32>> {
-        self.train().await
+    async fn run(&mut self) -> io::Result<Vec<f32>> {
+        self.run().await
     }
 
     fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>) {

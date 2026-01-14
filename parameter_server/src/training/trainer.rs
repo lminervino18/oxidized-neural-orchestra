@@ -1,4 +1,7 @@
-use crate::{optimization::Optimizer, storage::ParameterHandle};
+use crate::{
+    optimization::Optimizer,
+    storage::{ParameterHandle, Result},
+};
 
 /// Executes a single parameter update step.
 ///
@@ -10,7 +13,15 @@ pub trait TrainerTemplate: Clone {
     /// # Arguments
     /// * `grad` - The incoming gradient to accumulate.
     /// * `weights` - Where to write the resultant weights.
-    async fn step<O>(&self, handle: &ParameterHandle<O>, grad: &[f32], weights: &mut [f32])
+    ///
+    /// # Returns
+    /// An error if there's a size mismatch between `grad`, `weights` and the size of the storage.
+    async fn step<O>(
+        &self,
+        handle: &ParameterHandle<O>,
+        grad: &[f32],
+        weights: &mut [f32],
+    ) -> Result<()>
     where
         O: Optimizer + Send;
 }

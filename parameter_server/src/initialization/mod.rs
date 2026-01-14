@@ -6,6 +6,6 @@ mod weight_gen;
 
 pub use chained::ChainedWeightGen;
 pub use constant::ConstWeightGen;
-pub use error::{RandErr, Result};
+pub use error::Result;
 pub use random::RandWeightGen;
 pub use weight_gen::WeightGen;

@@ -6,15 +6,15 @@ use comms::specs::server::{
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use tokio::io::{AsyncRead, AsyncWrite};
 
+use super::{ParameterServer, Server};
 use crate::{
     initialization::{ChainedWeightGen, ConstWeightGen, RandWeightGen, Result, WeightGen},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
-    service::{ParameterServer, Server},
     storage::ParameterStore,
     training::{BarrierSyncTrainer, NonBlockingTrainer, Trainer},
 };
 
-/// Makes `callback`'s return type genric, when trying to resolve a concrete `RandWeightGen` it avoids boxing all
+/// Makes `callback`'s return type generic, when trying to resolve a concrete `RandWeightGen` it avoids boxing all
 /// weight generators variants.
 ///
 /// When trying to resolve for a `ChainedWeightGen`, a sub `RandWeightGen` must be returned as a boxed
