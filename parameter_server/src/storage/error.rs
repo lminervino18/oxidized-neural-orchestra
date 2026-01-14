@@ -6,8 +6,8 @@ use std::{
 /// The specific result type for size mismatch checks inside the storage module.
 pub type Result<T> = std::result::Result<T, SizeMismatchErr>;
 
-/// Error returned by `pull_weights` methods when there is a mismatch between the given
-/// output slice and the amount of parameters that the `ParameterShard` holds.
+/// Error returned by various methods in the `ParameterShard` whenever there is a size
+/// mismatch between different gradients, weights and external buffers.
 #[derive(Debug)]
 pub struct SizeMismatchErr;
 

@@ -64,7 +64,7 @@ impl<O: Optimizer> ParameterShard<O> {
         let mut weights = self.weights.write();
         let mut grad = self.grads[frozen_idx].lock();
 
-        // SAFETY: Both grad and weights have the same size of params.
+        // SAFETY: Both grad and weights have the same size.
         self.optimizer
             .lock()
             .update_weights(&grad, &mut weights)

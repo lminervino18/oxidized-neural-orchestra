@@ -11,6 +11,7 @@ pub trait TrainerTemplate: Clone {
     /// Should implement a step in the traning process, meaning accumulating this gradient and updating the weights.
     ///
     /// # Arguments
+    /// * `handle` - The parameter handle holding the weights of the model.
     /// * `grad` - The incoming gradient to accumulate.
     /// * `weights` - Where to write the resultant weights.
     ///

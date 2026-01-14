@@ -83,7 +83,8 @@ impl ServerBuilder {
     /// * `spec` - The specification of the parameter server.
     ///
     /// # Returns
-    /// A new server or an error if encountered.
+    /// A new Server or a `RandErr` if the specification has
+    /// invalid `RandWeightGen` construction values.
     pub fn build<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>>
     where
         R: AsyncRead + Unpin + Send + 'static,
@@ -114,7 +115,8 @@ impl ServerBuilder {
     /// * `spec` - The specification of the parameter server.
     ///
     /// # Returns
-    /// A new server or an error if encountered.
+    /// A new Server or a `RandErr` if the specification has
+    /// invalid `RandWeightGen` construction values.
     fn resolve_weight_gen<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>>
     where
         R: AsyncRead + Unpin + Send + 'static,
@@ -149,7 +151,7 @@ impl ServerBuilder {
     /// * `specs` - A list of weight gen specifications.
     ///
     /// # Returns
-    /// A newly configured `ChainedWeightGen`.
+    /// A resolved `ChainedWeightGen`.
     fn resolve_chained<R>(
         &self,
         rng: Rc<RefCell<R>>,
@@ -191,7 +193,8 @@ impl ServerBuilder {
     /// * `weight_gen` - A resolved weight generator.
     ///
     /// # Returns
-    /// A new server.
+    /// A new Server or a `RandErr` if the specification has
+    /// invalid `RandWeightGen` construction values.
     fn resolve_optimizer<R, W, WG>(&self, spec: ServerSpec, weight_gen: WG) -> Box<dyn Server<R, W>>
     where
         R: AsyncRead + Unpin + Send + 'static,
@@ -230,7 +233,8 @@ impl ServerBuilder {
     /// * `optimizer_factory` - A factory of optimizers.
     ///
     /// # Returns
-    /// A new server.
+    /// A new Server or a `RandErr` if the specification has
+    /// invalid `RandWeightGen` construction values.
     fn resolve_trainer<R, W, WG, O, OF>(
         &self,
         spec: ServerSpec,
@@ -265,7 +269,8 @@ impl ServerBuilder {
     /// * `trainer_factory` - A factory of a trainer.
     ///
     /// # Returns
-    /// A new session.
+    /// A new Server or a `RandErr` if the specification has
+    /// invalid `RandWeightGen` construction values.
     fn terminate_build<R, W, WG, O, OF, T>(
         &self,
         spec: ServerSpec,
