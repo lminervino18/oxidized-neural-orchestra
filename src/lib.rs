@@ -12,7 +12,7 @@ impl NeuralNet {
             .map(|idx| Array2::<f32>::zeros((sizes[idx + 1], sizes[idx])))
             .collect();
 
-        let biases = sizes
+        let biases = sizes[1..]
             .iter()
             .map(|size| Array1::<f32>::zeros(*size))
             .collect();
