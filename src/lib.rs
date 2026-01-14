@@ -26,8 +26,8 @@ impl NeuralNet {
 
     fn forward(&self, x: Array1<f32>) -> Array1<f32> {
         let mut y_pred = x;
-        self.weights.iter().for_each(|layer| {
-            y_pred = layer.dot(&y_pred);
+        self.weights.iter().zip(&self.biases).for_each(|(w, b)| {
+            y_pred = w.dot(&y_pred) + b;
         });
 
         y_pred
