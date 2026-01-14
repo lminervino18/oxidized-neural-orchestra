@@ -9,12 +9,12 @@ struct NeuralNet {
 impl NeuralNet {
     fn new(sizes: Vec<usize>) -> Self {
         let weights = (0..sizes.len() - 1)
-            .map(|idx| Array::<f32, Ix2>::zeros((sizes[idx + 1], sizes[idx])))
+            .map(|idx| Array2::<f32>::zeros((sizes[idx + 1], sizes[idx])))
             .collect();
 
         let biases = sizes
             .iter()
-            .map(|size| Array::<f32, Ix1>::zeros(*size))
+            .map(|size| Array1::<f32>::zeros(*size))
             .collect();
 
         Self {
@@ -24,8 +24,13 @@ impl NeuralNet {
         }
     }
 
-    fn forward(&self, x: Array<f32, Ix1>) -> Array1<f32> {
-        todo!()
+    fn forward(&self, x: Array1<f32>) -> Array1<f32> {
+        let mut y_pred = x;
+        self.weights.iter().for_each(|layer| {
+            y_pred = layer.dot(&y_pred);
+        });
+
+        y_pred
     }
 }
 
@@ -36,5 +41,12 @@ mod tests {
     #[test]
     fn test01() {
         let _net = NeuralNet::new(vec![2, 3, 1]);
+    }
+
+    #[test]
+    fn test02() {
+        let net = NeuralNet::new(vec![2, 3, 1]);
+        let x = Array1::<f32>::from_vec(vec![1., 2.]);
+        net.forward(x);
     }
 }
