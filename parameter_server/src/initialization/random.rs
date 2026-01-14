@@ -174,3 +174,50 @@ impl<R: Rng, D: Distribution<f32>> WeightGen for RandWeightGen<R, D> {
         Some(sample)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    fn seeded_rng() -> Rc<RefCell<StdRng>> {
+        Rc::new(RefCell::new(StdRng::seed_from_u64(42)))
+    }
+
+    #[test]
+    fn empty() {
+        const SIZE: usize = 0;
+        let rng = seeded_rng();
+
+        let mut weight_gen = RandWeightGen::normal(rng, SIZE, 0., 1.).unwrap();
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn exact() {
+        const SIZE: usize = 10;
+        let rng = seeded_rng();
+
+        let mut weight_gen = RandWeightGen::uniform(rng, SIZE, -1., 1.).unwrap();
+        let sample = weight_gen.sample(SIZE).unwrap();
+
+        assert_eq!(sample.len(), SIZE);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn partial() {
+        let rng = seeded_rng();
+
+        let mut weight_gen = RandWeightGen::normal(rng, 10, 0., 1.).unwrap();
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample.len(), 7);
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample.len(), 3);
+
+        assert!(weight_gen.sample(1).is_none());
+    }
+}

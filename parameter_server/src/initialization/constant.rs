@@ -31,3 +31,39 @@ impl WeightGen for ConstWeightGen {
         Some(vec![self.value; n])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty() {
+        const SIZE: usize = 0;
+
+        let mut weight_gen = ConstWeightGen::new(1., SIZE);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn exact() {
+        const SIZE: usize = 10;
+
+        let mut weight_gen = ConstWeightGen::new(1., SIZE);
+        let sample = weight_gen.sample(SIZE).unwrap();
+
+        assert_eq!(sample, vec![1.; SIZE]);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn partial() {
+        let mut weight_gen = ConstWeightGen::new(1., 10);
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample, vec![1.; 7]);
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample, vec![1.; 3]);
+        assert!(weight_gen.sample(1).is_none());
+    }
+}

@@ -47,3 +47,66 @@ impl WeightGen for ChainedWeightGen {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{super::ConstWeightGen, *};
+
+    #[test]
+    fn empty() {
+        let mut weight_gen = ChainedWeightGen::new(vec![]);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn exact() {
+        let weight_gens: Vec<Box<dyn WeightGen>> = vec![
+            Box::new(ConstWeightGen::new(0., 5)),
+            Box::new(ConstWeightGen::new(1., 5)),
+        ];
+
+        let mut weight_gen = ChainedWeightGen::new(weight_gens);
+        let sample = weight_gen.sample(10).unwrap();
+        let expected: Vec<_> = (0..10).map(|i| (i > 4) as u32 as f32).collect();
+
+        assert_eq!(sample, expected);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn partial() {
+        let weight_gens: Vec<Box<dyn WeightGen>> = vec![
+            Box::new(ConstWeightGen::new(0., 1)),
+            Box::new(ConstWeightGen::new(1., 3)),
+        ];
+
+        let mut weight_gen = ChainedWeightGen::new(weight_gens);
+
+        let sample = weight_gen.sample(2).unwrap();
+        assert_eq!(sample, [0., 1.]);
+
+        let sample = weight_gen.sample(2).unwrap();
+        assert_eq!(sample, [1., 1.]);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn recusive() {
+        let inner_weight_gens: Vec<Box<dyn WeightGen>> = vec![
+            Box::new(ConstWeightGen::new(1., 1)),
+            Box::new(ConstWeightGen::new(2., 1)),
+        ];
+
+        let weight_gens: Vec<Box<dyn WeightGen>> = vec![
+            Box::new(ConstWeightGen::new(0., 1)),
+            Box::new(ChainedWeightGen::new(inner_weight_gens)),
+            Box::new(ConstWeightGen::new(3., 1)),
+        ];
+
+        let mut weight_gen = ChainedWeightGen::new(weight_gens);
+        let sample = weight_gen.sample(4).unwrap();
+
+        assert_eq!(sample, [0., 1., 2., 3.]);
+        assert!(weight_gen.sample(1).is_none());
+    }
+}
