@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io};
+use std::io;
 
 use crate::{Deserialize, Serialize, specs::server::ServerSpec};
 
@@ -20,12 +20,20 @@ pub enum Command {
     Disconnect,
 }
 
+/// The errors for the `Err` variant of the `Msg` enum.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Detail {
+    GradSizeMismatch { expected: usize, got: usize },
+    WeightSizeMismatch { expected: usize, got: usize },
+}
+
 /// The application layer message for the entire system.
 #[derive(Debug)]
 pub enum Msg<'a> {
     Control(Command),
     Data(Payload<'a>),
-    Err(Cow<'a, str>),
+    Err(Detail),
 }
 
 impl Msg<'_> {
@@ -47,10 +55,14 @@ impl Msg<'_> {
 impl<'a> Serialize<'a> for Msg<'a> {
     fn serialize(&'a self, buf: &mut Vec<u8>) -> Option<&'a [u8]> {
         match self {
-            Msg::Err(e) => {
+            Msg::Err(detail) => {
                 let header = (0 as Header).to_be_bytes();
                 buf.extend_from_slice(&header);
-                Some(e.as_bytes())
+
+                // SAFETY: Serialize impl for `Detail` is derived and not implemented
+                //         by hand. Nor has a non string-key map inside.
+                serde_json::to_writer(buf, &detail).unwrap();
+                None
             }
             Msg::Control(cmd) => {
                 let header = (1 as Header).to_be_bytes();
@@ -88,10 +100,8 @@ impl<'a> Deserialize<'a> for Msg<'a> {
 
         match kind {
             0 => {
-                let string = str::from_utf8(rest)
-                    .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-
-                Ok(Self::Err(Cow::Borrowed(string)))
+                let detail = serde_json::from_slice(rest)?;
+                Ok(Self::Err(detail))
             }
             1 => {
                 let cmd = serde_json::from_slice(rest)?;
