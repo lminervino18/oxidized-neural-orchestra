@@ -1,9 +1,9 @@
+mod error;
 mod handle;
-pub mod optimization;
 mod shard;
 mod store;
-pub mod weight_gen;
 
+pub use error::{Result, SizeMismatchErr};
 pub use handle::ParameterHandle;
 pub(super) use shard::ParameterShard;
 pub use store::ParameterStore;

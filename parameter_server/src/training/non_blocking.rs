@@ -1,43 +1,33 @@
+use super::Trainer;
 use crate::{
-    parameters::{ParameterHandle, ParameterStore, optimization::Optimizer},
-    training::Trainer,
+    optimization::Optimizer,
+    storage::{ParameterHandle, Result},
 };
 
 /// A trainer that doesn't synchronize it's operations, will process incoming gradients immediately.
-pub struct NonBlockingTrainer<O: Optimizer> {
-    handle: ParameterHandle<O>,
-}
+#[derive(Clone)]
+pub struct NonBlockingTrainer;
 
-impl<O: Optimizer> Clone for NonBlockingTrainer<O> {
-    fn clone(&self) -> Self {
-        Self {
-            handle: self.handle.clone(),
-        }
-    }
-}
-
-impl<O: Optimizer> NonBlockingTrainer<O> {
+impl NonBlockingTrainer {
     /// Creates a new `NonBlockingTrainer`.
-    ///
-    /// # Arguments
-    /// * `store` - The underlying parameter store.
-    pub fn new(store: ParameterStore<O>) -> Self {
-        Self {
-            handle: ParameterHandle::new(store),
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
-impl<O: Optimizer + Send> Trainer for NonBlockingTrainer<O> {
-    async fn pull_weights(&self, weights: &mut [f32]) {
-        self.handle.pull_weights(weights).await;
-    }
-
-    async fn step(&self, grad: &[f32], weights: &mut [f32]) {
-        let Self { handle } = self;
-
-        handle.accumulate(grad).await;
+impl Trainer for NonBlockingTrainer {
+    async fn step<O>(
+        &self,
+        handle: &ParameterHandle<O>,
+        grad: &[f32],
+        weights: &mut [f32],
+    ) -> Result<()>
+    where
+        O: Optimizer + Send,
+    {
+        handle.accumulate(grad).await?;
         handle.update_weights().await;
-        handle.pull_weights(weights).await;
+        handle.pull_weights(weights).await?;
+        Ok(())
     }
 }

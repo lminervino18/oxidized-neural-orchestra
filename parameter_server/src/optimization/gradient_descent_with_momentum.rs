@@ -1,4 +1,5 @@
 use super::Optimizer;
+use crate::storage::{Result, SizeMismatchErr};
 
 #[derive(Debug)]
 pub struct GradientDescentWithMomentum {
@@ -24,7 +25,11 @@ impl GradientDescentWithMomentum {
 }
 
 impl Optimizer for GradientDescentWithMomentum {
-    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
+    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
+        if grad.len() != weights.len() {
+            return Err(SizeMismatchErr);
+        }
+
         let lr = self.learning_rate;
         let mu = self.momentum;
 
@@ -36,5 +41,7 @@ impl Optimizer for GradientDescentWithMomentum {
                 *v = (mu * *v) + g;
                 *w -= lr * *v;
             });
+
+        Ok(())
     }
 }

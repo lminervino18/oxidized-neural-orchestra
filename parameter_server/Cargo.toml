@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-trait = "0.1.89"
 comms = { version = "0.1.0", path = "../comms" }
 parking_lot = "0.12.5"
 rand = "0.9.2"

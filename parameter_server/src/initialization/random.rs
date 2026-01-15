@@ -1,25 +1,25 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, rc::Rc};
 
 use rand::Rng;
-use rand_distr::{Distribution, Normal, NormalError, Uniform, uniform::Error as UniformError};
+use rand_distr::{Distribution, Normal, Uniform};
 
-use super::WeightGen;
+use super::{Result, WeightGen};
 
 /// A weight generator that follows a certain probabilistic distribution.
-pub struct RandWeightGen<'a, R: Rng, D: Distribution<f32>> {
-    rng: &'a RefCell<R>,
+pub struct RandWeightGen<R: Rng, D: Distribution<f32>> {
+    rng: Rc<RefCell<R>>,
     distribution: D,
     remaining: usize,
 }
 
-impl<'a, R: Rng, D: Distribution<f32>> RandWeightGen<'a, R, D> {
+impl<R: Rng, D: Distribution<f32>> RandWeightGen<R, D> {
     /// Creates a new `RandWeightGen` weight generator.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
     /// * `distribution` - The distribution to sample the random numbers from.
     /// * `limit` - The maximum amount of numbers to generate.
-    pub fn new(rng: &'a RefCell<R>, distribution: D, limit: usize) -> Self {
+    pub fn new(rng: Rc<RefCell<R>>, distribution: D, limit: usize) -> Self {
         Self {
             rng,
             distribution,
@@ -28,7 +28,7 @@ impl<'a, R: Rng, D: Distribution<f32>> RandWeightGen<'a, R, D> {
     }
 }
 
-impl<'a, R: Rng> RandWeightGen<'a, R, Uniform<f32>> {
+impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
     /// Creates a new `RandWeightGen` weight generator with a uniform distribution.
     ///
     /// # Arguments
@@ -39,12 +39,7 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Uniform<f32>> {
     ///
     /// # Returns
     /// An error if the range is invalid (low > high).
-    pub fn uniform(
-        rng: &'a RefCell<R>,
-        limit: usize,
-        low: f32,
-        high: f32,
-    ) -> Result<Self, UniformError> {
+    pub fn uniform(rng: Rc<RefCell<R>>, limit: usize, low: f32, high: f32) -> Result<Self> {
         Ok(Self::new(rng, Uniform::new(low, high)?, limit))
     }
 
@@ -59,11 +54,11 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Uniform<f32>> {
     /// # Returns
     /// An error if the range is invalid (low > high).
     pub fn uniform_inclusive(
-        rng: &'a RefCell<R>,
+        rng: Rc<RefCell<R>>,
         limit: usize,
         low: f32,
         high: f32,
-    ) -> Result<Self, UniformError> {
+    ) -> Result<Self> {
         Ok(Self::new(rng, Uniform::new_inclusive(low, high)?, limit))
     }
 
@@ -78,11 +73,11 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Uniform<f32>> {
     /// # Returns
     /// An error if the calculated range is invalid.
     pub fn xavier_uniform(
-        rng: &'a RefCell<R>,
+        rng: Rc<RefCell<R>>,
         limit: usize,
         fan_in: usize,
         fan_out: usize,
-    ) -> Result<Self, UniformError> {
+    ) -> Result<Self> {
         let range = (6. / (fan_in + fan_out) as f32).sqrt();
         Self::uniform(rng, limit, -range, range)
     }
@@ -96,17 +91,13 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Uniform<f32>> {
     ///
     /// # Returns
     /// An error if the caluculated range is invalid.
-    pub fn lecun_uniform(
-        rng: &'a RefCell<R>,
-        limit: usize,
-        fan_in: usize,
-    ) -> Result<Self, UniformError> {
+    pub fn lecun_uniform(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self> {
         let range = (3. / fan_in as f32).sqrt();
         Self::uniform(rng, limit, -range, range)
     }
 }
 
-impl<'a, R: Rng> RandWeightGen<'a, R, Normal<f32>> {
+impl<R: Rng> RandWeightGen<R, Normal<f32>> {
     /// Creates a new `RandWeightGen` weight generator with a normal distribution.
     ///
     /// # Arguments
@@ -117,12 +108,7 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Normal<f32>> {
     ///
     /// # Returns
     /// An error if `std_dev` is not finite (Nan or infinite).
-    pub fn normal(
-        rng: &'a RefCell<R>,
-        limit: usize,
-        mean: f32,
-        std_dev: f32,
-    ) -> Result<Self, NormalError> {
+    pub fn normal(rng: Rc<RefCell<R>>, limit: usize, mean: f32, std_dev: f32) -> Result<Self> {
         Ok(Self::new(rng, Normal::new(mean, std_dev)?, limit))
     }
 
@@ -135,7 +121,7 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Normal<f32>> {
     ///
     /// # Returns
     /// An error if the calculated standard deviation is not finite (Nan or infinite).
-    pub fn kaiming(rng: &'a RefCell<R>, limit: usize, fan_in: usize) -> Result<Self, NormalError> {
+    pub fn kaiming(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self> {
         let std_dev = (2. / fan_in as f32).sqrt();
         Self::normal(rng, limit, 0., std_dev)
     }
@@ -151,11 +137,11 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Normal<f32>> {
     /// # Returns
     /// An error if the calculated standard deviation is not finite (Nan or infinite).
     pub fn xavier(
-        rng: &'a RefCell<R>,
+        rng: Rc<RefCell<R>>,
         limit: usize,
         fan_in: usize,
         fan_out: usize,
-    ) -> Result<Self, NormalError> {
+    ) -> Result<Self> {
         Self::kaiming(rng, limit, fan_in + fan_out)
     }
 
@@ -168,13 +154,13 @@ impl<'a, R: Rng> RandWeightGen<'a, R, Normal<f32>> {
     ///
     /// # Returns
     /// An error if the calculated standard deviation is not finite (Nan or infinite).
-    pub fn lecun(rng: &'a RefCell<R>, limit: usize, fan_in: usize) -> Result<Self, NormalError> {
+    pub fn lecun(rng: Rc<RefCell<R>>, limit: usize, fan_in: usize) -> Result<Self> {
         let std_dev = (1. / fan_in as f32).sqrt();
         Self::normal(rng, limit, 0., std_dev)
     }
 }
 
-impl<'a, R: Rng, D: Distribution<f32>> WeightGen for RandWeightGen<'a, R, D> {
+impl<R: Rng, D: Distribution<f32>> WeightGen for RandWeightGen<R, D> {
     fn sample(&mut self, mut n: usize) -> Option<Vec<f32>> {
         if self.remaining == 0 {
             return None;
@@ -186,5 +172,52 @@ impl<'a, R: Rng, D: Distribution<f32>> WeightGen for RandWeightGen<'a, R, D> {
         let mut rng = self.rng.borrow_mut();
         let sample = (0..n).map(|_| self.distribution.sample(&mut rng)).collect();
         Some(sample)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    fn seeded_rng() -> Rc<RefCell<StdRng>> {
+        Rc::new(RefCell::new(StdRng::seed_from_u64(42)))
+    }
+
+    #[test]
+    fn empty() {
+        const SIZE: usize = 0;
+        let rng = seeded_rng();
+
+        let mut weight_gen = RandWeightGen::normal(rng, SIZE, 0., 1.).unwrap();
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn exact() {
+        const SIZE: usize = 10;
+        let rng = seeded_rng();
+
+        let mut weight_gen = RandWeightGen::uniform(rng, SIZE, -1., 1.).unwrap();
+        let sample = weight_gen.sample(SIZE).unwrap();
+
+        assert_eq!(sample.len(), SIZE);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn partial() {
+        let rng = seeded_rng();
+
+        let mut weight_gen = RandWeightGen::normal(rng, 10, 0., 1.).unwrap();
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample.len(), 7);
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample.len(), 3);
+
+        assert!(weight_gen.sample(1).is_none());
     }
 }

@@ -1,40 +1,62 @@
-mod parameters;
-mod server;
+mod initialization;
+mod optimization;
+mod service;
+mod storage;
 mod training;
 
-use std::{io, num::NonZeroUsize};
+use std::error::Error;
 
-use tokio::net::TcpListener;
+use comms::msg::{Command, Msg, Payload};
+use tokio::{net::TcpListener, signal};
 
-use crate::{
-    parameters::{ParameterStore, optimization::GradientDescent, weight_gen::ConstWeightGen},
-    server::ParameterServer,
-    training::BarrierSyncTrainer,
-};
+use crate::service::ServerBuilder;
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
-    const ADDR: &'static str = "127.0.0.1:8765";
-    const WORKERS: usize = 1;
-    const PARAMS: usize = 2;
-    const SHARD_AMOUNT: NonZeroUsize = NonZeroUsize::new(2).unwrap();
-    const EPOCHS: usize = 500;
-    const LR: f32 = 0.01;
-
-    let weight_gen = ConstWeightGen::new(0., PARAMS);
-    let optimizer_factory = |_| GradientDescent::new(LR);
-    let store = ParameterStore::new(PARAMS, SHARD_AMOUNT, weight_gen, optimizer_factory);
-    let trainer = BarrierSyncTrainer::new(WORKERS, store);
-    let mut pserver = ParameterServer::new(PARAMS, EPOCHS, trainer);
+async fn main() -> Result<(), Box<dyn Error>> {
+    const ADDR: &str = "127.0.0.1:8765";
 
     let list = TcpListener::bind(ADDR).await?;
+    let builder = ServerBuilder::new();
 
-    for _ in 0..WORKERS {
+    let (stream, _) = list.accept().await?;
+    let (rx, tx) = stream.into_split();
+    let (mut rx, mut tx) = comms::channel(rx, tx);
+
+    let spec = loop {
+        let msg = match rx.recv().await {
+            Ok(msg) => msg,
+            Err(e) => {
+                println!("{e:?}");
+                continue;
+            }
+        };
+
+        let Msg::Control(Command::CreateServer(spec)) = msg else {
+            println!("Expected CreateServer");
+            continue;
+        };
+
+        break spec;
+    };
+
+    let workers = spec.workers;
+    let mut pserver = builder.build(spec)?;
+
+    for _ in 0..workers {
         let (stream, _) = list.accept().await?;
         let (rx, tx) = stream.into_split();
         let (rx, tx) = comms::channel(rx, tx);
         pserver.spawn(rx, tx);
     }
 
-    pserver.run().await.into_iter().collect::<io::Result<_>>()
+    tokio::select! {
+        ret = pserver.run() => {
+            let mut weights = ret?;
+            let msg = Msg::Data(Payload::Weights(&mut weights));
+            tx.send(&msg).await?;
+        },
+        _ = signal::ctrl_c() => {},
+    }
+
+    Ok(())
 }

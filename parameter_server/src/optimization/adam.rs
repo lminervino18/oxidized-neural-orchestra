@@ -1,4 +1,5 @@
 use super::Optimizer;
+use crate::storage::{Result, SizeMismatchErr};
 
 #[derive(Debug)]
 pub struct Adam {
@@ -34,7 +35,11 @@ impl Adam {
 }
 
 impl Optimizer for Adam {
-    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) {
+    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
+        if grad.len() != weights.len() {
+            return Err(SizeMismatchErr);
+        }
+
         let Self {
             learning_rate: lr,
             beta1: b1,
@@ -60,5 +65,7 @@ impl Optimizer for Adam {
                 *s = b2 * *s + (1. - b2) * g.powi(2);
                 *w -= step_size * *v / (s.sqrt() + eps);
             });
+
+        Ok(())
     }
 }
