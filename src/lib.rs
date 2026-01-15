@@ -7,6 +7,14 @@ struct NeuralNet {
     activation: fn(f32) -> f32,
 }
 
+fn l2_distance(v: ArrayView1<f32>, w: ArrayView1<f32>) -> f32 {
+    v.iter()
+        .zip(w)
+        .map(|(x, y)| (x - y).powi(2))
+        .sum::<f32>()
+        .sqrt()
+}
+
 fn sigmoid(z: f32) -> f32 {
     1. / (1. - std::f32::consts::E.powf(z))
 }
@@ -39,14 +47,40 @@ impl NeuralNet {
         y_pred
     }
 
-    fn train(&mut self, x_train: Vec<Array1<f32>>, y_train: Vec<Array1<f32>>) {
-        x_train.iter().zip(y_train).for_each(|(x, y)| {
-            let y_pred = self.forward(x.clone() /* grave...*/);
-            let err = l2_distance(y_pred.view(), y.view());
+    // recorrer el dataset -> backprop e ir sumando el grad resultante al grad total -> moverse en
+    // la dirección contraria al gradiente resultante escalado con el learning rate (eta)
+    fn train(&mut self, x_train: Vec<Array1<f32>>, y_train: Vec<Array1<f32>>, eta: f32) {
+        let mut grad_w: Vec<_> = self
+            .weights
+            .iter()
+            .map(|w| Array2::<f32>::zeros(w.dim()))
+            .collect();
 
-            // grad
-            // update
+        let mut grad_b: Vec<_> = self
+            .biases
+            .iter()
+            .map(|b| Array1::<f32>::zeros(b.dim()))
+            .collect();
+
+        x_train.iter().zip(y_train).for_each(|(x, y)| {
+            let delta_grad_w;
+            let delta_grad_b;
+
+            // TODO: backprop
+
+            grad_w.iter_mut().for_each(|gw| *gw += delta_grad_w);
+            grad_b.iter_mut().for_each(|gb| *gb += delta_grad_b);
         });
+
+        self.weights
+            .iter_mut()
+            .zip(grad_w)
+            .for_each(|(w, gw)| w.scaled_add(-eta, &gw));
+
+        self.biases
+            .iter_mut()
+            .zip(grad_b)
+            .for_each(|(b, gb)| w.scaled_add(-eta, &gb));
     }
 }
 
@@ -64,5 +98,11 @@ mod tests {
         let net = NeuralNet::new(vec![2, 3, 1], sigmoid);
         let x = Array1::<f32>::from_vec(vec![1., 2.]);
         net.forward(x);
+    }
+
+    fn test03() {
+        let a = Array1::<f32>::zeros(10);
+        let vec = vec![a];
+        let b = Array1::<f32>::zeros(vec.first().unwrap().dim());
     }
 }
