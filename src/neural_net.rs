@@ -7,10 +7,11 @@ pub struct NeuralNet {
     pub weights: Vec<Array2<f32>>,
     pub biases: Vec<Array1<f32>>,
     pub sigmoid: fn(f32) -> f32,
+    pub sigmoid_prime: fn(f32) -> f32,
 }
 
 impl NeuralNet {
-    fn new(sizes: &[usize], activation: fn(f32) -> f32) -> Self {
+    fn new(sizes: &[usize], sigmoid: fn(f32) -> f32, sigmoid_prime: fn(f32) -> f32) -> Self {
         let activations: Vec<_> = sizes.iter().map(|s| Array1::zeros(*s)).collect();
         let weights = (0..sizes.len() - 1)
             .map(|idx| Array2::zeros((sizes[idx + 1], sizes[idx])))
@@ -21,7 +22,8 @@ impl NeuralNet {
             biases: activations[1..].to_vec(),
             activations,
             weights,
-            sigmoid: activation,
+            sigmoid,
+            sigmoid_prime,
         }
     }
 }
@@ -53,12 +55,12 @@ mod test {
 
     #[test]
     fn test01() {
-        let _net = NeuralNet::new(&[2, 3, 1], |x| x);
+        let _net = NeuralNet::new(&[2, 3, 1], |x| x, |_| 1.);
     }
 
     #[test]
     fn test02() {
-        let mut net = NeuralNet::new(&[2, 3, 1], |x| x);
+        let mut net = NeuralNet::new(&[2, 3, 1], |x| x, |_| 1.);
         let x = Array1::from_vec(vec![1., 2.]);
         net.forward(x);
     }
