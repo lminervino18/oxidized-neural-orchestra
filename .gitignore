@@ -14,3 +14,7 @@
 
 # Added by cargo
 /target
+
+# Docker compose files
+*compose*.yml
+*compose*.yaml
