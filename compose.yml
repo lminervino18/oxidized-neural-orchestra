@@ -1,0 +1,14 @@
+name: parameter_server_training
+services:
+  parameter-server:
+    container_name: parameter-server
+    build:
+      dockerfile: parameter_server/Dockerfile
+    networks:
+      - training-network
+    env_file:
+      - parameter_server/.env
+
+networks:
+  training-network:
+    driver: bridge
