@@ -1,0 +1,6 @@
+.git/
+README.md
+compose.yml
+target/
+doc/
+references/
