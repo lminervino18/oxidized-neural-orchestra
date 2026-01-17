@@ -24,9 +24,9 @@ def generate_servers(servers: int) -> str:
     # Returns
     The string containing the configuration.
     """
-    compose_servers = []
+    compose_servers = ["\n  # ---------------- Parameter Server Shards ----------------\n"]
 
-    for i in range(servers):
+    for i in range(1, servers + 1):
         compose_server = f"""
   parameter-server-{i}:
     container_name: parameter-server-{i}
@@ -39,7 +39,7 @@ def generate_servers(servers: int) -> str:
 """
         compose_servers.append(compose_server)
 
-    return "\n".join(compose_servers)
+    return "".join(compose_servers)
 
 
 def generate_networks():

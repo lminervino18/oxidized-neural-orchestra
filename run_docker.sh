@@ -1,12 +1,15 @@
 #!/usr/bin/bash
 
+set -e
+trap 'echo "Running Cleanup..."; rm -f "$OUTPUT_PATH"' EXIT
+
 SCRIPTS_DIR="docker"
-CONFIG_PATH="$SCRIPTS_DIR/config.json"
-OUTPUT_PATH="compose.yml"
+export CONFIG_PATH="$SCRIPTS_DIR/config.json"
+export OUTPUT_PATH="compose.yml"
 
-CONFIG_PATH=$CONFIG_PATH OUTPUT_PATH=$OUTPUT_PATH ./$SCRIPTS_DIR/gen_compose.py
+echo "Generating compose file..."
+./$SCRIPTS_DIR/gen_compose.py
 
-# Acá hay que poner lo que ejecuta todo, algo tipo `docker compose up`
-echo "Executing training..."
+echo "Executing docker compose..."
+# Acá hay que poner lo que ejecuta todo, algo tipo `docker compose up`.
 
-rm $OUTPUT_PATH
