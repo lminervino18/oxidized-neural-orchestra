@@ -4,18 +4,25 @@ mod service;
 mod storage;
 mod training;
 
-use std::error::Error;
+use std::{env, error::Error};
 
 use comms::msg::{Command, Msg, Payload};
 use tokio::{net::TcpListener, signal};
 
 use crate::service::ServerBuilder;
 
+const DEFAULT_HOST: &str = "0.0.0.0";
+const DEFAULT_PORT: &str = "8765";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    const ADDR: &str = "127.0.0.1:8765";
+    let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
+    let port = env::var("PORT")
+        .unwrap_or_else(|_| DEFAULT_PORT.to_string())
+        .parse::<u16>()?;
 
-    let list = TcpListener::bind(ADDR).await?;
+    let addr = format!("{host}:{port}");
+    let list = TcpListener::bind(addr).await?;
     let builder = ServerBuilder::new();
 
     let (stream, _) = list.accept().await?;
