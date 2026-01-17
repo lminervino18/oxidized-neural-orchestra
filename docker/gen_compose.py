@@ -11,7 +11,7 @@ def generate_header():
     """
     Generates the header part of the docker-compose file.
     """
-    return "name: parameter_server_training\nservices:"
+    return "name: distributed_training\nservices:"
 
 
 def generate_servers(servers: int) -> str:
@@ -28,7 +28,7 @@ def generate_servers(servers: int) -> str:
 
     for i in range(1, servers + 1):
         compose_server = f"""
-  parameter-server-{i}:
+  server-{i}:
     container_name: parameter-server-{i}
     build:
       dockerfile: parameter_server/Dockerfile
