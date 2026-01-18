@@ -121,7 +121,7 @@ mod test {
     use super::*;
 
     fn sigmoid(z: f32) -> f32 {
-        1. / (1. - std::f32::consts::E.powf(-z))
+        1. / (1. + std::f32::consts::E.powf(-z))
     }
 
     fn sigmoid_prime(z: f32) -> f32 {
