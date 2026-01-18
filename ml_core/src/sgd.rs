@@ -195,4 +195,39 @@ mod test {
         dbg!(error);
         assert!(error < 0.01);
     }
+
+    #[test]
+    fn test01() {
+        let func = |x| 2. * f32::cos(x).powi(2);
+        let x_train: Vec<_> = (0..100)
+            .map(|x| Array1::<f32>::from_elem(1, x as f32))
+            .collect();
+        let y_train: Vec<_> = x_train.iter().map(|x| x.mapv(func)).collect();
+
+        let mut net = Mlp::new(&[1, 9, 3, 1], sigmoid, sigmoid_prime);
+        let sgd = Sgd { eta: 0.1 };
+        sgd.train(
+            &mut net,
+            x_train[..80].to_vec(),
+            y_train[..80].to_vec(),
+            10000,
+        );
+
+        let y_pred: Vec<_> = x_train[80..]
+            .iter()
+            .map(|x| net.forward(x.clone()))
+            .collect();
+
+        let error = y_pred
+            .into_iter()
+            .zip(&y_train)
+            .map(|(yp, y)| cost(yp.view(), y.view()))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .sum::<f32>()
+            / y_train.len() as f32;
+
+        dbg!(error);
+        assert!(error < 0.01);
+    }
 }
