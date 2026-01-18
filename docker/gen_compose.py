@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
-from typing import Any
+from typing import Union
 import os
 import json
 
 DEFAULT_CONFIG_PATH = "config.json"
 DEFAULT_OUTPUT_PATH = "../compose.yml"
 
+# The various values for a yaml field.
+type YmlField = Union[bool, int, float, str, list[YmlField], dict[str, YmlField]]
 
-def generate_servers(release: bool, servers: int) -> dict[str, Any]:
+
+def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
     """
     Generates the servers' part of the compose file.
 
@@ -41,7 +44,7 @@ def generate_servers(release: bool, servers: int) -> dict[str, Any]:
     }
 
 
-def generate_compose(release: bool, servers: int) -> dict:
+def generate_compose(release: bool, servers: int) -> dict[str, YmlField]:
     """
     Generates the entire docker compose file in a dictionary.
 
