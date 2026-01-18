@@ -2,7 +2,7 @@ use super::{feedforward::Feedforward, model::Model};
 use ndarray::{Array1, Array2};
 use ndarray_rand::{RandomExt, rand_distr::StandardNormal};
 
-pub struct NeuralNet {
+pub struct Mlp {
     pub activations: Vec<Array1<f32>>,
     pub weighted_sums: Vec<Array1<f32>>,
     pub weights: Vec<Array2<f32>>,
@@ -11,7 +11,7 @@ pub struct NeuralNet {
     pub sigmoid_prime: fn(f32) -> f32,
 }
 
-impl NeuralNet {
+impl Mlp {
     pub fn new(sizes: &[usize], sigmoid: fn(f32) -> f32, sigmoid_prime: fn(f32) -> f32) -> Self {
         let activations: Vec<_> = sizes
             .iter()
@@ -32,9 +32,9 @@ impl NeuralNet {
     }
 }
 
-impl Model for NeuralNet {}
+impl Model for Mlp {}
 
-impl Feedforward for NeuralNet {
+impl Feedforward for Mlp {
     fn forward(&mut self, x: Array1<f32>) -> Array1<f32> {
         self.activations[0] = x;
         (0..self.weighted_sums.len()).for_each(|idx| {
@@ -46,7 +46,7 @@ impl Feedforward for NeuralNet {
             let sigmoid = &(self.sigmoid);
 
             *z = w.dot(&self.activations[idx]) + b;
-            self.activations[idx + 1] = z.clone().mapv_into(sigmoid);
+            self.activations[idx + 1] = z.mapv(sigmoid);
         });
 
         self.activations.last().unwrap().clone()
@@ -59,12 +59,12 @@ mod test {
 
     #[test]
     fn test01() {
-        let _net = NeuralNet::new(&[2, 3, 1], |x| x, |_| 1.);
+        let _net = Mlp::new(&[2, 3, 1], |x| x, |_| 1.);
     }
 
     #[test]
     fn test02() {
-        let mut net = NeuralNet::new(&[2, 3, 1], |x| x, |_| 1.);
+        let mut net = Mlp::new(&[2, 3, 1], |x| x, |_| 1.);
         let x = Array1::from_vec(vec![1., 2.]);
         net.forward(x);
     }

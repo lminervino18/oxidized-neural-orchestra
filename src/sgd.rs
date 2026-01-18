@@ -1,4 +1,4 @@
-use super::{neural_net::NeuralNet, optimizer::Optimizer};
+use super::{neural_net::Mlp, optimizer::Optimizer};
 use crate::feedforward::Feedforward;
 use ndarray::{Array1, Array2, ArrayView1};
 
@@ -6,14 +6,12 @@ pub struct Sgd {
     eta: f32,
 }
 
-fn cost(y_pred: ArrayView1<f32>, y: ArrayView1<f32>) -> Array1<f32> {
-    (y.to_owned() - y_pred).pow2()
+fn cost(y_pred: ArrayView1<f32>, y: ArrayView1<f32>) -> f32 {
+    (y_pred.to_owned() - y).pow2().sum().sqrt()
 }
 
 fn cost_prime(y_pred: ArrayView1<f32>, y: ArrayView1<f32>) -> Array1<f32> {
-    let mut cost_prime = y_pred.to_owned() - y;
-    cost_prime.mapv_inplace(|x| x * 2.);
-    cost_prime
+    (y_pred.to_owned() - y).mapv(|x| x * 2.)
 }
 
 pub fn outer_product1(v: ArrayView1<f32>, w: ArrayView1<f32>) -> Array2<f32> {
@@ -38,81 +36,106 @@ pub fn outer_product1(v: ArrayView1<f32>, w: ArrayView1<f32>) -> Array2<f32> {
 impl Sgd {
     fn backprop(
         &self,
-        model: &NeuralNet,
+        model: &Mlp,
         y_pred: Array1<f32>,
         y: Array1<f32>,
     ) -> (Vec<Array2<f32>>, Vec<Array1<f32>>) {
-        let grad_a_cost = cost_prime(y_pred.view(), y.view());
-        let mut delta = grad_a_cost
+        // init grads
+        let mut grad_w: Vec<_> = model
+            .weights
+            .iter()
+            .map(|w| Array2::<f32>::zeros(w.dim()))
+            .collect();
+        let mut grad_b: Vec<_> = model
+            .biases
+            .iter()
+            .map(|b| Array1::<f32>::zeros(b.dim()))
+            .collect();
+
+        // compute last layer's delta (cannot be inside the loop since it requires a different math
+        // expression) and use it to compute model's last layers grads
+        let mut delta = cost_prime(y_pred.view(), y.view())
             * model
                 .weighted_sums
                 .last()
                 .unwrap()
-                .clone()
-                .mapv_into(|z| (model.sigmoid_prime)(z));
+                .mapv(|z| (model.sigmoid_prime)(z));
 
-        let (grad_w, grad_b): (Vec<_>, Vec<_>) = (0..model.weights.len() - 1)
-            .rev()
-            .map(|idx| {
-                let z = &model.weighted_sums[idx];
-                let input = &model.activations[idx];
-                let w = &model.weights[idx + 1];
-                let sigmoid_prime = &(model.sigmoid_prime);
+        *grad_w.last_mut().unwrap() = outer_product1(delta.view(), y_pred.view());
+        *grad_b.last_mut().unwrap() = delta.clone();
 
-                delta = w.t().dot(&delta) * z.clone().mapv_into(sigmoid_prime);
-                let grad_w = outer_product1(delta.view(), input.view());
-                let grad_b = delta.clone();
+        // loop through all layers and compute each delta and use it to compute the grads of the layer
+        (0..model.weights.len() - 1).rev().for_each(|idx| {
+            let z = &model.weighted_sums[idx];
+            let a = &model.activations[idx];
+            let w_next = &model.weights[idx + 1];
+            let sigmoid_prime = &(model.sigmoid_prime);
 
-                (grad_w, grad_b)
-            })
-            .collect();
+            delta = w_next.t().dot(&delta) * z.mapv(sigmoid_prime);
+            grad_w[idx] = outer_product1(delta.view(), a.view());
+            grad_b[idx] = delta.clone();
+        });
+
+        // nashe
+        grad_w.reverse();
+        grad_b.reverse();
 
         (grad_w, grad_b)
     }
 }
 
 impl Optimizer for Sgd {
-    type ModelT = NeuralNet;
+    type ModelT = Mlp;
 
-    fn train(&self, model: &mut NeuralNet, x_train: Vec<Array1<f32>>, y_train: Vec<Array1<f32>>) {
-        let mut grad_w: Vec<_> = model
-            .weights
-            .iter()
-            .map(|w| Array2::zeros(w.dim()))
-            .collect();
+    fn train(
+        &self,
+        model: &mut Mlp,
+        x_train: Vec<Array1<f32>>,
+        y_train: Vec<Array1<f32>>,
+        n_iters: usize,
+    ) {
+        for _ in 0..n_iters {
+            let mut grad_w: Vec<_> = model
+                .weights
+                .iter()
+                .map(|w| Array2::zeros(w.dim()))
+                .collect();
 
-        let mut grad_b: Vec<_> = model
-            .biases
-            .iter()
-            .map(|b| Array1::zeros(b.dim()))
-            .collect();
+            let mut grad_b: Vec<_> = model
+                .biases
+                .iter()
+                .map(|b| Array1::zeros(b.dim()))
+                .collect();
 
-        x_train.iter().zip(y_train).for_each(|(x, y)| {
-            let y_pred = model.forward(x.clone());
-            let (delta_gw, delta_gb) = self.backprop(model, y_pred, y);
+            x_train.iter().zip(y_train.clone()).for_each(|(x, y)| {
+                let y_pred = model.forward(x.clone());
+                let (delta_gw, delta_gb) = self.backprop(model, y_pred, y);
 
-            grad_w
+                grad_w
+                    .iter_mut()
+                    .zip(delta_gw.iter().rev())
+                    .for_each(|(gw, dgw)| *gw += dgw);
+
+                grad_b
+                    .iter_mut()
+                    .zip(delta_gb.iter().rev())
+                    .for_each(|(gb, dgb)| *gb += dgb);
+            });
+
+            // dbg!(grad_w);
+            // panic!();
+            model
+                .weights
                 .iter_mut()
-                .zip(delta_gw)
-                .for_each(|(gw, dgw)| *gw += &dgw);
+                .zip(grad_w)
+                .for_each(|(w, gw)| w.scaled_add(-self.eta / x_train.len() as f32, &gw));
 
-            grad_b
+            model
+                .biases
                 .iter_mut()
-                .zip(delta_gb)
-                .for_each(|(gb, dgb)| *gb += &dgb);
-        });
-
-        model
-            .weights
-            .iter_mut()
-            .zip(grad_w)
-            .for_each(|(w, gw)| w.scaled_add(-self.eta / x_train.len() as f32, &gw));
-
-        model
-            .biases
-            .iter_mut()
-            .zip(grad_b)
-            .for_each(|(b, gb)| b.scaled_add(-self.eta / x_train.len() as f32, &gb));
+                .zip(grad_b)
+                .for_each(|(b, gb)| b.scaled_add(-self.eta / x_train.len() as f32, &gb));
+        }
     }
 }
 
@@ -141,7 +164,7 @@ mod test {
 
     #[test]
     fn test00() {
-        let mut net = NeuralNet::new(&[2, 3, 1], sigmoid, sigmoid_prime);
+        let mut net = Mlp::new(&[2, 3, 1], sigmoid, sigmoid_prime);
         let x_train = [
             Array1::<f32>::from_vec(vec![0., 0.]),
             Array1::<f32>::from_vec(vec![0., 1.]),
@@ -155,10 +178,21 @@ mod test {
             Array1::<f32>::from_elem(1, 1.),
         ];
 
-        let sgd = Sgd { eta: 1. };
-        sgd.train(&mut net, x_train.to_vec(), y_train.to_vec());
+        let sgd = Sgd { eta: 3. };
+        sgd.train(&mut net, x_train.to_vec(), y_train.to_vec(), 10000);
 
         let y_pred = x_train.clone().map(|x| net.forward(x));
-        assert_eq!(y_pred, y_train);
+
+        let error = y_pred
+            .into_iter()
+            .zip(&y_train)
+            .map(|(yp, y)| cost(yp.view(), y.view()))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .sum::<f32>()
+            / y_train.len() as f32;
+
+        dbg!(error);
+        assert!(error < 0.01);
     }
 }
