@@ -11,7 +11,7 @@ fn cost(y_pred: ArrayView1<f32>, y: ArrayView1<f32>) -> Array1<f32> {
 }
 
 fn cost_prime(y_pred: ArrayView1<f32>, y: ArrayView1<f32>) -> Array1<f32> {
-    let mut cost_prime = y.to_owned() - y_pred;
+    let mut cost_prime = y_pred.to_owned() - y;
     cost_prime.mapv_inplace(|x| x * 2.);
     cost_prime
 }
