@@ -30,6 +30,12 @@ def generate_servers(release: bool, servers: int) -> dict[str, Any]:
                     "MODE": mode,
                 },
             },
+            "networks": [
+                "training-network",
+            ],
+            "env_file": [
+                "parameter_server/.env",
+            ],
         }
         for i in range(1, servers + 1)
     }
