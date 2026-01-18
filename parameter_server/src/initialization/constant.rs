@@ -1,0 +1,69 @@
+use super::WeightGen;
+
+/// A weight generator that always generates the same value.
+pub struct ConstWeightGen {
+    value: f32,
+    remaining: usize,
+}
+
+impl ConstWeightGen {
+    /// Creates a new `ConstWeightGen` weight generator which always generates the same value.
+    ///
+    /// # Arguments
+    /// * `value` - The value to always generate.
+    /// * `limit` - The maximum amount of times to generate that value.
+    pub fn new(value: f32, limit: usize) -> Self {
+        Self {
+            value,
+            remaining: limit,
+        }
+    }
+}
+
+impl WeightGen for ConstWeightGen {
+    fn sample(&mut self, mut n: usize) -> Option<Vec<f32>> {
+        if self.remaining == 0 {
+            return None;
+        }
+
+        n = n.min(self.remaining);
+        self.remaining -= n;
+        Some(vec![self.value; n])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty() {
+        const SIZE: usize = 0;
+
+        let mut weight_gen = ConstWeightGen::new(1., SIZE);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn exact() {
+        const SIZE: usize = 10;
+
+        let mut weight_gen = ConstWeightGen::new(1., SIZE);
+        let sample = weight_gen.sample(SIZE).unwrap();
+
+        assert_eq!(sample, vec![1.; SIZE]);
+        assert!(weight_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn partial() {
+        let mut weight_gen = ConstWeightGen::new(1., 10);
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample, vec![1.; 7]);
+
+        let sample = weight_gen.sample(7).unwrap();
+        assert_eq!(sample, vec![1.; 3]);
+        assert!(weight_gen.sample(1).is_none());
+    }
+}

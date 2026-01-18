@@ -1,0 +1,164 @@
+\section{Resumen}
+En los últimos años, tanto el sector público como el privado han llevado a cabo significativos esfuerzos en el desarrollo de nuevas tecnologías y protocolos de comunicación satelital. Este impulso está estrechamente vinculado con el creciente interés en la exploración espacial y la necesidad de proporcionar conectividad global. Sin embargo, la industria de las comunicaciones satelitales ha mostrado un avance limitado en las últimas décadas en comparación con la evolución de las redes terrestres tales como Internet. La razón principal consiste en que el entorno espacial es radicalmente diferente al terrestre, lo cual impacta considerablemente en la estabilidad de las conexiones y en el hecho de que los protocolos de comunicación utilizados en Tierra resulten inadecuados y/o ineficientes cuando se tratan de adaptar al espacio.
+
+Es en base a esta problemática que se ha empezado a estudiar y experimentar con nuevas estrategias de comunicacion que sean capaces de hacer frente a estas adversidades. En particular, en este trabajo se implementa y se somete a simulaciones el protocolo Adjacent Network Topology (ANTop), para su posterior comparación con el desempeño del ya existente Contact Graph Routing (CGR).
+
+El desarrollo de este proyecto tiene un impacto importante en la evolución de las comunicaciones espaciales, dado que ANTop podría ofrecer una solución más eficiente y robusta para el manejo dinámico de topologías en redes satelitales, superando las limitaciones de los protocolos actuales. Su implementación puede no solo mejorar la eficiencia y la estabilidad de las comunicaciones en órbita, sino también abrir nuevas oportunidades para la expansión de redes satelitales en aplicaciones críticas como la observación de la Tierra, la comunicación global en tiempo real y la exploración espacial.
+
+\section{Acta Acuerdo para el desarrollo de Tesis de Grado}
+
+En la Ciudad Autónoma de Buenos Aires, al día veintiséis del mes de febrero del año dos mil
+veinticinco se reúnen en el Departamento de Informática de la Facultad de Ingeniería de la Universidad
+de Buenos Aires el profesor Dr. Ing. J. Ignacio Alvarez-Hamelin, con
+los estudiantes de la carrera de Ingeniería Informática el Sr. Nombre y Apellido 1 (Padrón: xxxxx) y Sr. Nombre y Apellido 2 (Padrón yyyyy) para tratar la
+elección y acuerdo del tema de Tesis de Grado para el Ciclo Superior de la carrera.
+
+
+Teniendo en cuenta la propuesta presentada por los alumnos más las observaciones y mejoras
+propuestas por los profesores, se ha acordado el plan de trabajo para el desarrollo e implementación del trabajo práctico profesional “ANTop - Satelital” que
+figura en el documento adjunto.
+
+
+El acuerdo consiste en las siguientes pautas:
+
+1. Los alumnos Sra. Valentina Adelsflugel y Sr. Gastón Mariano Frenkel realizarán todas las etapas para el análisis y realización de
+pruebas del proyecto.
+
+2. El trabajo a realizar será presentado para cumplir los requisitos de la materia Tesis de Grado.
+
+3. El profesor Dr. Ing. J. Ignacio Alvarez-Hamelin acepta la función de tutor (Facultad de Ingeniería,
+Universidad de Buenos Aires), y el profesor Dr. Ing. Pablo Madoery acepta la función de cotutor para
+dicho trabajo.
+
+\vspace{2cm}
+
+\noindent
+\makebox[5cm][l]{\textbf{Nombre y apellido 1}} \underline{\hspace{5cm}}
+
+\vspace{1cm}
+
+\noindent
+\makebox[5cm][l]{\textbf{Nombre y apellido 2}} \underline{\hspace{5cm}}
+
+\vspace{1cm}
+
+\noindent
+\makebox[6cm][l]{\textbf{Dr. J. I. Alvarez-Hamelin}} \underline{\hspace{5cm}}
+
+
+
+\section{Estado de situación}
+A diferencia de las redes terrestres, las redes satelitales presentan desafíos únicos debido a su topología dinámica, la variabilidad en la conectividad y las altas latencias de propagación de señales producto del movimiento de los satélites, lo cual genera la necesidad de desarrollar e implementar algoritmos de enrutamiento específicos que se adapten a estos cambios.
+
+En base a esto, existe una tendencia hacia una arquitectura de protocolos basada en capas jerárquicas la cual integra elementos espaciales, aéreos y terrestres. A su vez, el componente satelital de dicha arquitectura puede ser considerado una única capa (single-layer satellite networks) o bien puede subdividirse en dos o tres capas, con cada satelite perteneciendo a una capa u otra en función de la distancia desde su órbita a la Tierra (multi-layer satellite networks) \cite{Cao2022-gy}. Algunos ejemplos de algoritmos incluyen LZDR (Localized Zone Distributed Routing), DRA (Datagram Routing Algorithm), LCRA (Low-complexity Probabilistic Routing Algorithm), MLSR (Multilayer Satellite Routing), SGRP (Satellite Grouping and Routing Protocol), entre muchos otros \cite{8932318}.
+
+Otro protocolo relevante es el Contact Graph Routing (CGR), el cual se utiliza en Delay-Tolerant Networks (DTN) para gestionar de manera eficiente el enrutamiento en entornos donde la conectividad es intermitente y las latencias son elevadas \cite{burleigh-dtnrg-cgr-01}. Esto lo logra calculando aproximaciones de rutas óptimas basándose en la predicción de contactos futuros entre nodos. Aunque CGR ha demostrado ser efectivo en la mitigación de algunos de los problemas asociados con las redes satelitales, su necesidad de poseer un conocimiento preciso de la dinámica de la red limitan su escalabilidad a escenarios complejos.
+
+En este contexto, la implementación y simulación del protocolo ANTop en redes satelitales busca ofrecer una solución eficiente, adaptable y escalable, capaz de enfrentar los desafíos mencionados.
+
+Este trabajo se desarrolla en el marco del proyecto de investigación ANTop, donde se han publicado los siguientes trabajos:
+\begin{itemize}
+    \item José Ignacio Alvarez-Hamelin, Aline Carneiro Viana, Marcelo Dias de Amorim. DHT-based Functionalities Using Hypercubes. IFIP 19th World Computer Congress, Aug 2006, Santiago, Chile. pp.157-176.
+    \item A. Marcu. Desarrollo y simulación de un protoclo para redes ad-hoc. University of Buenos Ares, Jul 2007, Buenos Aires, Argentina.
+    \item Matías Campolo. Estudio y análisis del funcionamiento de ANTop sobre IPv6. University of Buenos Aires, Apr 2012, Buenos Aires, Argentina.
+    \item Pablo D. Torrado. Fragmentación y Mezcla de redes ad-hoc utilizando el protocolo ANTop sobre IPv6. University of Buenos Aires, Mar 2018, Buenos Aires, Argentina.
+\end{itemize}
+
+\section{Objetivos}
+El trabajo tiene como objetivo la implementación del protocolo ANTop en un entorno de simulación de redes satelitales, comparando su desempeño con el protocolo CGR para determinar su eficiencia y viabilidad en este tipo de redes.
+
+En particular, el trabajo implica resolver cinco problemáticas principales:
+\begin{enumerate}
+    \item Desarrollar una implementación en C++ del protocolo ANTop, asegurando su correcta integración y funcionamiento en un entorno de simulación.
+    \item Configurar y ejecutar simulaciones del protocolo ANTop utilizando simuladores basados en OMNET++, modelando escenarios que reflejen condiciones típicas de redes satelitales.
+    \item Realizar una comparación de desempeño entre ANTop y el protocolo Contact Graph Routing (CGR), utilizando Python para el análisis de los resultados obtenidos en las simulaciones.
+    \item Evaluar los resultados obtenidos en términos de parámetros clave, como latencia, tasa de entrega de paquetes y utilización de ancho de banda, con el fin de determinar las fortalezas y limitaciones de ANTop en comparación con CGR.
+    \item Documentar las conclusiones derivadas del análisis comparativo, identificando posibles áreas de mejora y sugerencias para trabajos futuros en el ámbito de las comunicaciones satelitales.
+\end{enumerate}
+
+En lo académico, se busca utilizar y aplicar conocimientos adquiridos en materias como Algoritmos y Programación (I, II y III), Redes, Programación Concurrente, Simulación y Sistemas Distribuidos I. Además, existe un desafío adicional relacionado a la gestión del proyecto, la división de tareas y la estimación de tiempos, para lo cual se aplican contenidos relacionados a las materias Gestión del Desarrollo de Sistemas Informáticos y Taller de Programación II.
+
+\section{Tecnologías a utilizar}
+En esta sección se presentan las tecnologías a utilizar en el trabajo.
+\begin{itemize}
+    \item C++: Se opta por la utilización de C++ como lenguaje de programación para la implementación del protocolo ANTop debido a su ya probada resiliencia y robustez, además de ser requisito para utilizar OMNET++.
+    \item Python: Se decide utilizar de Python para realizar un análisis comparativo entre el rendimiento de los protocolos ANTop y CGR, aprovechando la facilidad que ofrece para el análisis de datos.
+    \item Docker: Se decide incorporar Docker con el fin de garantizar reproducibilidad en las simulaciones y generar un ambiente de uso estandarizado y controlado.
+    \item OMNET++ (OS³): Framework open source en C++ que permite simular comunicaciones satelitales.
+\end{itemize}
+
+\section{Planificación de trabajo}
+\subsection{Gestión}
+
+Se establece un compromiso por parte de cada estudiante para dedicar un total de 500 horas al desarrollo del trabajo profesional. Esto representa, en promedio 15 horas semanales por persona a la ejecución de las tareas asignadas. Este compromiso se mantendrá a lo largo de 32 semanas (dos cuatrimestres). Además, se tiene previsto llevar a cabo encuentros periódicos en formato virtual entre los miembros del equipo y su tutor, cada semana. El propósito de estas reuniones es informar el avance y desarrollo del proyecto en curso. 
+Asimismo, se abordarán aspectos como la definición de prioridades en las labores a realizar y la planificación requerida para la próxima etapa del proceso. 
+
+\subsection{Principales tareas}
+\begin{enumerate}
+    \item Leer y analizar los trabajos previos publicados sobre ANTop.
+    \item Investigar acerca del protocolo CGR
+    \item Entender y aprender a utilizar simuladores basados en Omnet++, tales como Dtnsim \cite{DtnSim} y LeoSatellites \cite{omnetpp-leosatellites-model}.
+    \item Investigar sobre la biblioteca H3 \cite{h3} para representar las posiciones de los satélites.
+    \item Integrar Dtnsim y LeoSatellites, agregando también el concepto de celdas
+que tiene la libreria H3 para crear nuestro simulador de redes ANTop.
+    \item Investigar y analizar existentes implementaciones del protocolo ANTop, ajustándolo a nuestras necesidades y agregando las funcionalidades que hagan falta.
+    \item Testear los programas realizados, ya sea con tests unitarios, de integración, o pruebas manuales.
+    \item Simular utilizando el simulador producido en 5) y el protocolo 6) diferentes escenarios de comunicación satelital con el objetivo de realizar mediciones como latencia, pérdida de paquetes, entre otras.
+    \item Analizar y graficar los resultados de las simulaciones utilizando Python.
+    \item Documentar el código generado y el proceso de desarrollo (decisiones tomadas, inconvenientes encontrados, etc).
+    \item Realizar un informe detallado de la evolución del trabajo y los resultados obtenidos.
+\end{enumerate}
+
+\newpage
+\subsection{Planificación}
+
+La figura \ref{fig:dependencias} representa las dependencia entre tareas y la tabla que se encuentra debajo, la duración estimada de las mismas por persona. Es importante resaltar que esta planificación tiene la flexibilidad de adaptarse conforme a la evolución de las actividades en curso. En caso de que surjan modificaciones, se mantendrá una comunicación continua con el tutor, notificándolo y manteniéndolo al tanto de cualquier cambio en la situación.
+\bigskip
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=17cm]{DiagramaRedTPP.jpeg}
+    \caption{Diagrama de red de las tareas planificadas}
+    \label{fig:dependencias}
+\end{figure}
+
+\centering
+\begin{tabular}{|c|c|c|c|}
+  \hline
+    & Tarea & Duración (hs) & Responsable \\  
+  \hline
+  1 & Leer y analizar trabajos previos sobre ANTop   & 15  & V y G \\
+  \hline
+  2 & Leer y entender CGR   &  15  & V \\
+  \hline
+  3 & Aprender a utilizar DtnSim   & 48  & V  \\
+  \hline
+  4 & Aprender a utilizar LeoSatellites  &  48  & G \\
+  \hline
+  5 & Investigar sobre H3   & 48  & G \\
+  \hline
+  6 & Implementar o readaptar ANTop   &  64 & V y G  \\
+  \hline
+  7 & Integrar los simuladores con H3   & 64  & V y G \\
+  \hline
+  8 & Testear   &  48  & V y G \\
+  \hline
+  9 & Documentar   & 24 & V y G \\
+  \hline
+  10 & Simular   &  48 & V y G   \\
+  \hline
+  11 & Analizar resultados   & 48 & V y G  \\
+  \hline
+  12 & Producir documento final   &  30 & V y G  \\
+  \hline
+   & Total   &   500 & - \\
+  \hline
+\end{tabular}\par
+\footnotesize{Estimación de carga horaria por tarea y por alumno.}\\
+
+
+\bibliography{references}
+\bibliographystyle{ieeetr}
+
+\end{document}

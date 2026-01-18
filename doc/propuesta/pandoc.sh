@@ -1,0 +1,14 @@
+pandoc \
+    caratula.md \
+    acuerdo.md \
+    resumen.md \
+    situacion.md \
+    objetivos.md \
+    tecnologias.md \
+    planificacion.md \
+    referencias.md \
+    --citeproc \
+    --bibliography=references.bib \
+    --number-sections \
+    --csl=ieee.csl \
+    -o propuesta.pdf
