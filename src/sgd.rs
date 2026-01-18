@@ -15,6 +15,24 @@ fn cost_prime(y_pred: ArrayView1<f32>, y: ArrayView1<f32>) -> Array1<f32> {
 }
 
 impl SGD {
+pub fn outer_product1(v: ArrayView1<f32>, w: ArrayView1<f32>) -> Array2<f32> {
+    let v_reshaped = v.to_shape((1, v.dim())).unwrap();
+    let w_reshaped = w.to_shape((1, w.dim())).unwrap();
+    v_reshaped.dot(&w_reshaped.t())
+}
+
+// from https://github.com/rust-ndarray/ndarray/issues/1148
+// pub fn outer_product2(a: &ArrayView2<f32>, b: &ArrayView2<f32>) -> Array4<f32> {
+//     let (m, n) = a.dim();
+//     let (p, q) = b.dim();
+//
+//     let a_reshaped = a.to_shape((m, n, 1, 1)).unwrap();
+//     let b_reshaped = b.to_shape((1, 1, p, q)).unwrap();
+//
+//     let prod = &a_reshaped * &b_reshaped;
+//
+//     prod.to_owned()
+// }
     fn backprop(
         &self,
         model: &NeuralNet,
