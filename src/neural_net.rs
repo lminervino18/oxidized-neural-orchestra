@@ -11,7 +11,7 @@ pub struct NeuralNet {
 }
 
 impl NeuralNet {
-    fn new(sizes: &[usize], sigmoid: fn(f32) -> f32, sigmoid_prime: fn(f32) -> f32) -> Self {
+    pub fn new(sizes: &[usize], sigmoid: fn(f32) -> f32, sigmoid_prime: fn(f32) -> f32) -> Self {
         let activations: Vec<_> = sizes.iter().map(|s| Array1::zeros(*s)).collect();
         let weights = (0..sizes.len() - 1)
             .map(|idx| Array2::zeros((sizes[idx + 1], sizes[idx])))
