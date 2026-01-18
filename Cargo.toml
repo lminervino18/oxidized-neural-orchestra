@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 ndarray = "0.17.2"
+ndarray-rand = "0.16.0"

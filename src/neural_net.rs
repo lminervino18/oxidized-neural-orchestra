@@ -1,5 +1,6 @@
 use super::{feedforward::Feedforward, model::Model};
 use ndarray::{Array1, Array2};
+use ndarray_rand::{RandomExt, rand_distr::StandardNormal};
 
 pub struct NeuralNet {
     pub activations: Vec<Array1<f32>>,
@@ -12,9 +13,12 @@ pub struct NeuralNet {
 
 impl NeuralNet {
     pub fn new(sizes: &[usize], sigmoid: fn(f32) -> f32, sigmoid_prime: fn(f32) -> f32) -> Self {
-        let activations: Vec<_> = sizes.iter().map(|s| Array1::zeros(*s)).collect();
+        let activations: Vec<_> = sizes
+            .iter()
+            .map(|s| Array1::random(*s, StandardNormal))
+            .collect();
         let weights = (0..sizes.len() - 1)
-            .map(|idx| Array2::zeros((sizes[idx + 1], sizes[idx])))
+            .map(|idx| Array2::random((sizes[idx + 1], sizes[idx]), StandardNormal))
             .collect();
 
         Self {
