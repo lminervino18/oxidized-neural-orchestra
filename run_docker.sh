@@ -4,7 +4,7 @@ set -e
 
 SCRIPTS_DIR="docker"
 export CONFIG_PATH="$SCRIPTS_DIR/config.json"
-export OUTPUT_PATH="compose.json"
+export OUTPUT_PATH="compose.yml"
 
 echo "Generating compose file..."
 ./$SCRIPTS_DIR/gen_compose.py

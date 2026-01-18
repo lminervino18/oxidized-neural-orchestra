@@ -16,4 +16,4 @@
 /target
 
 # Docker compose files
-*compose*.json
+*compose*.yml

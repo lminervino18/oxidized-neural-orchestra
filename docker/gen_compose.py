@@ -5,7 +5,7 @@ import os
 import json
 
 DEFAULT_CONFIG_PATH = "config.json"
-DEFAULT_OUTPUT_PATH = "../compose.json"
+DEFAULT_OUTPUT_PATH = "../compose.yml"
 
 
 def generate_servers(release: bool, servers: int) -> dict[str, Any]:
