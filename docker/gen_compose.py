@@ -1,56 +1,62 @@
 #!/usr/bin/env python3
 
+from typing import Any
 import os
 import json
 
 DEFAULT_CONFIG_PATH = "config.json"
-DEFAULT_OUTPUT_PATH = "../compose.yml"
+DEFAULT_OUTPUT_PATH = "../compose.json"
 
 
-def generate_header():
+def generate_servers(release: bool, servers: int) -> dict[str, Any]:
     """
-    Generates the header part of the docker-compose file.
-    """
-    return "name: distributed_training\nservices:"
-
-
-def generate_servers(servers: int) -> str:
-    """
-    Generates the server part of the docker-compose file.
+    Generates the servers' part of the compose file.
 
     # Arguments
+    * `release` - If the executable should be compiled as release mode.
     * `servers` - The amount of servers to create.
 
     # Returns
-    The string containing the configuration.
+    A dictionary containing the servers' part of the compose file.
     """
-    compose_servers = ["\n  # ---------------- Parameter Server Shards ----------------\n"]
+    mode = "release" if release else "debug"
 
-    for i in range(1, servers + 1):
-        compose_server = f"""
-  server-{i}:
-    container_name: parameter-server-{i}
-    build:
-      dockerfile: parameter_server/Dockerfile
-    networks:
-      - training-network
-    env_file:
-      - parameter_server/.env
-"""
-        compose_servers.append(compose_server)
-
-    return "".join(compose_servers)
+    return {
+        f"server-{i}": {
+            "container_name": f"server-{i}",
+            "build": {
+                "dockerfile": "parameter_server/Dockerfile",
+                "args": {
+                    "MODE": mode,
+                },
+            },
+        }
+        for i in range(servers)
+    }
 
 
-def generate_networks():
+def generate_compose(release: bool, servers: int) -> dict:
     """
-    Generates the networks part of the docker-compose file.
+    Generates the entire docker compose file in a dictionary.
+
+    # Arguments
+    * `release` - If the executable should be compiled as release mode.
+    * `servers` - The amount of servers to create.
+
+    # Returns
+    A dictionary containing the whole project's docker compose file.
     """
-    return """
-networks:
-  training-network:
-    driver: bridge
-"""
+    services = generate_servers(release, servers)
+
+    return {
+        "name": "distributed-training",
+        "services": services,
+        "networks": {
+            "training-network": {
+                "driver": "bridge",
+            },
+        },
+    }
 
 
 def main():
@@ -59,17 +65,11 @@ def main():
     with open(CONFIG_PATH) as f:
         config = json.load(f)
 
-    parts = (
-        generate_header(),
-        generate_servers(**config),
-        generate_networks(),
-    )
-
-    output = "".join(parts)
+    docker_compose = generate_compose(**config)
     OUTPUT_PATH = os.environ.get("OUTPUT_PATH", DEFAULT_OUTPUT_PATH)
 
     with open(OUTPUT_PATH, "w") as f:
-        f.write(output)
+        json.dump(docker_compose, f, indent=2)
 
 
 if __name__ == "__main__":

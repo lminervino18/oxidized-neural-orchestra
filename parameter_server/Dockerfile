@@ -1,5 +1,6 @@
-# 0. Define the package's name.
+# 0. Define the arguments' default values.
 ARG PKG=parameter_server
+ARG MODE=debug
 
 # 1. Install cargo-chef.
 FROM rust:1.92 AS chef
@@ -14,8 +15,11 @@ RUN cargo chef prepare --recipe-path recipe.json
 # 3. Cook the dependencies' recipe and build the package.
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+ARG MODE
 ARG PKG
+
+RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
+  cargo chef cook $FLAG --recipe-path recipe.json
 
   # Base dependencies.
   COPY Cargo.* .
@@ -24,8 +28,10 @@ ARG PKG
   # Extra dependencies.
   COPY comms ./comms
 
-RUN cargo build --release --bin $PKG
-RUN mv target/release/$PKG /app/binary
+RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
+  cargo build $FLAG --bin $PKG
+
+RUN mv target/$MODE/$PKG /app/binary
 
 # 4. Execute the package.
 FROM debian:bookworm-slim
