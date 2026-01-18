@@ -53,7 +53,7 @@ impl<O: Optimizer + Send, T: Trainer> ParameterServer<O, T> {
                 }
                 Err(e) => {
                     error!("task panicked or was cancelled: {e}");
-                    return Err(io::Error::new(io::ErrorKind::Other, e));
+                    return Err(io::Error::other(e));
                 }
                 _ => {}
             }
@@ -126,7 +126,7 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
                         let msg = Msg::Err(Detail::Fatal("invalid message".into()));
                         tx.send(&msg).await?;
 
-                        return Err(io::Error::new(io::ErrorKind::Other, "invalid message"));
+                        return Err(io::Error::other("invalid message"));
                     }
                 }
             }

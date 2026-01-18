@@ -1,6 +1,4 @@
-use std::{any::Any, fmt::Display, io};
-
-use serde::Serializer;
+use std::io;
 
 use crate::{Deserialize, Serialize, specs::server::ServerSpec};
 
@@ -77,9 +75,9 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 None
             }
             Msg::Data(payload) => {
-                let (kind, nums) = match payload {
-                    Payload::Gradient(grad) => (2, grad.as_ref()),
-                    Payload::Weights(weights) => (3, weights.as_ref()),
+                let (kind, nums): (_, &[_]) = match payload {
+                    Payload::Gradient(grad) => (2, grad),
+                    Payload::Weights(weights) => (3, weights),
                 };
 
                 let header = (kind as Header).to_be_bytes();

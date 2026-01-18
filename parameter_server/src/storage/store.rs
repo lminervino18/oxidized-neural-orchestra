@@ -9,7 +9,7 @@ use std::{
 use rayon::prelude::*;
 
 use super::{ParameterShard, Result};
-use crate::{initialization::WeightGen, optimization::Optimizer, storage::SizeMismatchErr};
+use crate::{initialization::WeightGen, optimization::Optimizer};
 
 /// The primary storage of weights and accumulated gradients.
 ///
