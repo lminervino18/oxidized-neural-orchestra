@@ -1,4 +1,6 @@
-use std::io;
+use std::{any::Any, fmt::Display, io};
+
+use serde::Serializer;
 
 use crate::{Deserialize, Serialize, specs::server::ServerSpec};
 
@@ -26,6 +28,7 @@ pub enum Command {
 pub enum Detail {
     GradSizeMismatch { expected: usize, got: usize },
     WeightSizeMismatch { expected: usize, got: usize },
+    Fatal(String),
 }
 
 /// The application layer message for the entire system.

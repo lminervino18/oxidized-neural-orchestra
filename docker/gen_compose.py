@@ -31,7 +31,7 @@ def generate_servers(release: bool, servers: int) -> dict[str, Any]:
                 },
             },
         }
-        for i in range(servers)
+        for i in range(1, servers + 1)
     }
 
 

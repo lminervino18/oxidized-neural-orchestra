@@ -4,6 +4,7 @@ use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Detail, Msg, Payload},
 };
+use log::{debug, error, info, warn};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     task::JoinSet,
@@ -36,20 +37,6 @@ impl<O: Optimizer, T: Trainer> ParameterServer<O, T> {
             trainer,
         }
     }
-
-    /// Creates an error for when an unexpected message kind is received.
-    ///
-    /// # Arguments
-    /// * `msg` - The received message.
-    ///
-    /// # Returns
-    /// An error.
-    fn unexpected_message_kind<U>(msg: Msg) -> io::Result<U> {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Received an unexpected message kind, got: {msg:?}"),
-        ))
-    }
 }
 
 impl<O: Optimizer + Send, T: Trainer> ParameterServer<O, T> {
@@ -59,7 +46,17 @@ impl<O: Optimizer + Send, T: Trainer> ParameterServer<O, T> {
     /// The trained weights of the model.
     pub async fn run(&mut self) -> io::Result<Vec<f32>> {
         while let Some(ret) = self.tasks.join_next().await {
-            ret??;
+            match ret {
+                Ok(Err(e)) => {
+                    error!("worker task failed with error: {e}");
+                    return Err(e);
+                }
+                Err(e) => {
+                    error!("task panicked or was cancelled: {e}");
+                    return Err(io::Error::new(io::ErrorKind::Other, e));
+                }
+                _ => {}
+            }
         }
 
         // SAFETY: This weight vector is the same size as
@@ -83,6 +80,7 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
+        let id = self.tasks.len() + 1;
         let handle = self.handle.clone();
         let trainer = self.trainer.clone();
 
@@ -95,17 +93,26 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
             handle.pull_weights(&mut buf).await.unwrap();
 
             loop {
+                debug!(worker_id = id; "sending weights");
                 let msg = Msg::Data(Payload::Weights(&mut buf));
                 tx.send(&msg).await?;
 
+                debug!(worker_id = id; "waiting to receive a message");
                 match rx.recv().await? {
-                    Msg::Control(Command::Disconnect) => break,
                     Msg::Data(Payload::Gradient(grad)) if params == grad.len() => {
+                        debug!(worker_id = id; "received gradient, applying step");
+
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
                         trainer.step(&handle, grad, &mut buf).await.unwrap();
                     }
+                    Msg::Control(Command::Disconnect) => {
+                        info!(worker_id = id; "gracefully disconnecting worker");
+                        break;
+                    }
                     Msg::Data(Payload::Gradient(grad)) => {
+                        warn!(worker_id = id; "gradient size mismatch, expected {params}, got {}", grad.len());
+
                         let msg = Msg::Err(Detail::GradSizeMismatch {
                             expected: params,
                             got: grad.len(),
@@ -113,7 +120,14 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
 
                         tx.send(&msg).await?;
                     }
-                    _ => return Self::unexpected_message_kind(msg),
+                    msg => {
+                        error!(worker_id = id; "received an invalid message {msg:?}");
+
+                        let msg = Msg::Err(Detail::Fatal("invalid message".into()));
+                        tx.send(&msg).await?;
+
+                        return Err(io::Error::new(io::ErrorKind::Other, "invalid message"));
+                    }
                 }
             }
 
