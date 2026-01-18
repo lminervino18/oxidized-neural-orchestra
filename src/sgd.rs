@@ -19,7 +19,7 @@ fn cost_prime(y_pred: ArrayView1<f32>, y: ArrayView1<f32>) -> Array1<f32> {
 pub fn outer_product1(v: ArrayView1<f32>, w: ArrayView1<f32>) -> Array2<f32> {
     let v_reshaped = v.to_shape((1, v.dim())).unwrap();
     let w_reshaped = w.to_shape((1, w.dim())).unwrap();
-    v_reshaped.dot(&w_reshaped.t())
+    v_reshaped.t().dot(&w_reshaped)
 }
 
 // from https://github.com/rust-ndarray/ndarray/issues/1148
@@ -127,6 +127,16 @@ mod test {
     fn sigmoid_prime(z: f32) -> f32 {
         let sigmoid = sigmoid(z);
         sigmoid * (1. - sigmoid)
+    }
+
+    #[test]
+    fn test_outer_product1() {
+        let a = Array1::<f32>::from_vec(vec![1., 2., 3.]);
+        let expected =
+            Array2::<f32>::from_shape_vec((3, 3), vec![1., 2., 3., 2., 4., 6., 3., 6., 9.])
+                .unwrap();
+        let outer = outer_product1(a.view(), a.view());
+        assert_eq!(outer, expected);
     }
 
     #[test]
