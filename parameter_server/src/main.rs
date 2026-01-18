@@ -7,6 +7,7 @@ mod training;
 use std::{env, error::Error};
 
 use comms::msg::{Command, Msg, Payload};
+use log::{info, warn};
 use tokio::{net::TcpListener, signal};
 
 use crate::service::ServerBuilder;
@@ -16,41 +17,36 @@ const DEFAULT_PORT: &str = "8765";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
-    let port = env::var("PORT")
-        .unwrap_or_else(|_| DEFAULT_PORT.to_string())
-        .parse::<u16>()?;
+    env_logger::init();
 
-    let addr = format!("{host}:{port}");
-    let list = TcpListener::bind(addr).await?;
-    let builder = ServerBuilder::new();
+    let addr = format!(
+        "{}:{}",
+        env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
+        env::var("PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string())
+    );
 
-    let (stream, _) = list.accept().await?;
+    let list = TcpListener::bind(&addr).await?;
+    info!("listening at {addr}");
+
+    let (stream, addr) = list.accept().await?;
+    info!("orchestrator connected from {addr}");
     let (rx, tx) = stream.into_split();
     let (mut rx, mut tx) = comms::channel(rx, tx);
 
     let spec = loop {
-        let msg = match rx.recv().await {
-            Ok(msg) => msg,
-            Err(e) => {
-                println!("{e:?}");
-                continue;
-            }
-        };
-
-        let Msg::Control(Command::CreateServer(spec)) = msg else {
-            println!("Expected CreateServer");
-            continue;
-        };
-
-        break spec;
+        match rx.recv().await {
+            Ok(Msg::Control(Command::CreateServer(spec))) => break spec,
+            Ok(msg) => warn!("expected CreateServer, got {msg:?}"),
+            Err(e) => warn!("io error {e}"),
+        }
     };
 
     let workers = spec.workers;
-    let mut pserver = builder.build(spec)?;
+    let mut pserver = ServerBuilder::new().build(spec)?;
 
-    for _ in 0..workers {
-        let (stream, _) = list.accept().await?;
+    for i in 0..workers {
+        let (stream, addr) = list.accept().await?;
+        info!("worker {i}/{workers} connected from {addr}");
         let (rx, tx) = stream.into_split();
         let (rx, tx) = comms::channel(rx, tx);
         pserver.spawn(rx, tx);
@@ -58,11 +54,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::select! {
         ret = pserver.run() => {
+            info!("wrapping up, sending weights...");
             let mut weights = ret?;
             let msg = Msg::Data(Payload::Weights(&mut weights));
             tx.send(&msg).await?;
         },
-        _ = signal::ctrl_c() => {},
+        _ = signal::ctrl_c() => {
+            info!("received SIGTERM");
+        },
     }
 
     Ok(())

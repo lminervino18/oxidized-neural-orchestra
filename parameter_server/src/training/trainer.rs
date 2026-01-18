@@ -6,6 +6,7 @@ use crate::{
 /// Executes a single parameter update step.
 ///
 /// A `Trainer` coordinates the application of gradients and produces updated model weights.
+#[allow(unused)]
 #[trait_variant::make(Trainer: Send)]
 pub trait TrainerTemplate: Clone {
     /// Should implement a step in the traning process, meaning accumulating this gradient and updating the weights.

@@ -26,6 +26,7 @@ pub enum Command {
 pub enum Detail {
     GradSizeMismatch { expected: usize, got: usize },
     WeightSizeMismatch { expected: usize, got: usize },
+    Fatal(String),
 }
 
 /// The application layer message for the entire system.
@@ -74,9 +75,9 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 None
             }
             Msg::Data(payload) => {
-                let (kind, nums) = match payload {
-                    Payload::Gradient(grad) => (2, grad.as_ref()),
-                    Payload::Weights(weights) => (3, weights.as_ref()),
+                let (kind, nums): (_, &[_]) = match payload {
+                    Payload::Gradient(grad) => (2, grad),
+                    Payload::Weights(weights) => (3, weights),
                 };
 
                 let header = (kind as Header).to_be_bytes();
