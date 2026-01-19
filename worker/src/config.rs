@@ -1,5 +1,7 @@
 use std::num::NonZeroUsize;
 
+use comms::specs::worker::WorkerSpec;
+
 /// Immutable configuration for a worker instance.
 ///
 /// This type defines the minimal identity and execution bounds required
@@ -23,6 +25,17 @@ impl WorkerConfig {
     /// Never panics. Structural invariants are enforced via types.
     pub fn new(worker_id: usize, steps: NonZeroUsize) -> Self {
         Self { worker_id, steps }
+    }
+
+    /// Builds a `WorkerConfig` from a wire-level `WorkerSpec`.
+    ///
+    /// # Args
+    /// * `spec` - Bootstrap specification received from the orchestrator.
+    ///
+    /// # Returns
+    /// A `WorkerConfig` containing the execution identity and bounds.
+    pub fn from_spec(spec: &WorkerSpec) -> Self {
+        Self::new(spec.worker_id, spec.steps)
     }
 
     /// Returns the identifier of this worker.
