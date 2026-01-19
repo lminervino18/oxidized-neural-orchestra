@@ -3,9 +3,9 @@ use std::{io, num::NonZeroUsize};
 use tokio::io as tokio_io;
 
 use comms::msg::{Command, Msg, Payload};
-use comms::specs::worker::{ExecutionSpec, StrategySpec, WorkerSpec};
+use comms::specs::worker::{ExecutionSpec, WorkerSpec};
+use comms::specs::strategy::{StrategySpec};
 use ml_core::{MlError, StepStats, TrainStrategy};
-
 
 fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
     WorkerSpec {
@@ -45,7 +45,6 @@ impl TrainStrategy for MockStrategy {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
-
     const BUF_SIZE: usize = 4096;
     const STEPS: usize = 3;
     const PARAMS: usize = 2;
@@ -62,7 +61,17 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
     let worker_task = tokio::spawn(async move {
-        worker::run_bootstrapped(wk_rx, wk_tx, MockStrategy).await
+        let factory = |spec: &WorkerSpec| -> io::Result<MockStrategy> {
+            match spec.strategy.kind.as_str() {
+                "mock" => Ok(MockStrategy),
+                other => Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unknown strategy kind: {other}"),
+                )),
+            }
+        };
+
+        worker::run_bootstrapped(wk_rx, wk_tx, factory).await
     });
 
     for step in 0..STEPS {

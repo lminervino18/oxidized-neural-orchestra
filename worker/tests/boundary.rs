@@ -4,7 +4,8 @@ use tokio::io as tokio_io;
 use tokio::time::timeout;
 
 use comms::msg::{Command, Msg, Payload};
-use comms::specs::worker::{ExecutionSpec, StrategySpec, WorkerSpec};
+use comms::specs::worker::{ExecutionSpec, WorkerSpec};
+use comms::specs::strategy::{StrategySpec};
 use ml_core::{MlError, StepStats, TrainStrategy};
 
 struct NoopStrategy;
@@ -47,7 +48,6 @@ async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
-
     let (sv_stream, wk_stream) = tokio_io::duplex(4096);
 
     let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
@@ -60,7 +60,17 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
     sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
     let worker_task = tokio::spawn(async move {
-        worker::run_bootstrapped(wk_rx, wk_tx, NoopStrategy).await
+        let factory = |spec: &WorkerSpec| -> io::Result<NoopStrategy> {
+            match spec.strategy.kind.as_str() {
+                "noop" => Ok(NoopStrategy),
+                other => Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unknown strategy kind: {other}"),
+                )),
+            }
+        };
+
+        worker::run_bootstrapped(wk_rx, wk_tx, factory).await
     });
 
     let mut w = [1.0_f32, 2.0, 3.0];
@@ -75,7 +85,6 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_rejects_unexpected_message() -> io::Result<()> {
-
     let (sv_stream, wk_stream) = tokio_io::duplex(4096);
 
     let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
@@ -88,7 +97,17 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
     sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
     let worker_task = tokio::spawn(async move {
-        worker::run_bootstrapped(wk_rx, wk_tx, NoopStrategy).await
+        let factory = |spec: &WorkerSpec| -> io::Result<NoopStrategy> {
+            match spec.strategy.kind.as_str() {
+                "noop" => Ok(NoopStrategy),
+                other => Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unknown strategy kind: {other}"),
+                )),
+            }
+        };
+
+        worker::run_bootstrapped(wk_rx, wk_tx, factory).await
     });
 
     let g = [0.1_f32, 0.2];
