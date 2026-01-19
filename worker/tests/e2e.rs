@@ -1,18 +1,25 @@
 use std::{io, num::NonZeroUsize};
-use std::sync::Once;
 
 use tokio::io as tokio_io;
 
-use comms::msg::{Msg, Payload};
+use comms::msg::{Command, Msg, Payload};
+use comms::specs::worker::{ExecutionSpec, StrategySpec, WorkerSpec};
 use ml_core::{MlError, StepStats, TrainStrategy};
-use worker::{Worker, WorkerConfig};
 
-static LOG_INIT: Once = Once::new();
 
-fn init_test_logging() {
-    LOG_INIT.call_once(|| {
-        worker::init_logging();
-    });
+fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
+    WorkerSpec {
+        worker_id: 0,
+        steps: NonZeroUsize::new(steps).unwrap(),
+        num_params: NonZeroUsize::new(num_params).unwrap(),
+        strategy: StrategySpec {
+            kind: "mock".to_string(),
+            params: serde_json::Value::Null,
+        },
+        artifacts: Default::default(),
+        execution: ExecutionSpec::Default,
+        seed: None,
+    }
 }
 
 #[derive(Debug)]
@@ -38,7 +45,6 @@ impl TrainStrategy for MockStrategy {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
-    init_test_logging();
 
     const BUF_SIZE: usize = 4096;
     const STEPS: usize = 3;
@@ -52,12 +58,12 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
-    let cfg = WorkerConfig::new(0, NonZeroUsize::new(STEPS).unwrap());
-    let num_params = NonZeroUsize::new(PARAMS).unwrap();
-    let strat = MockStrategy;
+    let spec = mk_spec(STEPS, PARAMS);
+    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-    let worker_task =
-        tokio::spawn(async move { Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await });
+    let worker_task = tokio::spawn(async move {
+        worker::run_bootstrapped(wk_rx, wk_tx, MockStrategy).await
+    });
 
     for step in 0..STEPS {
         let mut w = [step as f32 + 1.0, step as f32 + 2.0];

@@ -728,6 +728,7 @@ dependencies = [
  "env_logger",
  "log",
  "ml_core",
+ "serde_json",
  "tokio",
 ]
 
