@@ -53,6 +53,7 @@ impl Sgd {
             delta.view(),
             model.activations[model.activations.len() - 2].view(),
         );
+
         *grad_b.last_mut().unwrap() = delta.clone();
 
         // loop through all layers, compute each delta and use it to compute the grads of the layer
@@ -82,18 +83,21 @@ impl Optimizer for Sgd {
         y_train: &[Array1<f32>],
         n_iters: usize,
     ) {
-        for _ in 0..n_iters {
-            let mut grad_w: Vec<_> = model
-                .weights
-                .iter()
-                .map(|w| Array2::zeros(w.dim()))
-                .collect();
+        let mut grad_w: Vec<_> = model
+            .weights
+            .iter()
+            .map(|w| Array2::zeros(w.dim()))
+            .collect();
 
-            let mut grad_b: Vec<_> = model
-                .biases
-                .iter()
-                .map(|b| Array1::zeros(b.dim()))
-                .collect();
+        let mut grad_b: Vec<_> = model
+            .biases
+            .iter()
+            .map(|b| Array1::zeros(b.dim()))
+            .collect();
+
+        for _ in 0..n_iters {
+            grad_w.iter_mut().for_each(|g| g.fill(0.));
+            grad_b.iter_mut().for_each(|g| g.fill(0.));
 
             x_train.iter().zip(y_train).for_each(|(x, y)| {
                 let y_pred = model.forward(x.view());
@@ -113,14 +117,14 @@ impl Optimizer for Sgd {
             model
                 .weights
                 .iter_mut()
-                .zip(grad_w)
-                .for_each(|(w, gw)| w.scaled_add(-self.eta / x_train.len() as f32, &gw));
+                .zip(&grad_w)
+                .for_each(|(w, gw)| w.scaled_add(-self.eta / x_train.len() as f32, gw));
 
             model
                 .biases
                 .iter_mut()
-                .zip(grad_b)
-                .for_each(|(b, gb)| b.scaled_add(-self.eta / x_train.len() as f32, &gb));
+                .zip(&grad_b)
+                .for_each(|(b, gb)| b.scaled_add(-self.eta / x_train.len() as f32, gb));
         }
     }
 }
