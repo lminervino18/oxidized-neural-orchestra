@@ -49,11 +49,15 @@ impl Sgd {
                 .unwrap()
                 .mapv(|z| (model.sigmoid_prime)(z));
 
-        *grad_w.last_mut().unwrap() = outer_product1(delta.view(), y_pred.view());
+        *grad_w.last_mut().unwrap() = outer_product1(
+            delta.view(),
+            model.activations[model.activations.len() - 2].view(),
+        );
         *grad_b.last_mut().unwrap() = delta.clone();
 
-        // loop through all layers and compute each delta and use it to compute the grads of the layer
-        (0..model.weights.len() - 1).rev().for_each(|idx| {
+        // loop through all layers, compute each delta and use it to compute the grads of the layer
+        let n_layers = model.weights.len();
+        (0..n_layers - 1).rev().for_each(|idx| {
             let z = &model.weighted_sums[idx];
             let a = &model.activations[idx];
             let w_next = &model.weights[idx + 1];
@@ -145,8 +149,8 @@ mod test {
     }
 
     #[test]
-    fn test00() {
-        let mut net = Mlp::new(&[2, 3, 1], sigmoid, sigmoid_prime);
+    fn test_converges_on_and2() {
+        let mut net = Mlp::new(&[2, 5, 9, 1], sigmoid, sigmoid_prime);
         let x_train = [
             Array1::<f32>::from_vec(vec![0., 0.]),
             Array1::<f32>::from_vec(vec![0., 1.]),
@@ -161,55 +165,105 @@ mod test {
         ];
 
         let sgd = Sgd { eta: 3. };
-        sgd.train(&mut net, x_train.to_vec(), y_train.to_vec(), 10000);
+        sgd.optimize(&mut net, &x_train, &y_train, 1000);
 
-        let y_pred = x_train.clone().map(|x| net.forward(x));
+        let y_pred = x_train.map(|x| net.forward(x.view()));
 
-        let error = y_pred
-            .into_iter()
+        let accuracy = y_pred
+            .iter()
             .zip(&y_train)
-            .map(|(yp, y)| cost(yp.view(), y.view()))
+            .map(|(yp, y)| {
+                if cost(yp.view(), y.view()) < 0.1 {
+                    1.
+                } else {
+                    0.
+                }
+            })
             .collect::<Vec<_>>()
             .into_iter()
             .sum::<f32>()
             / y_train.len() as f32;
 
-        dbg!(error);
-        assert!(error < 0.01);
+        assert_eq!(accuracy, 1., "got: {}% accuracy", accuracy * 100.);
     }
 
     #[test]
-    fn test01() {
+    fn test_converges_on_xor2() {
+        let mut net = Mlp::new(&[2, 5, 9, 1], sigmoid, sigmoid_prime);
+        let x_train = [
+            Array1::<f32>::from_vec(vec![0., 0.]),
+            Array1::<f32>::from_vec(vec![0., 1.]),
+            Array1::<f32>::from_vec(vec![1., 0.]),
+            Array1::<f32>::from_vec(vec![1., 1.]),
+        ];
+        let y_train = [
+            Array1::<f32>::from_elem(1, 0.),
+            Array1::<f32>::from_elem(1, 1.),
+            Array1::<f32>::from_elem(1, 1.),
+            Array1::<f32>::from_elem(1, 0.),
+        ];
+
+        let sgd = Sgd { eta: 3. };
+        sgd.optimize(&mut net, &x_train, &y_train, 1000);
+
+        let y_pred = x_train.map(|x| net.forward(x.view()));
+
+        let accuracy = y_pred
+            .iter()
+            .zip(&y_train)
+            .map(|(yp, y)| {
+                if cost(yp.view(), y.view()) < 0.1 {
+                    1.
+                } else {
+                    0.
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .sum::<f32>()
+            / y_train.len() as f32;
+
+        assert_eq!(accuracy, 1., "got: {}% accuracy", accuracy * 100.);
+    }
+
+    #[test]
+    fn test_converges_with_non_linear_function() {
         let func = |x| 2. * f32::cos(x).powi(2);
-        let x_train: Vec<_> = (0..100)
+        let x_train: Vec<_> = (0..1000)
             .map(|x| Array1::<f32>::from_elem(1, x as f32))
             .collect();
         let y_train: Vec<_> = x_train.iter().map(|x| x.mapv(func)).collect();
 
         let mut net = Mlp::new(&[1, 9, 3, 1], sigmoid, sigmoid_prime);
-        let sgd = Sgd { eta: 0.1 };
-        sgd.train(
-            &mut net,
-            x_train[..80].to_vec(),
-            y_train[..80].to_vec(),
-            10000,
-        );
+        let sgd = Sgd { eta: 0.01 };
+        sgd.optimize(&mut net, &x_train[..800], &y_train[..800], 10000);
 
-        let y_pred: Vec<_> = x_train[80..]
+        let y_pred: Vec<_> = x_train[800..]
             .iter()
-            .map(|x| net.forward(x.clone()))
+            .map(|x| net.forward(x.view()))
             .collect();
 
-        let error = y_pred
-            .into_iter()
+        let accuracy = y_pred
+            .iter()
             .zip(&y_train)
-            .map(|(yp, y)| cost(yp.view(), y.view()))
+            .map(|(yp, y)| {
+                if cost(yp.view(), y.view()) < 0.1 {
+                    1.
+                } else {
+                    0.
+                }
+            })
             .collect::<Vec<_>>()
             .into_iter()
             .sum::<f32>()
             / y_train.len() as f32;
 
-        dbg!(error);
-        assert!(error < 0.01);
+        assert!(
+            accuracy > 0.9,
+            "got: {}% accuracy,\n--- last 10 y_test: {:?},\n--- last 10 y_pred:\n{:?}",
+            accuracy * 100.,
+            &y_train[800..810],
+            &y_pred[..10]
+        );
     }
 }
