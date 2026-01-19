@@ -2,6 +2,8 @@ use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
+use super::strategy::StrategySpec;
+
 /// The specification for the worker execution policy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -11,6 +13,12 @@ pub enum ExecutionSpec {
         microbatch_size: NonZeroUsize,
         grad_accum_steps: NonZeroUsize,
     },
+}
+
+impl Default for ExecutionSpec {
+    fn default() -> Self {
+        Self::Default
+    }
 }
 
 /// The specification for an external artifact needed by a worker.
@@ -27,14 +35,6 @@ pub struct WorkerArtifacts {
     pub dataset: Option<ArtifactSpec>,
 }
 
-/// The specification for the training strategy selection.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StrategySpec {
-    pub kind: String,
-    #[serde(default)]
-    pub params: serde_json::Value,
-}
-
 /// The specification for the worker bootstrap.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerSpec {
@@ -47,10 +47,4 @@ pub struct WorkerSpec {
     #[serde(default)]
     pub execution: ExecutionSpec,
     pub seed: Option<u64>,
-}
-
-impl Default for ExecutionSpec {
-    fn default() -> Self {
-        Self::Default
-    }
 }
