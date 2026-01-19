@@ -14,7 +14,7 @@ use crate::{Worker, WorkerConfig};
 ///
 /// This is the worker-side bootstrap handshake, analogous to the parameter server
 /// waiting for `CreateServer(ServerSpec)`.
-pub async fn run_bootstrapped<R, W, S>(mut rx: OnoReceiver<R>, mut tx: OnoSender<W>, strategy: S) -> io::Result<()>
+pub async fn run_bootstrapped<R, W, S>(mut rx: OnoReceiver<R>, tx: OnoSender<W>, strategy: S) -> io::Result<()>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,

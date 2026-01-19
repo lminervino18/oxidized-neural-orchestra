@@ -123,12 +123,7 @@ impl<S: TrainStrategy> Worker<S> {
             let res =
                 tokio::task::block_in_place(|| self.strategy.step(weights, &mut self.grads_buf));
             if let Err(e) = res {
-                warn!(
-                    worker_id = worker_id,
-                    step = step;
-                    "train strategy error: {}",
-                    e
-                );
+                warn!(worker_id = worker_id, step = step; "train strategy error: {}", e);
                 return Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()));
             }
 
