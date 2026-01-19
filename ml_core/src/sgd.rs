@@ -20,25 +20,12 @@ pub fn outer_product1(v: ArrayView1<f32>, w: ArrayView1<f32>) -> Array2<f32> {
     v_reshaped.t().dot(&w_reshaped)
 }
 
-// from https://github.com/rust-ndarray/ndarray/issues/1148
-// pub fn outer_product2(a: &ArrayView2<f32>, b: &ArrayView2<f32>) -> Array4<f32> {
-//     let (m, n) = a.dim();
-//     let (p, q) = b.dim();
-//
-//     let a_reshaped = a.to_shape((m, n, 1, 1)).unwrap();
-//     let b_reshaped = b.to_shape((1, 1, p, q)).unwrap();
-//
-//     let prod = &a_reshaped * &b_reshaped;
-//
-//     prod.to_owned()
-// }
-
 impl Sgd {
     fn backprop(
         &self,
         model: &Mlp,
-        y_pred: Array1<f32>,
-        y: Array1<f32>,
+        y_pred: ArrayView1<f32>,
+        y: ArrayView1<f32>,
     ) -> (Vec<Array2<f32>>, Vec<Array1<f32>>) {
         // init grads
         let mut grad_w: Vec<_> = model
@@ -46,6 +33,7 @@ impl Sgd {
             .iter()
             .map(|w| Array2::<f32>::zeros(w.dim()))
             .collect();
+
         let mut grad_b: Vec<_> = model
             .biases
             .iter()
@@ -76,10 +64,6 @@ impl Sgd {
             grad_b[idx] = delta.clone();
         });
 
-        // nashe
-        grad_w.reverse();
-        grad_b.reverse();
-
         (grad_w, grad_b)
     }
 }
@@ -87,11 +71,11 @@ impl Sgd {
 impl Optimizer for Sgd {
     type ModelT = Mlp;
 
-    fn train(
+    fn optimize(
         &self,
         model: &mut Mlp,
-        x_train: Vec<Array1<f32>>,
-        y_train: Vec<Array1<f32>>,
+        x_train: &[Array1<f32>],
+        y_train: &[Array1<f32>],
         n_iters: usize,
     ) {
         for _ in 0..n_iters {
@@ -107,23 +91,21 @@ impl Optimizer for Sgd {
                 .map(|b| Array1::zeros(b.dim()))
                 .collect();
 
-            x_train.iter().zip(y_train.clone()).for_each(|(x, y)| {
-                let y_pred = model.forward(x.clone());
-                let (delta_gw, delta_gb) = self.backprop(model, y_pred, y);
+            x_train.iter().zip(y_train).for_each(|(x, y)| {
+                let y_pred = model.forward(x.view());
+                let (delta_gw, delta_gb) = self.backprop(model, y_pred.view(), y.view());
 
                 grad_w
                     .iter_mut()
-                    .zip(delta_gw.iter().rev())
+                    .zip(&delta_gw)
                     .for_each(|(gw, dgw)| *gw += dgw);
 
                 grad_b
                     .iter_mut()
-                    .zip(delta_gb.iter().rev())
+                    .zip(&delta_gb)
                     .for_each(|(gb, dgb)| *gb += dgb);
             });
 
-            // dbg!(grad_w);
-            // panic!();
             model
                 .weights
                 .iter_mut()

@@ -1,6 +1,6 @@
 use super::{feedforward::Feedforward, model::Model};
-use ndarray::{Array1, Array2};
-use ndarray_rand::{RandomExt, rand_distr::StandardNormal};
+use ndarray::{Array1, Array2, ArrayView1};
+use ndarray_rand::{rand_distr::StandardNormal, RandomExt};
 
 pub struct Mlp {
     pub activations: Vec<Array1<f32>>,
@@ -35,18 +35,17 @@ impl Mlp {
 impl Model for Mlp {}
 
 impl Feedforward for Mlp {
-    fn forward(&mut self, x: Array1<f32>) -> Array1<f32> {
-        self.activations[0] = x;
+    fn forward(&mut self, x: ArrayView1<f32>) -> Array1<f32> {
+        self.activations[0] = x.to_owned();
         (0..self.weighted_sums.len()).for_each(|idx| {
+            let activations = &mut self.activations;
             let z = &mut self.weighted_sums[idx];
-            // let input = &mut self.activations[idx];
-            // let output = &mut self.activations[idx + 1];
             let w = &self.weights[idx];
             let b = &self.biases[idx];
             let sigmoid = &(self.sigmoid);
 
-            *z = w.dot(&self.activations[idx]) + b;
-            self.activations[idx + 1] = z.mapv(sigmoid);
+            *z = w.dot(&activations[idx]) + b;
+            activations[idx + 1] = z.mapv(sigmoid);
         });
 
         self.activations.last().unwrap().clone()
@@ -66,6 +65,6 @@ mod test {
     fn test02() {
         let mut net = Mlp::new(&[2, 3, 1], |x| x, |_| 1.);
         let x = Array1::from_vec(vec![1., 2.]);
-        net.forward(x);
+        net.forward(x.view());
     }
 }
