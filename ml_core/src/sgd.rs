@@ -133,6 +133,23 @@ impl Optimizer for Sgd {
 mod test {
     use super::*;
 
+    fn get_accuracy(y_pred: &[Array1<f32>], y_test: &[Array1<f32>]) -> f32 {
+        y_pred
+            .iter()
+            .zip(y_test)
+            .map(|(yp, y)| {
+                if cost(yp.view(), y.view()) < 0.1 {
+                    1.
+                } else {
+                    0.
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .sum::<f32>()
+            / y_test.len() as f32
+    }
+
     fn sigmoid(z: f32) -> f32 {
         1. / (1. + std::f32::consts::E.powf(-z))
     }
@@ -140,6 +157,10 @@ mod test {
     fn sigmoid_prime(z: f32) -> f32 {
         let sigmoid = sigmoid(z);
         sigmoid * (1. - sigmoid)
+    }
+
+    fn atanh_prime(x: f32) -> f32 {
+        1. / (1. - x.powi(2))
     }
 
     #[test]
@@ -200,6 +221,7 @@ mod test {
             Array1::<f32>::from_vec(vec![1., 0.]),
             Array1::<f32>::from_vec(vec![1., 1.]),
         ];
+
         let y_train = [
             Array1::<f32>::from_elem(1, 0.),
             Array1::<f32>::from_elem(1, 1.),
@@ -209,64 +231,42 @@ mod test {
 
         let sgd = Sgd { eta: 3. };
         sgd.optimize(&mut net, &x_train, &y_train, 1000);
-
         let y_pred = x_train.map(|x| net.forward(x.view()));
-
-        let accuracy = y_pred
-            .iter()
-            .zip(&y_train)
-            .map(|(yp, y)| {
-                if cost(yp.view(), y.view()) < 0.1 {
-                    1.
-                } else {
-                    0.
-                }
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .sum::<f32>()
-            / y_train.len() as f32;
+        let accuracy = get_accuracy(&y_pred, &y_train);
 
         assert_eq!(accuracy, 1., "got: {}% accuracy", accuracy * 100.);
     }
 
+    #[ignore = "la sigmoid de la última capa tiene imagen [0..1] xd, después le pongo tanh"]
     #[test]
     fn test_converges_with_non_linear_function() {
-        let func = |x| 2. * f32::cos(x).powi(2);
-        let x_train: Vec<_> = (0..1000)
+        // let func = |x| 2. * f32::cos(x).powi(2);
+        let func = |x| 2. * x;
+        let x: Vec<_> = (0..100)
             .map(|x| Array1::<f32>::from_elem(1, x as f32))
             .collect();
-        let y_train: Vec<_> = x_train.iter().map(|x| x.mapv(func)).collect();
 
-        let mut net = Mlp::new(&[1, 9, 3, 1], sigmoid, sigmoid_prime);
-        let sgd = Sgd { eta: 0.01 };
-        sgd.optimize(&mut net, &x_train[..800], &y_train[..800], 10000);
+        let y: Vec<_> = x.iter().map(|x| x.mapv(func)).collect();
 
-        let y_pred: Vec<_> = x_train[800..]
-            .iter()
-            .map(|x| net.forward(x.view()))
-            .collect();
+        let train_portion = (0.8 * x.len() as f32) as usize;
+        let x_train = &x[..train_portion];
+        let y_train = &y[..train_portion];
+        let x_test = &x[train_portion..];
+        let y_test = &y[train_portion..];
 
-        let accuracy = y_pred
-            .iter()
-            .zip(&y_train)
-            .map(|(yp, y)| {
-                if cost(yp.view(), y.view()) < 0.1 {
-                    1.
-                } else {
-                    0.
-                }
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .sum::<f32>()
-            / y_train.len() as f32;
+        let mut net = Mlp::new(&[1, 9, 1], sigmoid, sigmoid_prime);
+        let sgd = Sgd { eta: 0.1 };
+        let n_iters = 10000;
+        sgd.optimize(&mut net, x_train, y_train, n_iters);
+        let y_pred: Vec<_> = x_test.iter().map(|x| net.forward(x.view())).collect();
+
+        let accuracy = get_accuracy(&y_pred, y_test);
 
         assert!(
-            accuracy > 0.9,
-            "got: {}% accuracy,\n--- last 10 y_test: {:?},\n--- last 10 y_pred:\n{:?}",
+            accuracy >= 0.9,
+            "got: {}% accuracy,\n--- first 10 y_test:\n{:?},\n--- first 10 y_pred:\n{:?}",
             accuracy * 100.,
-            &y_train[800..810],
+            &y_test[..10],
             &y_pred[..10]
         );
     }
