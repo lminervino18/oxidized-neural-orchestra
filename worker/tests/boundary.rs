@@ -1,4 +1,5 @@
 use std::{io, num::NonZeroUsize, time::Duration};
+use std::sync::Once;
 
 use tokio::io as tokio_io;
 use tokio::time::timeout;
@@ -6,6 +7,14 @@ use tokio::time::timeout;
 use comms::msg::{Msg, Payload};
 use ml_core::{MlError, StepStats, TrainStrategy};
 use worker::{Worker, WorkerConfig};
+
+static LOG_INIT: Once = Once::new();
+
+fn init_test_logging() {
+    LOG_INIT.call_once(|| {
+        worker::init_logging();
+    });
+}
 
 struct NoopStrategy;
 
@@ -38,6 +47,8 @@ async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
+    init_test_logging();
+
     let (sv_stream, wk_stream) = tokio_io::duplex(4096);
 
     let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
@@ -65,6 +76,8 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_rejects_unexpected_message() -> io::Result<()> {
+    init_test_logging();
+
     let (sv_stream, wk_stream) = tokio_io::duplex(4096);
 
     let (sv_rx, sv_tx) = tokio_io::split(sv_stream);

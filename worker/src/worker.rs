@@ -4,6 +4,7 @@ use comms::{
     msg::{Msg, Payload},
     OnoReceiver, OnoSender,
 };
+use log::{debug, error, info, warn};
 use ml_core::TrainStrategy;
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -73,20 +74,32 @@ impl<S: TrainStrategy> Worker<S> {
         R: AsyncRead + Unpin + Send,
         W: AsyncWrite + Unpin + Send,
     {
-        for _ in 0..self.cfg.steps() {
+        let worker_id = self.cfg.worker_id();
+        info!(worker_id = worker_id; "worker starting");
+
+        for step in 0..self.cfg.steps() {
+            debug!(worker_id = worker_id, step = step; "waiting for weights");
             let msg: Msg = rx.recv().await?;
 
             let weights = match msg {
                 Msg::Data(Payload::Weights(w)) => w,
                 other => {
+                    error!(worker_id = worker_id, step = step; "unexpected message");
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!("unexpected message: {other:?}"),
-                    ))
+                    ));
                 }
             };
 
             if weights.len() != self.grads_buf.len() {
+                error!(
+                    worker_id = worker_id,
+                    step = step,
+                    got = weights.len(),
+                    expected = self.grads_buf.len();
+                    "weights length mismatch"
+                );
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!(
@@ -97,18 +110,39 @@ impl<S: TrainStrategy> Worker<S> {
                 ));
             }
 
+            debug!(
+                worker_id = worker_id,
+                step = step,
+                params = weights.len();
+                "received weights"
+            );
+
             self.grads_buf.fill(0.0);
 
+            debug!(worker_id = worker_id, step = step; "computing gradients");
             let res =
                 tokio::task::block_in_place(|| self.strategy.step(weights, &mut self.grads_buf));
             if let Err(e) = res {
+                warn!(
+                    worker_id = worker_id,
+                    step = step;
+                    "train strategy error: {}",
+                    e
+                );
                 return Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()));
             }
 
+            debug!(
+                worker_id = worker_id,
+                step = step,
+                params = self.grads_buf.len();
+                "sending gradient"
+            );
             let out = Msg::Data(Payload::Gradient(&self.grads_buf));
             tx.send(&out).await?;
         }
 
+        info!(worker_id = worker_id; "worker finished");
         Ok(())
     }
 }
