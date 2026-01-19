@@ -1,10 +1,19 @@
 use std::{io, num::NonZeroUsize};
+use std::sync::Once;
 
 use tokio::io as tokio_io;
 
 use comms::msg::{Msg, Payload};
 use ml_core::{MlError, StepStats, TrainStrategy};
 use worker::{Worker, WorkerConfig};
+
+static LOG_INIT: Once = Once::new();
+
+fn init_test_logging() {
+    LOG_INIT.call_once(|| {
+        worker::init_logging();
+    });
+}
 
 #[derive(Debug)]
 struct MockStrategy;
@@ -29,6 +38,8 @@ impl TrainStrategy for MockStrategy {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
+    init_test_logging();
+
     const BUF_SIZE: usize = 4096;
     const STEPS: usize = 3;
     const PARAMS: usize = 2;

@@ -789,6 +789,8 @@ name = "worker"
 version = "0.1.0"
 dependencies = [
  "comms",
+ "env_logger",
+ "log",
  "ml_core",
  "tokio",
 ]
