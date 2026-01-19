@@ -2,6 +2,7 @@ use std::io;
 
 use comms::{
     msg::{Command, Msg},
+    specs::worker::WorkerSpec,
     OnoReceiver, OnoSender,
 };
 use log::{debug, info, warn};
@@ -11,14 +12,16 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use crate::{Worker, WorkerConfig};
 
 /// Runs a worker after receiving a `CreateWorker(WorkerSpec)` control message.
-///
-/// This is the worker-side bootstrap handshake, analogous to the parameter server
-/// waiting for `CreateServer(ServerSpec)`.
-pub async fn run_bootstrapped<R, W, S>(mut rx: OnoReceiver<R>, tx: OnoSender<W>, strategy: S) -> io::Result<()>
+pub async fn run_bootstrapped<R, W, S, F>(
+    mut rx: OnoReceiver<R>,
+    tx: OnoSender<W>,
+    make_strategy: F,
+) -> io::Result<()>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
     S: TrainStrategy,
+    F: FnOnce(&WorkerSpec) -> io::Result<S>,
 {
     info!("waiting for CreateWorker spec");
 
@@ -32,18 +35,19 @@ where
             Ok(msg) => {
                 warn!("expected CreateWorker, got {msg:?}");
             }
-            Err(e) => {
-                return Err(e);
-            }
+            Err(e) => return Err(e),
         }
     };
 
     debug!(
         worker_id = spec.worker_id,
         steps = spec.steps.get(),
-        num_params = spec.num_params.get();
+        num_params = spec.num_params.get(),
+        strategy_kind = spec.strategy.kind.as_str();
         "received worker spec"
     );
+
+    let strategy = make_strategy(&spec)?;
 
     let cfg = WorkerConfig::from_spec(&spec);
     let worker = Worker::new(cfg, spec.num_params, strategy);
