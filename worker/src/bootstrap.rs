@@ -12,6 +12,24 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use crate::{Worker, WorkerConfig};
 
 /// Runs a worker after receiving a `CreateWorker(WorkerSpec)` control message.
+///
+/// # Args
+/// * `rx` - Receiving end of the communication channel.
+/// * `tx` - Sending end of the communication channel.
+/// * `make_strategy` - Factory that builds the concrete `TrainStrategy` instance from the received
+///   `WorkerSpec`.
+///
+/// # Returns
+/// Returns `Ok(())` if the worker completes its run successfully, or an `io::Error` if the bootstrap
+/// handshake fails, the strategy factory fails, or the worker runtime fails.
+///
+/// # Errors
+/// - Returns `io::Error` if receiving the bootstrap message fails.
+/// - Returns `io::Error` if `make_strategy` fails to build a strategy.
+/// - Returns `io::Error` if the worker runtime fails.
+///
+/// # Panics
+/// Never panics.
 pub async fn run_bootstrapped<R, W, S, F>(
     mut rx: OnoReceiver<R>,
     tx: OnoSender<W>,
