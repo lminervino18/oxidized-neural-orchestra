@@ -52,7 +52,9 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(STEPS, PARAMS);
-    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+    sv_tx
+        .send(&Msg::Control(Command::CreateWorker(spec)))
+        .await?;
 
     let worker_task = tokio::spawn(async move {
         let worker =

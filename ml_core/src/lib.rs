@@ -21,8 +21,15 @@ impl fmt::Display for MlError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MlError::InvalidInput(msg) => write!(f, "invalid input: {msg}"),
-            MlError::ShapeMismatch { what, got, expected } => {
-                write!(f, "shape mismatch for {what}: got {got}, expected {expected}")
+            MlError::ShapeMismatch {
+                what,
+                got,
+                expected,
+            } => {
+                write!(
+                    f,
+                    "shape mismatch for {what}: got {got}, expected {expected}"
+                )
             }
         }
     }
@@ -53,7 +60,10 @@ impl StepStats {
     /// # Panics
     /// Never panics.
     pub fn new(microbatches: usize, samples: usize) -> Self {
-        Self { microbatches, samples }
+        Self {
+            microbatches,
+            samples,
+        }
     }
 
     /// Returns the number of microbatches processed in the last step.

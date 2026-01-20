@@ -51,10 +51,13 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
     let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(1, 2);
-    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+    sv_tx
+        .send(&Msg::Control(Command::CreateWorker(spec)))
+        .await?;
 
     let worker_task = tokio::spawn(async move {
-        let worker = worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(NoopStrategy)).await?;
+        let worker =
+            worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(NoopStrategy)).await?;
         let Some(worker) = worker else {
             return Ok(());
         };
@@ -82,10 +85,13 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
     let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(1, 2);
-    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+    sv_tx
+        .send(&Msg::Control(Command::CreateWorker(spec)))
+        .await?;
 
     let worker_task = tokio::spawn(async move {
-        let worker = worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(NoopStrategy)).await?;
+        let worker =
+            worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(NoopStrategy)).await?;
         let Some(worker) = worker else {
             return Ok(());
         };
