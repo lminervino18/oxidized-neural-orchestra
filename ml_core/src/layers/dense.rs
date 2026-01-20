@@ -27,11 +27,12 @@ pub struct Dense<'a> {
 
 impl<'a> Dense<'a> {
     pub fn new(
-        dim_in: usize,
-        dim_out: usize,
+        dim: (usize, usize),
         weights_raw: &'a mut [f32],
         biases_raw: &'a mut [f32],
     ) -> Result<Self, ShapeError> {
+        let dim_in = dim.0;
+        let dim_out = dim.1;
         let weights = ArrayViewMut2::from_shape((dim_in, dim_out), weights_raw)?;
         let biases = ArrayViewMut1::from_shape(dim_out, biases_raw)?;
         let w_sums = Array1::<f32>::zeros(dim_out);
