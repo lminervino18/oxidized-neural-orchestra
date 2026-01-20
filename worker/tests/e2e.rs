@@ -3,24 +3,8 @@ use std::{io, num::NonZeroUsize};
 use tokio::io as tokio_io;
 
 use comms::msg::{Command, Msg, Payload};
-use comms::specs::worker::{ExecutionSpec, WorkerSpec};
-use comms::specs::strategy::{StrategySpec};
+use comms::specs::worker::{StrategySpec, WorkerSpec};
 use ml_core::{MlError, StepStats, TrainStrategy};
-
-fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
-    WorkerSpec {
-        worker_id: 0,
-        steps: NonZeroUsize::new(steps).unwrap(),
-        num_params: NonZeroUsize::new(num_params).unwrap(),
-        strategy: StrategySpec {
-            kind: "mock".to_string(),
-            params: serde_json::Value::Null,
-        },
-        artifacts: Default::default(),
-        execution: ExecutionSpec::Default,
-        seed: None,
-    }
-}
 
 #[derive(Debug)]
 struct MockStrategy;
@@ -43,6 +27,16 @@ impl TrainStrategy for MockStrategy {
     }
 }
 
+fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
+    WorkerSpec {
+        worker_id: 0,
+        steps: NonZeroUsize::new(steps).unwrap(),
+        num_params: NonZeroUsize::new(num_params).unwrap(),
+        strategy: StrategySpec::Mock,
+        seed: None,
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     const BUF_SIZE: usize = 4096;
@@ -55,23 +49,18 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     let (mut sv_rx, mut sv_tx) = comms::channel(sv_rx, sv_tx);
 
     let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
+    let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(STEPS, PARAMS);
     sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
     let worker_task = tokio::spawn(async move {
-        let factory = |spec: &WorkerSpec| -> io::Result<MockStrategy> {
-            match spec.strategy.kind.as_str() {
-                "mock" => Ok(MockStrategy),
-                other => Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("unknown strategy kind: {other}"),
-                )),
-            }
+        let worker =
+            worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(MockStrategy)).await?;
+        let Some(worker) = worker else {
+            return Ok(());
         };
-
-        worker::run_bootstrapped(wk_rx, wk_tx, factory).await
+        worker.run(wk_rx, wk_tx).await
     });
 
     for step in 0..STEPS {

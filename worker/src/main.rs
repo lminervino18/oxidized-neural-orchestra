@@ -1,27 +1,12 @@
-use std::{env, error::Error, io};
+use std::{env, error::Error};
 
-use comms::specs::worker::WorkerSpec;
-use log::{info, warn};
+use log::info;
 use tokio::{net::TcpStream, signal};
 
-use ml_core::{MlError, StepStats, TrainStrategy};
+use worker::{strategy::Strategy, WorkerBuilder};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: &str = "8765";
-
-/// Placeholder strategy used while the real model/plugin factory is not wired yet.
-///
-/// The goal is to keep the worker runtime infra-only, and defer domain strategy
-/// construction to a higher-level factory/registry.
-struct NoopStrategy;
-
-impl TrainStrategy for NoopStrategy {
-    fn step(&mut self, _weights: &[f32], _grads: &mut [f32]) -> Result<StepStats, MlError> {
-        Ok(StepStats::new(1, 0))
-    }
-}
-
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -38,20 +23,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("connected to server");
 
     let (rx, tx) = stream.into_split();
-    let (rx, tx) = comms::channel(rx, tx);
+    let (mut rx, tx) = comms::channel(rx, tx);
 
-    let factory = |spec: &WorkerSpec| -> io::Result<NoopStrategy> {
-        match spec.strategy.kind.as_str() {
-            "noop" => Ok(NoopStrategy),
-            other => {
-                warn!(strategy_kind = other; "unknown strategy kind, falling back to noop");
-                Ok(NoopStrategy)
-            }
-        }
+    let Some(spec) = WorkerBuilder::handshake(&mut rx).await? else {
+        info!("disconnected before bootstrap");
+        return Ok(());
     };
 
+    let strategy = Strategy::from_spec(&spec)?;
+    info!(
+        worker_id = spec.worker_id,
+        steps = spec.steps.get(),
+        num_params = spec.num_params.get(),
+        strategy_kind = strategy.kind();
+        "worker bootstrapped"
+    );
+
+    let worker = WorkerBuilder::build(&spec, strategy);
+
     tokio::select! {
-        ret = worker::run_bootstrapped(rx, tx, factory) => {
+        ret = worker.run(rx, tx) => {
             ret?;
             info!("worker finished");
         },
