@@ -1,0 +1,3 @@
+[dependencies]
+ml_core = { path = "../ml_core" }
+comms = { path = "../comms" }
