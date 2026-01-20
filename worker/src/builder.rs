@@ -5,7 +5,7 @@ use comms::{
     specs::worker::WorkerSpec,
     OnoReceiver,
 };
-use log::{debug, info, warn};
+use log::{info, warn};
 use ml_core::TrainStrategy;
 use tokio::io::AsyncRead;
 
@@ -32,6 +32,7 @@ impl WorkerBuilder {
     {
         info!("waiting for CreateWorker spec");
 
+        
         let spec = loop {
             match rx.recv::<Msg>().await {
                 Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,

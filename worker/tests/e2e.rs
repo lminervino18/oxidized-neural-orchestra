@@ -61,8 +61,7 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
             return Ok(());
         };
 
-        let strategy = MockStrategy;
-        let worker = worker::WorkerBuilder::build(&spec, strategy);
+        let worker = worker::WorkerBuilder::build(&spec, MockStrategy);
         worker.run(wk_rx, wk_tx).await
     });
 

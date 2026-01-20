@@ -60,8 +60,7 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
             return Ok(());
         };
 
-        let strategy = NoopStrategy;
-        let worker = worker::WorkerBuilder::build(&spec, strategy);
+        let worker = worker::WorkerBuilder::build(&spec, NoopStrategy);
         worker.run(wk_rx, wk_tx).await
     });
 
@@ -95,8 +94,7 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
             return Ok(());
         };
 
-        let strategy = NoopStrategy;
-        let worker = worker::WorkerBuilder::build(&spec, strategy);
+        let worker = worker::WorkerBuilder::build(&spec, NoopStrategy);
         worker.run(wk_rx, wk_tx).await
     });
 

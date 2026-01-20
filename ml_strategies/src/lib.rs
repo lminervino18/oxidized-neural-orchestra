@@ -10,6 +10,7 @@ pub fn from_spec(spec: &StrategySpec) -> io::Result<Strategy> {
     })
 }
 
+
 pub enum Strategy {
     Noop(NoopStrategy),
     Mock(MockStrategy),
@@ -23,6 +24,16 @@ impl TrainStrategy for Strategy {
         }
     }
 }
+
+impl Strategy {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Strategy::Noop(_) => "noop",
+            Strategy::Mock(_) => "mock",
+        }
+    }
+}
+
 
 pub struct NoopStrategy;
 
