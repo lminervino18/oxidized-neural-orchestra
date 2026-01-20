@@ -1,3 +1,8 @@
+[package]
+name = "ml_strategies"
+version = "0.1.0"
+edition = "2021"
+
 [dependencies]
 ml_core = { path = "../ml_core" }
 comms = { path = "../comms" }

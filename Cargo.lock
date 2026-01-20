@@ -271,6 +271,10 @@ version = "0.1.0"
 [[package]]
 name = "ml_strategies"
 version = "0.1.0"
+dependencies = [
+ "comms",
+ "ml_core",
+]
 
 [[package]]
 name = "num-traits"
@@ -732,6 +736,7 @@ dependencies = [
  "env_logger",
  "log",
  "ml_core",
+ "ml_strategies",
  "tokio",
 ]
 

@@ -57,11 +57,12 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
         .await?;
 
     let worker_task = tokio::spawn(async move {
-        let worker =
-            worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(MockStrategy)).await?;
-        let Some(worker) = worker else {
+        let Some(spec) = worker::WorkerBuilder::handshake(&mut wk_rx).await? else {
             return Ok(());
         };
+
+        let strategy = MockStrategy;
+        let worker = worker::WorkerBuilder::build(&spec, strategy);
         worker.run(wk_rx, wk_tx).await
     });
 

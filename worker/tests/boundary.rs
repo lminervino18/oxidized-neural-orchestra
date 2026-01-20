@@ -56,11 +56,12 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
         .await?;
 
     let worker_task = tokio::spawn(async move {
-        let worker =
-            worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(NoopStrategy)).await?;
-        let Some(worker) = worker else {
+        let Some(spec) = worker::WorkerBuilder::handshake(&mut wk_rx).await? else {
             return Ok(());
         };
+
+        let strategy = NoopStrategy;
+        let worker = worker::WorkerBuilder::build(&spec, strategy);
         worker.run(wk_rx, wk_tx).await
     });
 
@@ -90,11 +91,12 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
         .await?;
 
     let worker_task = tokio::spawn(async move {
-        let worker =
-            worker::WorkerBuilder::from_handshake(&mut wk_rx, |_| Ok(NoopStrategy)).await?;
-        let Some(worker) = worker else {
+        let Some(spec) = worker::WorkerBuilder::handshake(&mut wk_rx).await? else {
             return Ok(());
         };
+
+        let strategy = NoopStrategy;
+        let worker = worker::WorkerBuilder::build(&spec, strategy);
         worker.run(wk_rx, wk_tx).await
     });
 

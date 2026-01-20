@@ -3,7 +3,7 @@ use std::{env, error::Error};
 use log::info;
 use tokio::{net::TcpStream, signal};
 
-use worker::{strategy::Strategy, WorkerBuilder};
+use worker::WorkerBuilder;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: &str = "8765";
@@ -30,13 +30,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
 
-    let strategy = Strategy::from_spec(&spec)?;
+    let strategy = ml_strategies::from_spec(&spec.strategy)?;
+
     info!(
-        worker_id = spec.worker_id,
-        steps = spec.steps.get(),
-        num_params = spec.num_params.get(),
-        strategy_kind = strategy.kind();
-        "worker bootstrapped"
+        "worker bootstrapped: worker_id={}, steps={}, num_params={}, strategy={:?}",
+        spec.worker_id,
+        spec.steps.get(),
+        spec.num_params.get(),
+        spec.strategy
     );
 
     let worker = WorkerBuilder::build(&spec, strategy);

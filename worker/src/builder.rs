@@ -44,12 +44,8 @@ impl WorkerBuilder {
             }
         };
 
-        debug!(
-            worker_id = spec.worker_id,
-            steps = spec.steps.get(),
-            num_params = spec.num_params.get();
-            "received worker spec"
-        );
+       
+       
 
         Ok(Some(spec))
     }
@@ -68,34 +64,5 @@ impl WorkerBuilder {
     {
         let cfg = WorkerConfig::from_spec(spec);
         Worker::new(cfg, spec.num_params, strategy)
-    }
-
-    /// Receives `CreateWorker(WorkerSpec)` and builds a `Worker`.
-    ///
-    /// # Args
-    /// * `rx` - Receiving end of the communication channel.
-    /// * `make_strategy` - Factory that builds the concrete `TrainStrategy` from the received spec.
-    ///
-    /// # Returns
-    /// Returns `Ok(Some(worker))` on `CreateWorker`.
-    /// Returns `Ok(None)` if `Disconnect` is received before bootstrap.
-    ///
-    /// # Errors
-    /// Returns `io::Error` if receiving fails or the strategy factory fails.
-    pub async fn from_handshake<R, S, F>(
-        rx: &mut OnoReceiver<R>,
-        make_strategy: F,
-    ) -> io::Result<Option<Worker<S>>>
-    where
-        R: AsyncRead + std::marker::Unpin + Send,
-        S: TrainStrategy,
-        F: FnOnce(&WorkerSpec) -> io::Result<S>,
-    {
-        let Some(spec) = Self::handshake(rx).await? else {
-            return Ok(None);
-        };
-
-        let strategy = make_strategy(&spec)?;
-        Ok(Some(Self::build(&spec, strategy)))
     }
 }

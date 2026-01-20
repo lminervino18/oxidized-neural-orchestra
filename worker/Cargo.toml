@@ -10,6 +10,7 @@ env_logger = "0.11"
 
 comms = { path = "../comms" }
 ml_core = { path = "../ml_core" }
+ml_strategies = { path = "../ml_strategies" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "io-util"] }

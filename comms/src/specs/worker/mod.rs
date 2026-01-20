@@ -13,7 +13,7 @@ pub struct WorkerSpec {
 }
 
 /// The specification for selecting a training strategy.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StrategySpec {
     Noop,
