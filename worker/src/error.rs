@@ -61,11 +61,7 @@ impl WorkerError {
     pub fn into_io(self) -> io::Error {
         match self {
             WorkerError::Io(e) => e,
-            WorkerError::UnexpectedMessage { .. } => io::Error::new(io::ErrorKind::InvalidData, self),
-            WorkerError::WeightsLengthMismatch { .. } => {
-                io::Error::new(io::ErrorKind::InvalidData, self)
-            }
-            WorkerError::TrainFailed { .. } => io::Error::new(io::ErrorKind::InvalidData, self),
+            other => io::Error::new(io::ErrorKind::InvalidData, other),
         }
     }
 }
