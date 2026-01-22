@@ -3,7 +3,7 @@ use std::{env, error::Error};
 use log::info;
 use tokio::{net::TcpStream, signal};
 
-use worker::{WorkerAcceptor, WorkerBuilder};
+use worker::{WorkerAcceptor, WorkerBuilder, WorkerError};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: &str = "8765";
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::select! {
         ret = worker.run(rx, tx) => {
-            ret?;
+            ret.map_err(WorkerError::into_io)?;
             info!("worker finished");
         },
         _ = signal::ctrl_c() => {

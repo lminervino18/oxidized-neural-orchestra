@@ -3,8 +3,6 @@ use std::{error::Error, fmt, io};
 use machine_learning::MlError;
 
 /// Worker runtime failures.
-///
-/// This type models protocol violations, ML strategy failures, and I/O failures.
 #[derive(Debug)]
 pub enum WorkerError {
     Io(io::Error),
@@ -59,14 +57,19 @@ impl From<io::Error> for WorkerError {
 }
 
 impl WorkerError {
-    /// Converts a runtime error into an `io::Error`.
-    ///
-    /// # Returns
-    /// An `io::Error` suitable for boundary APIs.
+    /// Converts this error into an `io::Error` for boundary APIs.
     pub fn into_io(self) -> io::Error {
         match self {
             WorkerError::Io(e) => e,
-            other => io::Error::new(io::ErrorKind::InvalidData, other.to_string()),
+            WorkerError::UnexpectedMessage { .. } => {
+                io::Error::new(io::ErrorKind::InvalidData, self.to_string())
+            }
+            WorkerError::WeightsLengthMismatch { .. } => {
+                io::Error::new(io::ErrorKind::InvalidData, self.to_string())
+            }
+            WorkerError::TrainFailed { .. } => {
+                io::Error::new(io::ErrorKind::InvalidData, self.to_string())
+            }
         }
     }
 }
