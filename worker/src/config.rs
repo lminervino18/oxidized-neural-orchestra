@@ -1,7 +1,5 @@
 use std::num::NonZeroUsize;
 
-use comms::specs::worker::WorkerSpec;
-
 /// Immutable configuration for a worker instance.
 #[derive(Debug, Clone)]
 pub struct WorkerConfig {
@@ -15,27 +13,34 @@ impl WorkerConfig {
     /// # Args
     /// * `worker_id` - Worker identifier assigned by the orchestrator.
     /// * `steps` - Number of steps this worker should execute.
+    ///
+    /// # Returns
+    /// A `WorkerConfig` instance containing the provided identity and bounds.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn new(worker_id: usize, steps: NonZeroUsize) -> Self {
         Self { worker_id, steps }
     }
 
-    /// Builds a `WorkerConfig` from a wire-level `WorkerSpec`.
-    ///
-    /// # Args
-    /// * `spec` - Bootstrap specification received from the orchestrator.
+    /// Returns the identifier of this worker.
     ///
     /// # Returns
-    /// A `WorkerConfig` containing the execution identity and bounds.
-    pub fn from_spec(spec: &WorkerSpec) -> Self {
-        Self::new(spec.worker_id, spec.steps)
-    }
-
-    /// Returns the identifier of this worker.
+    /// The worker identifier as assigned by the orchestrator.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn worker_id(&self) -> usize {
         self.worker_id
     }
 
     /// Returns the total number of execution steps.
+    ///
+    /// # Returns
+    /// The number of steps this worker should execute.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn steps(&self) -> usize {
         self.steps.get()
     }

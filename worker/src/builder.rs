@@ -22,7 +22,7 @@ impl WorkerBuilder {
     /// # Panics
     /// Never panics.
     pub fn build(spec: &WorkerSpec) -> io::Result<Worker<Strategy>> {
-        let cfg = WorkerConfig::from_spec(spec);
+        let cfg = WorkerConfig::new(spec.worker_id, spec.steps);
         let strategy = Strategy::from_spec(&spec.strategy)?;
         Ok(Worker::new(
             cfg,
