@@ -14,6 +14,7 @@ use crate::config::WorkerConfig;
 pub struct Worker<S: TrainStrategy> {
     cfg: WorkerConfig,
     strategy: S,
+    num_params: NonZeroUsize,
     grads_buf: Vec<f32>,
 }
 
@@ -22,13 +23,21 @@ impl<S: TrainStrategy> Worker<S> {
     ///
     /// # Args
     /// * `cfg` - Immutable worker configuration.
-    /// * `num_params` - Number of parameters expected in `weights`/`grads`.
+    /// * `num_params` - Expected number of parameters in incoming `weights` messages and outgoing
+    ///   `grads` messages.
     /// * `strategy` - Training strategy used to compute gradients.
+    ///
+    /// # Returns
+    /// A new `Worker` instance with an initialized gradient buffer.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn new(cfg: WorkerConfig, num_params: NonZeroUsize, strategy: S) -> Self {
         let n = num_params.get();
         Self {
             cfg,
             strategy,
+            num_params,
             grads_buf: vec![0.0; n],
         }
     }
@@ -44,13 +53,15 @@ impl<S: TrainStrategy> Worker<S> {
     ///
     /// # Errors
     /// Returns `io::Error` if receiving/sending fails, an unexpected message is received,
-    /// or the input shape does not match.
+    /// or the input shape does not match the expected parameter count.
     pub async fn run<R, W>(mut self, mut rx: OnoReceiver<R>, mut tx: OnoSender<W>) -> io::Result<()>
     where
-        R: AsyncRead + std::marker::Unpin + Send,
-        W: AsyncWrite + std::marker::Unpin + Send,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let worker_id = self.cfg.worker_id();
+        let expected = self.num_params.get();
+
         info!(worker_id = worker_id; "worker starting");
 
         for step in 0..self.cfg.steps() {
@@ -68,12 +79,12 @@ impl<S: TrainStrategy> Worker<S> {
                 }
             };
 
-            if weights.len() != self.grads_buf.len() {
+            if weights.len() != expected {
                 error!(
                     worker_id = worker_id,
                     step = step,
                     got = weights.len(),
-                    expected = self.grads_buf.len();
+                    expected = expected;
                     "weights length mismatch"
                 );
                 return Err(io::Error::new(
@@ -81,7 +92,7 @@ impl<S: TrainStrategy> Worker<S> {
                     format!(
                         "weights length mismatch: got {}, expected {}",
                         weights.len(),
-                        self.grads_buf.len()
+                        expected
                     ),
                 ));
             }

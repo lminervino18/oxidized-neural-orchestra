@@ -1,4 +1,4 @@
-use std::{io, num::NonZeroUsize};
+use std::io;
 
 use comms::specs::worker::WorkerSpec;
 
@@ -24,10 +24,6 @@ impl WorkerBuilder {
     pub fn build(spec: &WorkerSpec) -> io::Result<Worker<Strategy>> {
         let cfg = WorkerConfig::new(spec.worker_id, spec.steps);
         let strategy = Strategy::from_spec(&spec.strategy)?;
-        Ok(Worker::new(
-            cfg,
-            NonZeroUsize::new(spec.num_params.get()).unwrap(),
-            strategy,
-        ))
+        Ok(Worker::new(cfg, spec.num_params, strategy))
     }
 }
