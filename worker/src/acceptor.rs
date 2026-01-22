@@ -23,9 +23,6 @@ impl WorkerAcceptor {
     ///
     /// # Errors
     /// Returns `io::Error` if receiving fails.
-    ///
-    /// # Panics
-    /// Never panics.
     pub async fn handshake<R>(rx: &mut OnoReceiver<R>) -> io::Result<Option<WorkerSpec>>
     where
         R: AsyncRead + Unpin + Send,

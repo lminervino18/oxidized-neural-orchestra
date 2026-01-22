@@ -2,7 +2,6 @@ use comms::specs::worker::WorkerSpec;
 
 use crate::{Strategy, Worker, WorkerConfig};
 
-/// Worker builder.
 pub struct WorkerBuilder;
 
 impl WorkerBuilder {

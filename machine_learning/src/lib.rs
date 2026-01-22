@@ -41,7 +41,7 @@ impl std::error::Error for MlError {}
 ///
 /// This type keeps fields private to allow evolving the internal counters
 /// without breaking the public API.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct StepStats {
     microbatches: usize,
     samples: usize,
@@ -56,9 +56,6 @@ impl StepStats {
     ///
     /// # Returns
     /// A `StepStats` instance containing the provided counters.
-    ///
-    /// # Panics
-    /// Never panics.
     pub fn new(microbatches: usize, samples: usize) -> Self {
         Self {
             microbatches,
@@ -71,8 +68,6 @@ impl StepStats {
     /// # Returns
     /// The microbatch count.
     ///
-    /// # Panics
-    /// Never panics.
     pub fn microbatches(&self) -> usize {
         self.microbatches
     }
@@ -82,8 +77,6 @@ impl StepStats {
     /// # Returns
     /// The sample count.
     ///
-    /// # Panics
-    /// Never panics.
     pub fn samples(&self) -> usize {
         self.samples
     }
@@ -108,8 +101,5 @@ pub trait TrainStrategy: Send {
     /// Implementations should return:
     /// - `MlError::ShapeMismatch` when shapes/lengths do not match expectations.
     /// - `MlError::InvalidInput` for invalid domain inputs.
-    ///
-    /// # Panics
-    /// Implementations should not panic; they should report failures via `MlError`.
     fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError>;
 }

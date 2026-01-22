@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 /// Immutable execution bounds for a worker instance.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct WorkerConfig {
     steps: NonZeroUsize,
 }
