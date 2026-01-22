@@ -6,15 +6,8 @@ use machine_learning::MlError;
 #[derive(Debug)]
 pub enum WorkerError {
     Io(io::Error),
-
     UnexpectedMessage { step: usize, got: &'static str },
-
-    WeightsLengthMismatch {
-        step: usize,
-        got: usize,
-        expected: usize,
-    },
-
+    WeightsLengthMismatch { step: usize, got: usize, expected: usize },
     TrainFailed { step: usize, source: MlError },
 }
 
@@ -25,11 +18,7 @@ impl fmt::Display for WorkerError {
             WorkerError::UnexpectedMessage { step, got } => {
                 write!(f, "unexpected message at step {step}: got {got}")
             }
-            WorkerError::WeightsLengthMismatch {
-                step,
-                got,
-                expected,
-            } => write!(
+            WorkerError::WeightsLengthMismatch { step, got, expected } => write!(
                 f,
                 "weights length mismatch at step {step}: got {got}, expected {expected}"
             ),
@@ -61,13 +50,7 @@ impl WorkerError {
     pub fn into_io(self) -> io::Error {
         match self {
             WorkerError::Io(e) => e,
-            WorkerError::UnexpectedMessage { .. } => {
-                io::Error::new(io::ErrorKind::InvalidData, self)
-            }
-            WorkerError::WeightsLengthMismatch { .. } => {
-                io::Error::new(io::ErrorKind::InvalidData, self)
-            }
-            WorkerError::TrainFailed { .. } => io::Error::new(io::ErrorKind::Other, self),
+            other => io::Error::new(io::ErrorKind::InvalidData, other),
         }
     }
 }
