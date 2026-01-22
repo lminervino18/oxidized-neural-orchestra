@@ -3,7 +3,7 @@ use std::{env, error::Error};
 use log::info;
 use tokio::{net::TcpStream, signal};
 
-use worker::WorkerBuilder;
+use worker::{WorkerAcceptor, WorkerBuilder};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: &str = "8765";
@@ -25,7 +25,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (rx, tx) = stream.into_split();
     let (mut rx, tx) = comms::channel(rx, tx);
 
-    let Some(spec) = WorkerBuilder::handshake(&mut rx).await? else {
+    let Some(spec) = WorkerAcceptor::handshake(&mut rx).await? else {
         info!("disconnected before bootstrap");
         return Ok(());
     };

@@ -1,56 +1,14 @@
-use std::io;
+use std::num::NonZeroUsize;
 
-use comms::{
-    msg::{Command, Msg},
-    specs::worker::WorkerSpec,
-    OnoReceiver,
-};
-use log::{info, warn};
+use comms::specs::worker::WorkerSpec;
 use ml_core::TrainStrategy;
-use tokio::io::AsyncRead;
 
 use crate::{Worker, WorkerConfig};
 
-/// Worker bootstrap builder.
+/// Worker builder.
 pub struct WorkerBuilder;
 
 impl WorkerBuilder {
-    /// Receives `CreateWorker(WorkerSpec)` and returns the spec.
-    ///
-    /// # Args
-    /// * `rx` - Receiving end of the communication channel.
-    ///
-    /// # Returns
-    /// Returns `Ok(Some(spec))` on `CreateWorker`.
-    /// Returns `Ok(None)` if `Disconnect` is received before bootstrap.
-    ///
-    /// # Errors
-    /// Returns `io::Error` if receiving fails.
-    pub async fn handshake<R>(rx: &mut OnoReceiver<R>) -> io::Result<Option<WorkerSpec>>
-    where
-        R: AsyncRead + std::marker::Unpin + Send,
-    {
-        info!("waiting for CreateWorker spec");
-
-        
-        let spec = loop {
-            match rx.recv::<Msg>().await {
-                Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
-                Ok(Msg::Control(Command::Disconnect)) => {
-                    info!("received Disconnect before bootstrap, exiting");
-                    return Ok(None);
-                }
-                Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
-                Err(e) => return Err(e),
-            }
-        };
-
-       
-       
-
-        Ok(Some(spec))
-    }
-
     /// Builds a `Worker` from a `WorkerSpec`.
     ///
     /// # Args
@@ -59,11 +17,17 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
+    ///
+    /// # Errors
+    /// Never returns an error.
+    ///
+    /// # Panics
+    /// Never panics.
     pub fn build<S>(spec: &WorkerSpec, strategy: S) -> Worker<S>
     where
         S: TrainStrategy,
     {
         let cfg = WorkerConfig::from_spec(spec);
-        Worker::new(cfg, spec.num_params, strategy)
+        Worker::new(cfg, NonZeroUsize::new(spec.num_params.get()).unwrap(), strategy)
     }
 }
