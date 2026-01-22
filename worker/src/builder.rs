@@ -1,7 +1,6 @@
-use std::num::NonZeroUsize;
+use std::{io, num::NonZeroUsize};
 
 use comms::specs::worker::WorkerSpec;
-use ml_core::TrainStrategy;
 
 use crate::{Worker, WorkerConfig};
 
@@ -13,21 +12,22 @@ impl WorkerBuilder {
     ///
     /// # Args
     /// * `spec` - Bootstrap specification received from the orchestrator.
-    /// * `strategy` - Concrete `TrainStrategy` implementation for this worker.
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
     ///
     /// # Errors
-    /// Never returns an error.
+    /// Returns `io::Error` if the requested training strategy cannot be constructed.
     ///
     /// # Panics
     /// Never panics.
-    pub fn build<S>(spec: &WorkerSpec, strategy: S) -> Worker<S>
-    where
-        S: TrainStrategy,
-    {
+    pub fn build(spec: &WorkerSpec) -> io::Result<Worker<ml_strategies::Strategy>> {
         let cfg = WorkerConfig::from_spec(spec);
-        Worker::new(cfg, NonZeroUsize::new(spec.num_params.get()).unwrap(), strategy)
+        let strategy = ml_strategies::from_spec(&spec.strategy)?;
+        Ok(Worker::new(
+            cfg,
+            NonZeroUsize::new(spec.num_params.get()).unwrap(),
+            strategy,
+        ))
     }
 }

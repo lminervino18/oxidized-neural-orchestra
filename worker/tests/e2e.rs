@@ -4,28 +4,6 @@ use tokio::io as tokio_io;
 
 use comms::msg::{Command, Msg, Payload};
 use comms::specs::worker::{StrategySpec, WorkerSpec};
-use ml_core::{MlError, StepStats, TrainStrategy};
-
-#[derive(Debug)]
-struct MockStrategy;
-
-impl TrainStrategy for MockStrategy {
-    fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError> {
-        if weights.len() != grads.len() {
-            return Err(MlError::ShapeMismatch {
-                what: "params",
-                got: weights.len(),
-                expected: grads.len(),
-            });
-        }
-
-        for (g, w) in grads.iter_mut().zip(weights.iter()) {
-            *g = 2.0 * *w;
-        }
-
-        Ok(StepStats::new(1, 0))
-    }
-}
 
 fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
     WorkerSpec {
@@ -57,11 +35,11 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
         .await?;
 
     let worker_task = tokio::spawn(async move {
-        let Some(spec) = worker::WorkerBuilder::handshake(&mut wk_rx).await? else {
+        let Some(spec) = worker::WorkerAcceptor::handshake(&mut wk_rx).await? else {
             return Ok(());
         };
 
-        let worker = worker::WorkerBuilder::build(&spec, MockStrategy);
+        let worker = worker::WorkerBuilder::build(&spec)?;
         worker.run(wk_rx, wk_tx).await
     });
 

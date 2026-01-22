@@ -5,7 +5,6 @@ use tokio::time::timeout;
 
 use comms::msg::{Command, Msg, Payload};
 use comms::specs::worker::{StrategySpec, WorkerSpec};
-use ml_core::{MlError, StepStats, TrainStrategy};
 
 async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
     sv_rx: &mut comms::OnoReceiver<R>,
@@ -19,14 +18,6 @@ async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
             panic!("server unexpectedly received a Gradient message");
         }
         Ok(Ok(_)) => {}
-    }
-}
-
-struct NoopStrategy;
-
-impl TrainStrategy for NoopStrategy {
-    fn step(&mut self, _weights: &[f32], _grads: &mut [f32]) -> Result<StepStats, MlError> {
-        Ok(StepStats::new(1, 0))
     }
 }
 
@@ -56,11 +47,11 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
         .await?;
 
     let worker_task = tokio::spawn(async move {
-        let Some(spec) = worker::WorkerBuilder::handshake(&mut wk_rx).await? else {
+        let Some(spec) = worker::WorkerAcceptor::handshake(&mut wk_rx).await? else {
             return Ok(());
         };
 
-        let worker = worker::WorkerBuilder::build(&spec, NoopStrategy);
+        let worker = worker::WorkerBuilder::build(&spec)?;
         worker.run(wk_rx, wk_tx).await
     });
 
@@ -90,11 +81,11 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
         .await?;
 
     let worker_task = tokio::spawn(async move {
-        let Some(spec) = worker::WorkerBuilder::handshake(&mut wk_rx).await? else {
+        let Some(spec) = worker::WorkerAcceptor::handshake(&mut wk_rx).await? else {
             return Ok(());
         };
 
-        let worker = worker::WorkerBuilder::build(&spec, NoopStrategy);
+        let worker = worker::WorkerBuilder::build(&spec)?;
         worker.run(wk_rx, wk_tx).await
     });
 

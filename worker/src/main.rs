@@ -30,8 +30,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
 
-    let strategy = ml_strategies::from_spec(&spec.strategy)?;
-
     info!(
         "worker bootstrapped: worker_id={}, steps={}, num_params={}, strategy={:?}",
         spec.worker_id,
@@ -40,7 +38,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         spec.strategy
     );
 
-    let worker = WorkerBuilder::build(&spec, strategy);
+    let worker = WorkerBuilder::build(&spec)?;
 
     tokio::select! {
         ret = worker.run(rx, tx) => {
