@@ -5,7 +5,7 @@ use comms::{
     OnoReceiver, OnoSender,
 };
 use log::{debug, error, info, warn};
-use ml_core::TrainStrategy;
+use machine_learning::TrainStrategy;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::config::WorkerConfig;

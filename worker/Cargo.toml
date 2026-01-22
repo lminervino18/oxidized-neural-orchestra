@@ -9,7 +9,7 @@ log = { version = "0.4.29", features = ["kv"] }
 env_logger = "0.11"
 
 comms = { path = "../comms" }
-ml_core = { path = "../ml_core" }
+machine_learning = { path = "../machine_learning" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "io-util"] }

@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::specs::worker::StrategySpec;
-use ml_core::{MlError, StepStats, TrainStrategy};
+use machine_learning::{MlError, StepStats, TrainStrategy};
 
 /// Worker-local training strategy.
 ///
