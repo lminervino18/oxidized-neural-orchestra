@@ -1,5 +1,3 @@
-use std::io;
-
 use comms::{
     msg::{Msg, Payload},
     OnoReceiver, OnoSender,
@@ -8,7 +6,7 @@ use log::{debug, error, info, warn};
 use machine_learning::TrainStrategy;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::config::WorkerConfig;
+use crate::{config::WorkerConfig, error::WorkerError};
 
 /// Infrastructure worker runtime.
 pub struct Worker<S: TrainStrategy> {
@@ -50,9 +48,16 @@ impl<S: TrainStrategy> Worker<S> {
     /// Returns `Ok(())` if all steps complete successfully.
     ///
     /// # Errors
-    /// Returns `io::Error` if receiving/sending fails, an unexpected message is received,
-    /// or a `Weights` payload length differs from the first observed weight vector.
-    pub async fn run<R, W>(mut self, mut rx: OnoReceiver<R>, mut tx: OnoSender<W>) -> io::Result<()>
+    /// Returns `WorkerError` if:
+    /// - receiving or sending fails (`WorkerError::Io`),
+    /// - an unexpected message is received (`WorkerError::UnexpectedMessage`),
+    /// - a `Weights` payload length changes across steps (`WorkerError::WeightsLengthMismatch`),
+    /// - the training strategy fails (`WorkerError::TrainFailed`).
+    pub async fn run<R, W>(
+        mut self,
+        mut rx: OnoReceiver<R>,
+        mut tx: OnoSender<W>,
+    ) -> Result<(), WorkerError>
     where
         R: AsyncRead + Unpin + Send,
         W: AsyncWrite + Unpin + Send,
@@ -68,11 +73,9 @@ impl<S: TrainStrategy> Worker<S> {
             let weights = match msg {
                 Msg::Data(Payload::Weights(w)) => w,
                 other => {
-                    error!(worker_id = worker_id, step = step; "unexpected message");
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("unexpected message: {other:?}"),
-                    ));
+                    let got = msg_kind(&other);
+                    error!(worker_id = worker_id, step = step, got = got; "unexpected message");
+                    return Err(WorkerError::UnexpectedMessage { step, got });
                 }
             };
 
@@ -89,10 +92,12 @@ impl<S: TrainStrategy> Worker<S> {
                     expected = expected;
                     "weights length mismatch"
                 );
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("weights length mismatch: got {got}, expected {expected}"),
-                ));
+
+                return Err(WorkerError::WeightsLengthMismatch {
+                    step,
+                    got,
+                    expected,
+                });
             }
 
             self.grads_buf.fill(0.0);
@@ -102,7 +107,7 @@ impl<S: TrainStrategy> Worker<S> {
                 tokio::task::block_in_place(|| self.strategy.step(weights, &mut self.grads_buf));
             if let Err(e) = res {
                 warn!(worker_id = worker_id, step = step; "train strategy error: {e}");
-                return Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()));
+                return Err(WorkerError::TrainFailed { step, source: e });
             }
 
             debug!(worker_id = worker_id, step = step; "sending gradient");
@@ -112,5 +117,14 @@ impl<S: TrainStrategy> Worker<S> {
 
         info!(worker_id = worker_id; "worker finished");
         Ok(())
+    }
+}
+
+fn msg_kind(msg: &Msg<'_>) -> &'static str {
+    match msg {
+        Msg::Control(_) => "control",
+        Msg::Err(_) => "err",
+        Msg::Data(Payload::Gradient(_)) => "data/gradient",
+        Msg::Data(Payload::Weights(_)) => "data/weights",
     }
 }

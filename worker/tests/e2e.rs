@@ -40,7 +40,10 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
         };
 
         let worker = worker::WorkerBuilder::build(&spec)?;
-        worker.run(wk_rx, wk_tx).await
+        worker
+            .run(wk_rx, wk_tx)
+            .await
+            .map_err(worker::WorkerError::into_io)
     });
 
     for step in 0..STEPS {
