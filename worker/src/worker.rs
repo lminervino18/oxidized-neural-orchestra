@@ -10,6 +10,7 @@ use crate::{config::WorkerConfig, error::WorkerError};
 
 /// Infrastructure worker runtime.
 pub struct Worker<S: TrainStrategy> {
+    worker_id: usize,
     cfg: WorkerConfig,
     strategy: S,
     grads_buf: Vec<f32>,
@@ -19,16 +20,15 @@ impl<S: TrainStrategy> Worker<S> {
     /// Creates a new `Worker`.
     ///
     /// # Args
-    /// * `cfg` - Immutable worker configuration.
+    /// * `worker_id` - Worker identifier used for observability.
+    /// * `cfg` - Immutable execution bounds.
     /// * `strategy` - Training strategy used to compute gradients.
     ///
     /// # Returns
     /// A new `Worker` instance.
-    ///
-    /// # Panics
-    /// Never panics.
-    pub fn new(cfg: WorkerConfig, strategy: S) -> Self {
+    pub fn new(worker_id: usize, cfg: WorkerConfig, strategy: S) -> Self {
         Self {
+            worker_id,
             cfg,
             strategy,
             grads_buf: Vec::new(),
@@ -48,11 +48,7 @@ impl<S: TrainStrategy> Worker<S> {
     /// Returns `Ok(())` if all steps complete successfully.
     ///
     /// # Errors
-    /// Returns `WorkerError` if:
-    /// - receiving or sending fails (`WorkerError::Io`),
-    /// - an unexpected message is received (`WorkerError::UnexpectedMessage`),
-    /// - a `Weights` payload length changes across steps (`WorkerError::WeightsLengthMismatch`),
-    /// - the training strategy fails (`WorkerError::TrainFailed`).
+    /// Returns `WorkerError` on I/O failures, protocol violations, or ML strategy failures.
     pub async fn run<R, W>(
         mut self,
         mut rx: OnoReceiver<R>,
@@ -62,7 +58,7 @@ impl<S: TrainStrategy> Worker<S> {
         R: AsyncRead + Unpin + Send,
         W: AsyncWrite + Unpin + Send,
     {
-        let worker_id = self.cfg.worker_id();
+        let worker_id = self.worker_id;
 
         info!(worker_id = worker_id; "worker starting");
 

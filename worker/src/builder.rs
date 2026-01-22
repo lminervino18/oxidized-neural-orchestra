@@ -18,12 +18,9 @@ impl WorkerBuilder {
     ///
     /// # Errors
     /// Returns `io::Error` if the requested training strategy cannot be constructed.
-    ///
-    /// # Panics
-    /// Never panics.
     pub fn build(spec: &WorkerSpec) -> io::Result<Worker<Strategy>> {
-        let cfg = WorkerConfig::new(spec.worker_id, spec.steps);
+        let cfg = WorkerConfig::new(spec.steps);
         let strategy = Strategy::from_spec(&spec.strategy)?;
-        Ok(Worker::new(cfg, strategy))
+        Ok(Worker::new(spec.worker_id, cfg, strategy))
     }
 }
