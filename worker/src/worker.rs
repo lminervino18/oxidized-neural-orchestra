@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use comms::{
     msg::{Msg, Payload},
     OnoReceiver, OnoSender,
@@ -13,6 +15,7 @@ pub struct Worker<S: TrainStrategy> {
     worker_id: usize,
     cfg: WorkerConfig,
     strategy: S,
+    num_params: NonZeroUsize,
     grads_buf: Vec<f32>,
 }
 
@@ -22,23 +25,23 @@ impl<S: TrainStrategy> Worker<S> {
     /// # Args
     /// * `worker_id` - Worker identifier used for observability.
     /// * `cfg` - Immutable execution bounds.
+    /// * `num_params` - Expected parameter count for `weights` and `grads`.
     /// * `strategy` - Training strategy used to compute gradients.
     ///
     /// # Returns
     /// A new `Worker` instance.
-    pub fn new(worker_id: usize, cfg: WorkerConfig, strategy: S) -> Self {
+    pub fn new(worker_id: usize, cfg: WorkerConfig, num_params: NonZeroUsize, strategy: S) -> Self {
+        let n = num_params.get();
         Self {
             worker_id,
             cfg,
             strategy,
-            grads_buf: Vec::new(),
+            num_params,
+            grads_buf: vec![0.0; n],
         }
     }
 
     /// Runs the worker loop for the configured number of steps.
-    ///
-    /// The parameter count is inferred from the first `Weights` message received.
-    /// Subsequent `Weights` messages must match that inferred size.
     ///
     /// # Args
     /// * `rx` - Receiving end of the communication channel.
@@ -59,6 +62,7 @@ impl<S: TrainStrategy> Worker<S> {
         W: AsyncWrite + Unpin + Send,
     {
         let worker_id = self.worker_id;
+        let expected = self.num_params.get();
 
         info!(worker_id = worker_id; "worker starting");
 
@@ -75,11 +79,8 @@ impl<S: TrainStrategy> Worker<S> {
                 }
             };
 
-            if self.grads_buf.is_empty() {
-                self.grads_buf.resize(weights.len(), 0.0);
-            } else if weights.len() != self.grads_buf.len() {
+            if weights.len() != expected {
                 let got = weights.len();
-                let expected = self.grads_buf.len();
 
                 error!(
                     worker_id = worker_id,

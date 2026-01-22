@@ -58,14 +58,12 @@ async fn worker_rejects_weight_length_change_across_steps() -> io::Result<()> {
     let mut w1 = [1.0_f32, 2.0];
     sv_tx.send(&Msg::Data(Payload::Weights(&mut w1))).await?;
 
-    // Step 0 completes; NoopStrategy still sends a gradient of the inferred length.
     let msg: Msg = sv_rx.recv().await?;
     match msg {
         Msg::Data(Payload::Gradient(g)) => assert_eq!(g.len(), 2),
         other => panic!("unexpected msg: {other:?}"),
     }
 
-    // Step 1 uses a different weight length -> must error.
     let mut w2 = [1.0_f32, 2.0, 3.0];
     sv_tx.send(&Msg::Data(Payload::Weights(&mut w2))).await?;
 
