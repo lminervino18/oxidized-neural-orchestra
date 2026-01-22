@@ -2,7 +2,7 @@ use std::{io, num::NonZeroUsize};
 
 use comms::specs::worker::WorkerSpec;
 
-use crate::{Worker, WorkerConfig};
+use crate::{Strategy, Worker, WorkerConfig};
 
 /// Worker builder.
 pub struct WorkerBuilder;
@@ -21,9 +21,9 @@ impl WorkerBuilder {
     ///
     /// # Panics
     /// Never panics.
-    pub fn build(spec: &WorkerSpec) -> io::Result<Worker<ml_strategies::Strategy>> {
+    pub fn build(spec: &WorkerSpec) -> io::Result<Worker<Strategy>> {
         let cfg = WorkerConfig::from_spec(spec);
-        let strategy = ml_strategies::from_spec(&spec.strategy)?;
+        let strategy = Strategy::from_spec(&spec.strategy)?;
         Ok(Worker::new(
             cfg,
             NonZeroUsize::new(spec.num_params.get()).unwrap(),
