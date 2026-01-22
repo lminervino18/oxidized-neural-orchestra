@@ -1,4 +1,4 @@
-use std::{io, num::NonZeroUsize};
+use std::io;
 
 use comms::{
     msg::{Msg, Payload},
@@ -14,7 +14,6 @@ use crate::config::WorkerConfig;
 pub struct Worker<S: TrainStrategy> {
     cfg: WorkerConfig,
     strategy: S,
-    expected_params: NonZeroUsize,
     grads_buf: Vec<f32>,
 }
 
@@ -23,8 +22,6 @@ impl<S: TrainStrategy> Worker<S> {
     ///
     /// # Args
     /// * `cfg` - Immutable worker configuration.
-    /// * `expected_params` - Expected parameter count as declared by the bootstrap specification.
-    ///   This value is validated against the first `Weights` message.
     /// * `strategy` - Training strategy used to compute gradients.
     ///
     /// # Returns
@@ -32,16 +29,18 @@ impl<S: TrainStrategy> Worker<S> {
     ///
     /// # Panics
     /// Never panics.
-    pub fn new(cfg: WorkerConfig, expected_params: NonZeroUsize, strategy: S) -> Self {
+    pub fn new(cfg: WorkerConfig, strategy: S) -> Self {
         Self {
             cfg,
             strategy,
-            expected_params,
             grads_buf: Vec::new(),
         }
     }
 
     /// Runs the worker loop for the configured number of steps.
+    ///
+    /// The parameter count is inferred from the first `Weights` message received.
+    /// Subsequent `Weights` messages must match that inferred size.
     ///
     /// # Args
     /// * `rx` - Receiving end of the communication channel.
@@ -52,7 +51,7 @@ impl<S: TrainStrategy> Worker<S> {
     ///
     /// # Errors
     /// Returns `io::Error` if receiving/sending fails, an unexpected message is received,
-    /// or the input shape does not match the first observed weight vector.
+    /// or a `Weights` payload length differs from the first observed weight vector.
     pub async fn run<R, W>(mut self, mut rx: OnoReceiver<R>, mut tx: OnoSender<W>) -> io::Result<()>
     where
         R: AsyncRead + Unpin + Send,
@@ -78,24 +77,7 @@ impl<S: TrainStrategy> Worker<S> {
             };
 
             if self.grads_buf.is_empty() {
-                let got = weights.len();
-                let expected = self.expected_params.get();
-
-                if got != expected {
-                    error!(
-                        worker_id = worker_id,
-                        step = step,
-                        got = got,
-                        expected = expected;
-                        "bootstrap num_params mismatch"
-                    );
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("bootstrap num_params mismatch: got {got}, expected {expected}"),
-                    ));
-                }
-
-                self.grads_buf.resize(got, 0.0);
+                self.grads_buf.resize(weights.len(), 0.0);
             } else if weights.len() != self.grads_buf.len() {
                 let got = weights.len();
                 let expected = self.grads_buf.len();

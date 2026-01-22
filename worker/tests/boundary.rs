@@ -32,7 +32,7 @@ fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
+async fn worker_rejects_weight_length_change_across_steps() -> io::Result<()> {
     let (sv_stream, wk_stream) = tokio_io::duplex(4096);
 
     let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
@@ -41,7 +41,7 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
     let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
     let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
-    let spec = mk_spec(1, 2);
+    let spec = mk_spec(2, 2);
     sv_tx
         .send(&Msg::Control(Command::CreateWorker(spec)))
         .await?;
@@ -55,8 +55,19 @@ async fn worker_rejects_wrong_weight_length() -> io::Result<()> {
         worker.run(wk_rx, wk_tx).await
     });
 
-    let mut w = [1.0_f32, 2.0, 3.0];
-    sv_tx.send(&Msg::Data(Payload::Weights(&mut w))).await?;
+    let mut w1 = [1.0_f32, 2.0];
+    sv_tx.send(&Msg::Data(Payload::Weights(&mut w1))).await?;
+
+    // Step 0 completes; NoopStrategy still sends a gradient of the inferred length.
+    let msg: Msg = sv_rx.recv().await?;
+    match msg {
+        Msg::Data(Payload::Gradient(g)) => assert_eq!(g.len(), 2),
+        other => panic!("unexpected msg: {other:?}"),
+    }
+
+    // Step 1 uses a different weight length -> must error.
+    let mut w2 = [1.0_f32, 2.0, 3.0];
+    sv_tx.send(&Msg::Data(Payload::Weights(&mut w2))).await?;
 
     let res = worker_task.await.unwrap();
     assert!(res.is_err());
