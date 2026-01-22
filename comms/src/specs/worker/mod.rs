@@ -3,11 +3,21 @@ use std::num::NonZeroUsize;
 use serde::{Deserialize, Serialize};
 
 /// The wire-level bootstrap specification for a worker instance.
+///
+/// This specification defines the bootstrap-time execution bounds and the
+/// training strategy selection for a worker.
+///
+/// Note:
+/// - `num_params` is retained for wire compatibility, but it is not a runtime invariant.
+///   The worker infers the effective parameter count from the first `weights` payload it
+///   receives and enforces consistency across subsequent steps.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkerSpec {
     pub worker_id: usize,
     pub steps: NonZeroUsize,
+
     pub num_params: NonZeroUsize,
+
     pub strategy: StrategySpec,
     pub seed: Option<u64>,
 }
