@@ -1,5 +1,3 @@
-use std::io;
-
 use comms::specs::worker::WorkerSpec;
 
 use crate::{Strategy, Worker, WorkerConfig};
@@ -15,12 +13,9 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    ///
-    /// # Errors
-    /// Returns `io::Error` if the requested training strategy cannot be constructed.
-    pub fn build(spec: &WorkerSpec) -> io::Result<Worker<Strategy>> {
+    pub fn build(spec: &WorkerSpec) -> Worker<Strategy> {
         let cfg = WorkerConfig::new(spec.steps);
-        let strategy = Strategy::from_spec(&spec.strategy)?;
-        Ok(Worker::new(spec.worker_id, cfg, spec.num_params, strategy))
+        let strategy = Strategy::from_spec(&spec.strategy);
+        Worker::new(spec.worker_id, cfg, spec.num_params, strategy)
     }
 }

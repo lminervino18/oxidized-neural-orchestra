@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         spec.strategy
     );
 
-    let worker = WorkerBuilder::build(&spec)?;
+    let worker = WorkerBuilder::build(&spec);
 
     tokio::select! {
         ret = worker.run(rx, tx) => {

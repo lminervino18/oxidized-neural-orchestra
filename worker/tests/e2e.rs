@@ -39,7 +39,7 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
             return Ok(());
         };
 
-        let worker = worker::WorkerBuilder::build(&spec)?;
+        let worker = worker::WorkerBuilder::build(&spec);
         worker
             .run(wk_rx, wk_tx)
             .await

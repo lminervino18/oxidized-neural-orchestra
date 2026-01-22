@@ -51,8 +51,11 @@ async fn worker_rejects_weight_length_change_across_steps() -> io::Result<()> {
             return Ok(());
         };
 
-        let worker = worker::WorkerBuilder::build(&spec)?;
-        worker.run(wk_rx, wk_tx).await
+        let worker = worker::WorkerBuilder::build(&spec);
+        worker
+            .run(wk_rx, wk_tx)
+            .await
+            .map_err(worker::WorkerError::into_io)
     });
 
     let mut w1 = [1.0_f32, 2.0];
@@ -94,8 +97,11 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
             return Ok(());
         };
 
-        let worker = worker::WorkerBuilder::build(&spec)?;
-        worker.run(wk_rx, wk_tx).await
+        let worker = worker::WorkerBuilder::build(&spec);
+        worker
+            .run(wk_rx, wk_tx)
+            .await
+            .map_err(worker::WorkerError::into_io)
     });
 
     let g = [0.1_f32, 0.2];

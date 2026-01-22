@@ -1,12 +1,7 @@
-use std::io;
-
 use comms::specs::worker::StrategySpec;
 use machine_learning::{MlError, StepStats, TrainStrategy};
 
-/// Worker-local training strategy.
-///
-/// This type provides a runtime-selectable implementation of `TrainStrategy`
-/// derived from a wire-level `StrategySpec`.
+/// Worker-local training strategy selected at runtime from `StrategySpec`.
 pub enum Strategy {
     Noop(NoopStrategy),
     Mock(MockStrategy),
@@ -20,26 +15,17 @@ impl Strategy {
     ///
     /// # Returns
     /// A concrete worker strategy implementation.
-    ///
-    /// # Errors
-    /// Returns `io::Error` if the requested strategy cannot be constructed.
-    ///
-    /// # Panics
-    /// Never panics.
-    pub fn from_spec(spec: &StrategySpec) -> io::Result<Self> {
-        Ok(match spec {
+    pub fn from_spec(spec: &StrategySpec) -> Self {
+        match spec {
             StrategySpec::Noop => Self::Noop(NoopStrategy),
             StrategySpec::Mock => Self::Mock(MockStrategy),
-        })
+        }
     }
 
     /// Returns a stable identifier for the strategy kind.
     ///
     /// # Returns
     /// A static string identifying the strategy kind.
-    ///
-    /// # Panics
-    /// Never panics.
     pub fn kind(&self) -> &'static str {
         match self {
             Strategy::Noop(_) => "noop",
@@ -58,8 +44,6 @@ impl TrainStrategy for Strategy {
 }
 
 /// Strategy that performs no-op training.
-///
-/// This strategy always returns a successful step and leaves gradients as-is.
 pub struct NoopStrategy;
 
 impl TrainStrategy for NoopStrategy {
@@ -69,8 +53,6 @@ impl TrainStrategy for NoopStrategy {
 }
 
 /// Strategy used for testing the training loop.
-///
-/// This strategy computes `grad[i] = 2 * weight[i]`.
 pub struct MockStrategy;
 
 impl TrainStrategy for MockStrategy {
