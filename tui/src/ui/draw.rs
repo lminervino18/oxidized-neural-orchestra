@@ -1,16 +1,27 @@
-use ratatui::{Frame, layout::Rect};
+use ratatui::Frame;
 
 use crate::state::model::SessionView;
 
-/// Draws the whole UI.
-///
-/// # Args
-/// * `f` - Frame provided by ratatui.
-/// * `view` - Snapshot to render.
-/// * `show_diagram` - Whether to render the architecture diagram.
-/// * `show_logs` - Whether to render the logs panel.
-pub fn draw(f: &mut Frame, view: &SessionView, _show_diagram: bool, _show_logs: bool) {
-    let area: Rect = f.size();
-    // Temporary stub: we'll implement panels in the next commit.
-    let _ = (view, area);
+use super::{layout, widgets};
+
+/// Draws the entire UI.
+pub fn draw(f: &mut Frame, view: &SessionView, show_diagram: bool, show_logs: bool) {
+    let area = f.size();
+
+    let (header_area, body_area, logs_area) = layout::vertical(area, show_logs);
+    let (diagram_area, right_area) = layout::body(body_area, show_diagram);
+    let (server_area, workers_area) = layout::right(right_area);
+
+    f.render_widget(widgets::header(view), header_area);
+
+    if let Some(diag) = diagram_area {
+        f.render_widget(widgets::diagram(view), diag);
+    }
+
+    f.render_widget(widgets::server(view), server_area);
+    f.render_widget(widgets::workers_table(view), workers_area);
+
+    if let Some(logs) = logs_area {
+        f.render_widget(widgets::logs(view), logs);
+    }
 }

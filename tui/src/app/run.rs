@@ -12,23 +12,39 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use crate::state::mock::MockState;
 use crate::ui::draw::draw;
 
+struct TerminalGuard;
+
+impl TerminalGuard {
+    fn enter() -> Result<Self> {
+        enable_raw_mode()?;
+        execute!(io::stdout(), EnterAlternateScreen)?;
+        Ok(Self)
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+    }
+}
+
 /// Runs the interactive TUI.
 ///
 /// # Errors
 /// Returns an error if terminal setup, event polling, or rendering fails.
 pub fn run() -> Result<()> {
-    // Terminal setup
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    let _guard = TerminalGuard::enter()?;
+
+    let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+    terminal.clear()?;
 
     let mut state = MockState::new();
     let mut show_diagram = true;
     let mut show_logs = true;
 
-    // Main loop
     loop {
         state.tick();
         let view = state.view();
@@ -37,7 +53,6 @@ pub fn run() -> Result<()> {
             draw(f, &view, show_diagram, show_logs);
         })?;
 
-        // Input handling with timeout tick
         if event::poll(Duration::from_millis(120))? {
             match event::read()? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => match k.code {
@@ -51,10 +66,6 @@ pub fn run() -> Result<()> {
         }
     }
 
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
-
     Ok(())
 }
