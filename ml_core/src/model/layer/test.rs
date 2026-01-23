@@ -1,6 +1,7 @@
+use ndarray::Array1;
 #[cfg(test)]
 use {
-    super::{dense::Dense, layer::Layer, sigmoid::Sigmoid},
+    super::{dense::Dense, r#trait::Layer, sigmoid::Sigmoid},
     rand::Rng,
 };
 
@@ -68,7 +69,7 @@ fn xd3() {
 // este boilerplate. Le pasás las layers y la memoria de los weights y biases al factory y listo!!!
 // :)
 #[test]
-fn mlp_init() {
+fn convergence() {
     fn get_array_mut_chunks<'a>(sizes: &[usize], array: &'a mut [f32]) -> Vec<&'a mut [f32]> {
         let mut res_chunk = array;
         let mut chunks: Vec<&mut [f32]> = vec![];
@@ -105,5 +106,19 @@ fn mlp_init() {
             Dense::new((dims[1], dims[2]), w_chunks.remove(0), b_chunks.remove(0)).unwrap(),
         ),
         Layer::Sigmoid(Sigmoid::new(dims[2])),
+    ];
+
+    let x_train = [
+        Array1::<f32>::from_vec(vec![0., 0.]),
+        Array1::<f32>::from_vec(vec![0., 1.]),
+        Array1::<f32>::from_vec(vec![1., 0.]),
+        Array1::<f32>::from_vec(vec![1., 1.]),
+    ];
+
+    let y_train = [
+        Array1::<f32>::from_elem(1, 0.),
+        Array1::<f32>::from_elem(1, 1.),
+        Array1::<f32>::from_elem(1, 1.),
+        Array1::<f32>::from_elem(1, 0.),
     ];
 }

@@ -1,4 +1,4 @@
-use super::{feedforward::Feedforward, model::Model};
+use super::{ff::Feedforward, model::Model};
 use ndarray::{Array1, Array2, ArrayView1};
 use ndarray_rand::{rand_distr::StandardNormal, RandomExt};
 
