@@ -1,12 +1,15 @@
-use ratatui::Frame;
+use ratatui::{widgets::Block, Frame};
 
 use crate::state::model::SessionView;
 
-use super::{layout, widgets};
+use super::{layout, theme::Theme, widgets};
 
 /// Draws the entire UI.
 pub fn draw(f: &mut Frame, view: &SessionView, show_diagram: bool, show_logs: bool) {
     let area = f.size();
+
+    // Paint full background for consistent neon theme.
+    f.render_widget(Block::default().style(Theme::base()), area);
 
     let (header_area, body_area, logs_area) = layout::vertical(area, show_logs);
     let (diagram_area, right_area) = layout::body(body_area, show_diagram);
