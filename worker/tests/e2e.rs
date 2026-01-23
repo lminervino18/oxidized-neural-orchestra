@@ -1,45 +1,22 @@
 use std::{io, num::NonZeroUsize};
-use std::sync::Once;
 
 use tokio::io as tokio_io;
 
-use comms::msg::{Msg, Payload};
-use ml_core::{MlError, StepStats, TrainStrategy};
-use worker::{Worker, WorkerConfig};
+use comms::msg::{Command, Msg, Payload};
+use comms::specs::worker::{StrategySpec, WorkerSpec};
 
-static LOG_INIT: Once = Once::new();
-
-fn init_test_logging() {
-    LOG_INIT.call_once(|| {
-        worker::init_logging();
-    });
-}
-
-#[derive(Debug)]
-struct MockStrategy;
-
-impl TrainStrategy for MockStrategy {
-    fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError> {
-        if weights.len() != grads.len() {
-            return Err(MlError::ShapeMismatch {
-                what: "params",
-                got: weights.len(),
-                expected: grads.len(),
-            });
-        }
-
-        for (g, w) in grads.iter_mut().zip(weights.iter()) {
-            *g = 2.0 * *w;
-        }
-
-        Ok(StepStats::new(1, 0))
+fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
+    WorkerSpec {
+        worker_id: 0,
+        steps: NonZeroUsize::new(steps).unwrap(),
+        num_params: NonZeroUsize::new(num_params).unwrap(),
+        strategy: StrategySpec::Mock,
+        seed: None,
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
-    init_test_logging();
-
     const BUF_SIZE: usize = 4096;
     const STEPS: usize = 3;
     const PARAMS: usize = 2;
@@ -50,14 +27,24 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
     let (mut sv_rx, mut sv_tx) = comms::channel(sv_rx, sv_tx);
 
     let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
+    let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
-    let cfg = WorkerConfig::new(0, NonZeroUsize::new(STEPS).unwrap());
-    let num_params = NonZeroUsize::new(PARAMS).unwrap();
-    let strat = MockStrategy;
+    let spec = mk_spec(STEPS, PARAMS);
+    sv_tx
+        .send(&Msg::Control(Command::CreateWorker(spec)))
+        .await?;
 
-    let worker_task =
-        tokio::spawn(async move { Worker::new(cfg, num_params, strat).run(wk_rx, wk_tx).await });
+    let worker_task = tokio::spawn(async move {
+        let Some(spec) = worker::WorkerAcceptor::handshake(&mut wk_rx).await? else {
+            return Ok(());
+        };
+
+        let worker = worker::WorkerBuilder::build(&spec);
+        worker
+            .run(wk_rx, wk_tx)
+            .await
+            .map_err(worker::WorkerError::into_io)
+    });
 
     for step in 0..STEPS {
         let mut w = [step as f32 + 1.0, step as f32 + 2.0];

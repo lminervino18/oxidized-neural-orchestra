@@ -1,6 +1,9 @@
 use std::io;
 
-use crate::{Deserialize, Serialize, specs::server::ServerSpec};
+use crate::{
+    Deserialize, Serialize,
+    specs::{server::ServerSpec, worker::WorkerSpec},
+};
 
 type Header = u32;
 const HEADER_SIZE: usize = size_of::<Header>();
@@ -17,6 +20,7 @@ pub enum Payload<'a> {
 #[serde(rename_all = "snake_case")]
 pub enum Command {
     CreateServer(ServerSpec),
+    CreateWorker(WorkerSpec),
     Disconnect,
 }
 
