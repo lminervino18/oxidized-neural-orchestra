@@ -1,14 +1,7 @@
-// <<<<<<< HEAD:ml_core/src/lib.rs
-mod dataset;
-// mod draft3;
-/* mod dataset;
-mod ff;
-mod layer; */
-mod model;
-// mod neural_net;
-// mod optimizer;
-// mod sgd;
-// =======
+pub mod arch;
+pub mod dataset;
+pub mod optimization;
+
 use std::fmt;
 
 /// Errors produced by ML plugins when inputs are invalid.
