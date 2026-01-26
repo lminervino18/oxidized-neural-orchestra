@@ -10,6 +10,6 @@ pub use config::WorkerConfig;
 pub use error::WorkerError;
 pub use worker::Worker;
 
-pub use strategy::Strategy;
+pub use model::Model;
 
-mod strategy;
+mod model;

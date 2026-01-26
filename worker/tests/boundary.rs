@@ -5,7 +5,8 @@ use tokio::io as tokio_io;
 use tokio::time::timeout;
 
 use comms::msg::{Command, Msg, Payload};
-use comms::specs::worker::{StrategySpec, WorkerSpec};
+use comms::specs::server::OptimizerSpec;
+use comms::specs::worker::{AlgorithmSpec, ModelSpec, TrainingSpec, WorkerSpec};
 
 async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
     sv_rx: &mut comms::OnoReceiver<R>,
@@ -27,7 +28,15 @@ fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
         worker_id: 0,
         steps: NonZeroUsize::new(steps).unwrap(),
         num_params: NonZeroUsize::new(num_params).unwrap(),
-        strategy: StrategySpec::Noop,
+        model: ModelSpec::Noop,
+        training: TrainingSpec {
+            algorithm: AlgorithmSpec::ParameterServer {
+                server_ips: vec!["127.0.0.1".to_string()],
+            },
+            optimizer: OptimizerSpec::GradientDescent { learning_rate: 0.1 },
+            offline_steps: 0,
+            epochs: NonZeroUsize::new(1).unwrap(),
+        },
         seed: None,
     }
 }

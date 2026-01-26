@@ -31,11 +31,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     info!(
-        "worker bootstrapped: worker_id={}, steps={}, num_params={}, strategy={:?}",
+        "worker bootstrapped: worker_id={}, steps={}, num_params={}, model={:?}, offline_steps={}, epochs={}",
         spec.worker_id,
         spec.steps.get(),
         spec.num_params.get(),
-        spec.strategy
+        spec.model,
+        spec.training.offline_steps,
+        spec.training.epochs.get(),
     );
 
     let worker = WorkerBuilder::build(&spec);
