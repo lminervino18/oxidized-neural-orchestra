@@ -1,8 +1,7 @@
-use std::{io, num::NonZeroUsize, time::Duration};
 
+use std::{io, net::{IpAddr, Ipv4Addr, SocketAddr}, num::NonZeroUsize, time::Duration};
 use machine_learning::MlError;
-use tokio::io as tokio_io;
-use tokio::time::timeout;
+use tokio::{io as tokio_io, time::timeout};
 
 use comms::msg::{Command, Msg, Payload};
 use comms::specs::server::OptimizerSpec;
@@ -24,6 +23,8 @@ async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
 }
 
 fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
+    let ps_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8765);
+
     WorkerSpec {
         worker_id: 0,
         steps: NonZeroUsize::new(steps).unwrap(),
@@ -31,7 +32,7 @@ fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
         model: ModelSpec::Noop,
         training: TrainingSpec {
             algorithm: AlgorithmSpec::ParameterServer {
-                server_ips: vec!["127.0.0.1".to_string()],
+                server_ips: vec![ps_addr],
             },
             optimizer: OptimizerSpec::GradientDescent { learning_rate: 0.1 },
             offline_steps: 0,
