@@ -5,7 +5,7 @@ use std::f32;
 pub struct Sigmoid {
     dim: usize,
     amp: f32,
-    a: Option<Array2<f32>>,
+    a_out: Option<Array2<f32>>,
 }
 
 impl Sigmoid {
@@ -22,18 +22,18 @@ impl Sigmoid {
     }
 
     pub fn forward(&mut self, z: Array2<f32>) -> Array2<f32> {
-        let a = z.mapv_into(|z| self.sigmoid(z));
+        let a_out = z.mapv_into(|z| self.sigmoid(z));
 
         // TODO: eventualmente devolver un ArrayView2
-        self.a = Some(a.clone());
-        a
+        self.a_out = Some(a_out.clone());
+        a_out
     }
 
     pub fn backward(&mut self, mut d: Array2<f32>) -> Array2<f32> {
         // TODO: sacar el unwrap
-        let a = self.a.take().unwrap();
+        let a_out = self.a_out.take().unwrap();
 
-        d.zip_mut_with(&a, |d, &a| {
+        d.zip_mut_with(&a_out, |d, &a| {
             *d *= (a * (self.amp - a)) / self.amp;
         });
 
