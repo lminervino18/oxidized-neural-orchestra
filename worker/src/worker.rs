@@ -17,7 +17,6 @@ pub struct Worker<O: Optimizer> {
     offline_steps: usize,
     num_params: NonZeroUsize,
     grads_buf: Vec<f32>,
-    weights_buf: Vec<f32>,
 }
 
 impl<O: Optimizer> Worker<O> {
@@ -47,7 +46,6 @@ impl<O: Optimizer> Worker<O> {
             offline_steps,
             num_params,
             grads_buf: vec![0.0; n],
-            weights_buf: vec![0.0; n],
         }
     }
 
@@ -80,7 +78,7 @@ impl<O: Optimizer> Worker<O> {
             debug!(worker_id = worker_id, step = step; "waiting for weights");
             let msg: Msg = rx.recv().await?;
 
-            let weights = match msg {
+            let weights: &mut [f32] = match msg {
                 Msg::Data(Payload::Weights(w)) => w,
                 other => {
                     let got = msg_kind(&other);
@@ -107,14 +105,11 @@ impl<O: Optimizer> Worker<O> {
                 });
             }
 
-            self.weights_buf.copy_from_slice(weights);
             self.grads_buf.fill(0.0);
 
             debug!(worker_id = worker_id, step = step; "computing gradients");
-            let grad_res = tokio::task::block_in_place(|| {
-                self.optimizer
-                    .gradient(&self.weights_buf, &mut self.grads_buf)
-            });
+            let grad_res =
+                tokio::task::block_in_place(|| self.optimizer.gradient(weights, &mut self.grads_buf));
 
             if let Err(e) = grad_res {
                 warn!(worker_id = worker_id, step = step; "optimizer error: {e}");
@@ -124,7 +119,7 @@ impl<O: Optimizer> Worker<O> {
             for _ in 0..self.offline_steps {
                 let upd_res = tokio::task::block_in_place(|| {
                     self.optimizer
-                        .update_weights(&mut self.weights_buf, &self.grads_buf)
+                        .update_weights(weights, &self.grads_buf)
                 });
 
                 if let Err(e) = upd_res {
@@ -136,7 +131,7 @@ impl<O: Optimizer> Worker<O> {
 
                 let grad_res = tokio::task::block_in_place(|| {
                     self.optimizer
-                        .gradient(&self.weights_buf, &mut self.grads_buf)
+                        .gradient(weights, &mut self.grads_buf)
                 });
 
                 if let Err(e) = grad_res {
