@@ -61,6 +61,6 @@ impl Dense {
         self.db.mapv_inplace(|b| b * inv_batch_size);
 
         // TODO: ver de no alocar `d`s todo el tiempo
-        d.dot(&weights.t())
+        weights.t().dot(&d)
     }
 }
