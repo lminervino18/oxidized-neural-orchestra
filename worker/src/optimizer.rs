@@ -2,6 +2,9 @@ use comms::specs::worker::{ModelSpec, TrainingSpec};
 use machine_learning::{MlError, StepStats};
 
 /// Worker-local optimization interface.
+///
+/// Implementations encapsulate model-specific gradient computation and optional
+/// local weight updates for offline steps.
 pub trait Optimizer: Send {
     /// Computes gradients for the given weights.
     ///
@@ -42,28 +45,20 @@ impl OptimizerBuilder {
     ///
     /// # Returns
     /// A boxed optimizer implementation.
-    pub fn build(model: &ModelSpec, training: &TrainingSpec) -> Box<dyn Optimizer> {
+    pub fn build(model: &ModelSpec, _training: &TrainingSpec) -> Box<dyn Optimizer> {
         match model {
-            ModelSpec::Noop => Box::new(NoopOptimizer::new(training.offline_steps)),
-            ModelSpec::Mock => Box::new(MockOptimizer::new(training.offline_steps)),
+            ModelSpec::Noop => Box::new(NoopOptimizer),
+            ModelSpec::Mock => Box::new(MockOptimizer),
             ModelSpec::FeedForward { .. } => Box::new(UnsupportedOptimizer),
         }
     }
 }
 
-struct NoopOptimizer {
-    offline_steps: usize,
-}
-
-impl NoopOptimizer {
-    fn new(offline_steps: usize) -> Self {
-        Self { offline_steps }
-    }
-}
+struct NoopOptimizer;
 
 impl Optimizer for NoopOptimizer {
     fn gradient(&mut self, _weights: &[f32], _grads: &mut [f32]) -> Result<StepStats, MlError> {
-        Ok(StepStats::new(self.offline_steps.max(1), 0))
+        Ok(StepStats::new(1, 0))
     }
 
     fn update_weights(&mut self, _weights: &mut [f32], _grads: &[f32]) -> Result<(), MlError> {
@@ -71,15 +66,7 @@ impl Optimizer for NoopOptimizer {
     }
 }
 
-struct MockOptimizer {
-    offline_steps: usize,
-}
-
-impl MockOptimizer {
-    fn new(offline_steps: usize) -> Self {
-        Self { offline_steps }
-    }
-}
+struct MockOptimizer;
 
 impl Optimizer for MockOptimizer {
     fn gradient(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError> {
@@ -95,7 +82,7 @@ impl Optimizer for MockOptimizer {
             *g = 2.0 * *w;
         }
 
-        Ok(StepStats::new(self.offline_steps.max(1), 0))
+        Ok(StepStats::new(1, 0))
     }
 
     fn update_weights(&mut self, _weights: &mut [f32], _grads: &[f32]) -> Result<(), MlError> {
