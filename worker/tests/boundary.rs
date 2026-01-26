@@ -206,7 +206,7 @@ fn worker_error_into_io_maps_kinds() {
     let io_err = err.into_io();
     assert_eq!(io_err.kind(), io::ErrorKind::InvalidData);
 
-    let err = worker::WorkerError::TrainFailed {
+    let err = worker::WorkerError::ComputeFailed {
         step: 0,
         source: MlError::ShapeMismatch {
             what: "params",

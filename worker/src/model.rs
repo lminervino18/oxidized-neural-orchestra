@@ -37,16 +37,6 @@ impl Model {
     }
 }
 
-impl TrainStrategy for Model {
-    fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError> {
-        match self {
-            Model::Noop(m) => m.step(weights, grads),
-            Model::Mock(m) => m.step(weights, grads),
-            Model::FeedForward(m) => m.step(weights, grads),
-        }
-    }
-}
-
 /// No-op model used for protocol tests.
 pub struct NoopModel;
 
@@ -83,5 +73,15 @@ pub struct UnsupportedModel;
 impl TrainStrategy for UnsupportedModel {
     fn step(&mut self, _weights: &[f32], _grads: &mut [f32]) -> Result<StepStats, MlError> {
         Err(MlError::InvalidInput("model is not supported yet"))
+    }
+}
+
+impl TrainStrategy for Model {
+    fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError> {
+        match self {
+            Model::Noop(m) => m.step(weights, grads),
+            Model::Mock(m) => m.step(weights, grads),
+            Model::FeedForward(m) => m.step(weights, grads),
+        }
     }
 }

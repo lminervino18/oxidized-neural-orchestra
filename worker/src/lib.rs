@@ -10,6 +10,6 @@ pub use config::WorkerConfig;
 pub use error::WorkerError;
 pub use worker::Worker;
 
-pub use model::Model;
+pub use optimizer::{Optimizer, OptimizerBuilder};
 
-mod model;
+mod optimizer;

@@ -1,6 +1,6 @@
 use comms::specs::worker::WorkerSpec;
 
-use crate::{Model, Worker, WorkerConfig};
+use crate::{optimizer::Optimizer, OptimizerBuilder, Worker, WorkerConfig};
 
 pub struct WorkerBuilder;
 
@@ -12,9 +12,15 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    pub fn build(spec: &WorkerSpec) -> Worker<Model> {
+    pub fn build(spec: &WorkerSpec) -> Worker<Box<dyn Optimizer>> {
         let cfg = WorkerConfig::new(spec.steps);
-        let model = Model::from_spec(&spec.model);
-        Worker::new(spec.worker_id, cfg, spec.num_params, model)
+        let optimizer = OptimizerBuilder::build(&spec.model, &spec.training);
+        Worker::new(
+            spec.worker_id,
+            cfg,
+            spec.num_params,
+            optimizer,
+            spec.training.offline_steps,
+        )
     }
 }
