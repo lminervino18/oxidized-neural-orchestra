@@ -1,5 +1,5 @@
-mod activation;
+mod act_fn;
 mod sigmoid;
 
-pub use activation::ActFn;
+pub use act_fn::ActFn;
 pub use sigmoid::Sigmoid;

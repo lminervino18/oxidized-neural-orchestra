@@ -1,4 +1,4 @@
-use ndarray::{Array2, ArrayView2};
+use ndarray::{Array2, ArrayView2, ArrayViewMut2};
 
 use super::{layers::Layer, loss::LossFn, Model};
 use crate::dataset::Dataset;
@@ -59,18 +59,28 @@ impl Sequential {
 }
 
 impl Model for Sequential {
-    fn backprop<'a, L, I>(&mut self, params: &mut [f32], grad: &mut [f32], loss: &L, batches: I)
-    where
+    fn backprop<'a, L, I>(
+        &mut self,
+        params: &mut [f32],
+        grad: &mut [f32],
+        loss: &L,
+        batch: (ArrayView2<f32>, ArrayView2<f32>),
+    ) where
         L: LossFn,
         I: IntoIterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
-        for (x, y) in batches {
-            // TODO: intentar evitar owned
-            let y_pred = self.forward(params, x).to_owned();
-            self.backward(params, grad, y_pred.view(), y, loss);
-        }
+        let (x, y) = batch;
+        // TODO: cuando esté into iter para dataset usarlo (debería ser como un stream, si no no
+        // tiene sentido)
+        // TODO: intentar evitar owned. NOTE: si usamos la misma memoria para los cómputos de
+        // forward y backward este to_owned pasa a ser algo como un take
+        let y_pred = self.forward(params, x).to_owned();
+        self.backward(params, grad, y_pred.view(), y, loss);
 
         // mover los parámetros, deberíamos haber construido de antemano las views para manipular?
         // en ese caso lo que está por debajo podría pasar a recibir arrays también
+        // NOTE: los params no se pueden representar como una sóla matriz, por lo tanto la resta va
+        // a tener que ser iterando las matrices de cada layer: iterar de nuevo y llamar a
+        // apply_grad()
     }
 }

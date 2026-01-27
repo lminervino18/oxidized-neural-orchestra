@@ -15,10 +15,8 @@ impl Layer {
         }
     }
 
-    pub fn dense<A>(dim: (usize, usize), act_fn: ActFn) -> Self
-    where
-        A: Into<Option<ActFn>>,
-    {
+    pub fn dense(dim: (usize, usize), act_fn: ActFn) -> Self
+where {
         Self::Dense(Dense::new(dim, act_fn.into()))
     }
 

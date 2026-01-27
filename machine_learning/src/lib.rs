@@ -1,6 +1,7 @@
 pub mod arch;
 pub mod dataset;
 pub mod optimization;
+mod test;
 
 use std::fmt;
 

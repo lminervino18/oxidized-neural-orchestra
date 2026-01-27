@@ -7,6 +7,8 @@ pub struct Dataset {
     y_size: usize,
 }
 
+// TODO: implementar iterator para los batches, debería ir haciendo get con el tamaño de cada
+
 impl Dataset {
     pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> Self {
         Self {

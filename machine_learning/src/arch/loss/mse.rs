@@ -3,6 +3,7 @@ use ndarray::{Array2, ArrayView2};
 use super::LossFn;
 
 pub struct Mse;
+
 impl LossFn for Mse {
     fn loss(&self, y_pred: ArrayView2<f32>, y: ArrayView2<f32>) -> f32 {
         (&y_pred - &y).mapv(|x| x.powi(2)).sum() / y_pred.len() as f32

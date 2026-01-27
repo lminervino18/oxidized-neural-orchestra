@@ -9,6 +9,14 @@ pub struct Sigmoid {
 }
 
 impl Sigmoid {
+    pub fn new(dim: usize, amp: f32) -> Self {
+        Self {
+            dim,
+            amp,
+            a_out: None,
+        }
+    }
+
     pub fn f(&self, z: f32) -> f32 {
         self.amp / (1. + f32::consts::E.powf(-z))
     }
