@@ -1,4 +1,4 @@
-use ndarray::{linalg, Array1, Array2, ArrayView1, ArrayView2, ArrayViewMut1, ArrayViewMut2, Axis};
+use ndarray::{linalg, Array2, ArrayView1, ArrayView2, ArrayViewMut1, ArrayViewMut2, Axis};
 
 use crate::arch::activations::ActFn;
 
@@ -18,10 +18,6 @@ pub struct Dense {
 }
 
 impl Dense {
-    pub fn size(&self) -> usize {
-        self.size
-    }
-
     pub fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
         let size = (dim.0 + 1) * dim.1;
         let zeros = Array2::zeros((0, dim.1));
@@ -35,6 +31,10 @@ impl Dense {
             a: zeros.clone(),
             d: zeros,
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
     }
 
     fn view_grad<'a>(
@@ -60,17 +60,17 @@ impl Dense {
         (weights, biases)
     }
 
-    pub fn forward<'a>(&'a mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'a, f32> {
+    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
 
         // TODO: deberíamos liberar la memoria si los xs van a ser más chicos
-        if let Some(additional) = x.nrows().checked_sub(self.z.nrows()) {
-            self.z.reserve_rows(additional);
-            self.a.reserve_rows(additional);
-            self.x.reserve_rows(additional);
+        if let Some(_) = x.nrows().checked_sub(self.z.nrows()) {
+            self.x = Array2::zeros((x.nrows(), self.dim.1));
+            self.a = Array2::zeros((x.nrows(), self.dim.1));
+            self.z = Array2::zeros((x.nrows(), self.dim.1));
         }
 
-        linalg::general_mat_mul(1.0, &x, &w.t(), 0.0, &mut self.z);
+        linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
         self.z += &b;
         self.x = x.to_owned(); // TODO: ver de no allocar
 
@@ -90,7 +90,7 @@ impl Dense {
         params: &[f32],
         grad: &mut [f32],
         d: ArrayView2<f32>,
-    ) -> ArrayView2<f32> {
+    ) -> ArrayView2<'_, f32> {
         let (mut dw, mut db) = self.view_grad(grad);
 
         linalg::general_mat_mul(1.0, &self.x.t(), &d, 0.0, &mut dw);
@@ -100,7 +100,7 @@ impl Dense {
         db.mapv_inplace(|b| b * inv_batch_size);
 
         if let Some(additional) = d.nrows().checked_sub(self.d.nrows()) {
-            self.d.reserve_rows(additional);
+            self.d.reserve_rows(additional).unwrap();
         }
 
         let (w, _) = self.view_params(params);

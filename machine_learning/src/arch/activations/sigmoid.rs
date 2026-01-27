@@ -3,18 +3,13 @@ use std::f32;
 
 #[derive(Debug, Default)]
 pub struct Sigmoid {
-    dim: usize,
     amp: f32,
     a_out: Option<Array2<f32>>,
 }
 
 impl Sigmoid {
-    pub fn new(dim: usize, amp: f32) -> Self {
-        Self {
-            dim,
-            amp,
-            a_out: None,
-        }
+    pub fn new(amp: f32) -> Self {
+        Self { amp, a_out: None }
     }
 
     pub fn f(&self, z: f32) -> f32 {

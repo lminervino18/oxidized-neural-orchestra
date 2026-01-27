@@ -1,14 +1,18 @@
-use crate::arch::loss::LossFn;
+use crate::{arch::loss::LossFn, optimization::Optimizer};
 use ndarray::ArrayView2;
 
 pub trait Model {
-    fn backprop<'a, L, I>(
+    fn size(&self) -> usize;
+
+    fn backprop<'a, L, O, I>(
         &mut self,
         params: &mut [f32],
         grad: &mut [f32],
         loss: &L,
-        batch: (ArrayView2<f32>, ArrayView2<f32>),
+        optimizer: &mut O,
+        batches: I,
     ) where
         L: LossFn,
-        I: IntoIterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>;
+        O: Optimizer,
+        I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>;
 }

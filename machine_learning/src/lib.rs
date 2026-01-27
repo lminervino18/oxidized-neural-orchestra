@@ -2,6 +2,7 @@ pub mod arch;
 pub mod dataset;
 pub mod optimization;
 mod test;
+pub mod training;
 
 use std::fmt;
 

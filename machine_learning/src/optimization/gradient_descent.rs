@@ -1,24 +1,21 @@
 use super::Optimizer;
-use crate::arch::Model;
 
-pub struct GradientDescent<M: Model> {
-    model: M,
+pub struct GradientDescent {
     learning_rate: f32,
 }
 
-impl<M: Model> GradientDescent<M> {
-    pub fn new(model: M, learning_rate: f32) -> Self {
-        Self {
-            model,
-            learning_rate,
-        }
+impl GradientDescent {
+    pub fn new(learning_rate: f32) -> Self {
+        Self { learning_rate }
     }
 }
 
-impl<M: Model> Optimizer for GradientDescent<M> {
-    fn calculate_gradient() {}
+impl Optimizer for GradientDescent {
+    fn update_params(&mut self, params: &mut [f32], grad: &[f32]) {
+        let lr = self.learning_rate;
 
-    fn update_weights() {
-        todo!()
+        for (w, g) in params.iter_mut().zip(grad) {
+            *w -= lr * g;
+        }
     }
 }

@@ -6,8 +6,8 @@ pub enum ActFn {
 use ActFn::*;
 
 impl ActFn {
-    pub fn sigmoid(dim: usize, amp: f32) -> Self {
-        Sigmoid(Sigmoid::new(dim, amp))
+    pub fn sigmoid(amp: f32) -> Self {
+        Sigmoid(Sigmoid::new(amp))
     }
 
     pub fn f(&self, x: f32) -> f32 {

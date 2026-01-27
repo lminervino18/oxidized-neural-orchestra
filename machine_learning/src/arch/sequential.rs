@@ -1,7 +1,8 @@
-use ndarray::{Array2, ArrayView2, ArrayViewMut2};
+use ndarray::ArrayView2;
+
+use crate::optimization::Optimizer;
 
 use super::{layers::Layer, loss::LossFn, Model};
-use crate::dataset::Dataset;
 
 pub struct Sequential {
     layers: Vec<Layer>,
@@ -20,17 +21,15 @@ impl Sequential {
     pub fn forward<'a>(
         &'a mut self,
         mut params: &[f32],
-        x: ArrayView2<'a, f32>,
+        mut x: ArrayView2<'a, f32>,
     ) -> ArrayView2<'a, f32> {
-        let mut output = x;
-
         for l in self.layers.iter_mut() {
             let curr;
             (curr, params) = params.split_at(l.size());
-            output = l.forward(curr, x);
+            x = l.forward(curr, x);
         }
 
-        output
+        x
     }
 
     pub fn backward<L: LossFn>(
@@ -59,28 +58,30 @@ impl Sequential {
 }
 
 impl Model for Sequential {
-    fn backprop<'a, L, I>(
+    fn size(&self) -> usize {
+        self.layers.iter().map(|layer| layer.size()).sum()
+    }
+
+    fn backprop<'a, L, O, I>(
         &mut self,
         params: &mut [f32],
         grad: &mut [f32],
         loss: &L,
-        batch: (ArrayView2<f32>, ArrayView2<f32>),
+        optimizer: &mut O,
+        batches: I,
     ) where
         L: LossFn,
-        I: IntoIterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
+        O: Optimizer,
+        I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
-        let (x, y) = batch;
-        // TODO: cuando esté into iter para dataset usarlo (debería ser como un stream, si no no
-        // tiene sentido)
-        // TODO: intentar evitar owned. NOTE: si usamos la misma memoria para los cómputos de
-        // forward y backward este to_owned pasa a ser algo como un take
-        let y_pred = self.forward(params, x).to_owned();
-        self.backward(params, grad, y_pred.view(), y, loss);
+        for (i, (x, y)) in batches.enumerate() {
+            if i > 0 {
+                optimizer.update_params(params, grad);
+            }
 
-        // mover los parámetros, deberíamos haber construido de antemano las views para manipular?
-        // en ese caso lo que está por debajo podría pasar a recibir arrays también
-        // NOTE: los params no se pueden representar como una sóla matriz, por lo tanto la resta va
-        // a tener que ser iterando las matrices de cada layer: iterar de nuevo y llamar a
-        // apply_grad()
+            // TODO: sacar `to_owned`
+            let y_pred = self.forward(params, x).to_owned();
+            self.backward(params, grad, y_pred.view(), y, loss);
+        }
     }
 }

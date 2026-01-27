@@ -1,40 +1,77 @@
 use ndarray::{ArrayView2, Axis};
+use rand::Rng;
 
 pub struct Dataset {
     data: Vec<f32>,
-    len: usize,
+    rows: usize,
     x_size: usize,
-    y_size: usize,
+    row_size: usize,
 }
-
-// TODO: implementar iterator para los batches, debería ir haciendo get con el tamaño de cada
 
 impl Dataset {
     pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> Self {
+        let row_size = x_size + y_size;
+
         Self {
-            len: data.len(),
+            rows: data.len() / row_size,
             data,
             x_size,
-            y_size,
+            row_size,
         }
     }
 
-    pub fn get(&self, row_offset: usize, n_rows: usize) -> (ArrayView2<f32>, ArrayView2<f32>) {
+    pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
+        let Self {
+            rows,
+            row_size,
+            ref mut data,
+            ..
+        } = *self;
+
+        for i in 0..rows {
+            let j = rng.random_range(i..rows);
+            if i == j {
+                continue;
+            }
+
+            let (i, j) = (i.min(j), i.max(j));
+            let i_data = i * row_size;
+            let j_data = j * row_size;
+
+            let (left, right) = data.split_at_mut(j_data);
+            let row = &mut left[i_data..i_data + row_size];
+            let other = &mut right[..row_size];
+            row.swap_with_slice(other);
+        }
+    }
+
+    pub fn batches<'a>(
+        &'a self,
+        batch_size: usize,
+    ) -> impl Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)> + 'a {
+        (0..self.rows).step_by(batch_size).map(move |start| {
+            let n = (start + batch_size).min(self.rows) - start;
+            self.view_batch(start, n)
+        })
+    }
+
+    fn view_batch<'a>(
+        &'a self,
+        row: usize,
+        n: usize,
+    ) -> (ArrayView2<'a, f32>, ArrayView2<'a, f32>) {
         let &Self {
             x_size,
-            y_size,
+            row_size,
             ref data,
             ..
         } = self;
 
-        let row_size = x_size + y_size;
-        let offset = row_offset * row_size;
-        let raw_batch = &data[offset..offset + row_size * n_rows];
+        let offset = row * row_size;
+        let raw_batch = &data[offset..offset + row_size * n];
 
-        let batch = ArrayView2::from_shape((n_rows, row_size), raw_batch).unwrap();
-        let (x, y) = batch.split_at(Axis(1), x_size);
-
-        (x, y)
+        let batch = ArrayView2::from_shape((n, row_size), raw_batch).unwrap();
+        batch.split_at(Axis(1), x_size)
     }
 }
 
@@ -51,7 +88,7 @@ mod tests {
         let expected_x = ArrayView2::from_shape((2, 2), &[1.0, 2.0, 3.0, 4.0]).unwrap();
         let expected_y = ArrayView2::from_shape((2, 1), &[3.0, 7.0]).unwrap();
 
-        let (x, y) = ds.get(0, 2);
+        let (x, y) = ds.view_batch(0, 2);
 
         assert_eq!(x, expected_x);
         assert_eq!(y, expected_y);
