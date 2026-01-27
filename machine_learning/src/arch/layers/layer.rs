@@ -1,33 +1,41 @@
-use ndarray::Array2;
+use ndarray::{Array2, ArrayView2};
 
-use super::{Dense, Sigmoid};
+use super::Dense;
+use crate::arch::activations::ActFn;
 
 pub enum Layer {
     Dense(Dense),
-    Sigmoid(Sigmoid),
 }
 use Layer::*;
 
 impl Layer {
-    pub fn dense(dim: (usize, usize)) -> Self {
-        Self::Dense(Dense::new(dim))
-    }
-
-    pub fn sigmoid(dim: usize, amp: f32) -> Self {
-        Self::Sigmoid(Sigmoid::new(dim, amp))
-    }
-
-    pub fn forward(&mut self, params: &mut &[f32], x: Array2<f32>) -> Array2<f32> {
+    pub fn size(&self) -> usize {
         match self {
-            Dense(l) => l.forward(params, x),
-            Sigmoid(l) => l.forward(x),
+            Dense(l) => l.size(),
         }
     }
 
-    pub fn backward(&mut self, params: &mut &[f32], d: Array2<f32>) -> Array2<f32> {
+    pub fn dense<A>(dim: (usize, usize), act_fn: ActFn) -> Self
+    where
+        A: Into<Option<ActFn>>,
+    {
+        Self::Dense(Dense::new(dim, act_fn.into()))
+    }
+
+    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<f32> {
         match self {
-            Dense(l) => l.backward(params, d),
-            Sigmoid(l) => l.backward(d),
+            Dense(l) => l.forward(params, x),
+        }
+    }
+
+    pub fn backward(
+        &mut self,
+        params: &[f32],
+        grad: &mut [f32],
+        d: ArrayView2<f32>,
+    ) -> ArrayView2<f32> {
+        match self {
+            Dense(l) => l.backward(params, grad, d),
         }
     }
 }

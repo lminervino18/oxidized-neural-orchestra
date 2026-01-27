@@ -9,20 +9,19 @@ pub struct Sigmoid {
 }
 
 impl Sigmoid {
-    pub fn new(dim: usize, amp: f32) -> Self {
-        Self {
-            dim,
-            amp,
-            ..Default::default()
-        }
-    }
-
-    fn sigmoid(&self, z: f32) -> f32 {
+    pub fn f(&self, z: f32) -> f32 {
         self.amp / (1. + f32::consts::E.powf(-z))
     }
 
+    pub fn df(&self, z: f32) -> f32 {
+        let amp = self.amp;
+        let s = self.f(z);
+
+        (s * (amp - s)) / amp
+    }
+
     pub fn forward(&mut self, z: Array2<f32>) -> Array2<f32> {
-        let a_out = z.mapv_into(|z| self.sigmoid(z));
+        let a_out = z.mapv_into(|z| self.f(z));
 
         // TODO: eventualmente devolver un ArrayView2
         self.a_out = Some(a_out.clone());
