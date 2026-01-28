@@ -1,14 +1,16 @@
-use std::mem;
-
 use ndarray::{linalg, prelude::*};
 
+use super::InplaceReshape;
 use crate::arch::activations::ActFn;
 
+/// Optimizations:
+///   1. Find a way to not copy `x` in each `Dense::forward` call.
+///   2. Find a way to sum up the rows of `d` in `Dense::backward` in parallel to write them to `b`.
 #[derive(Clone)]
 pub struct Dense {
     dim: (usize, usize),
-    size: usize,
     act_fn: Option<ActFn>,
+    size: usize,
 
     // Forward metadata
     x: Array2<f32>,
@@ -16,18 +18,17 @@ pub struct Dense {
     a: Array2<f32>,
 
     // Backward metadata
-    // TODO: hacer que el sequential tenga el delta y lo vaya pasando
     d: Array2<f32>,
 }
 
 impl Dense {
+    // TODO: docstring
     pub fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
-        let size = (dim.0 + 1) * dim.1;
-        let zeros = Array2::zeros((1, dim.1));
+        let zeros = Array2::zeros((1, 1));
 
         Self {
             dim,
-            size,
+            size: (dim.0 + 1) * dim.1,
             act_fn,
             x: zeros.clone(),
             z: zeros.clone(),
@@ -36,52 +37,20 @@ impl Dense {
         }
     }
 
+    /// Returns the size of this layer.
+    ///
+    /// # Returns
+    /// The amount of parameters this layer has.
     pub fn size(&self) -> usize {
         self.size
     }
 
-    fn view_grad<'a>(
-        &self,
-        grad: &'a mut [f32],
-    ) -> (ArrayViewMut2<'a, f32>, ArrayViewMut1<'a, f32>) {
-        let w_size = self.size - self.dim.1;
-
-        let (dw_raw, db_raw) = grad.split_at_mut(w_size);
-
-        let dw = ArrayViewMut2::from_shape(self.dim, dw_raw).unwrap();
-        let db = ArrayViewMut1::from_shape(self.dim.1, db_raw).unwrap();
-
-        (dw, db)
-    }
-
-    fn view_params<'a>(&self, params: &'a [f32]) -> (ArrayView2<'a, f32>, ArrayView1<'a, f32>) {
-        let w_size = self.size - self.dim.1;
-
-        let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
-        let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
-
-        (weights, biases)
-    }
-
-    fn reshape(shape: (usize, usize), arr: Array2<f32>) -> Array2<f32> {
-        let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {
-            // TODO: ver de arreglar esto
-            panic!("wtf, no es 0 el offset");
-        };
-
-        let size = shape.0 * shape.1;
-        if size > v.len() {
-            v.resize(size, 0.0);
-        }
-
-        Array2::from_shape_vec(shape, v).unwrap()
-    }
-
+    // TODO: docstring
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
         let shape = (x.nrows(), self.dim.1);
 
-        self.z = Self::reshape(shape, mem::take(&mut self.z));
+        self.z = self.z.into_reshape(shape);
         linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
         self.z += &b;
 
@@ -91,11 +60,12 @@ impl Dense {
             return self.z.view();
         };
 
-        self.a = Self::reshape(shape, mem::take(&mut self.a));
+        self.a = self.a.into_reshape(shape);
         self.a.zip_mut_with(&self.z, |a, &z| *a = act_fn.f(z));
         self.a.view()
     }
 
+    // TODO: docstring
     pub fn backward(
         &mut self,
         params: &[f32],
@@ -111,9 +81,41 @@ impl Dense {
         db.view_mut().assign(&d.sum_axis(Axis(0)));
 
         let (w, _) = self.view_params(params);
-        self.d = Self::reshape((d.nrows(), w.nrows()), mem::take(&mut self.d));
+        self.d = self.d.into_reshape((d.nrows(), w.nrows()));
         linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.d);
 
         self.d.view_mut()
+    }
+
+    /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
+    ///
+    /// # Arguments
+    /// * `grad` - A gradient slice.
+    ///
+    /// # Returns
+    /// A tuple containing the delta weights and delta biases.
+    fn view_grad<'a>(
+        &self,
+        grad: &'a mut [f32],
+    ) -> (ArrayViewMut2<'a, f32>, ArrayViewMut1<'a, f32>) {
+        let w_size = self.size - self.dim.1;
+        let (dw_raw, db_raw) = grad.split_at_mut(w_size);
+        let dw = ArrayViewMut2::from_shape(self.dim, dw_raw).unwrap();
+        let db = ArrayViewMut1::from_shape(self.dim.1, db_raw).unwrap();
+        (dw, db)
+    }
+
+    /// Gives a view of the raw parameter slice as the weights and biases of this layer.
+    ///
+    /// # Arguments
+    /// * `params` - A slice of parameters.
+    ///
+    /// # Returns
+    /// A tuple containing the weights and biases.
+    fn view_params<'a>(&self, params: &'a [f32]) -> (ArrayView2<'a, f32>, ArrayView1<'a, f32>) {
+        let w_size = self.size - self.dim.1;
+        let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
+        let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
+        (weights, biases)
     }
 }
