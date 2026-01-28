@@ -1,5 +1,10 @@
+use std::{
+    io,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    num::NonZeroUsize,
+    time::Duration,
+};
 
-use std::{io, net::{IpAddr, Ipv4Addr, SocketAddr}, num::NonZeroUsize, time::Duration};
 use machine_learning::MlError;
 use tokio::{io as tokio_io, time::timeout};
 
@@ -7,9 +12,7 @@ use comms::msg::{Command, Msg, Payload};
 use comms::specs::server::OptimizerSpec;
 use comms::specs::worker::{AlgorithmSpec, ModelSpec, TrainingSpec, WorkerSpec};
 
-async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
-    sv_rx: &mut comms::OnoReceiver<R>,
-) {
+async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(sv_rx: &mut comms::OnoReceiver<R>) {
     let recv_res = timeout(Duration::from_millis(50), sv_rx.recv::<Msg>()).await;
 
     match recv_res {
@@ -31,9 +34,7 @@ fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
         num_params: NonZeroUsize::new(num_params).unwrap(),
         model: ModelSpec::Noop,
         training: TrainingSpec {
-            algorithm: AlgorithmSpec::ParameterServer {
-                server_ip: ps_addr,
-            },
+            algorithm: AlgorithmSpec::ParameterServer { server_ip: ps_addr },
             optimizer: OptimizerSpec::GradientDescent { learning_rate: 0.1 },
             offline_steps: 0,
             epochs: NonZeroUsize::new(1).unwrap(),
@@ -53,12 +54,10 @@ async fn worker_rejects_weight_length_change_across_steps() -> io::Result<()> {
     let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(2, 2);
-    sv_tx
-        .send(&Msg::Control(Command::CreateWorker(spec)))
-        .await?;
+    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
     let worker_task = tokio::spawn(async move {
-        let Some(spec) = worker::WorkerAcceptor::handshake(&mut wk_rx).await? else {
+        let Some(spec) = worker::WorkerAcceptor::bootstrap(&mut wk_rx).await? else {
             return Ok(());
         };
 
@@ -99,12 +98,10 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
     let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(1, 2);
-    sv_tx
-        .send(&Msg::Control(Command::CreateWorker(spec)))
-        .await?;
+    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
     let worker_task = tokio::spawn(async move {
-        let Some(spec) = worker::WorkerAcceptor::handshake(&mut wk_rx).await? else {
+        let Some(spec) = worker::WorkerAcceptor::bootstrap(&mut wk_rx).await? else {
             return Ok(());
         };
 
@@ -136,11 +133,9 @@ async fn acceptor_returns_spec_on_create_worker() -> io::Result<()> {
     let (mut wk_rx, _wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(3, 4);
-    sv_tx
-        .send(&Msg::Control(Command::CreateWorker(spec)))
-        .await?;
+    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-    let got = worker::WorkerAcceptor::handshake(&mut wk_rx).await?;
+    let got = worker::WorkerAcceptor::bootstrap(&mut wk_rx).await?;
     assert!(got.is_some());
 
     let got = got.unwrap();
@@ -162,7 +157,7 @@ async fn acceptor_returns_none_on_disconnect_before_bootstrap() -> io::Result<()
 
     sv_tx.send(&Msg::Control(Command::Disconnect)).await?;
 
-    let got = worker::WorkerAcceptor::handshake(&mut wk_rx).await?;
+    let got = worker::WorkerAcceptor::bootstrap(&mut wk_rx).await?;
     assert!(got.is_none());
     Ok(())
 }
@@ -181,39 +176,26 @@ async fn acceptor_ignores_noise_until_create_worker() -> io::Result<()> {
     sv_tx.send(&Msg::Data(Payload::Weights(&mut w))).await?;
 
     let spec = mk_spec(1, 2);
-    sv_tx
-        .send(&Msg::Control(Command::CreateWorker(spec)))
-        .await?;
+    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-    let got = worker::WorkerAcceptor::handshake(&mut wk_rx).await?;
+    let got = worker::WorkerAcceptor::bootstrap(&mut wk_rx).await?;
     assert!(got.is_some());
     Ok(())
 }
 
 #[test]
 fn worker_error_into_io_maps_kinds() {
-    let err = worker::WorkerError::UnexpectedMessage {
-        step: 0,
-        got: "control",
-    };
+    let err = worker::WorkerError::UnexpectedMessage { step: 0, got: "control" };
     let io_err = err.into_io();
     assert_eq!(io_err.kind(), io::ErrorKind::InvalidData);
 
-    let err = worker::WorkerError::WeightsLengthMismatch {
-        step: 0,
-        got: 1,
-        expected: 2,
-    };
+    let err = worker::WorkerError::WeightsLengthMismatch { step: 0, got: 1, expected: 2 };
     let io_err = err.into_io();
     assert_eq!(io_err.kind(), io::ErrorKind::InvalidData);
 
     let err = worker::WorkerError::ComputeFailed {
         step: 0,
-        source: MlError::ShapeMismatch {
-            what: "params",
-            got: 1,
-            expected: 2,
-        },
+        source: MlError::ShapeMismatch { what: "params", got: 1, expected: 2 },
     };
     let io_err = err.into_io();
     assert_eq!(io_err.kind(), io::ErrorKind::InvalidData);

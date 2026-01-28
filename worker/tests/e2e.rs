@@ -19,9 +19,7 @@ fn mk_spec(steps: usize, num_params: usize, offline_steps: usize) -> WorkerSpec 
         num_params: NonZeroUsize::new(num_params).unwrap(),
         model: ModelSpec::Mock,
         training: TrainingSpec {
-            algorithm: AlgorithmSpec::ParameterServer {
-                server_ip: ps_addr,
-            },
+            algorithm: AlgorithmSpec::ParameterServer { server_ip: ps_addr },
             optimizer: OptimizerSpec::GradientDescent { learning_rate: 0.1 },
             offline_steps,
             epochs: NonZeroUsize::new(1).unwrap(),
@@ -44,12 +42,10 @@ async fn run_e2e(offline_steps: usize) -> io::Result<()> {
     let (mut wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let spec = mk_spec(STEPS, PARAMS, offline_steps);
-    sv_tx
-        .send(&Msg::Control(Command::CreateWorker(spec)))
-        .await?;
+    sv_tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
     let worker_task = tokio::spawn(async move {
-        let Some(spec) = worker::WorkerAcceptor::handshake(&mut wk_rx).await? else {
+        let Some(spec) = worker::WorkerAcceptor::bootstrap(&mut wk_rx).await? else {
             return Ok(());
         };
 
