@@ -34,8 +34,8 @@ impl Sequential {
 
     pub fn backward<L: LossFn>(
         &mut self,
-        params: &[f32],
-        grad: &mut [f32],
+        mut params: &[f32],
+        mut grad: &mut [f32],
         y_pred: ArrayView2<f32>,
         y: ArrayView2<f32>,
         loss: &L,
@@ -43,14 +43,11 @@ impl Sequential {
         let d_last = loss.loss_prime(y_pred, y);
         let mut d = d_last.view();
 
-        let mut rem_params = params;
-        let mut rem_grad = grad;
-
         for l in self.layers.iter_mut().rev() {
             let curr_params;
             let curr_grad;
-            (rem_params, curr_params) = rem_params.split_at(l.size());
-            (rem_grad, curr_grad) = rem_grad.split_at_mut(l.size());
+            (params, curr_params) = params.split_at(params.len() - l.size());
+            (grad, curr_grad) = grad.split_at_mut(grad.len() - l.size());
 
             d = l.backward(curr_params, curr_grad, d.view());
         }
@@ -74,14 +71,12 @@ impl Model for Sequential {
         O: Optimizer,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
-        for (i, (x, y)) in batches.enumerate() {
-            if i > 0 {
-                optimizer.update_params(params, grad);
-            }
-
+        for (x, y) in batches {
             // TODO: sacar `to_owned`
+            grad.fill(0.0);
             let y_pred = self.forward(params, x).to_owned();
             self.backward(params, grad, y_pred.view(), y, loss);
+            optimizer.update_params(params, grad);
         }
     }
 }

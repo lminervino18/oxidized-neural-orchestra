@@ -63,20 +63,16 @@ impl Dense {
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
 
-        // TODO: deberíamos liberar la memoria si los xs van a ser más chicos
-        if let Some(_) = x.nrows().checked_sub(self.z.nrows()) {
-            self.x = Array2::zeros((x.nrows(), self.dim.1));
-            self.a = Array2::zeros((x.nrows(), self.dim.1));
-            self.z = Array2::zeros((x.nrows(), self.dim.1));
-        }
+        self.a = Array2::zeros((x.nrows(), self.dim.1));
+        self.z = Array2::zeros((x.nrows(), self.dim.1));
 
         linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
         self.z += &b;
-        self.x = x.to_owned(); // TODO: ver de no allocar
+        self.x = x.to_owned(); // TODO: ver de no alocar
 
         if let Some(act_fn) = &self.act_fn {
             self.a.zip_mut_with(&self.z, |a, &z| {
-                *a = act_fn.df(z);
+                *a = act_fn.f(z);
             });
 
             return self.a.view();
@@ -91,24 +87,23 @@ impl Dense {
         grad: &mut [f32],
         d: ArrayView2<f32>,
     ) -> ArrayView2<'_, f32> {
-        let (mut dw, mut db) = self.view_grad(grad);
+        // TODO: hacer que el d que entra sea mutable
+        let mut d = d.to_owned();
 
-        linalg::general_mat_mul(1.0, &self.x.t(), &d, 0.0, &mut dw);
+        if let Some(act_fn) = &self.act_fn {
+            d.zip_mut_with(&self.z, |d, &z| *d *= act_fn.df(z));
+        }
 
         let inv_batch_size = 1.0 / d.nrows() as f32;
+        let (mut dw, mut db) = self.view_grad(grad);
+
+        linalg::general_mat_mul(inv_batch_size, &self.x.t(), &d, 0.0, &mut dw);
         db.view_mut().assign(&d.sum_axis(Axis(0)));
         db.mapv_inplace(|b| b * inv_batch_size);
 
-        if let Some(additional) = d.nrows().checked_sub(self.d.nrows()) {
-            self.d.reserve_rows(additional).unwrap();
-        }
-
         let (w, _) = self.view_params(params);
+        self.d = Array2::zeros((d.nrows(), self.dim.0));
         linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.d);
-
-        if let Some(act_fn) = &self.act_fn {
-            self.d.zip_mut_with(&self.z, |d, &z| *d *= act_fn.df(z));
-        }
 
         self.d.view()
     }

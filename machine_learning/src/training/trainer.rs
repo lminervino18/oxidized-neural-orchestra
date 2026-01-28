@@ -43,14 +43,8 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> Trainer<M, O, L, R> {
 
 impl<M: Model, O: Optimizer + Send, L: LossFn, R: Rng> Trainer<M, O, L, R> {
     pub fn train(&mut self, params: &mut [f32]) -> &[f32] {
-        self.grad.fill(0.0);
-
         for i in 0..self.offline_iters + 1 {
             println!("epoch {i}");
-            if i > 0 {
-                // TODO: paralelizar con rayon.
-                self.optimizer.update_params(params, &self.grad);
-            }
 
             self.dataset.shuffle(&mut self.rng);
             let batches = self.dataset.batches(self.batch_size);
