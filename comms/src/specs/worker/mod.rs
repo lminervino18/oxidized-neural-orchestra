@@ -7,7 +7,7 @@ pub mod model;
 pub mod training;
 
 pub use algorithm::AlgorithmSpec;
-pub use model::{ActFuncSpec, LayerSpec, ModelSpec};
+pub use model::{ActFnSpec, LayerSpec, ModelSpec};
 pub use training::TrainingSpec;
 
 /// Wire-level bootstrap specification for a worker instance.

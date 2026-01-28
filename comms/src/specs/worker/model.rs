@@ -22,12 +22,12 @@ pub enum ModelSpec {
 pub struct LayerSpec {
     pub input: NonZeroUsize,
     pub output: NonZeroUsize,
-    pub act_func: ActFuncSpec,
+    pub act_fn: ActFnSpec,
 }
 
 /// Activation function specification.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ActFuncSpec {
+pub enum ActFnSpec {
     Sigmoid { amp: f32 },
 }
