@@ -3,7 +3,8 @@ use std::{env, error::Error};
 use log::info;
 use tokio::{net::TcpStream, signal};
 
-use worker::{AlgorithmConnector, WorkerAcceptor, WorkerBuilder, WorkerError};
+use comms::specs::worker::AlgorithmSpec;
+use worker::{WorkerAcceptor, WorkerBuilder, WorkerError};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: &str = "8765";
@@ -30,24 +31,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
 
-    info!(
-        "worker bootstrapped: worker_id={}, steps={}, num_params={}, model={:?}, offline_steps={}, epochs={}",
-        spec.worker_id,
-        spec.steps.get(),
-        spec.num_params.get(),
-        spec.model,
-        spec.training.offline_steps,
-        spec.training.epochs.get(),
-    );
+    info!("worker bootstrapped: {spec:#?}");
 
-    info!("connecting to algorithm data plane: {:?}", spec.training.algorithm);
-    let (algo_rx, algo_tx) = AlgorithmConnector::connect(&spec.training.algorithm).await?;
-    info!("connected to algorithm data plane");
+    let ps_addr = match spec.training.algorithm {
+        AlgorithmSpec::ParameterServer { server_ip } => server_ip,
+    };
+
+    
+    info!("connecting to parameter server at {ps_addr}");
+    let ps_stream = TcpStream::connect(ps_addr).await?;
+    let (ps_rx, ps_tx) = ps_stream.into_split();
+    let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
 
     let worker = WorkerBuilder::build(&spec);
 
     tokio::select! {
-        ret = worker.run(algo_rx, algo_tx) => {
+        ret = worker.run(ps_rx, ps_tx) => {
             ret.map_err(WorkerError::into_io)?;
             info!("worker finished");
         },
