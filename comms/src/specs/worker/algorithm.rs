@@ -8,7 +8,5 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmSpec {
-    ParameterServer { server_ips: Vec<SocketAddr> },
-    AllReduce { peers: Vec<SocketAddr> },
-    StrategySwitch,
+    ParameterServer { server_ip: SocketAddr },
 }

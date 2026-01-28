@@ -32,7 +32,7 @@ fn mk_spec(steps: usize, num_params: usize) -> WorkerSpec {
         model: ModelSpec::Noop,
         training: TrainingSpec {
             algorithm: AlgorithmSpec::ParameterServer {
-                server_ips: vec![ps_addr],
+                server_ip: ps_addr,
             },
             optimizer: OptimizerSpec::GradientDescent { learning_rate: 0.1 },
             offline_steps: 0,
