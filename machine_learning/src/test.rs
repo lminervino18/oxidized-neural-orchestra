@@ -1,7 +1,6 @@
 #![cfg(test)]
 
 use ndarray::ArrayView2;
-use rand::Rng;
 
 use crate::{
     arch::{activations::ActFn, layers::Layer, loss::Mse, Model, Sequential},
@@ -22,18 +21,15 @@ fn test_ml_and3_gate_convergence() {
     ];
 
     let dataset = Dataset::new(and3.into(), 2, 1);
-    let mut rng = rand::rng();
-
     let model = Sequential::new([Layer::dense((2, 1), ActFn::sigmoid(1.))]);
-    let mut params: Vec<f32> = vec![0.1; model.size()];
-    let optimizer = GradientDescent::new(0.01);
-    let mut trainer = Trainer::new(model, optimizer, dataset, 1000, 4, Mse, rng);
+    let mut params: Vec<f32> = vec![0.; model.size()];
+    let optimizer = GradientDescent::new(2.);
+    let mut trainer = Trainer::new(model, optimizer, dataset, 2000, 4, Mse, rand::rng());
     trainer.train(&mut params);
 
     // 2
 
     let mut model = Sequential::new([Layer::dense((2, 1), ActFn::sigmoid(1.))]);
-
     let data = ArrayView2::from_shape((4, 3), &and3).unwrap();
     let (x, y) = data.split_at(ndarray::Axis(1), 2);
     let y_pred = model.forward(&params, x);

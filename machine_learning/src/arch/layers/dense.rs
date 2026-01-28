@@ -63,18 +63,11 @@ impl Dense {
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
 
-        self.a = Array2::zeros((x.nrows(), self.dim.1));
-        self.z = Array2::zeros((x.nrows(), self.dim.1));
+        self.x = x.to_owned();
+        self.z = x.dot(&w) + &b;
 
-        linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
-        self.z += &b;
-        self.x = x.to_owned(); // TODO: ver de no alocar
-
-        if let Some(act_fn) = &self.act_fn {
-            self.a.zip_mut_with(&self.z, |a, &z| {
-                *a = act_fn.f(z);
-            });
-
+        if let Some(ref act_fn) = self.act_fn {
+            self.a = self.z.mapv(|z| act_fn.f(z));
             return self.a.view();
         }
 
@@ -91,20 +84,18 @@ impl Dense {
         let mut d = d.to_owned();
 
         if let Some(act_fn) = &self.act_fn {
-            d.zip_mut_with(&self.z, |d, &z| *d *= act_fn.df(z));
+            d *= &self.z.mapv(|z| act_fn.df(z));
         }
 
-        let inv_batch_size = 1.0 / d.nrows() as f32;
         let (mut dw, mut db) = self.view_grad(grad);
+        let inv_batch_size = 1.0 / d.nrows() as f32;
 
         linalg::general_mat_mul(inv_batch_size, &self.x.t(), &d, 0.0, &mut dw);
         db.view_mut().assign(&d.sum_axis(Axis(0)));
         db.mapv_inplace(|b| b * inv_batch_size);
 
         let (w, _) = self.view_params(params);
-        self.d = Array2::zeros((d.nrows(), self.dim.0));
-        linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.d);
-
+        self.d = d.dot(&w.t());
         self.d.view()
     }
 }
