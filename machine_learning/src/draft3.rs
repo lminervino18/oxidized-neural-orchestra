@@ -1,5 +1,5 @@
 use super::{neural_net::Mlp, optimizer::Optimizer};
-use crate::feedforward::Feedforward;
+use crate::ff::Feedforward;
 use ndarray::{Array1, Array2, ArrayView1};
 
 pub struct Sgd {

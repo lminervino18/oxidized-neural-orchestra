@@ -4,12 +4,13 @@ use ndarray::Array1;
 pub trait Optimizer {
     type ModelT: Model;
 
+    fn optimize(n_iters: usize, weights: &mut [f32], dataset: &Dataset);
     // fn train(model: Self::ModelT, dataset: &Dataset);
-    fn optimize(
+    /* fn optimize(
         &self,
         model: &mut Self::ModelT,
         x_train: &[Array1<f32>],
         y_train: &[Array1<f32>],
         n_iters: usize, // se podría generalizar la condición de corte
-    );
+    ); */
 }
