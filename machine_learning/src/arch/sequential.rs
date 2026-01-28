@@ -25,9 +25,8 @@ impl Sequential {
         mut x: ArrayView2<'a, f32>,
     ) -> ArrayView2<'a, f32> {
         for l in self.layers.iter_mut() {
-            let curr;
-            (curr, params) = params.split_at(l.size());
-            x = l.forward(curr, x);
+            let (curr, rest) = params.split_at(l.size());
+            (x, params) = (l.forward(curr, x), rest);
         }
 
         x
@@ -45,12 +44,9 @@ impl Sequential {
         let mut d = d_last.view_mut();
 
         for l in self.layers.iter_mut().rev() {
-            let curr_params;
-            let curr_grad;
-            (params, curr_params) = params.split_at(params.len() - l.size());
-            (grad, curr_grad) = grad.split_at_mut(grad.len() - l.size());
-
-            d = l.backward(curr_params, curr_grad, d.view_mut());
+            let (ps_rest, ps_curr) = params.split_at(params.len() - l.size());
+            let (gs_rest, gs_curr) = grad.split_at_mut(grad.len() - l.size());
+            (d, params, grad) = (l.backward(ps_curr, gs_curr, d.view_mut()), ps_rest, gs_rest);
         }
     }
 }

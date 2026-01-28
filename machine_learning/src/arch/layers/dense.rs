@@ -64,16 +64,14 @@ impl Dense {
     }
 
     fn reshape(shape: (usize, usize), arr: Array2<f32>) -> Array2<f32> {
-        let size = shape.0 * shape.1;
-
         let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {
             // TODO: ver de arreglar esto
             panic!("wtf, no es 0 el offset");
         };
 
-        if let Some(additional) = size.checked_sub(v.len()) {
-            v.reserve(additional);
-            unsafe { v.set_len(size) };
+        let size = shape.0 * shape.1;
+        if size > v.len() {
+            v.resize(size, 0.0);
         }
 
         Array2::from_shape_vec(shape, v).unwrap()
@@ -81,11 +79,9 @@ impl Dense {
 
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
-
         let shape = (x.nrows(), self.dim.1);
-        self.z = Self::reshape(shape, mem::take(&mut self.z));
-        self.a = Self::reshape(shape, mem::take(&mut self.a));
 
+        self.z = Self::reshape(shape, mem::take(&mut self.z));
         linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
         self.z += &b;
 
@@ -95,6 +91,7 @@ impl Dense {
             return self.z.view();
         };
 
+        self.a = Self::reshape(shape, mem::take(&mut self.a));
         self.a.zip_mut_with(&self.z, |a, &z| *a = act_fn.f(z));
         self.a.view()
     }
