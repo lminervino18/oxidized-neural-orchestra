@@ -5,37 +5,45 @@ use comms::{
     OnoReceiver, OnoSender,
 };
 use log::{debug, error, info, warn};
-use machine_learning::TrainStrategy;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{config::WorkerConfig, error::WorkerError};
+use crate::{config::WorkerConfig, error::WorkerError, optimizer::Optimizer};
 
 /// Infrastructure worker runtime.
-pub struct Worker<S: TrainStrategy> {
+pub struct Worker<O: Optimizer> {
     worker_id: usize,
     cfg: WorkerConfig,
-    strategy: S,
+    optimizer: O,
+    offline_steps: usize,
     num_params: NonZeroUsize,
     grads_buf: Vec<f32>,
 }
 
-impl<S: TrainStrategy> Worker<S> {
+impl<O: Optimizer> Worker<O> {
     /// Creates a new `Worker`.
     ///
     /// # Args
     /// * `worker_id` - Worker identifier used for observability.
     /// * `cfg` - Immutable execution bounds.
     /// * `num_params` - Expected parameter count for `weights` and `grads`.
-    /// * `strategy` - Training strategy used to compute gradients.
+    /// * `optimizer` - Worker-local optimizer instance.
+    /// * `offline_steps` - Local update iterations per received snapshot.
     ///
     /// # Returns
     /// A new `Worker` instance.
-    pub fn new(worker_id: usize, cfg: WorkerConfig, num_params: NonZeroUsize, strategy: S) -> Self {
+    pub fn new(
+        worker_id: usize,
+        cfg: WorkerConfig,
+        num_params: NonZeroUsize,
+        optimizer: O,
+        offline_steps: usize,
+    ) -> Self {
         let n = num_params.get();
         Self {
             worker_id,
             cfg,
-            strategy,
+            optimizer,
+            offline_steps,
             num_params,
             grads_buf: vec![0.0; n],
         }
@@ -51,7 +59,7 @@ impl<S: TrainStrategy> Worker<S> {
     /// Returns `Ok(())` if all steps complete successfully.
     ///
     /// # Errors
-    /// Returns `WorkerError` on I/O failures, protocol violations, or ML strategy failures.
+    /// Returns `WorkerError` on I/O failures, protocol violations, or ML failures.
     pub async fn run<R, W>(
         mut self,
         mut rx: OnoReceiver<R>,
@@ -70,7 +78,7 @@ impl<S: TrainStrategy> Worker<S> {
             debug!(worker_id = worker_id, step = step; "waiting for weights");
             let msg: Msg = rx.recv().await?;
 
-            let weights = match msg {
+            let weights: &mut [f32] = match msg {
                 Msg::Data(Payload::Weights(w)) => w,
                 other => {
                     let got = msg_kind(&other);
@@ -100,11 +108,36 @@ impl<S: TrainStrategy> Worker<S> {
             self.grads_buf.fill(0.0);
 
             debug!(worker_id = worker_id, step = step; "computing gradients");
-            let res =
-                tokio::task::block_in_place(|| self.strategy.step(weights, &mut self.grads_buf));
-            if let Err(e) = res {
-                warn!(worker_id = worker_id, step = step; "train strategy error: {e}");
-                return Err(WorkerError::TrainFailed { step, source: e });
+            let grad_res =
+                tokio::task::block_in_place(|| self.optimizer.gradient(weights, &mut self.grads_buf));
+
+            if let Err(e) = grad_res {
+                warn!(worker_id = worker_id, step = step; "optimizer error: {e}");
+                return Err(WorkerError::ComputeFailed { step, source: e });
+            }
+
+            for _ in 0..self.offline_steps {
+                let upd_res = tokio::task::block_in_place(|| {
+                    self.optimizer
+                        .update_weights(weights, &self.grads_buf)
+                });
+
+                if let Err(e) = upd_res {
+                    warn!(worker_id = worker_id, step = step; "optimizer error: {e}");
+                    return Err(WorkerError::ComputeFailed { step, source: e });
+                }
+
+                self.grads_buf.fill(0.0);
+
+                let grad_res = tokio::task::block_in_place(|| {
+                    self.optimizer
+                        .gradient(weights, &mut self.grads_buf)
+                });
+
+                if let Err(e) = grad_res {
+                    warn!(worker_id = worker_id, step = step; "optimizer error: {e}");
+                    return Err(WorkerError::ComputeFailed { step, source: e });
+                }
             }
 
             debug!(worker_id = worker_id, step = step; "sending gradient");
