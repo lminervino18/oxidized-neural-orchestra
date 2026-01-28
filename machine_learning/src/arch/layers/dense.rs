@@ -1,6 +1,6 @@
 use std::mem;
 
-use ndarray::{linalg, Array2, ArrayView1, ArrayView2, ArrayViewMut1, ArrayViewMut2, Axis};
+use ndarray::{linalg, prelude::*};
 
 use crate::arch::activations::ActFn;
 
@@ -103,10 +103,8 @@ impl Dense {
         &mut self,
         params: &[f32],
         grad: &mut [f32],
-        d: ArrayView2<f32>,
-    ) -> ArrayView2<'_, f32> {
-        let mut d = d.to_owned();
-
+        mut d: ArrayViewMut2<f32>,
+    ) -> ArrayViewMut2<'_, f32> {
         if let Some(act_fn) = &self.act_fn {
             d.zip_mut_with(&self.z, |d, &z| *d *= act_fn.df(z));
         }
@@ -116,7 +114,9 @@ impl Dense {
         db.view_mut().assign(&d.sum_axis(Axis(0)));
 
         let (w, _) = self.view_params(params);
-        self.d = d.dot(&w.t());
-        self.d.view()
+        self.d = Self::reshape((d.nrows(), w.nrows()), mem::take(&mut self.d));
+        linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.d);
+
+        self.d.view_mut()
     }
 }

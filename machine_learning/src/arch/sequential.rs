@@ -41,8 +41,8 @@ impl Sequential {
         y: ArrayView2<f32>,
         loss: &L,
     ) {
-        let d_last = loss.loss_prime(y_pred, y);
-        let mut d = d_last.view();
+        let mut d_last = loss.loss_prime(y_pred, y);
+        let mut d = d_last.view_mut();
 
         for l in self.layers.iter_mut().rev() {
             let curr_params;
@@ -50,7 +50,7 @@ impl Sequential {
             (params, curr_params) = params.split_at(params.len() - l.size());
             (grad, curr_grad) = grad.split_at_mut(grad.len() - l.size());
 
-            d = l.backward(curr_params, curr_grad, d.view());
+            d = l.backward(curr_params, curr_grad, d.view_mut());
         }
     }
 }

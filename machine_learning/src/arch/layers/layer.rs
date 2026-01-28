@@ -1,4 +1,4 @@
-use ndarray::ArrayView2;
+use ndarray::prelude::*;
 
 use super::Dense;
 use crate::arch::activations::ActFn;
@@ -31,8 +31,8 @@ where {
         &'a mut self,
         params: &[f32],
         grad: &mut [f32],
-        d: ArrayView2<f32>,
-    ) -> ArrayView2<'a, f32> {
+        d: ArrayViewMut2<f32>,
+    ) -> ArrayViewMut2<'a, f32> {
         match self {
             Dense(l) => l.backward(params, grad, d),
         }
