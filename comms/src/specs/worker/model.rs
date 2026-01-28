@@ -19,10 +19,13 @@ pub enum ModelSpec {
 
 /// Feed-forward layer specification.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct LayerSpec {
-    pub input: NonZeroUsize,
-    pub output: NonZeroUsize,
-    pub act_fn: ActFnSpec,
+#[serde(rename_all = "snake_case")]
+pub enum LayerSpec {
+    Dense {
+        input: NonZeroUsize,
+        output: NonZeroUsize,
+        act_fn: Option<ActFnSpec>,
+    },
 }
 
 /// Activation function specification.
