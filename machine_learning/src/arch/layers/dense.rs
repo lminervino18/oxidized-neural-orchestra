@@ -1,3 +1,5 @@
+use std::mem;
+
 use ndarray::{linalg, Array2, ArrayView1, ArrayView2, ArrayViewMut1, ArrayViewMut2, Axis};
 
 use crate::arch::activations::ActFn;
@@ -21,7 +23,7 @@ pub struct Dense {
 impl Dense {
     pub fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
         let size = (dim.0 + 1) * dim.1;
-        let zeros = Array2::zeros((0, dim.1));
+        let zeros = Array2::zeros((1, dim.1));
 
         Self {
             dim,
@@ -61,18 +63,40 @@ impl Dense {
         (weights, biases)
     }
 
+    fn reshape(shape: (usize, usize), arr: Array2<f32>) -> Array2<f32> {
+        let size = shape.0 * shape.1;
+
+        let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {
+            // TODO: ver de arreglar esto
+            panic!("wtf, no es 0 el offset");
+        };
+
+        if let Some(additional) = size.checked_sub(v.len()) {
+            v.reserve(additional);
+            unsafe { v.set_len(size) };
+        }
+
+        Array2::from_shape_vec(shape, v).unwrap()
+    }
+
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
 
+        let shape = (x.nrows(), self.dim.1);
+        self.z = Self::reshape(shape, mem::take(&mut self.z));
+        self.a = Self::reshape(shape, mem::take(&mut self.a));
+
+        linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
+        self.z += &b;
+
         self.x = x.to_owned();
-        self.z = x.dot(&w) + b;
 
-        if let Some(ref act_fn) = self.act_fn {
-            self.a = self.z.mapv(|z| act_fn.f(z));
-            return self.a.view();
-        }
+        let Some(ref act_fn) = self.act_fn else {
+            return self.z.view();
+        };
 
-        self.z.view()
+        self.a.zip_mut_with(&self.z, |a, &z| *a = act_fn.f(z));
+        self.a.view()
     }
 
     pub fn backward(
@@ -81,15 +105,13 @@ impl Dense {
         grad: &mut [f32],
         d: ArrayView2<f32>,
     ) -> ArrayView2<'_, f32> {
-        // TODO: hacer que el d que entra sea mutable
         let mut d = d.to_owned();
 
         if let Some(act_fn) = &self.act_fn {
-            d *= &self.z.mapv(|z| act_fn.df(z));
+            d.zip_mut_with(&self.z, |d, &z| *d *= act_fn.df(z));
         }
 
         let (mut dw, mut db) = self.view_grad(grad);
-
         linalg::general_mat_mul(1.0, &self.x.t(), &d, 0.0, &mut dw);
         db.view_mut().assign(&d.sum_axis(Axis(0)));
 
