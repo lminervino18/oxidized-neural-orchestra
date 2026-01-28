@@ -4,6 +4,7 @@ use crate::optimization::Optimizer;
 
 use super::{layers::Layer, loss::LossFn, Model};
 
+#[derive(Clone)]
 pub struct Sequential {
     layers: Vec<Layer>,
 }
@@ -75,6 +76,10 @@ impl Model for Sequential {
             // TODO: sacar `to_owned`
             grad.fill(0.0);
             let y_pred = self.forward(params, x).to_owned();
+
+            let err = loss.loss(y_pred.view(), y);
+            println!("err: {}", err);
+
             self.backward(params, grad, y_pred.view(), y, loss);
             optimizer.update_params(params, grad);
         }

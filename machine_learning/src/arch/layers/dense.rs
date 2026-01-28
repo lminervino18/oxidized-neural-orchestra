@@ -2,6 +2,7 @@ use ndarray::{linalg, Array2, ArrayView1, ArrayView2, ArrayViewMut1, ArrayViewMu
 
 use crate::arch::activations::ActFn;
 
+#[derive(Clone)]
 pub struct Dense {
     dim: (usize, usize),
     size: usize,
@@ -64,7 +65,7 @@ impl Dense {
         let (w, b) = self.view_params(params);
 
         self.x = x.to_owned();
-        self.z = x.dot(&w) + &b;
+        self.z = x.dot(&w) + b;
 
         if let Some(ref act_fn) = self.act_fn {
             self.a = self.z.mapv(|z| act_fn.f(z));
@@ -88,11 +89,9 @@ impl Dense {
         }
 
         let (mut dw, mut db) = self.view_grad(grad);
-        let inv_batch_size = 1.0 / d.nrows() as f32;
 
-        linalg::general_mat_mul(inv_batch_size, &self.x.t(), &d, 0.0, &mut dw);
+        linalg::general_mat_mul(1.0, &self.x.t(), &d, 0.0, &mut dw);
         db.view_mut().assign(&d.sum_axis(Axis(0)));
-        db.mapv_inplace(|b| b * inv_batch_size);
 
         let (w, _) = self.view_params(params);
         self.d = d.dot(&w.t());

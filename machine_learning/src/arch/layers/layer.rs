@@ -3,6 +3,7 @@ use ndarray::ArrayView2;
 use super::Dense;
 use crate::arch::activations::ActFn;
 
+#[derive(Clone)]
 pub enum Layer {
     Dense(Dense),
 }
