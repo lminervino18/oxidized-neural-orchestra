@@ -6,6 +6,8 @@ use crate::arch::activations::ActFn;
 /// Optimizations:
 ///   1. Find a way to not copy `x` in each `Dense::forward` call.
 ///   2. Find a way to sum up the rows of `d` in `Dense::backward` in parallel to write them to `b`.
+///   3. Maybe make the a = f(z) computation parallel.
+///   4. Maybe make the d *= df(z) computation parallel.
 #[derive(Clone)]
 pub struct Dense {
     dim: (usize, usize),
