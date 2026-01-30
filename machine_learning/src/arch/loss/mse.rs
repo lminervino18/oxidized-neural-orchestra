@@ -2,10 +2,12 @@ use ndarray::{Array2, ArrayView2};
 
 use super::LossFn;
 
+/// Mean squared error loss function.
 #[derive(Default)]
 pub struct Mse;
 
 impl Mse {
+    /// Returns a new `Mse`.
     pub fn new() -> Self {
         Self
     }
