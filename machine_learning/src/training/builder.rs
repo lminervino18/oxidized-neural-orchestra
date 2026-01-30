@@ -1,4 +1,4 @@
-use super::{Trainer, Unnamed};
+use super::{ModelTrainer, Trainer};
 use crate::{
     arch::{
         activations::ActFn,
@@ -14,14 +14,20 @@ use comms::specs::machine_learning::{
 };
 use rand::{rngs::StdRng, SeedableRng};
 
+/// Builds `Trainer`s given a specification.
 #[derive(Default)]
 pub struct TrainerBuilder;
 
 impl TrainerBuilder {
+    /// Creates a new `TrainerBuilder`.
     pub fn new() -> Self {
         Self
     }
 
+    /// Builds a new `Trainer` following a spec.
+    ///
+    /// # Arguments
+    /// * `spec` - The specification for the trainer.
     pub fn build(&self, spec: &TrainerSpec) -> Box<dyn Trainer> {
         self.resolve_model(spec)
     }
@@ -103,10 +109,9 @@ impl TrainerBuilder {
         let offline_iters = spec.offline_epochs;
         let batch_size = spec.batch_size;
         let rng = self.generate_rng(spec.seed);
-        // pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> Self {
-        let dataset = Dataset::new(vec![], 0, 0);
+        let dataset = Dataset::new(vec![], 0, 0); // TODO
 
-        let trainer = Unnamed::new(
+        let trainer = ModelTrainer::new(
             model,
             optimizer,
             dataset,
