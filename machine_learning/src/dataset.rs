@@ -1,6 +1,8 @@
 use ndarray::{ArrayView2, Axis};
 use rand::Rng;
 
+/// A container for the *raw* dataset and its meta data. The raw data is expected to be structured
+/// as rows, each with an x and it's expected output y.
 pub struct Dataset {
     data: Vec<f32>,
     rows: usize,
@@ -9,6 +11,12 @@ pub struct Dataset {
 }
 
 impl Dataset {
+    /// Creates a new `Dataset`.
+    ///
+    /// # Arguments
+    /// * `data` - A vector containing the raw data.
+    /// * `x_size` - The size of x in each row.
+    /// * `y_size` - The size of y in each row.
     pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> Self {
         let row_size = x_size + y_size;
 
@@ -20,6 +28,7 @@ impl Dataset {
         }
     }
 
+    /// Shuffles the rows in the dataset using the passed random number generator `rng`.
     pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
         let Self {
             rows,
@@ -45,6 +54,11 @@ impl Dataset {
         }
     }
 
+    /// Returns an `Iterator` of batches over *all* the data. Each tuple contains
+    /// a batch of *x*s and their *y*s expected outputs.
+    ///
+    /// # Arguments
+    /// * `batch_size`: the size of the batches. The last batch may be smaller than `batch_size`.
     pub fn batches<'a>(
         &'a self,
         batch_size: usize,
