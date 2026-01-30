@@ -24,8 +24,7 @@ pub struct Dense {
 }
 
 impl Dense {
-    // TODO: docstring
-    pub fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
+    pub(super) fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
         let zeros = Array2::zeros((1, 1));
 
         Self {
@@ -39,16 +38,11 @@ impl Dense {
         }
     }
 
-    /// Returns the size of this layer.
-    ///
-    /// # Returns
-    /// The amount of parameters this layer has.
-    pub fn size(&self) -> usize {
+    pub(super) fn size(&self) -> usize {
         self.size
     }
 
-    // TODO: docstring
-    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
+    pub(super) fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
         let shape = (x.nrows(), self.dim.1);
 
@@ -67,8 +61,7 @@ impl Dense {
         self.a.view()
     }
 
-    // TODO: docstring
-    pub fn backward(
+    pub(super) fn backward(
         &mut self,
         params: &[f32],
         grad: &mut [f32],
@@ -89,6 +82,7 @@ impl Dense {
         self.d.view_mut()
     }
 
+    // estos docstrings los dejo pero mepa q están de más porq son priv
     /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
     ///
     /// # Arguments
