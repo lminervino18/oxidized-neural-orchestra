@@ -2,7 +2,7 @@ use crate::{arch::loss::LossFn, optimization::Optimizer};
 use ndarray::ArrayView2;
 
 pub trait Model {
-    // esto puede ser distinto para cada modelo concreto...
+    /// Returns the amount of parameters in the model.
     fn size(&self) -> usize;
 
     /// Computes the gradient of the loss function with respect to the parameters of the model over
@@ -13,8 +13,7 @@ pub trait Model {
     /// * `params` - The model's parameters.
     /// * `grad` - A buffer for writting the computed gradient on each batch pass.
     /// * `loss` - The loss function.
-    /// * `optimizer` - The optimizer that dictates how to update the weights on each gradient
-    /// calculation.
+    /// * `optimizer` - The optimizer that dictates how to update the weights on each gradient calculation.
     /// * `batches` - The batches of data.
     fn backprop<'a, L, O, I>(
         &mut self,
