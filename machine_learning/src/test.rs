@@ -11,7 +11,7 @@ use crate::{
     },
     dataset::Dataset,
     optimization::GradientDescent,
-    training::Trainer,
+    training::Unnamed,
 };
 use rand::Rng;
 
@@ -33,7 +33,7 @@ fn test_ml_and2_gate_convergence() {
     ]);
     let mut params: Vec<f32> = vec![0.; model.size()];
     let optimizer = GradientDescent::new(10.);
-    let mut trainer = Trainer::new(model, optimizer, dataset, 10000, 4, Mse, rand::rng());
+    let mut trainer = Unnamed::new(model, optimizer, dataset, 10000, 4, Mse, rand::rng());
     trainer.train(&mut params);
 
     // 2
@@ -79,7 +79,7 @@ fn test_ml_and3_gate_convergence() {
     ]);
     let mut params: Vec<f32> = vec![0.; model.size()];
     let optimizer = GradientDescent::new(1.);
-    let mut trainer = Trainer::new(model, optimizer, dataset, 10000, 8, Mse, rand::rng());
+    let mut trainer = Unnamed::new(model, optimizer, dataset, 10000, 8, Mse, rand::rng());
     trainer.train(&mut params);
 
     // 2
@@ -124,7 +124,7 @@ fn test_ml_xor2_gate_convergence() {
         .map(|_| (rng.random::<f32>() - 0.5) * 2.)
         .collect();
     let optimizer = GradientDescent::new(1.0);
-    let mut trainer = Trainer::new(model, optimizer, dataset, 5000, 4, Mse, rand::rng());
+    let mut trainer = Unnamed::new(model, optimizer, dataset, 5000, 4, Mse, rand::rng());
     trainer.train(&mut params);
 
     // 2
@@ -189,7 +189,7 @@ fn test_ml_xor4_gate_convergence() {
     let iters = 5000;
     let batch_size = 16;
     let optimizer = GradientDescent::new(learning_rate);
-    let mut trainer = Trainer::new(
+    let mut trainer = Unnamed::new(
         model.clone(),
         optimizer,
         dataset,

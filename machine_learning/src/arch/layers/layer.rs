@@ -10,7 +10,7 @@ pub enum Layer {
 use Layer::*;
 
 impl Layer {
-    pub fn dense(dim: (usize, usize), act_fn: ActFn) -> Self {
+    pub fn dense<A: Into<Option<ActFn>>>(dim: (usize, usize), act_fn: A) -> Self {
         Self::Dense(Dense::new(dim, act_fn.into()))
     }
 

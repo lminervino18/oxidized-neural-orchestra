@@ -2,7 +2,14 @@ use ndarray::{Array2, ArrayView2};
 
 use super::LossFn;
 
+#[derive(Default)]
 pub struct Mse;
+
+impl Mse {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl LossFn for Mse {
     fn loss(&self, y_pred: ArrayView2<f32>, y: ArrayView2<f32>) -> f32 {
