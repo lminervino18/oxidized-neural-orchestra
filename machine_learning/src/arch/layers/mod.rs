@@ -9,11 +9,11 @@ use std::mem;
 use ndarray::Array2;
 
 trait InplaceReshape {
-    fn into_reshape(&mut self, shape: (usize, usize)) -> Self;
+    fn reshape_inplace(&mut self, shape: (usize, usize)) -> Self;
 }
 
 impl<T: Clone + Default> InplaceReshape for Array2<T> {
-    fn into_reshape(&mut self, shape: (usize, usize)) -> Self {
+    fn reshape_inplace(&mut self, shape: (usize, usize)) -> Self {
         let arr = mem::take(self);
 
         let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {

@@ -52,7 +52,7 @@ impl Dense {
         let (w, b) = self.view_params(params);
         let shape = (x.nrows(), self.dim.1);
 
-        self.z = self.z.into_reshape(shape);
+        self.z = self.z.reshape_inplace(shape);
         linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
         self.z += &b;
 
@@ -62,7 +62,7 @@ impl Dense {
             return self.z.view();
         };
 
-        self.a = self.a.into_reshape(shape);
+        self.a = self.a.reshape_inplace(shape);
         self.a.zip_mut_with(&self.z, |a, &z| *a = act_fn.f(z));
         self.a.view()
     }
@@ -83,7 +83,7 @@ impl Dense {
         db.view_mut().assign(&d.sum_axis(Axis(0)));
 
         let (w, _) = self.view_params(params);
-        self.d = self.d.into_reshape((d.nrows(), w.nrows()));
+        self.d = self.d.reshape_inplace((d.nrows(), w.nrows()));
         linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.d);
 
         self.d.view_mut()
