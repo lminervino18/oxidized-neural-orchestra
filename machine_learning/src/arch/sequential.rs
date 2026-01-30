@@ -4,12 +4,18 @@ use crate::optimization::Optimizer;
 
 use super::{layers::Layer, loss::LossFn, Model};
 
+/// A sequential model: information flows forward when computing an output and backward when
+/// computing the *deltas* of its layers.
 #[derive(Clone)]
 pub struct Sequential {
     layers: Vec<Layer>,
 }
 
 impl Sequential {
+    /// Returns a new `Sequential`.
+    ///
+    /// # Arguments
+    /// * `layers` - The layers the sequential is composed of.
     pub fn new<I>(layers: I) -> Self
     where
         I: IntoIterator<Item = Layer>,
@@ -19,6 +25,14 @@ impl Sequential {
         }
     }
 
+    // este método lo dejo público para poder testear convergencia y esas weas, hence los
+    // docstrings
+    /// Goes through the model's layers, computes all of their outputs and returns a view of the
+    /// output of the last one.
+    ///
+    /// # Arguments
+    /// * `params` - The parameters the layers use to compute their own outputs, that is, the weights and biases of the net.
+    /// * `x` - The x batch in the input layer.
     pub fn forward<'a>(
         &'a mut self,
         mut params: &[f32],
@@ -32,7 +46,7 @@ impl Sequential {
         x
     }
 
-    pub fn backward<L: LossFn>(
+    fn backward<L: LossFn>(
         &mut self,
         mut params: &[f32],
         mut grad: &mut [f32],
