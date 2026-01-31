@@ -15,8 +15,8 @@ impl Dataset {
     ///
     /// # Arguments
     /// * `data` - A vector containing the raw data.
-    /// * `x_size` - The size of x in each row.
-    /// * `y_size` - The size of y in each row.
+    /// * `x_size` - The amount of samples per row.
+    /// * `y_size` - The amount of labels per row.
     pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> Self {
         let row_size = x_size + y_size;
 
@@ -28,7 +28,10 @@ impl Dataset {
         }
     }
 
-    /// Shuffles the rows in the dataset using the passed random number generator `rng`.
+    /// Shuffles the rows in the dataset using a random number generator.
+    ///
+    /// # Arguments
+    /// * `rng` - A random number generator.
     pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
         let Self {
             rows,
@@ -54,11 +57,13 @@ impl Dataset {
         }
     }
 
-    /// Returns an `Iterator` of batches over *all* the data. Each tuple contains
-    /// a batch of *x*s and their *y*s expected outputs.
+    /// Retrieves the dataset in batches of size `batch_size`.
     ///
     /// # Arguments
-    /// * `batch_size`: the size of the batches. The last batch may be smaller than `batch_size`.
+    /// * `batch_size` - The maximum size of batches to yield.
+    ///
+    /// # Returns
+    /// An iterator over the batches of the dataset in the form of tuples of `ArrayView2`s.
     pub fn batches<'a>(
         &'a self,
         batch_size: usize,
@@ -69,6 +74,14 @@ impl Dataset {
         })
     }
 
+    /// Creates a view over a certain batch of the dataset.
+    ///
+    /// # Arguments
+    /// * `row` - The starting row to retrieve.
+    /// * `n` - The amount of rows to keep in the view.
+    ///
+    /// # Returns
+    /// A tuple of both samples and labels inside the selected batch.
     fn view_batch<'a>(
         &'a self,
         row: usize,
