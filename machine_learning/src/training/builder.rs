@@ -28,10 +28,20 @@ impl TrainerBuilder {
     ///
     /// # Arguments
     /// * `spec` - The specification for the trainer.
+    ///
+    /// # Returns
+    /// A new `Trainer`.
     pub fn build(&self, spec: &TrainerSpec) -> Box<dyn Trainer> {
         self.resolve_model(spec)
     }
 
+    /// Resolves the `Model` for this trainer.
+    ///
+    /// # Arguments
+    /// * `spec` - The specification of the trainer.
+    ///
+    /// # Returns
+    /// A new `Trainer`.
     fn resolve_model(&self, spec: &TrainerSpec) -> Box<dyn Trainer> {
         match &spec.model {
             ModelSpec::Sequential {
@@ -44,6 +54,13 @@ impl TrainerBuilder {
         }
     }
 
+    /// Resolves the `Layer`s for a `Sequential` model.
+    ///
+    /// # Arguments
+    /// * `spec` - The specification of a certain layer.
+    ///
+    /// # Returns
+    /// A new `Layer`.
     fn resolve_layer(&self, spec: LayerSpec) -> Layer {
         match spec {
             LayerSpec::Dense { dim, act_fn } => {
@@ -53,6 +70,14 @@ impl TrainerBuilder {
         }
     }
 
+    /// Resolves the `ActFn` for a specific layer.
+    ///
+    /// # Arguments
+    /// * `spec` - An optional specification for an `ActFn`.
+    /// * `layer_factory` - A layer factory given an optional activation function.
+    ///
+    /// # Returns
+    /// A new `Layer`.
     fn resolve_act_fn<F>(&self, spec: Option<ActFnSpec>, layer_factory: F) -> Layer
     where
         F: FnOnce(Option<ActFn>) -> Layer,
@@ -68,6 +93,14 @@ impl TrainerBuilder {
         layer_factory(act_fn)
     }
 
+    /// Resolves the `Optimizer` for this trainer.
+    ///
+    /// # Arguments
+    /// * `spec` - The specification for this trainer.
+    /// * `model` - A resolved model.
+    ///
+    /// # Returns
+    /// A new `Trainer`.
     fn resolve_optimizer<M>(&self, spec: &TrainerSpec, model: M) -> Box<dyn Trainer>
     where
         M: Model + 'static,
@@ -81,6 +114,15 @@ impl TrainerBuilder {
         }
     }
 
+    /// Resolves the `LossFn` for this trainer.
+    ///
+    /// # Arguments
+    /// * `spec` - The specification for this trainer.
+    /// * `model` - A resolved model.
+    /// * `optimizer` - A resolved optimizer.
+    ///
+    /// # Returns
+    /// A new `Trainer`.
     fn resolve_loss<M, O>(&self, spec: &TrainerSpec, model: M, optimizer: O) -> Box<dyn Trainer>
     where
         M: Model + 'static,
@@ -94,6 +136,16 @@ impl TrainerBuilder {
         }
     }
 
+    /// Terminates the entire build for this trainer and instanciates the final entity.
+    ///
+    /// # Arguments
+    /// * `spec` - The specification for this trainer.
+    /// * `model` - A resolved model.
+    /// * `optimizer` - A resolved optimizer.
+    /// * `loss` - A resolved loss function.
+    ///
+    /// # Returns
+    /// A new `Trainer`.
     fn terminate_build<M, O, L>(
         &self,
         spec: &TrainerSpec,
@@ -124,6 +176,13 @@ impl TrainerBuilder {
         Box::new(trainer)
     }
 
+    /// Generates a random number generator given (or not) a seed.
+    ///
+    /// # Arguments
+    /// * `seed` - An optional seed for the rng.
+    ///
+    /// # Returns
+    /// A new rng.
     fn generate_rng(&self, seed: Option<u64>) -> StdRng {
         match seed {
             Some(seed) => StdRng::seed_from_u64(seed),
