@@ -11,7 +11,7 @@ pub trait Model {
     ///
     /// # Arguments
     /// * `params` - The model's parameters.
-    /// * `grad` - A buffer for writting the computed gradient on each batch pass.
+    /// * `grad` - A buffer for writing the computed gradient on each batch pass.
     /// * `loss` - The loss function.
     /// * `optimizer` - The optimizer that dictates how to update the weights on each gradient calculation.
     /// * `batches` - The batches of data.

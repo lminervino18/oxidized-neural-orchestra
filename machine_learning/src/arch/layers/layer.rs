@@ -29,7 +29,7 @@ impl Layer {
         }
     }
 
-    /// Performs a forward pass of the layer and returns a view its activation.
+    /// Performs a forward pass of the layer and returns a view of its activation.
     ///
     /// # Arguments
     /// * `params` - The parameters to use for the forward pass.
@@ -45,7 +45,7 @@ impl Layer {
     ///
     /// # Arguments
     /// * `params` - The parameters to use for the backward pass.
-    /// * `grad` - The buffer for writting the gradient of the layer.
+    /// * `grad` - The buffer for writing the gradient of the layer.
     /// * `d` - The delta of the next layer.
     pub fn backward<'a>(
         &'a mut self,
