@@ -31,7 +31,7 @@ impl Sequential {
     /// output of the last one.
     ///
     /// # Arguments
-    /// * `params` - The parameters the layers use to compute their own outputs, that is, the weights and biases of the net.
+    /// * `params` - The parameters the layers use to compute their own outputs, that is, the weights and biases of the network.
     /// * `x` - The x batch in the input layer.
     pub fn forward<'a>(
         &'a mut self,

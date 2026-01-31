@@ -30,7 +30,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// * `model` - The model that will be trained.
     /// * `optimizer` - The way of optimizing the model (e.g. stochastic gradient descent).
     /// * `dataset` - The dataset the model will be trained with.
-    /// * `iters` - The amont of training iterations performed on each call to `train`.
+    /// * `iters` - The amount of training iterations performed on each call to `train`.
     /// * `loss` - The loss function used to measure the difference between a model's output and the expected one.
     /// * `rng` - A random number generator.
     pub fn new(

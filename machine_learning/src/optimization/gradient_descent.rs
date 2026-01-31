@@ -16,7 +16,7 @@ impl GradientDescent {
 }
 
 impl Optimizer for GradientDescent {
-    /// Update the parameters according to the algorithm's learning rule, that is, making a step in
+    /// Updates the parameters according to the algorithm's learning rule, that is, making a step in
     /// the opposite direction of the gradient, with a length of `learning_rate`.
     ///
     /// # Arguments
