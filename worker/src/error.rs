@@ -8,7 +8,7 @@ pub enum WorkerError {
     Io(io::Error),
     UnexpectedMessage { step: usize, got: &'static str },
     WeightsLengthMismatch { step: usize, got: usize, expected: usize },
-    TrainFailed { step: usize, source: MlError },
+    ComputeFailed { step: usize, source: MlError },
 }
 
 impl fmt::Display for WorkerError {
@@ -22,8 +22,8 @@ impl fmt::Display for WorkerError {
                 f,
                 "weights length mismatch at step {step}: got {got}, expected {expected}"
             ),
-            WorkerError::TrainFailed { step, source } => {
-                write!(f, "train failed at step {step}: {source}")
+            WorkerError::ComputeFailed { step, source } => {
+                write!(f, "computation failed at step {step}: {source}")
             }
         }
     }
@@ -33,7 +33,7 @@ impl Error for WorkerError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             WorkerError::Io(e) => Some(e),
-            WorkerError::TrainFailed { source, .. } => Some(source),
+            WorkerError::ComputeFailed { source, .. } => Some(source),
             _ => None,
         }
     }
