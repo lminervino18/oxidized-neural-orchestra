@@ -31,7 +31,7 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Trainer`.
-    pub fn build(&self, spec: &TrainerSpec) -> Box<dyn Trainer> {
+    pub fn build(&self, spec: TrainerSpec) -> Box<dyn Trainer> {
         self.resolve_model(spec)
     }
 
@@ -42,7 +42,7 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_model(&self, spec: &TrainerSpec) -> Box<dyn Trainer> {
+    fn resolve_model(&self, spec: TrainerSpec) -> Box<dyn Trainer> {
         match &spec.model {
             ModelSpec::Sequential {
                 layers: layer_specs,
@@ -101,7 +101,7 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_optimizer<M>(&self, spec: &TrainerSpec, model: M) -> Box<dyn Trainer>
+    fn resolve_optimizer<M>(&self, spec: TrainerSpec, model: M) -> Box<dyn Trainer>
     where
         M: Model + 'static,
     {
@@ -123,7 +123,7 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_loss<M, O>(&self, spec: &TrainerSpec, model: M, optimizer: O) -> Box<dyn Trainer>
+    fn resolve_loss<M, O>(&self, spec: TrainerSpec, model: M, optimizer: O) -> Box<dyn Trainer>
     where
         M: Model + 'static,
         O: Optimizer + 'static,
@@ -148,7 +148,7 @@ impl TrainerBuilder {
     /// A new `Trainer`.
     fn terminate_build<M, O, L>(
         &self,
-        spec: &TrainerSpec,
+        spec: TrainerSpec,
         model: M,
         optimizer: O,
         loss: L,
@@ -161,7 +161,7 @@ impl TrainerBuilder {
         let offline_iters = spec.offline_epochs;
         let batch_size = spec.batch_size;
         let rng = self.generate_rng(spec.seed);
-        let dataset = Dataset::new(vec![], 0, 0); // TODO
+        let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
 
         let trainer = ModelTrainer::new(
             model,

@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (ps_rx, ps_tx) = ps_stream.into_split();
     let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
 
-    let worker = WorkerBuilder::build(&spec);
+    let worker = WorkerBuilder::build(spec);
 
     tokio::select! {
         ret = worker.run(ps_rx, ps_tx) => {

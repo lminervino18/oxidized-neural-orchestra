@@ -13,8 +13,8 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    pub fn build(spec: &WorkerSpec) -> Worker {
-        let trainer = TrainerBuilder::new().build(&spec.trainer);
+    pub fn build(spec: WorkerSpec) -> Worker {
+        let trainer = TrainerBuilder::new().build(spec.trainer);
 
         Worker::new(spec.worker_id, trainer)
     }
