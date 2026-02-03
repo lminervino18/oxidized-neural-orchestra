@@ -1,5 +1,3 @@
-use std::num::NonZeroUsize;
-
 use comms::{
     msg::{Msg, Payload},
     OnoReceiver, OnoSender,
@@ -7,19 +5,16 @@ use comms::{
 use log::{debug, error, info, warn};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{config::WorkerConfig, error::WorkerError, optimizer::Optimizer};
+use crate::error::WorkerError;
+use machine_learning::training::Trainer;
 
 /// Infrastructure worker runtime.
-pub struct Worker<O: Optimizer> {
+pub struct Worker {
     worker_id: usize,
-    cfg: WorkerConfig,
-    optimizer: O,
-    offline_steps: usize,
-    num_params: NonZeroUsize,
-    grads_buf: Vec<f32>,
+    trainer: Box<dyn Trainer>,
 }
 
-impl<O: Optimizer> Worker<O> {
+impl Worker {
     /// Creates a new `Worker`.
     ///
     /// # Args
@@ -31,22 +26,8 @@ impl<O: Optimizer> Worker<O> {
     ///
     /// # Returns
     /// A new `Worker` instance.
-    pub fn new(
-        worker_id: usize,
-        cfg: WorkerConfig,
-        num_params: NonZeroUsize,
-        optimizer: O,
-        offline_steps: usize,
-    ) -> Self {
-        let n = num_params.get();
-        Self {
-            worker_id,
-            cfg,
-            optimizer,
-            offline_steps,
-            num_params,
-            grads_buf: vec![0.0; n],
-        }
+    pub fn new(worker_id: usize, trainer: Box<dyn Trainer>) -> Self {
+        Self { worker_id, trainer }
     }
 
     /// Runs the worker loop for the configured number of steps.
@@ -61,7 +42,7 @@ impl<O: Optimizer> Worker<O> {
     /// # Errors
     /// Returns `WorkerError` on I/O failures, protocol violations, or ML failures.
     pub async fn run<R, W>(
-        mut self,
+        self,
         mut rx: OnoReceiver<R>,
         mut tx: OnoSender<W>,
     ) -> Result<(), WorkerError>
@@ -70,79 +51,17 @@ impl<O: Optimizer> Worker<O> {
         W: AsyncWrite + Unpin + Send,
     {
         let worker_id = self.worker_id;
-        let expected = self.num_params.get();
+        let mut trainer = self.trainer;
 
         info!(worker_id = worker_id; "worker starting");
 
-        for step in 0..self.cfg.steps() {
-            debug!(worker_id = worker_id, step = step; "waiting for weights");
-            let msg: Msg = rx.recv().await?;
-
-            let weights: &mut [f32] = match msg {
-                Msg::Data(Payload::Weights(w)) => w,
-                other => {
-                    let got = msg_kind(&other);
-                    error!(worker_id = worker_id, step = step, got = got; "unexpected message");
-                    return Err(WorkerError::UnexpectedMessage { step, got });
-                }
-            };
-
-            if weights.len() != expected {
-                let got = weights.len();
-
-                error!(
-                    worker_id = worker_id,
-                    step = step,
-                    got = got,
-                    expected = expected;
-                    "weights length mismatch"
-                );
-
-                return Err(WorkerError::WeightsLengthMismatch {
-                    step,
-                    got,
-                    expected,
-                });
+        match rx.recv().await.unwrap() {
+            Msg::Data(Payload::Weights(params)) => {
+                let grad = trainer.train(params);
+                let msg = Msg::Data(Payload::Gradient(grad));
+                tx.send(&msg).await.unwrap();
             }
-
-            self.grads_buf.fill(0.0);
-
-            debug!(worker_id = worker_id, step = step; "computing gradients");
-            let grad_res =
-                tokio::task::block_in_place(|| self.optimizer.gradient(weights, &mut self.grads_buf));
-
-            if let Err(e) = grad_res {
-                warn!(worker_id = worker_id, step = step; "optimizer error: {e}");
-                return Err(WorkerError::ComputeFailed { step, source: e });
-            }
-
-            for _ in 0..self.offline_steps {
-                let upd_res = tokio::task::block_in_place(|| {
-                    self.optimizer
-                        .update_weights(weights, &self.grads_buf)
-                });
-
-                if let Err(e) = upd_res {
-                    warn!(worker_id = worker_id, step = step; "optimizer error: {e}");
-                    return Err(WorkerError::ComputeFailed { step, source: e });
-                }
-
-                self.grads_buf.fill(0.0);
-
-                let grad_res = tokio::task::block_in_place(|| {
-                    self.optimizer
-                        .gradient(weights, &mut self.grads_buf)
-                });
-
-                if let Err(e) = grad_res {
-                    warn!(worker_id = worker_id, step = step; "optimizer error: {e}");
-                    return Err(WorkerError::ComputeFailed { step, source: e });
-                }
-            }
-
-            debug!(worker_id = worker_id, step = step; "sending gradient");
-            let out = Msg::Data(Payload::Gradient(&self.grads_buf));
-            tx.send(&out).await?;
+            _ => todo!(),
         }
 
         info!(worker_id = worker_id; "worker finished");

@@ -21,8 +21,6 @@ pub struct ModelTrainer<M: Model, O: Optimizer, L: LossFn, R: Rng> {
     rng: R,
 }
 
-impl<M: Model, O: Optimizer, L: LossFn, R: Rng> Trainer for ModelTrainer<M, O, L, R> {}
-
 impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// Returns a new `ModelTrainer`.
     ///
@@ -55,7 +53,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     }
 }
 
-impl<M: Model, O: Optimizer + Send, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
+impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// Performs `iters` iterations of training its model, using its optimizer, dataset, loss
     /// function and batch size.
     ///
@@ -78,5 +76,17 @@ impl<M: Model, O: Optimizer + Send, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> 
         }
 
         &self.grad
+    }
+}
+
+impl<M, O, L, R> Trainer for ModelTrainer<M, O, L, R>
+where
+    M: Model,
+    O: Optimizer,
+    L: LossFn,
+    R: Rng,
+{
+    fn train(&mut self, params: &mut [f32]) -> &[f32] {
+        self.train(params)
     }
 }

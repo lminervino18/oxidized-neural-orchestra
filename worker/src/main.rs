@@ -33,7 +33,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     info!("worker bootstrapped: {spec:#?}");
 
-    let ps_addr = match spec.training.algorithm {
+    // TODO
+    let ps_addr = match spec.trainer.algorithm {
         AlgorithmSpec::ParameterServer { server_ip } => server_ip,
     };
 
