@@ -17,14 +17,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let port = env::var("PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string());
     let listen_addr = format!("{host}:{port}");
 
-    info!("listening for orchestrator at {listen_addr}");
-    let listener = TcpListener::bind(&listen_addr).await?;
-
-    let (stream, peer) = listener.accept().await?;
-    info!("orchestrator connected from {peer}");
-
-    let (rx, tx) = stream.into_split();
-    let (mut rx, _tx) = comms::channel(rx, tx);
+    let mut rx = accept_orchestrator_channel(&listen_addr).await?;
 
     let Some(spec) = WorkerAcceptor::bootstrap(&mut rx).await? else {
         info!("disconnected before bootstrap");
@@ -46,6 +39,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+/// Accepts an orchestrator connection and returns the read-side channel.
+///
+/// # Args
+/// * `listen_addr` - Address to bind and accept the orchestrator connection.
+///
+/// # Returns
+/// A receiver channel for orchestrator messages.
+///
+/// # Errors
+/// Returns an `io::Error` if binding or accept fails.
+async fn accept_orchestrator_channel(
+    listen_addr: &str,
+) -> std::io::Result<comms::OnoReceiver<tokio::net::tcp::OwnedReadHalf>> {
+    info!("listening for orchestrator at {listen_addr}");
+    let listener = TcpListener::bind(listen_addr).await?;
+
+    let (stream, peer) = listener.accept().await?;
+    info!("orchestrator connected from {peer}");
+
+    let (rx, tx) = stream.into_split();
+    let (rx, _tx) = comms::channel(rx, tx);
+
+    Ok(rx)
 }
 
 fn init_logging() {
