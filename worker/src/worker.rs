@@ -69,7 +69,7 @@ impl Worker {
     ///
     /// # Errors
     /// Returns `WorkerError` on I/O failures or protocol invariant violations.
-    async fn run_parameter_server<R, W>(
+    pub async fn run_parameter_server<R, W>(
         self,
         mut rx: OnoReceiver<R>,
         mut tx: OnoSender<W>,
