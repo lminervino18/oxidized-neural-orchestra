@@ -1,9 +1,9 @@
 use std::{env, error::Error};
 
+use env_logger::Env;
 use log::info;
-use tokio::{net::TcpListener, net::TcpStream, signal};
+use tokio::{net::TcpListener, signal};
 
-use comms::specs::worker::AlgorithmSpec;
 use worker::{WorkerAcceptor, WorkerBuilder, WorkerError};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
@@ -11,7 +11,7 @@ const DEFAULT_PORT: &str = "8765";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
+    init_logging();
 
     let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
     let port = env::var("PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string());
@@ -31,29 +31,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
 
-    info!("worker bootstrapped: {spec:#?}");
-
-    // TODO
-    let ps_addr = match spec.trainer.algorithm {
-        AlgorithmSpec::ParameterServer { server_ip } => server_ip,
-    };
-
-    info!("connecting to parameter server at {ps_addr}");
-    let ps_stream = TcpStream::connect(ps_addr).await?;
-    let (ps_rx, ps_tx) = ps_stream.into_split();
-    let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
+    info!("worker bootstrapped: worker_id={}", spec.worker_id);
 
     let worker = WorkerBuilder::build(spec);
 
     tokio::select! {
-        ret = worker.run(ps_rx, ps_tx) => {
+        ret = worker.run() => {
             ret.map_err(WorkerError::into_io)?;
             info!("worker finished");
-        },
+        }
         _ = signal::ctrl_c() => {
-            info!("received SIGTERM");
-        },
+            info!("received shutdown signal");
+        }
     }
 
     Ok(())
+}
+
+fn init_logging() {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .format_timestamp_millis()
+        .init();
 }
