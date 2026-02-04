@@ -71,7 +71,7 @@ impl<S: TrainStrategy> Worker<S> {
             let msg: Msg = rx.recv().await?;
 
             let weights = match msg {
-                Msg::Data(Payload::Weights(w)) => w,
+                Msg::Data(Payload::Params(w)) => w,
                 other => {
                     let got = msg_kind(&other);
                     error!(worker_id = worker_id, step = step, got = got; "unexpected message");
@@ -108,7 +108,7 @@ impl<S: TrainStrategy> Worker<S> {
             }
 
             debug!(worker_id = worker_id, step = step; "sending gradient");
-            let out = Msg::Data(Payload::Gradient(&self.grads_buf));
+            let out = Msg::Data(Payload::Grad(&self.grads_buf));
             tx.send(&out).await?;
         }
 
@@ -121,7 +121,7 @@ fn msg_kind(msg: &Msg<'_>) -> &'static str {
     match msg {
         Msg::Control(_) => "control",
         Msg::Err(_) => "err",
-        Msg::Data(Payload::Gradient(_)) => "data/gradient",
-        Msg::Data(Payload::Weights(_)) => "data/weights",
+        Msg::Data(Payload::Grad(_)) => "data/gradient",
+        Msg::Data(Payload::Params(_)) => "data/weights",
     }
 }
