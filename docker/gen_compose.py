@@ -46,6 +46,7 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
         for i in range(1, servers + 1)
     }
 
+
 def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
     mode = "release" if release else "debug"
     log_level = "INFO" if release else "DEBUG"
@@ -66,10 +67,11 @@ def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
                 "HOST": "0.0.0.0",
                 "PORT": 8765,
                 "RUST_LOG": log_level,
-            }
+            },
         }
         for i in range(1, workers + 1)
     }
+
 
 def generate_compose(release: bool, servers: int, workers: int) -> dict[str, YmlField]:
     """

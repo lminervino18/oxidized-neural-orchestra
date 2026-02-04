@@ -1,6 +1,6 @@
 # 0. Define the arguments' default values.
 ARG PKG=parameter_server
-ARG MODE=debug
+ARG MODE
 
 # 1. Install cargo-chef.
 FROM rust:1.92 AS chef
