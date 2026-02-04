@@ -9,15 +9,15 @@ use std::{
 use rayon::prelude::*;
 
 use super::{ParameterShard, Result};
-use crate::{initialization::WeightGen, optimization::Optimizer};
+use crate::{initialization::ParamGen, optimization::Optimizer};
 
-/// The primary storage of weights and accumulated gradients.
+/// The primary storage of parameters and accumulated gradients.
 ///
 /// These methods are private to the module, they become available
 /// through the async interface of a `ParameterHandle`.
 #[derive(Debug)]
 pub struct ParameterStore<O: Optimizer> {
-    params: usize,
+    nparams: usize,
     active_idx: Arc<AtomicU8>,
     updating: Arc<AtomicBool>,
     shards: Arc<[ParameterShard<O>]>,
@@ -27,7 +27,7 @@ pub struct ParameterStore<O: Optimizer> {
 impl<O: Optimizer> Clone for ParameterStore<O> {
     fn clone(&self) -> Self {
         Self {
-            params: self.params,
+            nparams: self.nparams,
             active_idx: Arc::clone(&self.active_idx),
             updating: Arc::clone(&self.updating),
             shards: Arc::clone(&self.shards),
@@ -41,25 +41,32 @@ impl<O: Optimizer> ParameterStore<O> {
     ///
     /// # Arguments
     /// * `shard_size` - The maximum amount of parameters per shard.
-    /// * `weight_gen` - A weight generator.
+    /// * `param_gen` - A parameter generator.
     /// * `optimizer_factory` - An `Optimizer` factory closure.
-    pub fn new<W, F>(shard_size: NonZeroUsize, mut weight_gen: W, mut optimizer_factory: F) -> Self
+    ///
+    /// # Returns
+    /// A new `ParameterStore` instance.
+    pub fn new<PG, OF>(
+        shard_size: NonZeroUsize,
+        mut parameter_gen: PG,
+        mut optimizer_factory: OF,
+    ) -> Self
     where
-        W: WeightGen,
-        F: FnMut(usize) -> O,
+        PG: ParamGen,
+        OF: FnMut(usize) -> O,
     {
-        let mut params = 0;
+        let mut nparams = 0;
         let mut shards = Vec::new();
 
-        while let Some(weights) = weight_gen.sample(shard_size.get()) {
-            params += weights.len();
-            let optimizer = optimizer_factory(weights.len());
-            let shard = ParameterShard::new(weights, optimizer);
+        while let Some(params) = parameter_gen.sample(shard_size.get()) {
+            nparams += params.len();
+            let optimizer = optimizer_factory(params.len());
+            let shard = ParameterShard::new(params, optimizer);
             shards.push(shard);
         }
 
         Self {
-            params,
+            nparams,
             active_idx: Arc::new(AtomicU8::new(0)),
             updating: Arc::new(AtomicBool::new(false)),
             shards: Arc::from(shards),
@@ -72,7 +79,7 @@ impl<O: Optimizer> ParameterStore<O> {
     /// # Returns
     /// The amount of parameters in the storage.
     pub fn len(&self) -> usize {
-        self.params
+        self.nparams
     }
 }
 
@@ -93,10 +100,10 @@ impl<O: Optimizer + Send> ParameterStore<O> {
             .try_for_each(|(shard, grad_slice)| shard.accumulate(active_idx, grad_slice))
     }
 
-    /// Swaps the active gradient buffer and applies the frozen gradient to the weights.
+    /// Swaps the active gradient buffer and applies the frozen gradient to the parameters.
     ///
     /// This triggers a parallel update across all shards.
-    pub(super) fn update_weights(&self) {
+    pub(super) fn update_params(&self) {
         let success = self
             .updating
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
@@ -107,26 +114,26 @@ impl<O: Optimizer + Send> ParameterStore<O> {
 
             self.shards
                 .par_iter()
-                .for_each(|shard| shard.update_weights(frozen_idx));
+                .for_each(|shard| shard.update_params(frozen_idx));
 
             self.updating.store(false, Ordering::Release);
         }
     }
 
-    /// Gathers all the sharded weights into a local buffer.
+    /// Gathers all the sharded parameters into a local buffer.
     ///
     /// # Arguments
-    /// * `out` - A mutable slice where the weights will be copied.
+    /// * `out` - A mutable slice where the parameters will be copied.
     ///
     /// # Returns
     /// A `SizeMismatchErr` if there is a size mismatch in any of the inner shards.
-    pub(super) fn pull_weights(&self, out: &mut [f32]) -> Result<()> {
+    pub(super) fn pull_params(&self, out: &mut [f32]) -> Result<()> {
         let shard_size = self.shard_size.get();
 
         self.shards
             .par_iter()
             .zip(out.par_chunks_mut(shard_size))
-            .try_for_each(|(shard, out_slice)| shard.pull_weights(out_slice))
+            .try_for_each(|(shard, out_slice)| shard.pull_params(out_slice))
     }
 }
 
@@ -135,21 +142,21 @@ mod tests {
     use std::num::NonZeroUsize;
 
     use super::*;
-    use crate::initialization::ConstWeightGen;
+    use crate::initialization::ConstParamGen;
 
     struct AddOptimizer;
 
     impl Optimizer for AddOptimizer {
-        fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
-            weights.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
+        fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
+            params.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
             Ok(())
         }
     }
 
     fn create_test_store(params: usize, shard_size: usize) -> ParameterStore<AddOptimizer> {
         let shard_size = NonZeroUsize::new(shard_size).unwrap();
-        let weight_gen = ConstWeightGen::new(0., params);
-        ParameterStore::new(shard_size, weight_gen, |_| AddOptimizer)
+        let param_gen = ConstParamGen::new(0., params);
+        ParameterStore::new(shard_size, param_gen, |_| AddOptimizer)
     }
 
     #[test]
@@ -161,10 +168,10 @@ mod tests {
         let grad = [1.0; PARAMS];
 
         store.accumulate(&grad).unwrap();
-        store.update_weights();
+        store.update_params();
 
         let mut out = [0.0; PARAMS];
-        store.pull_weights(&mut out).unwrap();
+        store.pull_params(&mut out).unwrap();
         assert_eq!(out, [1.0; PARAMS]);
     }
 
@@ -176,17 +183,17 @@ mod tests {
         let store = create_test_store(PARAMS, SHARD_SIZE);
         store.accumulate(&[1.0; PARAMS]).unwrap();
 
-        store.update_weights();
+        store.update_params();
         assert_eq!(store.active_idx.load(Ordering::Acquire), 1);
         store.accumulate(&[5.0; PARAMS]).unwrap();
 
-        let mut weights = [0.0; PARAMS];
-        store.pull_weights(&mut weights).unwrap();
-        assert_eq!(weights, [1.0; PARAMS]);
+        let mut params = [0.0; PARAMS];
+        store.pull_params(&mut params).unwrap();
+        assert_eq!(params, [1.0; PARAMS]);
 
-        store.update_weights();
-        store.pull_weights(&mut weights).unwrap();
-        assert_eq!(weights, [6.0; PARAMS]);
+        store.update_params();
+        store.pull_params(&mut params).unwrap();
+        assert_eq!(params, [6.0; PARAMS]);
     }
 
     #[test]
@@ -198,11 +205,11 @@ mod tests {
         store.updating.store(true, Ordering::SeqCst);
 
         let active_idx = store.active_idx.load(Ordering::Acquire);
-        store.update_weights();
+        store.update_params();
         assert_eq!(store.active_idx.load(Ordering::Acquire), active_idx);
 
         store.updating.store(false, Ordering::Release);
-        store.update_weights();
+        store.update_params();
         assert_ne!(store.active_idx.load(Ordering::SeqCst), active_idx);
     }
 
@@ -215,13 +222,13 @@ mod tests {
 
         let grad = [1.0; PARAMS];
         store.accumulate(&grad).unwrap();
-        store.update_weights();
+        store.update_params();
 
-        let mut weights = [0.0; PARAMS];
-        store.pull_weights(&mut weights).unwrap();
+        let mut params = [0.0; PARAMS];
+        store.pull_params(&mut params).unwrap();
 
-        for (i, &w) in weights.iter().enumerate() {
-            assert_eq!(w, 1.0, "Weight mismatch at index {i}");
+        for (i, &w) in params.iter().enumerate() {
+            assert_eq!(w, 1.0, "Parameter mismatch at index {i}");
         }
     }
 
@@ -234,10 +241,10 @@ mod tests {
 
         let grad = [1.0; PARAMS];
         store.accumulate(&grad).unwrap();
-        store.update_weights();
+        store.update_params();
 
-        let mut weights = [0.0; PARAMS];
-        store.pull_weights(&mut weights).unwrap();
-        assert_eq!(weights.len(), PARAMS);
+        let mut params = [0.0; PARAMS];
+        store.pull_params(&mut params).unwrap();
+        assert_eq!(params.len(), PARAMS);
     }
 }

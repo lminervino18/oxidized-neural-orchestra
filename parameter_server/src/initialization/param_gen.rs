@@ -1,6 +1,6 @@
-/// A `WeightGen` generates values for the initial state of the model's weights.
-pub trait WeightGen {
-    /// Should sample at most `n` weights.
+/// A `ParamGen` generates values for the initial state of the model's parameters.
+pub trait ParamGen {
+    /// Should sample at most `n` parameters.
     ///
     /// # Arguments
     /// * `n` - The upper limit of samples to generate.

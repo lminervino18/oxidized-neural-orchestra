@@ -15,7 +15,7 @@ async fn assert_no_gradient_received<R: tokio::io::AsyncRead + Unpin>(
     match recv_res {
         Err(_) => {}
         Ok(Err(_)) => {}
-        Ok(Ok(Msg::Data(Payload::Gradient(_)))) => {
+        Ok(Ok(Msg::Data(Payload::Grad(_)))) => {
             panic!("server unexpectedly received a Gradient message");
         }
         Ok(Ok(_)) => {}
@@ -60,16 +60,16 @@ async fn worker_rejects_weight_length_change_across_steps() -> io::Result<()> {
     });
 
     let mut w1 = [1.0_f32, 2.0];
-    sv_tx.send(&Msg::Data(Payload::Weights(&mut w1))).await?;
+    sv_tx.send(&Msg::Data(Payload::Params(&mut w1))).await?;
 
     let msg: Msg = sv_rx.recv().await?;
     match msg {
-        Msg::Data(Payload::Gradient(g)) => assert_eq!(g.len(), 2),
+        Msg::Data(Payload::Grad(g)) => assert_eq!(g.len(), 2),
         other => panic!("unexpected msg: {other:?}"),
     }
 
     let mut w2 = [1.0_f32, 2.0, 3.0];
-    sv_tx.send(&Msg::Data(Payload::Weights(&mut w2))).await?;
+    sv_tx.send(&Msg::Data(Payload::Params(&mut w2))).await?;
 
     let res = worker_task.await.unwrap();
     assert!(res.is_err());
@@ -106,7 +106,7 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
     });
 
     let g = [0.1_f32, 0.2];
-    sv_tx.send(&Msg::Data(Payload::Gradient(&g))).await?;
+    sv_tx.send(&Msg::Data(Payload::Grad(&g))).await?;
 
     let res = worker_task.await.unwrap();
     assert!(res.is_err());
@@ -168,7 +168,7 @@ async fn acceptor_ignores_noise_until_create_worker() -> io::Result<()> {
     let (mut wk_rx, _wk_tx) = comms::channel(wk_rx, wk_tx);
 
     let mut w = [1.0_f32, 2.0];
-    sv_tx.send(&Msg::Data(Payload::Weights(&mut w))).await?;
+    sv_tx.send(&Msg::Data(Payload::Params(&mut w))).await?;
 
     let spec = mk_spec(1, 2);
     sv_tx

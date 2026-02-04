@@ -48,11 +48,11 @@ async fn worker_e2e_sends_expected_gradient() -> io::Result<()> {
 
     for step in 0..STEPS {
         let mut w = [step as f32 + 1.0, step as f32 + 2.0];
-        sv_tx.send(&Msg::Data(Payload::Weights(&mut w))).await?;
+        sv_tx.send(&Msg::Data(Payload::Params(&mut w))).await?;
 
         let msg: Msg = sv_rx.recv().await?;
         match msg {
-            Msg::Data(Payload::Gradient(g)) => {
+            Msg::Data(Payload::Grad(g)) => {
                 assert_eq!(g.len(), PARAMS);
                 assert_eq!(g[0], 2.0 * w[0]);
                 assert_eq!(g[1], 2.0 * w[1]);

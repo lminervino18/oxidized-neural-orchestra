@@ -14,17 +14,17 @@ use super::Server;
 use crate::{
     optimization::Optimizer,
     storage::{ParameterHandle, ParameterStore},
-    training::Trainer,
+    synchronization::Synchronizer,
 };
 
 /// The central server structure, it handles task management and io between workers.
-pub struct ParameterServer<O: Optimizer, T: Trainer> {
+pub struct ParameterServer<O: Optimizer, T: Synchronizer> {
     tasks: JoinSet<io::Result<()>>,
     handle: ParameterHandle<O>,
     trainer: T,
 }
 
-impl<O: Optimizer, T: Trainer> ParameterServer<O, T> {
+impl<O: Optimizer, T: Synchronizer> ParameterServer<O, T> {
     /// Creates a new `ParameterServer`.
     ///
     /// # Arguments
@@ -39,11 +39,11 @@ impl<O: Optimizer, T: Trainer> ParameterServer<O, T> {
     }
 }
 
-impl<O: Optimizer + Send, T: Trainer> ParameterServer<O, T> {
+impl<O: Optimizer + Send, T: Synchronizer> ParameterServer<O, T> {
     /// Starts the training process with the spawned workers.
     ///
     /// # Returns
-    /// The trained weights of the model.
+    /// The trained parameters of the model.
     pub async fn run(&mut self) -> io::Result<Vec<f32>> {
         while let Some(ret) = self.tasks.join_next().await {
             match ret {
@@ -59,17 +59,16 @@ impl<O: Optimizer + Send, T: Trainer> ParameterServer<O, T> {
             }
         }
 
-        // SAFETY: This weight vector is the same size as
+        // SAFETY: This parameter vector is the same size as
         //         the amount of parameters in the storage.
-        let params = self.handle.len();
-        let mut weights = vec![0.; params];
-        self.handle.pull_weights(&mut weights).await.unwrap();
-
-        Ok(weights)
+        let nparams = self.handle.len();
+        let mut params = vec![0.; nparams];
+        self.handle.pull_params(&mut params).await.unwrap();
+        Ok(params)
     }
 }
 
-impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> {
+impl<O: Optimizer + Send + 'static, T: Synchronizer + 'static> ParameterServer<O, T> {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Arguments
@@ -90,16 +89,16 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
 
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
-            handle.pull_weights(&mut buf).await.unwrap();
+            handle.pull_params(&mut buf).await.unwrap();
 
             loop {
-                debug!(worker_id = id; "sending weights");
-                let msg = Msg::Data(Payload::Weights(&mut buf));
+                debug!(worker_id = id; "sending parameters");
+                let msg = Msg::Data(Payload::Params(&mut buf));
                 tx.send(&msg).await?;
 
                 debug!(worker_id = id; "waiting to receive a message");
                 match rx.recv().await? {
-                    Msg::Data(Payload::Gradient(grad)) if params == grad.len() => {
+                    Msg::Data(Payload::Grad(grad)) if params == grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
 
                         // SAFETY: We checked that the gradient is the same
@@ -110,10 +109,10 @@ impl<O: Optimizer + Send + 'static, T: Trainer + 'static> ParameterServer<O, T> 
                         info!(worker_id = id; "gracefully disconnecting worker");
                         break;
                     }
-                    Msg::Data(Payload::Gradient(grad)) => {
+                    Msg::Data(Payload::Grad(grad)) => {
                         warn!(worker_id = id; "gradient size mismatch, expected {params}, got {}", grad.len());
 
-                        let msg = Msg::Err(Detail::GradSizeMismatch {
+                        let msg = Msg::Err(Detail::BufferSizeMismatch {
                             expected: params,
                             got: grad.len(),
                         });
@@ -144,7 +143,7 @@ where
     R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
     O: Optimizer + Send + 'static,
-    T: Trainer + 'static,
+    T: Synchronizer + 'static,
 {
     async fn run(&mut self) -> io::Result<Vec<f32>> {
         self.run().await
