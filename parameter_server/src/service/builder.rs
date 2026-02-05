@@ -253,12 +253,12 @@ impl ServerBuilder {
     {
         match spec.synchronizer {
             SynchronizerSpec::Barrier { barrier_size } => {
-                let trainer = BarrierSync::new(barrier_size);
-                self.terminate_build(spec, param_gen, optimizer_factory, trainer)
+                let synchronizer = BarrierSync::new(barrier_size);
+                self.terminate_build(spec, param_gen, optimizer_factory, synchronizer)
             }
             SynchronizerSpec::NonBlocking => {
-                let trainer = NoBlockingSync::new();
-                self.terminate_build(spec, param_gen, optimizer_factory, trainer)
+                let synchronizer = NoBlockingSync::new();
+                self.terminate_build(spec, param_gen, optimizer_factory, synchronizer)
             }
         }
     }

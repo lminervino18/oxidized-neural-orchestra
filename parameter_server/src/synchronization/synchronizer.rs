@@ -1,6 +1,6 @@
 use crate::{
     optimization::Optimizer,
-    storage::{ParameterHandle, Result},
+    storage::{Result, StoreHandle},
 };
 
 /// Executes a single parameter update step.
@@ -20,7 +20,7 @@ pub trait SynchronizerTemplate: Clone {
     /// An error if there's a size mismatch between `grad`, `params` and the size of the storage.
     async fn step<O>(
         &self,
-        handle: &ParameterHandle<O>,
+        handle: &StoreHandle<O>,
         grad: &[f32],
         params: &mut [f32],
     ) -> Result<()>

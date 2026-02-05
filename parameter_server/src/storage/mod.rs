@@ -1,9 +1,9 @@
+mod blocking;
 mod error;
 mod handle;
-mod shard;
 mod store;
+mod wild;
 
 pub use error::{Result, SizeMismatchErr};
-pub use handle::ParameterHandle;
-pub(super) use shard::ParameterShard;
-pub use store::ParameterStore;
+pub use handle::StoreHandle;
+pub use store::Store;

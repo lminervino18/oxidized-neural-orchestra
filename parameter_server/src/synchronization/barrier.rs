@@ -5,7 +5,7 @@ use tokio::sync::Barrier;
 use super::Synchronizer;
 use crate::{
     optimization::Optimizer,
-    storage::{ParameterHandle, Result},
+    storage::{Result, StoreHandle},
 };
 
 /// Synchronizes parameter updates across multiple workers using a barrier.
@@ -30,12 +30,7 @@ impl BarrierSync {
 }
 
 impl Synchronizer for BarrierSync {
-    async fn step<O>(
-        &self,
-        handle: &ParameterHandle<O>,
-        grad: &[f32],
-        params: &mut [f32],
-    ) -> Result<()>
+    async fn step<O>(&self, handle: &StoreHandle<O>, grad: &[f32], params: &mut [f32]) -> Result<()>
     where
         O: Optimizer + Send,
     {
