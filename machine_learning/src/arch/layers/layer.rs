@@ -11,8 +11,6 @@ pub enum Layer {
 use Layer::*;
 
 impl Layer {
-    // NOTE: hmmm tema visibilidad, me gusta decir q retornamos dense porq es lo q a fin de cuentas
-    // el usuario ve de acá
     /// Returns a new `(Layer::)Dense`.
     ///
     /// # Arguments
