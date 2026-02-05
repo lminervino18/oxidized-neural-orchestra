@@ -23,6 +23,7 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
     A dictionary containing the servers' part of the compose file.
     """
     mode = "release" if release else "debug"
+    log_level = "INFO" if release else "DEBUG"
 
     return {
         f"server-{i}": {
@@ -36,26 +37,55 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
             "networks": [
                 "training-network",
             ],
-            "env_file": [
-                "parameter_server/.env",
-            ],
+            "environment": {
+                "HOST": "0.0.0.0",
+                "PORT": 8765,
+                "LOG_LEVEL": log_level,
+            },
         }
         for i in range(1, servers + 1)
     }
 
 
-def generate_compose(release: bool, servers: int) -> dict[str, YmlField]:
+def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
+    mode = "release" if release else "debug"
+    log_level = "INFO" if release else "DEBUG"
+
+    return {
+        f"worker-{i}": {
+            "container_name": f"worker-{i}",
+            "build": {
+                "dockerfile": "worker/Dockerfile",
+                "args": {
+                    "MODE": mode,
+                },
+            },
+            "networks": [
+                "training-network",
+            ],
+            "environment": {
+                "HOST": "0.0.0.0",
+                "PORT": 8765,
+                "RUST_LOG": log_level,
+            },
+        }
+        for i in range(1, workers + 1)
+    }
+
+
+def generate_compose(release: bool, servers: int, workers: int) -> dict[str, YmlField]:
     """
     Generates the entire docker compose file in a dictionary.
 
     # Arguments
     * `release` - If the executable should be compiled as release mode.
     * `servers` - The amount of servers to create.
+    * `workers` - The amount of workers to create.
 
     # Returns
     A dictionary containing the whole project's docker compose file.
     """
-    services = generate_servers(release, servers)
+    services = generate_servers(release, servers) | generate_workers(release, workers)
 
     return {
         "name": "distributed-training",

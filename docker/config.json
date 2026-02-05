@@ -1,4 +1,5 @@
 {
   "release": false,
-  "servers": 1
+  "servers": 1,
+  "workers": 1
 }
