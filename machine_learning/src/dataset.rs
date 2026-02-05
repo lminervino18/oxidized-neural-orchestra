@@ -15,8 +15,8 @@ impl Dataset {
     ///
     /// # Arguments
     /// * `data` - A vector containing the raw data.
-    /// * `x_size` - The amount of samples per row.
-    /// * `y_size` - The amount of labels per row.
+    /// * `x_size` - Per row sample size.
+    /// * `y_size` - Per row Label size.
     pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> Self {
         let row_size = x_size + y_size;
 
