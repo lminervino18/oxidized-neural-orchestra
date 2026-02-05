@@ -3,17 +3,17 @@ use std::{cell::RefCell, rc::Rc};
 use rand::Rng;
 use rand_distr::{Distribution, Normal, Uniform};
 
-use super::{Result, WeightGen};
+use super::{ParamGen, Result};
 
-/// A weight generator that follows a certain probabilistic distribution.
-pub struct RandWeightGen<R: Rng, D: Distribution<f32>> {
+/// A parameter generator that follows a certain probabilistic distribution.
+pub struct RandParamGen<R: Rng, D: Distribution<f32>> {
     rng: Rc<RefCell<R>>,
     distribution: D,
     remaining: usize,
 }
 
-impl<R: Rng, D: Distribution<f32>> RandWeightGen<R, D> {
-    /// Creates a new `RandWeightGen` weight generator.
+impl<R: Rng, D: Distribution<f32>> RandParamGen<R, D> {
+    /// Creates a new `RandParamGen` parameter generator.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -28,8 +28,8 @@ impl<R: Rng, D: Distribution<f32>> RandWeightGen<R, D> {
     }
 }
 
-impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
-    /// Creates a new `RandWeightGen` weight generator with a uniform distribution.
+impl<R: Rng> RandParamGen<R, Uniform<f32>> {
+    /// Creates a new `RandParamGen` parameter generator with a uniform distribution.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -43,7 +43,7 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
         Ok(Self::new(rng, Uniform::new(low, high)?, limit))
     }
 
-    /// Creates a new `RandWeightGen` weight generator with an inclusive uniform distribution.
+    /// Creates a new `RandParamGen` parameter generator with an inclusive uniform distribution.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -62,7 +62,7 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
         Ok(Self::new(rng, Uniform::new_inclusive(low, high)?, limit))
     }
 
-    /// Creates a new `RandWeightGen` weight generator using Xavier uniform initialization.
+    /// Creates a new `RandParamGen` parameter generator using Xavier uniform initialization.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -82,7 +82,7 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
         Self::uniform(rng, limit, -range, range)
     }
 
-    /// Creates a new `RandWeightGen` weight generator using LeCun uniform initialization.
+    /// Creates a new `RandParamGen` parameter generator using LeCun uniform initialization.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -97,8 +97,8 @@ impl<R: Rng> RandWeightGen<R, Uniform<f32>> {
     }
 }
 
-impl<R: Rng> RandWeightGen<R, Normal<f32>> {
-    /// Creates a new `RandWeightGen` weight generator with a normal distribution.
+impl<R: Rng> RandParamGen<R, Normal<f32>> {
+    /// Creates a new `RandParamGen` parameter generator with a normal distribution.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -112,7 +112,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
         Ok(Self::new(rng, Normal::new(mean, std_dev)?, limit))
     }
 
-    /// Creates a new `RandWeightGen` weight generator using Kaiming normal initialization.
+    /// Creates a new `RandParamGen` parameter generator using Kaiming normal initialization.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -126,7 +126,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
         Self::normal(rng, limit, 0., std_dev)
     }
 
-    /// Creates a new `RandWeightGen` weight generator using Xavier normal initialization.
+    /// Creates a new `RandParamGen` parameter generator using Xavier normal initialization.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -145,7 +145,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
         Self::kaiming(rng, limit, fan_in + fan_out)
     }
 
-    /// Creates a new `RandWeightGen` weight generator using LeCun normal initialization.
+    /// Creates a new `RandParamGen` parameter generator using LeCun normal initialization.
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
@@ -160,7 +160,7 @@ impl<R: Rng> RandWeightGen<R, Normal<f32>> {
     }
 }
 
-impl<R: Rng, D: Distribution<f32>> WeightGen for RandWeightGen<R, D> {
+impl<R: Rng, D: Distribution<f32>> ParamGen for RandParamGen<R, D> {
     fn sample(&mut self, mut n: usize) -> Option<Vec<f32>> {
         if self.remaining == 0 {
             return None;
@@ -189,9 +189,8 @@ mod tests {
     fn empty() {
         const SIZE: usize = 0;
         let rng = seeded_rng();
-
-        let mut weight_gen = RandWeightGen::normal(rng, SIZE, 0., 1.).unwrap();
-        assert!(weight_gen.sample(1).is_none());
+        let mut param_gen = RandParamGen::normal(rng, SIZE, 0., 1.).unwrap();
+        assert!(param_gen.sample(1).is_none());
     }
 
     #[test]
@@ -199,25 +198,24 @@ mod tests {
         const SIZE: usize = 10;
         let rng = seeded_rng();
 
-        let mut weight_gen = RandWeightGen::uniform(rng, SIZE, -1., 1.).unwrap();
-        let sample = weight_gen.sample(SIZE).unwrap();
+        let mut param_gen = RandParamGen::uniform(rng, SIZE, -1., 1.).unwrap();
+        let sample = param_gen.sample(SIZE).unwrap();
 
         assert_eq!(sample.len(), SIZE);
-        assert!(weight_gen.sample(1).is_none());
+        assert!(param_gen.sample(1).is_none());
     }
 
     #[test]
     fn partial() {
         let rng = seeded_rng();
+        let mut param_gen = RandParamGen::normal(rng, 10, 0., 1.).unwrap();
 
-        let mut weight_gen = RandWeightGen::normal(rng, 10, 0., 1.).unwrap();
-
-        let sample = weight_gen.sample(7).unwrap();
+        let sample = param_gen.sample(7).unwrap();
         assert_eq!(sample.len(), 7);
 
-        let sample = weight_gen.sample(7).unwrap();
+        let sample = param_gen.sample(7).unwrap();
         assert_eq!(sample.len(), 3);
 
-        assert!(weight_gen.sample(1).is_none());
+        assert!(param_gen.sample(1).is_none());
     }
 }

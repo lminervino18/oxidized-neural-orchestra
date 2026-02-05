@@ -2,23 +2,26 @@ use std::sync::Arc;
 
 use tokio::sync::Barrier;
 
-use super::Trainer;
+use super::Synchronizer;
 use crate::{
     optimization::Optimizer,
     storage::{ParameterHandle, Result},
 };
 
-/// A trainer that synchronizes parameter updates across multiple workers using a barrier.
+/// Synchronizes parameter updates across multiple workers using a barrier.
 #[derive(Clone)]
-pub struct BarrierSyncTrainer {
+pub struct BarrierSync {
     barrier: Arc<Barrier>,
 }
 
-impl BarrierSyncTrainer {
-    /// Creates a new `BarrierSyncTrainer`.
+impl BarrierSync {
+    /// Creates a new `BarrierSync` synchronizer.
     ///
     /// # Arguments
-    /// * `barrier_size` - The amount of workers to wait on until updating the weights of the model.
+    /// * `barrier_size` - The amount of workers to wait on until updating the parameters of the model.
+    ///
+    /// # Returns
+    /// A new `BarrierSync` instance.
     pub fn new(barrier_size: usize) -> Self {
         Self {
             barrier: Arc::new(Barrier::new(barrier_size)),
@@ -26,12 +29,12 @@ impl BarrierSyncTrainer {
     }
 }
 
-impl Trainer for BarrierSyncTrainer {
+impl Synchronizer for BarrierSync {
     async fn step<O>(
         &self,
         handle: &ParameterHandle<O>,
         grad: &[f32],
-        weights: &mut [f32],
+        params: &mut [f32],
     ) -> Result<()>
     where
         O: Optimizer + Send,
@@ -39,11 +42,11 @@ impl Trainer for BarrierSyncTrainer {
         handle.accumulate(grad).await?;
 
         if self.barrier.wait().await.is_leader() {
-            handle.update_weights().await;
+            handle.update_params().await;
         }
 
         self.barrier.wait().await;
-        handle.pull_weights(weights).await?;
+        handle.pull_params(params).await?;
         Ok(())
     }
 }

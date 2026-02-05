@@ -15,6 +15,9 @@ impl GradientDescentWithMomentum {
     /// * `len` - The amount of parameters this instance should hold.
     /// * `learning_rate` - The small coefficient that modulates the amount of training per update.
     /// * `momentum` - Hyperparameter to the optimization algorithm.
+    ///
+    /// # Returns
+    /// A new `GradientDescentWithMomentum` instance.
     pub fn new(len: usize, learning_rate: f32, momentum: f32) -> Self {
         Self {
             learning_rate,
@@ -25,21 +28,21 @@ impl GradientDescentWithMomentum {
 }
 
 impl Optimizer for GradientDescentWithMomentum {
-    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
-        if grad.len() != weights.len() {
+    fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
+        if grad.len() != params.len() {
             return Err(SizeMismatchErr);
         }
 
         let lr = self.learning_rate;
         let mu = self.momentum;
 
-        weights
+        params
             .iter_mut()
             .zip(grad)
             .zip(self.velocity.iter_mut())
-            .for_each(|((w, g), v)| {
+            .for_each(|((p, g), v)| {
                 *v = (mu * *v) + g;
-                *w -= lr * *v;
+                *p -= lr * *v;
             });
 
         Ok(())

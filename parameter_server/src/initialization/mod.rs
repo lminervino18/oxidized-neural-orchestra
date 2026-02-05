@@ -1,11 +1,11 @@
 mod chained;
 mod constant;
 mod error;
+mod param_gen;
 mod random;
-mod weight_gen;
 
-pub use chained::ChainedWeightGen;
-pub use constant::ConstWeightGen;
+pub use chained::ChainedParamGen;
+pub use constant::ConstParamGen;
 pub use error::Result;
-pub use random::RandWeightGen;
-pub use weight_gen::WeightGen;
+pub use param_gen::ParamGen;
+pub use random::RandParamGen;

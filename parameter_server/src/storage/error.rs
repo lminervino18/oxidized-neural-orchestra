@@ -7,7 +7,7 @@ use std::{
 pub type Result<T> = std::result::Result<T, SizeMismatchErr>;
 
 /// Error returned by various methods in the `ParameterShard` whenever there is a size
-/// mismatch between different gradients, weights and external buffers.
+/// mismatch between different gradients, parameters and external buffers.
 #[derive(Debug)]
 pub struct SizeMismatchErr;
 

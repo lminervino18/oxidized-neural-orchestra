@@ -16,10 +16,10 @@ pub enum DistributionSpec {
     Lecun { fan_in: usize },
 }
 
-/// The specification for the `WeightGen` trait.
+/// The specification for the `ParamGen` trait.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WeightGenSpec {
+pub enum ParamGenSpec {
     Const {
         value: f32,
         limit: usize,
@@ -29,7 +29,7 @@ pub enum WeightGenSpec {
         limit: usize,
     },
     Chained {
-        specs: Vec<WeightGenSpec>,
+        specs: Vec<ParamGenSpec>,
     },
 }
 
@@ -52,21 +52,21 @@ pub enum OptimizerSpec {
     },
 }
 
-/// The specification for the `Trainer` trait.
+/// The specification for the `Synchronizer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TrainerSpec {
-    BarrierSync { barrier_size: usize },
+pub enum SynchronizerSpec {
+    Barrier { barrier_size: usize },
     NonBlocking,
 }
 
 /// The specification for the `Server` trait.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerSpec {
-    pub workers: usize,
+    pub nworkers: usize,
     pub shard_size: NonZeroUsize,
-    pub weight_gen: WeightGenSpec,
+    pub param_gen: ParamGenSpec,
     pub optimizer: OptimizerSpec,
-    pub trainer: TrainerSpec,
+    pub synchronizer: SynchronizerSpec,
     pub seed: Option<u64>,
 }

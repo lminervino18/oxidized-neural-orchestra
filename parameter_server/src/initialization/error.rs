@@ -5,10 +5,10 @@ use std::{
 
 use rand_distr::{NormalError, uniform::Error as UniformError};
 
-/// The specific result type for the different instances of `RandWeightGen` generators.
+/// The specific result type for the different instances of `RandParamGen` parameter generators.
 pub type Result<T> = std::result::Result<T, RandErr>;
 
-/// Error returned by the `RandWeightGen` constructors whenever there is an error creating
+/// Error returned by the `RandParamGen` constructors whenever there is an error creating
 /// a new instance of the struct, each constructor has it's own constraints given that
 /// they use different distributions.
 #[derive(Debug)]
