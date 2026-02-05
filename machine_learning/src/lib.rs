@@ -1,3 +1,9 @@
+pub mod arch;
+pub mod dataset;
+pub mod optimization;
+mod test;
+pub mod training;
+
 use std::fmt;
 
 /// Errors produced by ML plugins when inputs are invalid.
@@ -103,3 +109,4 @@ pub trait TrainStrategy: Send {
     /// - `MlError::InvalidInput` for invalid domain inputs.
     fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError>;
 }
+// >>>>>>> 58b4b858d3c4fd2cfe799cc8d184e06136dbc7bc:machine_learning/src/lib.rs

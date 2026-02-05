@@ -1,26 +1,20 @@
-use std::num::NonZeroUsize;
+use std::net::IpAddr;
 
 use serde::{Deserialize, Serialize};
+
+pub mod algorithm;
+pub mod model;
+pub mod training;
+
+use super::machine_learning::TrainerSpec;
+pub use algorithm::AlgorithmSpec;
+pub use model::{ActFnSpec, LayerSpec, ModelSpec};
+pub use training::TrainingSpec;
 
 /// Wire-level bootstrap specification for a worker instance.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkerSpec {
-    /// Worker identifier assigned by the orchestrator.
     pub worker_id: usize,
-    /// Number of training steps to execute.
-    pub steps: NonZeroUsize,
-    /// Expected parameter count for `weights` and `gradient` payloads.
-    pub num_params: NonZeroUsize,
-    /// Training strategy selection.
-    pub strategy: StrategySpec,
-    /// Optional seed for strategy/model initialization.
-    pub seed: Option<u64>,
-}
-
-/// Training strategy selector.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StrategySpec {
-    Noop,
-    Mock,
+    pub trainer: TrainerSpec,
+    pub server_addr: IpAddr,
 }
