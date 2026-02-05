@@ -24,7 +24,7 @@ pub struct Dense {
 }
 
 impl Dense {
-    pub(super) fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
+    pub fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
         let zeros = Array2::zeros((1, 1));
 
         Self {
@@ -38,11 +38,11 @@ impl Dense {
         }
     }
 
-    pub(super) fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.size
     }
 
-    pub(super) fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
+    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'_, f32> {
         let (w, b) = self.view_params(params);
         let shape = (x.nrows(), self.dim.1);
 
@@ -61,7 +61,7 @@ impl Dense {
         self.a.view()
     }
 
-    pub(super) fn backward(
+    pub fn backward(
         &mut self,
         params: &[f32],
         grad: &mut [f32],

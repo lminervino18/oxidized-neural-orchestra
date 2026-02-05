@@ -1,8 +1,7 @@
 mod dense;
 mod layer;
 
-// TODO: definir bien las visibilidades, deberíamos usar Dense directamente por fuera de layers?
-pub use dense::Dense;
+pub(super) use dense::Dense;
 pub use layer::Layer;
 
 use std::mem;
