@@ -60,13 +60,21 @@ pub enum SynchronizerSpec {
     NonBlocking,
 }
 
+/// The specification for the `Store` trait.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StoreSpec {
+    Blocking { shard_size: NonZeroUsize },
+    Wild { shard_size: NonZeroUsize },
+}
+
 /// The specification for the `Server` trait.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerSpec {
     pub nworkers: usize,
-    pub shard_size: NonZeroUsize,
     pub param_gen: ParamGenSpec,
     pub optimizer: OptimizerSpec,
     pub synchronizer: SynchronizerSpec,
+    pub store: StoreSpec,
     pub seed: Option<u64>,
 }

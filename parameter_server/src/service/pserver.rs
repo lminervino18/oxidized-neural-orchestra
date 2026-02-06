@@ -12,19 +12,18 @@ use tokio::{
 
 use super::Server;
 use crate::{
-    optimization::Optimizer,
     storage::{Store, StoreHandle},
     synchronization::Synchronizer,
 };
 
 /// The central server structure, it handles task management and io between workers.
-pub struct ParameterServer<O: Optimizer, S: Synchronizer> {
+pub struct ParameterServer<PS: Store, Sy: Synchronizer> {
     tasks: JoinSet<io::Result<()>>,
-    handle: StoreHandle<O>,
-    synchronizer: S,
+    handle: StoreHandle<PS>,
+    synchronizer: Sy,
 }
 
-impl<O: Optimizer, S: Synchronizer> ParameterServer<O, S> {
+impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
     /// Creates a new `ParameterServer`.
     ///
     /// # Arguments
@@ -33,7 +32,7 @@ impl<O: Optimizer, S: Synchronizer> ParameterServer<O, S> {
     ///
     /// # Returns
     /// A new `ParameterServer` instance.
-    pub fn new(handle: StoreHandle<O>, synchronizer: S) -> Self {
+    pub fn new(handle: StoreHandle<PS>, synchronizer: Sy) -> Self {
         Self {
             tasks: JoinSet::new(),
             handle,
@@ -42,7 +41,7 @@ impl<O: Optimizer, S: Synchronizer> ParameterServer<O, S> {
     }
 }
 
-impl<O: Optimizer + Send, S: Synchronizer> ParameterServer<O, S> {
+impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
     /// Starts the training process with the spawned workers.
     ///
     /// # Returns
@@ -71,7 +70,7 @@ impl<O: Optimizer + Send, S: Synchronizer> ParameterServer<O, S> {
     }
 }
 
-impl<O: Optimizer + Send + 'static, S: Synchronizer + 'static> ParameterServer<O, S> {
+impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterServer<PS, Sy> {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Arguments
@@ -141,12 +140,12 @@ impl<O: Optimizer + Send + 'static, S: Synchronizer + 'static> ParameterServer<O
 }
 
 #[async_trait::async_trait]
-impl<R, W, O, S> Server<R, W> for ParameterServer<O, S>
+impl<R, W, PS, Sy> Server<R, W> for ParameterServer<PS, Sy>
 where
     R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
-    O: Optimizer + Send + 'static,
-    S: Synchronizer + 'static,
+    PS: Store + Send + Sync + 'static,
+    Sy: Synchronizer + 'static,
 {
     async fn run(&mut self) -> io::Result<Vec<f32>> {
         self.run().await

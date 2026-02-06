@@ -3,10 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Barrier;
 
 use super::Synchronizer;
-use crate::{
-    optimization::Optimizer,
-    storage::{Result, StoreHandle},
-};
+use crate::storage::{Result, Store, StoreHandle};
 
 /// Synchronizes parameter updates across multiple workers using a barrier.
 #[derive(Clone)]
@@ -30,9 +27,9 @@ impl BarrierSync {
 }
 
 impl Synchronizer for BarrierSync {
-    async fn step<O>(&self, handle: &StoreHandle<O>, grad: &[f32], params: &mut [f32]) -> Result<()>
+    async fn step<S>(&self, handle: &StoreHandle<S>, grad: &[f32], params: &mut [f32]) -> Result<()>
     where
-        O: Optimizer + Send,
+        S: Store + Send + Sync,
     {
         handle.accumulate(grad).await?;
 

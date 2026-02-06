@@ -50,7 +50,7 @@ impl<O: Optimizer> BlockingStore<O> {
     /// A new `BlockingStore` instance.
     pub fn new<PG, OF>(
         shard_size: NonZeroUsize,
-        mut parameter_gen: PG,
+        mut param_gen: PG,
         mut optimizer_factory: OF,
     ) -> Self
     where
@@ -60,7 +60,7 @@ impl<O: Optimizer> BlockingStore<O> {
         let mut nparams = 0;
         let mut shards = Vec::new();
 
-        while let Some(params) = parameter_gen.sample(shard_size.get()) {
+        while let Some(params) = param_gen.sample(shard_size.get()) {
             nparams += params.len();
             let optimizer = optimizer_factory(params.len());
             let shard = BlockingShard::new(params, optimizer);
