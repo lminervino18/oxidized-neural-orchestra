@@ -1,28 +1,32 @@
-use std::ptr;
-
 use parking_lot::{Mutex, RwLock};
 
-use super::{Result, SizeMismatchErr};
-use crate::optimization::Optimizer;
+use crate::{
+    optimization::Optimizer,
+    storage::{Result, SizeMismatchErr},
+};
 
-/// A buffer for accumulating gradients and parameters across multiple threads.
+/// A buffer for accumulating gradients and parameters across multiple threads using locks.
+///
+/// It implements a double-buffer strategy to let workers accumulate gradients in the active
+/// buffer while the frozen buffer stays inactive to be able to reset it via `update_params`
+/// without stoping other workers trying to accumulate more gradients.
 #[derive(Debug)]
-pub struct ParameterShard<O: Optimizer> {
+pub struct BlockingShard<O: Optimizer> {
     nparams: usize,
     grads: [Mutex<Box<[f32]>>; 2],
     params: RwLock<Box<[f32]>>,
     optimizer: Mutex<O>,
 }
 
-impl<O: Optimizer> ParameterShard<O> {
-    /// Creates a new `ParameterShard`.
+impl<O: Optimizer> BlockingShard<O> {
+    /// Creates a new `BlockingShard` parameter shard.
     ///
     /// # Arguments
     /// * `params` - The initial state of the parameters.
     /// * `optimizer` - The optimization algorithm.
     ///
     /// # Returns
-    /// A new `ParameterShard` instance.
+    /// A new `BlockingShard` instance.
     pub fn new(params: Vec<f32>, optimizer: O) -> Self {
         let nparams = params.len();
 
@@ -67,7 +71,7 @@ impl<O: Optimizer> ParameterShard<O> {
         let mut params = self.params.write();
         let mut grad = self.grads[frozen_idx].lock();
 
-        // SAFETY: Both grad and params have the same size.
+        // SAFETY: Both grad and params have the same length.
         self.optimizer
             .lock()
             .update_params(&grad, &mut params)
@@ -89,12 +93,7 @@ impl<O: Optimizer> ParameterShard<O> {
         }
 
         let params = self.params.read();
-
-        // SAFETY: We've already checked that both slices have the same size.
-        unsafe {
-            ptr::copy_nonoverlapping(params.as_ptr(), out.as_mut_ptr(), out.len());
-        }
-
+        out.copy_from_slice(&params);
         Ok(())
     }
 }
@@ -114,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_accumulation_and_update() {
-        let shard = ParameterShard::new(vec![0.; 3], AddOptimizer);
+        let shard = BlockingShard::new(vec![0.; 3], AddOptimizer);
 
         shard.accumulate(0, &[1.0, 2.0, 3.0]).unwrap();
         shard.accumulate(0, &[1.0, 1.0, 1.0]).unwrap();
@@ -137,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_double_buffering_flow() {
-        let shard = ParameterShard::new(vec![0.], AddOptimizer);
+        let shard = BlockingShard::new(vec![0.], AddOptimizer);
 
         shard.accumulate(0, &[10.]).unwrap();
         shard.accumulate(1, &[5.]).unwrap();

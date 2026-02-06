@@ -1,8 +1,5 @@
 use super::Synchronizer;
-use crate::{
-    optimization::Optimizer,
-    storage::{ParameterHandle, Result},
-};
+use crate::storage::{Result, Store, StoreHandle};
 
 /// Skips synchronization between workers for it's operations, will process incoming gradients immediately.
 #[derive(Clone)]
@@ -19,14 +16,9 @@ impl NoBlockingSync {
 }
 
 impl Synchronizer for NoBlockingSync {
-    async fn step<O>(
-        &self,
-        handle: &ParameterHandle<O>,
-        grad: &[f32],
-        params: &mut [f32],
-    ) -> Result<()>
+    async fn step<S>(&self, handle: &StoreHandle<S>, grad: &[f32], params: &mut [f32]) -> Result<()>
     where
-        O: Optimizer + Send,
+        S: Store + Send + Sync,
     {
         handle.accumulate(grad).await?;
         handle.update_params().await;

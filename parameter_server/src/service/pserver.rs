@@ -12,34 +12,36 @@ use tokio::{
 
 use super::Server;
 use crate::{
-    optimization::Optimizer,
-    storage::{ParameterHandle, ParameterStore},
+    storage::{Store, StoreHandle},
     synchronization::Synchronizer,
 };
 
 /// The central server structure, it handles task management and io between workers.
-pub struct ParameterServer<O: Optimizer, T: Synchronizer> {
+pub struct ParameterServer<PS: Store, Sy: Synchronizer> {
     tasks: JoinSet<io::Result<()>>,
-    handle: ParameterHandle<O>,
-    trainer: T,
+    handle: StoreHandle<PS>,
+    synchronizer: Sy,
 }
 
-impl<O: Optimizer, T: Synchronizer> ParameterServer<O, T> {
+impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
     /// Creates a new `ParameterServer`.
     ///
     /// # Arguments
-    /// * `store` - The underlying parameter store to use.
-    /// * `trainer` - The trainer to use.
-    pub fn new(store: ParameterStore<O>, trainer: T) -> Self {
+    /// * `handle` - The underlying parameter store to use behind a handle.
+    /// * `synchronizer` - The synchronizer to use.
+    ///
+    /// # Returns
+    /// A new `ParameterServer` instance.
+    pub fn new(handle: StoreHandle<PS>, synchronizer: Sy) -> Self {
         Self {
             tasks: JoinSet::new(),
-            handle: ParameterHandle::new(store),
-            trainer,
+            handle,
+            synchronizer,
         }
     }
 }
 
-impl<O: Optimizer + Send, T: Synchronizer> ParameterServer<O, T> {
+impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
     /// Starts the training process with the spawned workers.
     ///
     /// # Returns
@@ -68,7 +70,7 @@ impl<O: Optimizer + Send, T: Synchronizer> ParameterServer<O, T> {
     }
 }
 
-impl<O: Optimizer + Send + 'static, T: Synchronizer + 'static> ParameterServer<O, T> {
+impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterServer<PS, Sy> {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Arguments
@@ -81,7 +83,7 @@ impl<O: Optimizer + Send + 'static, T: Synchronizer + 'static> ParameterServer<O
     {
         let id = self.tasks.len() + 1;
         let handle = self.handle.clone();
-        let trainer = self.trainer.clone();
+        let synchronizer = self.synchronizer.clone();
 
         let task = async move {
             let params = handle.len();
@@ -103,7 +105,7 @@ impl<O: Optimizer + Send + 'static, T: Synchronizer + 'static> ParameterServer<O
 
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
-                        trainer.step(&handle, grad, &mut buf).await.unwrap();
+                        synchronizer.step(&handle, grad, &mut buf).await.unwrap();
                     }
                     Msg::Control(Command::Disconnect) => {
                         info!(worker_id = id; "gracefully disconnecting worker");
@@ -138,12 +140,12 @@ impl<O: Optimizer + Send + 'static, T: Synchronizer + 'static> ParameterServer<O
 }
 
 #[async_trait::async_trait]
-impl<R, W, O, T> Server<R, W> for ParameterServer<O, T>
+impl<R, W, PS, Sy> Server<R, W> for ParameterServer<PS, Sy>
 where
     R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
-    O: Optimizer + Send + 'static,
-    T: Synchronizer + 'static,
+    PS: Store + Send + Sync + 'static,
+    Sy: Synchronizer + 'static,
 {
     async fn run(&mut self) -> io::Result<Vec<f32>> {
         self.run().await

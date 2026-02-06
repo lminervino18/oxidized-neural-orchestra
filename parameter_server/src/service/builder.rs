@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use comms::specs::server::{
-    DistributionSpec, OptimizerSpec, ParamGenSpec, ServerSpec, SynchronizerSpec,
+    DistributionSpec, OptimizerSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec,
 };
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -10,7 +10,7 @@ use super::{ParameterServer, Server};
 use crate::{
     initialization::{ChainedParamGen, ConstParamGen, ParamGen, RandParamGen, Result},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
-    storage::ParameterStore,
+    storage::{BlockingStore, Store, StoreHandle, WildStore},
     synchronization::{BarrierSync, NoBlockingSync, Synchronizer},
 };
 
@@ -68,8 +68,7 @@ macro_rules! with_distribution {
 }
 
 /// Builds `Server`s given a specification.
-#[derive(Default)]
-pub struct ServerBuilder {}
+pub struct ServerBuilder;
 
 impl ServerBuilder {
     /// Creates a new `ServerBuilder`.
@@ -77,7 +76,7 @@ impl ServerBuilder {
     /// # Returns
     /// A new `ServerBuilder` instance.
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     /// Builds a new `Server` following a spec.
@@ -196,8 +195,7 @@ impl ServerBuilder {
     /// * `param_gen` - A resolved parameter generator.
     ///
     /// # Returns
-    /// A new Server or a `RandErr` if the specification has
-    /// invalid `RandParamGen` construction values.
+    /// A new server.
     fn resolve_optimizer<R, W, PG>(&self, spec: ServerSpec, param_gen: PG) -> Box<dyn Server<R, W>>
     where
         R: AsyncRead + Unpin + Send + 'static,
@@ -236,8 +234,7 @@ impl ServerBuilder {
     /// * `optimizer_factory` - A factory of optimizers.
     ///
     /// # Returns
-    /// A new Server or a `RandErr` if the specification has
-    /// invalid `RandParamGen` construction values.
+    /// A new server.
     fn resolve_synchronizer<R, W, PG, O, OF>(
         &self,
         spec: ServerSpec,
@@ -253,28 +250,27 @@ impl ServerBuilder {
     {
         match spec.synchronizer {
             SynchronizerSpec::Barrier { barrier_size } => {
-                let trainer = BarrierSync::new(barrier_size);
-                self.terminate_build(spec, param_gen, optimizer_factory, trainer)
+                let synchronizer = BarrierSync::new(barrier_size);
+                self.resolve_store(spec, param_gen, optimizer_factory, synchronizer)
             }
             SynchronizerSpec::NonBlocking => {
-                let trainer = NoBlockingSync::new();
-                self.terminate_build(spec, param_gen, optimizer_factory, trainer)
+                let synchronizer = NoBlockingSync::new();
+                self.resolve_store(spec, param_gen, optimizer_factory, synchronizer)
             }
         }
     }
 
-    /// Terminates the entire build for this session and finally instanciates all the entities.
+    /// Resolves the `Store` for this server.
     ///
     /// # Arguments
     /// * `spec` - The specification for the parameter server.
     /// * `param_gen` - A resolved parameter generator.
-    /// * `optimizer_factory` - A factory of optimzers.
+    /// * `optimizer_factory` - A factory of optimizers.
     /// * `synchronizer` - A resolved synchronizer.
     ///
     /// # Returns
-    /// A new Server or a `RandErr` if the specification has
-    /// invalid `RandParamGen` construction values.
-    fn terminate_build<R, W, PG, O, OF, S>(
+    /// A new server.
+    fn resolve_store<R, W, PG, O, OF, S>(
         &self,
         spec: ServerSpec,
         param_gen: PG,
@@ -289,8 +285,35 @@ impl ServerBuilder {
         OF: FnMut(usize) -> O,
         S: Synchronizer + Send + Sync + 'static,
     {
-        let store = ParameterStore::new(spec.shard_size, param_gen, optimizer_factory);
-        let pserver = ParameterServer::new(store, synchronizer);
+        match spec.store {
+            StoreSpec::Blocking { shard_size } => {
+                let store = BlockingStore::new(shard_size, param_gen, optimizer_factory);
+                self.terminate_build(store, synchronizer)
+            }
+            StoreSpec::Wild { shard_size } => {
+                let store = WildStore::new(shard_size, param_gen, optimizer_factory);
+                self.terminate_build(store, synchronizer)
+            }
+        }
+    }
+
+    /// Terminates the entire build for this session and finally instanciates all the entities.
+    ///
+    /// # Arguments
+    /// * `store` - A resolved store.
+    /// * `synchronizer` - A resolved synchronizer.
+    ///
+    /// # Returns
+    /// A new server.
+    fn terminate_build<R, W, PS, Sy>(&self, store: PS, synchronizer: Sy) -> Box<dyn Server<R, W>>
+    where
+        R: AsyncRead + Unpin + Send + 'static,
+        W: AsyncWrite + Unpin + Send + 'static,
+        PS: Store + Send + Sync + 'static,
+        Sy: Synchronizer + Send + Sync + 'static,
+    {
+        let handle = StoreHandle::new(store);
+        let pserver = ParameterServer::new(handle, synchronizer);
         Box::new(pserver)
     }
 }
