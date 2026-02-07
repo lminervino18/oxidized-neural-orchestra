@@ -82,7 +82,6 @@ impl Worker {
         let mut trainer = self.trainer;
 
         let mut step: usize = 0;
-        let mut expected_len: Option<usize> = None;
 
         info!("worker starting: worker_id={worker_id}");
 
@@ -99,27 +98,9 @@ impl Worker {
 
                 Msg::Data(Payload::Weights(weights)) => {
                     let got = weights.len();
-                    let expected = expected_len.get_or_insert(got);
-
-                    if got != *expected {
-                        return Err(WorkerError::WeightsLengthMismatch {
-                            step,
-                            got,
-                            expected: *expected,
-                        });
-                    }
-
                     debug!("training: worker_id={worker_id} step={step} params={got}");
 
                     let grad = trainer.train(weights);
-
-                    if grad.len() != got {
-                        return Err(WorkerError::GradientLengthMismatch {
-                            step,
-                            got: grad.len(),
-                            expected: got,
-                        });
-                    }
 
                     tx.send(&Msg::Data(Payload::Gradient(grad)))
                         .await

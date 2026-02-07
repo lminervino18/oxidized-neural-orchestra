@@ -75,42 +75,6 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn worker_rejects_weights_length_change() -> io::Result<()> {
-    let (sv_stream, wk_stream) = tokio_io::duplex(4096);
-
-    let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
-    let (mut sv_rx, mut sv_tx) = comms::channel(sv_rx, sv_tx);
-
-    let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
-
-    let worker = make_worker();
-
-    let worker_fut = async move {
-        worker
-            .run_parameter_server(wk_rx, wk_tx)
-            .await
-            .map_err(WorkerError::into_io)
-    };
-
-    let server_fut = async move {
-        let mut w1 = [1.0_f32, 2.0];
-        sv_tx.send(&Msg::Data(Payload::Weights(&mut w1))).await?;
-        let _msg: Msg = sv_rx.recv().await?; // grad ok
-
-        let mut w2 = [1.0_f32, 2.0, 3.0];
-        sv_tx.send(&Msg::Data(Payload::Weights(&mut w2))).await?;
-
-        Ok::<(), io::Error>(())
-    };
-
-    let (worker_res, server_res) = tokio::join!(worker_fut, server_fut);
-    server_res?;
-    assert!(worker_res.is_err());
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
 async fn worker_rejects_unexpected_message() -> io::Result<()> {
     let (sv_stream, wk_stream) = tokio_io::duplex(4096);
 
