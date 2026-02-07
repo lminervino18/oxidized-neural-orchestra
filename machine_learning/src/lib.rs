@@ -109,4 +109,3 @@ pub trait TrainStrategy: Send {
     /// - `MlError::InvalidInput` for invalid domain inputs.
     fn step(&mut self, weights: &[f32], grads: &mut [f32]) -> Result<StepStats, MlError>;
 }
-// >>>>>>> 58b4b858d3c4fd2cfe799cc8d184e06136dbc7bc:machine_learning/src/lib.rs
