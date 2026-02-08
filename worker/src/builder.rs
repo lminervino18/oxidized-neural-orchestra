@@ -1,6 +1,7 @@
 use comms::specs::worker::WorkerSpec;
 
-use crate::{Strategy, Worker, WorkerConfig};
+use crate::Worker;
+use machine_learning::training::TrainerBuilder;
 
 pub struct WorkerBuilder;
 
@@ -12,9 +13,8 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    pub fn build(spec: &WorkerSpec) -> Worker<Strategy> {
-        let cfg = WorkerConfig::new(spec.steps);
-        let strategy = Strategy::from_spec(&spec.strategy);
-        Worker::new(spec.worker_id, cfg, spec.num_params, strategy)
+    pub fn build(spec: WorkerSpec) -> Worker {
+        let trainer = TrainerBuilder::new().build(spec.trainer);
+        Worker::new(spec.worker_id, spec.algorithm, trainer)
     }
 }

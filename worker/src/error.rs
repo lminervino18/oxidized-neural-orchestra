@@ -1,14 +1,12 @@
 use std::{error::Error, fmt, io};
 
-use machine_learning::MlError;
-
 /// Worker runtime failures.
 #[derive(Debug)]
 pub enum WorkerError {
     Io(io::Error),
     UnexpectedMessage { step: usize, got: &'static str },
     WeightsLengthMismatch { step: usize, got: usize, expected: usize },
-    TrainFailed { step: usize, source: MlError },
+    GradientLengthMismatch { step: usize, got: usize, expected: usize },
 }
 
 impl fmt::Display for WorkerError {
@@ -22,9 +20,10 @@ impl fmt::Display for WorkerError {
                 f,
                 "weights length mismatch at step {step}: got {got}, expected {expected}"
             ),
-            WorkerError::TrainFailed { step, source } => {
-                write!(f, "train failed at step {step}: {source}")
-            }
+            WorkerError::GradientLengthMismatch { step, got, expected } => write!(
+                f,
+                "gradient length mismatch at step {step}: got {got}, expected {expected}"
+            ),
         }
     }
 }
@@ -33,7 +32,6 @@ impl Error for WorkerError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             WorkerError::Io(e) => Some(e),
-            WorkerError::TrainFailed { source, .. } => Some(source),
             _ => None,
         }
     }

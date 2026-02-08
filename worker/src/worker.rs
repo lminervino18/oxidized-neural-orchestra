@@ -1,59 +1,78 @@
-use std::num::NonZeroUsize;
-
 use comms::{
-    msg::{Msg, Payload},
     OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
+    specs::worker::AlgorithmSpec,
 };
-use log::{debug, error, info, warn};
-use machine_learning::TrainStrategy;
-use tokio::io::{AsyncRead, AsyncWrite};
+use log::{debug, info, warn};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpStream,
+};
 
-use crate::{config::WorkerConfig, error::WorkerError};
+use crate::error::WorkerError;
+use machine_learning::training::Trainer;
 
 /// Infrastructure worker runtime.
-pub struct Worker<S: TrainStrategy> {
+pub struct Worker {
     worker_id: usize,
-    cfg: WorkerConfig,
-    strategy: S,
-    num_params: NonZeroUsize,
-    grads_buf: Vec<f32>,
+    algorithm: AlgorithmSpec,
+    trainer: Box<dyn Trainer>,
 }
 
-impl<S: TrainStrategy> Worker<S> {
-    /// Creates a new `Worker`.
+impl Worker {
+    /// Worker runtime that maps weights snapshots into gradient updates.
     ///
     /// # Args
-    /// * `worker_id` - Worker identifier used for observability.
-    /// * `cfg` - Immutable execution bounds.
-    /// * `num_params` - Expected parameter count for `weights` and `grads`.
-    /// * `strategy` - Training strategy used to compute gradients.
+    /// * `worker_id` - Identifier used for observability.
+    /// * `algorithm` - Distributed algorithm selection for this worker.
+    /// * `trainer` - Domain strategy used to compute gradients from weights.
     ///
     /// # Returns
-    /// A new `Worker` instance.
-    pub fn new(worker_id: usize, cfg: WorkerConfig, num_params: NonZeroUsize, strategy: S) -> Self {
-        let n = num_params.get();
+    /// A new worker instance.
+    pub fn new(worker_id: usize, algorithm: AlgorithmSpec, trainer: Box<dyn Trainer>) -> Self {
         Self {
             worker_id,
-            cfg,
-            strategy,
-            num_params,
-            grads_buf: vec![0.0; n],
+            algorithm,
+            trainer,
         }
     }
 
-    /// Runs the worker loop for the configured number of steps.
-    ///
-    /// # Args
-    /// * `rx` - Receiving end of the communication channel.
-    /// * `tx` - Sending end of the communication channel.
+    /// Runs the worker using its configured distributed algorithm.
     ///
     /// # Returns
-    /// Returns `Ok(())` if all steps complete successfully.
+    /// Returns `Ok(())` on graceful completion.
     ///
     /// # Errors
-    /// Returns `WorkerError` on I/O failures, protocol violations, or ML strategy failures.
-    pub async fn run<R, W>(
-        mut self,
+    /// Returns `WorkerError` on I/O failures or protocol violations.
+    pub async fn run(self) -> Result<(), WorkerError> {
+        match self.algorithm {
+            AlgorithmSpec::ParameterServer { server_ip } => {
+                info!(
+                    "connecting to parameter server: worker_id={} server_addr={}",
+                    self.worker_id, server_ip
+                );
+
+                let ps_stream = TcpStream::connect(server_ip)
+                    .await
+                    .map_err(WorkerError::Io)?;
+                let (ps_rx, ps_tx) = ps_stream.into_split();
+                let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
+
+                self.run_parameter_server(ps_rx, ps_tx).await
+            }
+        }
+    }
+
+    /// Runs the parameter-server protocol loop until `Disconnect` or a violation.
+    ///
+    /// # Args
+    /// * `rx` - Receiving channel end.
+    /// * `tx` - Sending channel end.
+    ///
+    /// # Errors
+    /// Returns `WorkerError` on I/O failures or protocol invariant violations.
+    pub async fn run_parameter_server<R, W>(
+        self,
         mut rx: OnoReceiver<R>,
         mut tx: OnoSender<W>,
     ) -> Result<(), WorkerError>
@@ -62,57 +81,53 @@ impl<S: TrainStrategy> Worker<S> {
         W: AsyncWrite + Unpin + Send,
     {
         let worker_id = self.worker_id;
-        let expected = self.num_params.get();
+        let mut trainer = self.trainer;
 
-        info!(worker_id = worker_id; "worker starting");
+        let mut step: usize = 0;
 
-        for step in 0..self.cfg.steps() {
-            debug!(worker_id = worker_id, step = step; "waiting for weights");
-            let msg: Msg = rx.recv().await?;
+        info!("worker starting: worker_id={worker_id}");
 
-            let weights = match msg {
-                Msg::Data(Payload::Params(w)) => w,
-                other => {
-                    let got = msg_kind(&other);
-                    error!(worker_id = worker_id, step = step, got = got; "unexpected message");
-                    return Err(WorkerError::UnexpectedMessage { step, got });
+        loop {
+            debug!("waiting message: worker_id={worker_id} step={step}");
+
+            let msg: Msg = rx.recv().await.map_err(WorkerError::Io)?;
+
+            match msg {
+                Msg::Control(Command::Disconnect) => {
+                    info!("disconnect received: worker_id={worker_id} step={step}");
+                    break;
                 }
-            };
 
-            if weights.len() != expected {
-                let got = weights.len();
+                Msg::Data(Payload::Params(weights)) => {
+                    let got = weights.len();
+                    debug!("training: worker_id={worker_id} step={step} params={got}");
 
-                error!(
-                    worker_id = worker_id,
-                    step = step,
-                    got = got,
-                    expected = expected;
-                    "weights length mismatch"
-                );
+                    let grad = trainer.train(weights);
 
-                return Err(WorkerError::WeightsLengthMismatch {
-                    step,
-                    got,
-                    expected,
-                });
+                    tx.send(&Msg::Data(Payload::Grad(grad)))
+                        .await
+                        .map_err(WorkerError::Io)?;
+
+                    step += 1;
+                }
+
+                other => {
+                    warn!(
+                        "unexpected message: worker_id={} step={} got={}",
+                        worker_id,
+                        step,
+                        msg_kind(&other)
+                    );
+
+                    return Err(WorkerError::UnexpectedMessage {
+                        step,
+                        got: msg_kind(&other),
+                    });
+                }
             }
-
-            self.grads_buf.fill(0.0);
-
-            debug!(worker_id = worker_id, step = step; "computing gradients");
-            let res =
-                tokio::task::block_in_place(|| self.strategy.step(weights, &mut self.grads_buf));
-            if let Err(e) = res {
-                warn!(worker_id = worker_id, step = step; "train strategy error: {e}");
-                return Err(WorkerError::TrainFailed { step, source: e });
-            }
-
-            debug!(worker_id = worker_id, step = step; "sending gradient");
-            let out = Msg::Data(Payload::Grad(&self.grads_buf));
-            tx.send(&out).await?;
         }
 
-        info!(worker_id = worker_id; "worker finished");
+        info!("worker finished: worker_id={worker_id} steps={step}");
         Ok(())
     }
 }

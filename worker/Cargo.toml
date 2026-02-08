@@ -4,11 +4,22 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-comms = { path = "../comms" }
-env_logger = "0.11"
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "net",
+  "signal",
+] }
+env_logger = "0.11.8"
 log = { version = "0.4.29", features = ["kv"] }
+
+comms = { path = "../comms" }
 machine_learning = { path = "../machine_learning" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "io-util"] }
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "time",
+  "io-util",
+] }
