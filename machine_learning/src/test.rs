@@ -1,13 +1,15 @@
 #![cfg(test)]
 
+use std::num::NonZeroUsize;
+
 use ndarray::ArrayView2;
 
 use crate::{
     arch::{
+        Model, Sequential,
         activations::ActFn,
         layers::Layer,
         loss::{LossFn, Mse},
-        Model, Sequential,
     },
     dataset::Dataset,
     optimization::GradientDescent,
@@ -33,7 +35,16 @@ fn test_ml_and2_gate_convergence() {
     ]);
     let mut params: Vec<f32> = vec![0.; model.size()];
     let optimizer = GradientDescent::new(10.);
-    let mut trainer = ModelTrainer::new(model, optimizer, dataset, 10000, 4, Mse, rand::rng());
+    let batch_size = NonZeroUsize::new(4).unwrap();
+    let mut trainer = ModelTrainer::new(
+        model,
+        optimizer,
+        dataset,
+        10000,
+        batch_size,
+        Mse,
+        rand::rng(),
+    );
     trainer.train(&mut params);
 
     // 2
@@ -79,7 +90,16 @@ fn test_ml_and3_gate_convergence() {
     ]);
     let mut params: Vec<f32> = vec![0.; model.size()];
     let optimizer = GradientDescent::new(1.);
-    let mut trainer = ModelTrainer::new(model, optimizer, dataset, 10000, 8, Mse, rand::rng());
+    let batch_size = NonZeroUsize::new(8).unwrap();
+    let mut trainer = ModelTrainer::new(
+        model,
+        optimizer,
+        dataset,
+        10000,
+        batch_size,
+        Mse,
+        rand::rng(),
+    );
     trainer.train(&mut params);
 
     // 2
@@ -124,7 +144,16 @@ fn test_ml_xor2_gate_convergence() {
         .map(|_| (rng.random::<f32>() - 0.5) * 2.)
         .collect();
     let optimizer = GradientDescent::new(1.0);
-    let mut trainer = ModelTrainer::new(model, optimizer, dataset, 5000, 4, Mse, rand::rng());
+    let batch_size = NonZeroUsize::new(4).unwrap();
+    let mut trainer = ModelTrainer::new(
+        model,
+        optimizer,
+        dataset,
+        5000,
+        batch_size,
+        Mse,
+        rand::rng(),
+    );
     trainer.train(&mut params);
 
     // 2
@@ -187,7 +216,7 @@ fn test_ml_xor4_gate_convergence() {
     // training
     let learning_rate = 1.;
     let iters = 5000;
-    let batch_size = 16;
+    let batch_size = NonZeroUsize::new(16).unwrap();
     let optimizer = GradientDescent::new(learning_rate);
     let mut trainer = ModelTrainer::new(
         model.clone(),

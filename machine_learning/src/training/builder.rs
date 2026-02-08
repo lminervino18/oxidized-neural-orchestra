@@ -1,10 +1,10 @@
 use super::{ModelTrainer, Trainer};
 use crate::{
     arch::{
+        Model, Sequential,
         activations::ActFn,
         layers::Layer,
         loss::{LossFn, Mse},
-        Model, Sequential,
     },
     dataset::Dataset,
     optimization::{GradientDescent, Optimizer},
@@ -12,7 +12,7 @@ use crate::{
 use comms::specs::machine_learning::{
     ActFnSpec, LayerSpec, LossFnSpec, ModelSpec, OptimizerSpec, TrainerSpec,
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 
 /// Builds `Trainer`s given a specification.
 #[derive(Default)]
@@ -128,7 +128,7 @@ impl TrainerBuilder {
         M: Model + 'static,
         O: Optimizer + 'static,
     {
-        match spec.loss {
+        match spec.loss_fn {
             LossFnSpec::Mse => {
                 let loss = Mse::new();
                 self.terminate_build(spec, model, optimizer, loss)

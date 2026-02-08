@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use serde::{Deserialize, Serialize};
 
 /// The specification for the `ActFn` enum.
@@ -65,8 +67,8 @@ pub struct TrainerSpec {
     pub model: ModelSpec,
     pub optimizer: OptimizerSpec,
     pub dataset: DatasetSpec,
-    pub loss: LossFnSpec,
+    pub loss_fn: LossFnSpec,
     pub offline_epochs: usize,
-    pub batch_size: usize,
+    pub batch_size: NonZeroUsize,
     pub seed: Option<u64>,
 }

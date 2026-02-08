@@ -1,7 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
-use comms::specs::server::{
-    DistributionSpec, OptimizerSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec,
+use comms::specs::{
+    machine_learning::OptimizerSpec,
+    server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
 };
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use tokio::io::{AsyncRead, AsyncWrite};

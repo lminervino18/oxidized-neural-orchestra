@@ -1,8 +1,10 @@
+use std::num::NonZeroUsize;
+
 use rand::Rng;
 
 use super::Trainer;
 use crate::{
-    arch::{loss::LossFn, Model},
+    arch::{Model, loss::LossFn},
     dataset::Dataset,
     optimization::Optimizer,
 };
@@ -17,7 +19,7 @@ pub struct ModelTrainer<M: Model, O: Optimizer, L: LossFn, R: Rng> {
     loss: L,
 
     iters: usize,
-    batch_size: usize,
+    batch_size: NonZeroUsize,
     rng: R,
 }
 
@@ -36,7 +38,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
         optimizer: O,
         dataset: Dataset,
         offline_iters: usize,
-        batch_size: usize,
+        batch_size: NonZeroUsize,
         loss: L,
         rng: R,
     ) -> Self {
