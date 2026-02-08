@@ -11,8 +11,8 @@ const HEADER_SIZE: usize = size_of::<Header>();
 /// The payload data for the `Data` variant of the `Msg` enum.
 #[derive(Debug)]
 pub enum Payload<'a> {
-    Gradient(&'a [f32]),
-    Weights(&'a mut [f32]),
+    Grad(&'a [f32]),
+    Params(&'a mut [f32]),
 }
 
 /// The command for the `Control` variant of the `Msg` enum.
@@ -28,8 +28,7 @@ pub enum Command {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Detail {
-    GradSizeMismatch { expected: usize, got: usize },
-    WeightSizeMismatch { expected: usize, got: usize },
+    BufferSizeMismatch { expected: usize, got: usize },
     Fatal(String),
 }
 
@@ -80,8 +79,8 @@ impl<'a> Serialize<'a> for Msg<'a> {
             }
             Msg::Data(payload) => {
                 let (kind, nums): (_, &[_]) = match payload {
-                    Payload::Gradient(grad) => (2, grad),
-                    Payload::Weights(weights) => (3, weights),
+                    Payload::Grad(grad) => (2, grad),
+                    Payload::Params(params) => (3, params),
                 };
 
                 let header = (kind as Header).to_be_bytes();
@@ -116,8 +115,8 @@ impl<'a> Deserialize<'a> for Msg<'a> {
                 let nums = bytemuck::cast_slice_mut(rest);
 
                 let payload = match kind {
-                    2 => Payload::Gradient(nums),
-                    3 => Payload::Weights(nums),
+                    2 => Payload::Grad(nums),
+                    3 => Payload::Params(nums),
                     _ => unreachable!(),
                 };
 

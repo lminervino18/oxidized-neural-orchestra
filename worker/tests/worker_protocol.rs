@@ -56,11 +56,11 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
 
     let server_fut = async move {
         let mut w = [1.0_f32, 2.0];
-        sv_tx.send(&Msg::Data(Payload::Weights(&mut w))).await?;
+        sv_tx.send(&Msg::Data(Payload::Params(&mut w))).await?;
 
         let msg: Msg = sv_rx.recv().await?;
         match msg {
-            Msg::Data(Payload::Gradient(g)) => assert_eq!(g, &[2.0, 4.0]),
+            Msg::Data(Payload::Grad(g)) => assert_eq!(g, &[2.0, 4.0]),
             other => panic!("unexpected message: {other:?}"),
         }
 
@@ -95,7 +95,7 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
 
     let server_fut = async move {
         let g = [0.1_f32, 0.2];
-        sv_tx.send(&Msg::Data(Payload::Gradient(&g))).await?;
+        sv_tx.send(&Msg::Data(Payload::Grad(&g))).await?;
         Ok::<(), io::Error>(())
     };
 

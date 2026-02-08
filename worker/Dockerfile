@@ -1,5 +1,5 @@
 # 0. Define the arguments' default values.
-ARG PKG=parameter_server
+ARG PKG=worker
 ARG MODE
 
 # 1. Install cargo-chef.
@@ -26,7 +26,8 @@ RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
   COPY $PKG    ./$PKG
 
   # Extra dependencies.
-  COPY comms ./comms
+  COPY comms            ./comms
+  COPY machine_learning ./machine_learning
 
 RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
   cargo build $FLAG --bin $PKG

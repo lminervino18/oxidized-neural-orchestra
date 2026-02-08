@@ -1,7 +1,7 @@
 use comms::{
+    OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
     specs::worker::AlgorithmSpec,
-    OnoReceiver, OnoSender,
 };
 use log::{debug, info, warn};
 use tokio::{
@@ -52,7 +52,9 @@ impl Worker {
                     self.worker_id, server_ip
                 );
 
-                let ps_stream = TcpStream::connect(server_ip).await.map_err(WorkerError::Io)?;
+                let ps_stream = TcpStream::connect(server_ip)
+                    .await
+                    .map_err(WorkerError::Io)?;
                 let (ps_rx, ps_tx) = ps_stream.into_split();
                 let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
 
@@ -96,13 +98,13 @@ impl Worker {
                     break;
                 }
 
-                Msg::Data(Payload::Weights(weights)) => {
+                Msg::Data(Payload::Params(weights)) => {
                     let got = weights.len();
                     debug!("training: worker_id={worker_id} step={step} params={got}");
 
                     let grad = trainer.train(weights);
 
-                    tx.send(&Msg::Data(Payload::Gradient(grad)))
+                    tx.send(&Msg::Data(Payload::Grad(grad)))
                         .await
                         .map_err(WorkerError::Io)?;
 
@@ -134,7 +136,7 @@ fn msg_kind(msg: &Msg<'_>) -> &'static str {
     match msg {
         Msg::Control(_) => "control",
         Msg::Err(_) => "err",
-        Msg::Data(Payload::Gradient(_)) => "data/gradient",
-        Msg::Data(Payload::Weights(_)) => "data/weights",
+        Msg::Data(Payload::Grad(_)) => "data/gradient",
+        Msg::Data(Payload::Params(_)) => "data/weights",
     }
 }
