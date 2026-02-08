@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+env_logger = "0.11.8"
 log = { version = "0.4.29", features = ["kv"] }
-env_logger = "0.11"
 
 comms = { path = "../comms" }
 machine_learning = { path = "../machine_learning" }

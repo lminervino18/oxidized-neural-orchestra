@@ -48,7 +48,7 @@ fn test_ml_and2_gate_convergence() {
 
     println!("{y:#?}\n\n\n{y_pred:#?}");
     println!("params: {params:?}");
-    let err = (&y_pred - &y)
+    let _err = (&y_pred - &y)
         .mapv(|x| x.powi(2))
         .mean()
         .unwrap_or_default();
@@ -139,7 +139,7 @@ fn test_ml_xor2_gate_convergence() {
 
     println!("{y:#?}\n\n\n{y_pred:#?}");
     println!("params: {params:?}");
-    let err = (&y_pred - &y)
+    let _err = (&y_pred - &y)
         .mapv(|x| x.powi(2))
         .mean()
         .unwrap_or_default();
