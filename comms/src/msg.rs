@@ -24,10 +24,10 @@ pub enum Command {
 
     /// Reports a sequence of losses computed by the worker over its partial dataset
     /// after completing an epoch (i.e., one full pass over that partial dataset).
-    ReportLosses {
+    ReportLoss {
         worker_id: usize,
         epoch: usize,
-        losses: Vec<f32>,
+        loss: f32,
     },
 
     Disconnect,

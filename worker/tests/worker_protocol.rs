@@ -18,10 +18,10 @@ impl TestTrainer {
 }
 
 impl Trainer for TestTrainer {
-    fn train(&mut self, weights: &mut [f32]) -> &[f32] {
+    fn train(&mut self, weights: &mut [f32]) -> (&[f32], f32) {
         self.buf.clear();
         self.buf.extend(weights.iter().map(|x| 2.0 * x));
-        &self.buf
+        (&self.buf, 0.0)
     }
 }
 
@@ -204,10 +204,13 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
     let orchestrator_fut = async move {
         let msg: Msg = orch_rx.recv().await?;
         match msg {
-            Msg::Control(Command::ReportLosses { worker_id, epoch, losses }) => {
+            Msg::Control(Command::ReportLoss {
+                worker_id,
+                epoch,
+                loss: _,
+            }) => {
                 assert_eq!(worker_id, 0);
                 assert_eq!(epoch, 1);
-                assert!(losses.is_empty());
             }
             other => panic!("unexpected orchestrator message: {other:?}"),
         }

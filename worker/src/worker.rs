@@ -79,7 +79,8 @@ impl Worker {
                 let (ps_rx, ps_tx) = ps_stream.into_split();
                 let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
 
-                self.run_parameter_server(ps_rx, ps_tx, orch_rx, orch_tx).await
+                self.run_parameter_server(ps_rx, ps_tx, orch_rx, orch_tx)
+                    .await
             }
         }
     }
@@ -135,7 +136,7 @@ impl Worker {
                             let got = weights.len();
                             debug!("training: worker_id={worker_id} step={step} params={got}");
 
-                            let grad = trainer.train(weights);
+                            let (grad, loss) = trainer.train(weights);
 
                             ps_tx.send(&Msg::Data(Payload::Grad(grad)))
                                 .await
@@ -143,15 +144,24 @@ impl Worker {
 
                             step += 1;
 
+                            // NOTE: es barato calcular la loss porq durante el entrenamiento
+                            // tenemos en la mano las cosas q necesitamos para sacarlo. Lo que sí
+                            // sería caro es printearlo pero no lo estamos haciendo. Por esto hice
+                            // que trainer retorne tupla (grad, loss), donde la loss es la de la
+                            // última epoch.
+                            // TODO: es caro mandar 2 msgs, ver de mandar la loss junto con el grad
+                            // (puede ser un campo opcional). Después podemos ver de no computar
+                            // siempre la loss, pero entre un if y unas sumitas no sé qué tanto
+                            // cambia.
                             let epoch = step;
                             if should_report_loss(loss_report, epoch) {
 
                                 //Here i send fake losses, the training domain will need to be extended to compute real epoch losses and report them here.
                                 orch_tx
-                                    .send(&Msg::Control(Command::ReportLosses {
+                                    .send(&Msg::Control(Command::ReportLoss {
                                         worker_id,
                                         epoch,
-                                        losses: Vec::new(),
+                                        loss
                                     }))
                                     .await
                                     .map_err(WorkerError::Io)?;
