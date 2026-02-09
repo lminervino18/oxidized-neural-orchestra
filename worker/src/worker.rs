@@ -87,9 +87,6 @@ impl Worker {
 
     /// Runs the parameter-server protocol loop while listening to the orchestrator control plane.
     ///
-    /// This loop provides:
-    /// - Data-plane: weights/gradients exchange with the parameter server.
-    /// - Control-plane: early-stop via orchestrator `Disconnect`, and epoch telemetry via `ReportLosses`.
     /// # Args
     /// * `ps_rx` - Receiving end of the parameter-server channel.
     /// * `ps_tx` - Sending end of the parameter-server channel.
@@ -111,6 +108,7 @@ impl Worker {
         Rorch: AsyncRead + Unpin + Send,
         Worch: AsyncWrite + Unpin + Send,
     {
+        // Extract what we need from `self` up-front.
         let worker_id = self.worker_id;
         let loss_report = self.loss_report;
         let mut trainer = self.trainer;
@@ -125,82 +123,23 @@ impl Worker {
             tokio::select! {
                 ps_msg = ps_rx.recv::<Msg>() => {
                     let msg = ps_msg.map_err(WorkerError::Io)?;
-
-                    match msg {
-                        Msg::Control(Command::Disconnect) => {
-                            info!("disconnect received from parameter server: worker_id={worker_id} step={step}");
-                            break;
-                        }
-
-                        Msg::Data(Payload::Params(weights)) => {
-                            let got = weights.len();
-                            debug!("training: worker_id={worker_id} step={step} params={got}");
-
-                            let (grad, loss) = trainer.train(weights);
-
-                            ps_tx.send(&Msg::Data(Payload::Grad(grad)))
-                                .await
-                                .map_err(WorkerError::Io)?;
-
-                            step += 1;
-
-                            // NOTE: es barato calcular la loss porq durante el entrenamiento
-                            // tenemos en la mano las cosas q necesitamos para sacarlo. Lo que sí
-                            // sería caro es printearlo pero no lo estamos haciendo. Por esto hice
-                            // que trainer retorne tupla (grad, loss), donde la loss es la de la
-                            // última epoch.
-                            // TODO: es caro mandar 2 msgs, ver de mandar la loss junto con el grad
-                            // (puede ser un campo opcional). Después podemos ver de no computar
-                            // siempre la loss, pero entre un if y unas sumitas no sé qué tanto
-                            // cambia.
-                            let epoch = step;
-                            if should_report_loss(loss_report, epoch) {
-
-                                //Here i send fake losses, the training domain will need to be extended to compute real epoch losses and report them here.
-                                orch_tx
-                                    .send(&Msg::Control(Command::ReportLoss {
-                                        worker_id,
-                                        epoch,
-                                        loss
-                                    }))
-                                    .await
-                                    .map_err(WorkerError::Io)?;
-                            }
-                        }
-
-                        other => {
-                            warn!(
-                                "unexpected message from parameter server: worker_id={} step={} got={}",
-                                worker_id,
-                                step,
-                                msg_kind(&other)
-                            );
-
-                            return Err(WorkerError::UnexpectedMessage {
-                                step,
-                                got: msg_kind(&other),
-                            });
-                        }
+                    if handle_server_message(
+                        worker_id,
+                        loss_report,
+                        &mut step,
+                        &mut trainer,
+                        &mut ps_tx,
+                        &mut orch_tx,
+                        msg,
+                    ).await? {
+                        break;
                     }
                 }
 
                 orch_msg = orch_rx.recv::<Msg>() => {
                     let msg = orch_msg.map_err(WorkerError::Io)?;
-
-                    match msg {
-                        Msg::Control(Command::Disconnect) => {
-                            info!("disconnect received from orchestrator: worker_id={worker_id} step={step}");
-                            break;
-                        }
-                        other => {
-                            warn!(
-                                "unexpected message from orchestrator: worker_id={} step={} got={}",
-                                worker_id,
-                                step,
-                                msg_kind(&other),
-                            );
-                            // Ignore unknown control-plane messages for now.
-                        }
+                    if handle_orchestrator_message(worker_id, step, msg) {
+                        break;
                     }
                 }
             }
@@ -208,6 +147,87 @@ impl Worker {
 
         info!("worker finished: worker_id={worker_id} steps={step}");
         Ok(())
+    }
+}
+
+async fn handle_server_message<Wps, Worch>(
+    worker_id: usize,
+    loss_report: LossReportSpec,
+    step: &mut usize,
+    trainer: &mut Box<dyn Trainer>,
+    ps_tx: &mut OnoSender<Wps>,
+    orch_tx: &mut OnoSender<Worch>,
+    msg: Msg<'_>,
+) -> Result<bool, WorkerError>
+where
+    Wps: AsyncWrite + Unpin + Send,
+    Worch: AsyncWrite + Unpin + Send,
+{
+    match msg {
+        Msg::Control(Command::Disconnect) => {
+            info!("disconnect received from parameter server: worker_id={worker_id} step={step}");
+            Ok(true)
+        }
+
+        Msg::Data(Payload::Params(weights)) => {
+            let got = weights.len();
+            debug!("training: worker_id={worker_id} step={step} params={got}");
+
+            let (grad, loss) = trainer.train(weights);
+
+            ps_tx
+                .send(&Msg::Data(Payload::Grad(grad)))
+                .await
+                .map_err(WorkerError::Io)?;
+
+            *step += 1;
+
+            let epoch = *step;
+            if should_report_loss(loss_report, epoch) {
+                orch_tx
+                    .send(&Msg::Control(Command::ReportLoss {
+                        worker_id,
+                        epoch,
+                        loss,
+                    }))
+                    .await
+                    .map_err(WorkerError::Io)?;
+            }
+
+            Ok(false)
+        }
+
+        other => {
+            warn!(
+                "unexpected message from parameter server: worker_id={} step={} got={}",
+                worker_id,
+                step,
+                msg_kind(&other)
+            );
+
+            Err(WorkerError::UnexpectedMessage {
+                step: *step,
+                got: msg_kind(&other),
+            })
+        }
+    }
+}
+
+fn handle_orchestrator_message(worker_id: usize, step: usize, msg: Msg<'_>) -> bool {
+    match msg {
+        Msg::Control(Command::Disconnect) => {
+            info!("disconnect received from orchestrator: worker_id={worker_id} step={step}");
+            true
+        }
+        other => {
+            warn!(
+                "unexpected message from orchestrator: worker_id={} step={} got={}",
+                worker_id,
+                step,
+                msg_kind(&other),
+            );
+            false
+        }
     }
 }
 
