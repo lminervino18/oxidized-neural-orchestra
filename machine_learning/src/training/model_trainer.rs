@@ -2,7 +2,7 @@ use rand::Rng;
 
 use super::Trainer;
 use crate::{
-    arch::{loss::LossFn, Model},
+    arch::{Model, loss::LossFn},
     dataset::Dataset,
     optimization::Optimizer,
 };
@@ -16,7 +16,7 @@ pub struct ModelTrainer<M: Model, O: Optimizer, L: LossFn, R: Rng> {
     model: M,
     loss: L,
 
-    iters: usize,
+    epochs: usize,
     batch_size: usize,
     rng: R,
 }
@@ -28,14 +28,14 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// * `model` - The model that will be trained.
     /// * `optimizer` - The way of optimizing the model (e.g. stochastic gradient descent).
     /// * `dataset` - The dataset the model will be trained with.
-    /// * `iters` - The amount of training iterations performed on each call to `train`.
+    /// * `epochs` - The amount of training epochs performed on each call to `train`.
     /// * `loss` - The loss function used to measure the difference between a model's output and the expected one.
     /// * `rng` - A random number generator.
     pub fn new(
         model: M,
         optimizer: O,
         dataset: Dataset,
-        offline_iters: usize,
+        epochs: usize,
         batch_size: usize,
         loss: L,
         rng: R,
@@ -45,7 +45,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
             model,
             optimizer,
             dataset,
-            iters: offline_iters,
+            epochs,
             batch_size,
             loss,
             rng,
@@ -54,13 +54,13 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
 }
 
 impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
-    /// Performs `iters` iterations of training its model, using its optimizer, dataset, loss
+    /// Performs `epochs` epochs of training its model, using its optimizer, dataset, loss
     /// function and batch size.
     ///
     /// # Arguments
     /// * `params` - The parameters that will be optimized for the model that's being trained.
     pub fn train(&mut self, params: &mut [f32]) -> &[f32] {
-        for i in 0..self.iters + 1 {
+        for i in 0..self.epochs + 1 {
             println!("epoch {i}");
 
             self.dataset.shuffle(&mut self.rng);

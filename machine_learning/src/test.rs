@@ -4,10 +4,10 @@ use ndarray::ArrayView2;
 
 use crate::{
     arch::{
+        Model, Sequential,
         activations::ActFn,
         layers::Layer,
         loss::{LossFn, Mse},
-        Model, Sequential,
     },
     dataset::Dataset,
     optimization::GradientDescent,
@@ -186,14 +186,14 @@ fn test_ml_xor4_gate_convergence() {
 
     // training
     let learning_rate = 1.;
-    let iters = 5000;
+    let epochs = 5000;
     let batch_size = 16;
     let optimizer = GradientDescent::new(learning_rate);
     let mut trainer = ModelTrainer::new(
         model.clone(),
         optimizer,
         dataset,
-        iters,
+        epochs,
         batch_size,
         Mse,
         rand::rng(),

@@ -1,10 +1,10 @@
 use super::{ModelTrainer, Trainer};
 use crate::{
     arch::{
+        Model, Sequential,
         activations::ActFn,
         layers::Layer,
         loss::{LossFn, Mse},
-        Model, Sequential,
     },
     dataset::Dataset,
     optimization::{GradientDescent, Optimizer},
@@ -12,7 +12,7 @@ use crate::{
 use comms::specs::machine_learning::{
     ActFnSpec, LayerSpec, LossFnSpec, ModelSpec, OptimizerSpec, TrainerSpec,
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 
 /// Builds `Trainer`s given a specification.
 #[derive(Default)]
@@ -158,20 +158,12 @@ impl TrainerBuilder {
         O: Optimizer + 'static,
         L: LossFn + 'static,
     {
-        let offline_iters = spec.offline_epochs;
+        let epochs = spec.epochs;
         let batch_size = spec.batch_size;
         let rng = self.generate_rng(spec.seed);
         let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
 
-        let trainer = ModelTrainer::new(
-            model,
-            optimizer,
-            dataset,
-            offline_iters,
-            batch_size,
-            loss,
-            rng,
-        );
+        let trainer = ModelTrainer::new(model, optimizer, dataset, epochs, batch_size, loss, rng);
 
         Box::new(trainer)
     }

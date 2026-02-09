@@ -66,7 +66,7 @@ pub struct TrainerSpec {
     pub optimizer: OptimizerSpec,
     pub dataset: DatasetSpec,
     pub loss: LossFnSpec,
-    pub offline_epochs: usize,
+    pub epochs: usize,
     pub batch_size: usize,
     pub seed: Option<u64>,
 }
