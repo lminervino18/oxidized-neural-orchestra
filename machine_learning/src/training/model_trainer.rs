@@ -64,7 +64,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// A tuple with the param grads and the epoch loss.
     pub fn train(&mut self, params: &mut [f32]) -> (&[f32], f32) {
         let mut loss = 0.0;
-        for i in 0..self.epochs + 1 {
+        for i in 0..self.epochs {
             println!("epoch {i}");
 
             self.dataset.shuffle(&mut self.rng);
