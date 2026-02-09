@@ -82,7 +82,6 @@ impl Dense {
         self.d.view_mut()
     }
 
-    // estos docstrings los dejo pero mepa q están de más porq son priv
     /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
     ///
     /// # Arguments
@@ -113,5 +112,37 @@ impl Dense {
         let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
         let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
         (weights, biases)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dense_3by2_forward() {
+        let mut dense = Dense::new((3, 2), None);
+        /*      [1 2
+         *  W =  3 4 , B = [7 8]
+         *       5 6]
+         ***/
+        let params = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+
+        /* x =  [9 10 11]
+         ***/
+        let x = ArrayView2::from_shape((1, 3), &[9.0, 10.0, 11.0]).unwrap();
+
+        let expected = ArrayView2::from_shape(
+            (1, 2),
+            &[
+                1. * 9. + 3. * 10. + 11. * 5. + 7.,
+                2. * 9. + 4. * 10. + 11. * 6. + 8.,
+            ],
+        )
+        .unwrap();
+
+        let y = dense.forward(&params, x);
+
+        assert_eq!(y, expected);
     }
 }
