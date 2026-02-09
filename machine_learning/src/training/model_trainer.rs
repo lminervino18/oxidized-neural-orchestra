@@ -61,9 +61,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// * `params` - The parameters that will be optimized for the model that's being trained.
     ///
     /// # Returns
-    /// An approximation of the loss of the epoch
-    //  since getting the actual loss would require
-    // forwarding over all batches again at the end of the backprop iterations.
+    /// A tuple with the param grads and the epoch loss.
     pub fn train(&mut self, params: &mut [f32]) -> (&[f32], f32) {
         let mut loss = 0.0;
         for i in 0..self.epochs + 1 {

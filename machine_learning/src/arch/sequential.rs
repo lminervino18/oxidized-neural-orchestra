@@ -25,8 +25,6 @@ impl Sequential {
         }
     }
 
-    // este método lo dejo público para poder testear convergencia y esas weas, hence los
-    // docstrings
     /// Goes through the model's layers, computes all of their outputs and returns a view of the
     /// output of the last one.
     ///
@@ -70,6 +68,11 @@ impl Model for Sequential {
         self.layers.iter().map(|layer| layer.size()).sum()
     }
 
+    // NOTE: since getting the actual loss would require forwarding over all batches again at
+    // the end of the backprop iterations, we are approximating it by averaging the loss at
+    // each batch (this is a good approximation), another option would be to sum the weighted
+    // losses, that is, loss * batch_size and then diving by the also weighted sum of
+    // num_batches.
     fn backprop<'a, L, O, I>(
         &mut self,
         params: &mut [f32],
