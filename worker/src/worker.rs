@@ -89,10 +89,6 @@ impl Worker {
     /// This loop provides:
     /// - Data-plane: weights/gradients exchange with the parameter server.
     /// - Control-plane: early-stop via orchestrator `Disconnect`, and epoch telemetry via `ReportLosses`.
-    ///
-    /// Loss telemetry is currently sent as an empty vector to keep the coupling minimal until the
-    /// training domain exposes real epoch losses.
-    ///
     /// # Args
     /// * `ps_rx` - Receiving end of the parameter-server channel.
     /// * `ps_tx` - Sending end of the parameter-server channel.
