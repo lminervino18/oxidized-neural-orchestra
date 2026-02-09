@@ -37,14 +37,29 @@ impl Worker {
         }
     }
 
-    /// Runs the worker using its configured distributed algorithm.
+    /// Runs the worker using its configured distributed algorithm while keeping a live
+    /// bidirectional channel to the orchestrator.
+    ///
+    /// # Args
+    /// * `orch_rx` - Receiving end of the orchestrator channel.
+    /// * `orch_tx` - Sending end of the orchestrator channel.
     ///
     /// # Returns
     /// Returns `Ok(())` on graceful completion.
     ///
     /// # Errors
     /// Returns `WorkerError` on I/O failures or protocol violations.
-    pub async fn run(self) -> Result<(), WorkerError> {
+    pub async fn run<R, W>(
+        self,
+        orch_rx: OnoReceiver<R>,
+        orch_tx: OnoSender<W>,
+    ) -> Result<(), WorkerError>
+    where
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
+    {
+        let _orch = (orch_rx, orch_tx);
+
         match self.algorithm {
             AlgorithmSpec::ParameterServer { server_ip } => {
                 info!(
