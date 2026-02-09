@@ -21,6 +21,15 @@ pub enum Payload<'a> {
 pub enum Command {
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
+
+    /// Reports a sequence of losses computed by the worker over its partial dataset
+    /// after completing an epoch (i.e., one full pass over that partial dataset).
+    ReportLosses {
+        worker_id: usize,
+        epoch: usize,
+        losses: Vec<f32>,
+    },
+
     Disconnect,
 }
 
