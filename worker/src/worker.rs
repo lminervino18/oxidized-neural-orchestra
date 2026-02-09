@@ -1,7 +1,7 @@
 use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
-    specs::worker::AlgorithmSpec,
+    specs::worker::{AlgorithmSpec, LossReportSpec},
 };
 use log::{debug, info, warn};
 use tokio::{
@@ -16,6 +16,7 @@ use machine_learning::training::Trainer;
 pub struct Worker {
     worker_id: usize,
     algorithm: AlgorithmSpec,
+    loss_report: LossReportSpec,
     trainer: Box<dyn Trainer>,
 }
 
@@ -25,14 +26,21 @@ impl Worker {
     /// # Args
     /// * `worker_id` - Identifier used for observability.
     /// * `algorithm` - Distributed algorithm selection for this worker.
+    /// * `loss_report` - Loss reporting policy used to emit epoch telemetry to the orchestrator.
     /// * `trainer` - Domain strategy used to compute gradients from weights.
     ///
     /// # Returns
     /// A new worker instance.
-    pub fn new(worker_id: usize, algorithm: AlgorithmSpec, trainer: Box<dyn Trainer>) -> Self {
+    pub fn new(
+        worker_id: usize,
+        algorithm: AlgorithmSpec,
+        loss_report: LossReportSpec,
+        trainer: Box<dyn Trainer>,
+    ) -> Self {
         Self {
             worker_id,
             algorithm,
+            loss_report,
             trainer,
         }
     }
@@ -49,17 +57,15 @@ impl Worker {
     ///
     /// # Errors
     /// Returns `WorkerError` on I/O failures or protocol violations.
-    pub async fn run<R, W>(
+    pub async fn run<Rorch, Worch>(
         self,
-        orch_rx: OnoReceiver<R>,
-        orch_tx: OnoSender<W>,
+        orch_rx: OnoReceiver<Rorch>,
+        orch_tx: OnoSender<Worch>,
     ) -> Result<(), WorkerError>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        Rorch: AsyncRead + Unpin + Send,
+        Worch: AsyncWrite + Unpin + Send,
     {
-        let _orch = (orch_rx, orch_tx);
-
         match self.algorithm {
             AlgorithmSpec::ParameterServer { server_ip } => {
                 info!(
@@ -73,29 +79,43 @@ impl Worker {
                 let (ps_rx, ps_tx) = ps_stream.into_split();
                 let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
 
-                self.run_parameter_server(ps_rx, ps_tx).await
+                self.run_parameter_server(ps_rx, ps_tx, orch_rx, orch_tx).await
             }
         }
     }
 
-    /// Runs the parameter-server protocol loop until `Disconnect` or a violation.
+    /// Runs the parameter-server protocol loop while listening to the orchestrator control plane.
+    ///
+    /// This loop provides:
+    /// - Data-plane: weights/gradients exchange with the parameter server.
+    /// - Control-plane: early-stop via orchestrator `Disconnect`, and epoch telemetry via `ReportLosses`.
+    ///
+    /// Loss telemetry is currently sent as an empty vector to keep the coupling minimal until the
+    /// training domain exposes real epoch losses.
     ///
     /// # Args
-    /// * `rx` - Receiving channel end.
-    /// * `tx` - Sending channel end.
+    /// * `ps_rx` - Receiving end of the parameter-server channel.
+    /// * `ps_tx` - Sending end of the parameter-server channel.
+    /// * `orch_rx` - Receiving end of the orchestrator channel.
+    /// * `orch_tx` - Sending end of the orchestrator channel.
     ///
     /// # Errors
     /// Returns `WorkerError` on I/O failures or protocol invariant violations.
-    pub async fn run_parameter_server<R, W>(
+    pub async fn run_parameter_server<Rps, Wps, Rorch, Worch>(
         self,
-        mut rx: OnoReceiver<R>,
-        mut tx: OnoSender<W>,
+        mut ps_rx: OnoReceiver<Rps>,
+        mut ps_tx: OnoSender<Wps>,
+        mut orch_rx: OnoReceiver<Rorch>,
+        mut orch_tx: OnoSender<Worch>,
     ) -> Result<(), WorkerError>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        Rps: AsyncRead + Unpin + Send,
+        Wps: AsyncWrite + Unpin + Send,
+        Rorch: AsyncRead + Unpin + Send,
+        Worch: AsyncWrite + Unpin + Send,
     {
         let worker_id = self.worker_id;
+        let loss_report = self.loss_report;
         let mut trainer = self.trainer;
 
         let mut step: usize = 0;
@@ -105,45 +125,91 @@ impl Worker {
         loop {
             debug!("waiting message: worker_id={worker_id} step={step}");
 
-            let msg: Msg = rx.recv().await.map_err(WorkerError::Io)?;
+            tokio::select! {
+                ps_msg = ps_rx.recv::<Msg>() => {
+                    let msg = ps_msg.map_err(WorkerError::Io)?;
 
-            match msg {
-                Msg::Control(Command::Disconnect) => {
-                    info!("disconnect received: worker_id={worker_id} step={step}");
-                    break;
+                    match msg {
+                        Msg::Control(Command::Disconnect) => {
+                            info!("disconnect received from parameter server: worker_id={worker_id} step={step}");
+                            break;
+                        }
+
+                        Msg::Data(Payload::Params(weights)) => {
+                            let got = weights.len();
+                            debug!("training: worker_id={worker_id} step={step} params={got}");
+
+                            let grad = trainer.train(weights);
+
+                            ps_tx.send(&Msg::Data(Payload::Grad(grad)))
+                                .await
+                                .map_err(WorkerError::Io)?;
+
+                            step += 1;
+
+                            let epoch = step;
+                            if should_report_loss(loss_report, epoch) {
+
+                                //Here i send fake losses, the training domain will need to be extended to compute real epoch losses and report them here.
+                                orch_tx
+                                    .send(&Msg::Control(Command::ReportLosses {
+                                        worker_id,
+                                        epoch,
+                                        losses: Vec::new(),
+                                    }))
+                                    .await
+                                    .map_err(WorkerError::Io)?;
+                            }
+                        }
+
+                        other => {
+                            warn!(
+                                "unexpected message from parameter server: worker_id={} step={} got={}",
+                                worker_id,
+                                step,
+                                msg_kind(&other)
+                            );
+
+                            return Err(WorkerError::UnexpectedMessage {
+                                step,
+                                got: msg_kind(&other),
+                            });
+                        }
+                    }
                 }
 
-                Msg::Data(Payload::Params(weights)) => {
-                    let got = weights.len();
-                    debug!("training: worker_id={worker_id} step={step} params={got}");
+                orch_msg = orch_rx.recv::<Msg>() => {
+                    let msg = orch_msg.map_err(WorkerError::Io)?;
 
-                    let grad = trainer.train(weights);
-
-                    tx.send(&Msg::Data(Payload::Grad(grad)))
-                        .await
-                        .map_err(WorkerError::Io)?;
-
-                    step += 1;
-                }
-
-                other => {
-                    warn!(
-                        "unexpected message: worker_id={} step={} got={}",
-                        worker_id,
-                        step,
-                        msg_kind(&other)
-                    );
-
-                    return Err(WorkerError::UnexpectedMessage {
-                        step,
-                        got: msg_kind(&other),
-                    });
+                    match msg {
+                        Msg::Control(Command::Disconnect) => {
+                            info!("disconnect received from orchestrator: worker_id={worker_id} step={step}");
+                            break;
+                        }
+                        other => {
+                            warn!(
+                                "unexpected message from orchestrator: worker_id={} step={} got={}",
+                                worker_id,
+                                step,
+                                msg_kind(&other),
+                            );
+                            // Ignore unknown control-plane messages for now.
+                        }
+                    }
                 }
             }
         }
 
         info!("worker finished: worker_id={worker_id} steps={step}");
         Ok(())
+    }
+}
+
+fn should_report_loss(policy: LossReportSpec, epoch: usize) -> bool {
+    match policy {
+        LossReportSpec::Disabled => false,
+        LossReportSpec::EveryEpoch => true,
+        LossReportSpec::EveryNEpochs { n } => n != 0 && epoch % n == 0,
     }
 }
 

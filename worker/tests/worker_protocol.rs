@@ -3,7 +3,7 @@ use std::io;
 use tokio::io as tokio_io;
 
 use comms::msg::{Command, Msg, Payload};
-use comms::specs::worker::AlgorithmSpec;
+use comms::specs::worker::{AlgorithmSpec, LossReportSpec};
 use machine_learning::training::Trainer;
 use worker::{Worker, WorkerError};
 
@@ -31,8 +31,24 @@ fn make_worker() -> Worker {
         AlgorithmSpec::ParameterServer {
             server_ip: "127.0.0.1:0".parse().unwrap(),
         },
+        LossReportSpec::Disabled,
         Box::new(TestTrainer::new()),
     )
+}
+
+/// Creates an orchestrator channel for the worker and returns a guard stream that must be kept
+/// alive for the duration of the test to prevent EOF/BrokenPipe on the orchestrator side.
+fn orch_channel() -> (
+    comms::OnoReceiver<tokio_io::ReadHalf<tokio_io::DuplexStream>>,
+    comms::OnoSender<tokio_io::WriteHalf<tokio_io::DuplexStream>>,
+    tokio_io::DuplexStream,
+) {
+    let (orch_stream, orch_peer) = tokio_io::duplex(4096);
+
+    let (orch_rx, orch_tx) = tokio_io::split(orch_stream);
+    let (orch_rx, orch_tx) = comms::channel(orch_rx, orch_tx);
+
+    (orch_rx, orch_tx, orch_peer)
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -45,11 +61,13 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
     let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
+    let (orch_rx, orch_tx, _orch_peer) = orch_channel();
+
     let worker = make_worker();
 
     let worker_fut = async move {
         worker
-            .run_parameter_server(wk_rx, wk_tx)
+            .run_parameter_server(wk_rx, wk_tx, orch_rx, orch_tx)
             .await
             .map_err(WorkerError::into_io)
     };
@@ -84,11 +102,13 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
     let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
+    let (orch_rx, orch_tx, _orch_peer) = orch_channel();
+
     let worker = make_worker();
 
     let worker_fut = async move {
         worker
-            .run_parameter_server(wk_rx, wk_tx)
+            .run_parameter_server(wk_rx, wk_tx, orch_rx, orch_tx)
             .await
             .map_err(WorkerError::into_io)
     };
@@ -115,11 +135,13 @@ async fn worker_stops_on_disconnect() -> io::Result<()> {
     let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
     let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
 
+    let (orch_rx, orch_tx, _orch_peer) = orch_channel();
+
     let worker = make_worker();
 
     let worker_fut = async move {
         worker
-            .run_parameter_server(wk_rx, wk_tx)
+            .run_parameter_server(wk_rx, wk_tx, orch_rx, orch_tx)
             .await
             .map_err(WorkerError::into_io)
     };
