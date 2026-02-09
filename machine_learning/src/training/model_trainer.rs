@@ -59,14 +59,20 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     ///
     /// # Arguments
     /// * `params` - The parameters that will be optimized for the model that's being trained.
-    pub fn train(&mut self, params: &mut [f32]) -> &[f32] {
+    ///
+    /// # Returns
+    /// An approximation of the loss of the epoch
+    //  since getting the actual loss would require
+    // forwarding over all batches again at the end of the backprop iterations.
+    pub fn train(&mut self, params: &mut [f32]) -> (&[f32], f32) {
+        let mut loss = 0.0;
         for i in 0..self.epochs + 1 {
             println!("epoch {i}");
 
             self.dataset.shuffle(&mut self.rng);
             let batches = self.dataset.batches(self.batch_size);
 
-            self.model.backprop(
+            loss = self.model.backprop(
                 params,
                 &mut self.grad,
                 &self.loss,
@@ -75,7 +81,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
             );
         }
 
-        &self.grad
+        (&self.grad, loss)
     }
 }
 
@@ -86,7 +92,7 @@ where
     L: LossFn,
     R: Rng,
 {
-    fn train(&mut self, params: &mut [f32]) -> &[f32] {
+    fn train(&mut self, params: &mut [f32]) -> (&[f32], f32) {
         self.train(params)
     }
 }
