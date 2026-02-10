@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroUsize;
 
 /// The specification for the `ActFn` enum.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -66,7 +67,7 @@ pub struct TrainerSpec {
     pub optimizer: OptimizerSpec,
     pub dataset: DatasetSpec,
     pub loss: LossFnSpec,
-    pub epochs: usize,
-    pub batch_size: usize,
+    pub epochs: NonZeroUsize,
+    pub batch_size: NonZeroUsize,
     pub seed: Option<u64>,
 }

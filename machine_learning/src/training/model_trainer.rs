@@ -6,6 +6,7 @@ use crate::{
     dataset::Dataset,
     optimization::Optimizer,
 };
+use std::num::NonZeroUsize;
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
 /// including the model itself.
@@ -16,8 +17,8 @@ pub struct ModelTrainer<M: Model, O: Optimizer, L: LossFn, R: Rng> {
     model: M,
     loss: L,
 
-    epochs: usize,
-    batch_size: usize,
+    epochs: NonZeroUsize,
+    batch_size: NonZeroUsize,
     rng: R,
 }
 
@@ -35,8 +36,8 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
         model: M,
         optimizer: O,
         dataset: Dataset,
-        epochs: usize,
-        batch_size: usize,
+        epochs: NonZeroUsize,
+        batch_size: NonZeroUsize,
         loss: L,
         rng: R,
     ) -> Self {
@@ -63,13 +64,14 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
     pub fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
-        let mut losses = Vec::with_capacity(self.epochs);
+        let epochs = self.epochs.get();
+        let batch_size = self.batch_size.get();
 
-        for i in 0..self.epochs {
-            println!("epoch {i}");
+        let mut losses = Vec::with_capacity(epochs);
 
+        for _ in 0..epochs {
             self.dataset.shuffle(&mut self.rng);
-            let batches = self.dataset.batches(self.batch_size);
+            let batches = self.dataset.batches(batch_size);
 
             losses.push(self.model.backprop(
                 params,
