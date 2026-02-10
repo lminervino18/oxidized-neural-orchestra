@@ -62,24 +62,25 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     ///
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
-    pub fn train(&mut self, params: &mut [f32]) -> (&[f32], f32) {
-        let mut loss = 0.0;
+    pub fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
+        let mut losses = Vec::with_capacity(self.epochs);
+
         for i in 0..self.epochs {
             println!("epoch {i}");
 
             self.dataset.shuffle(&mut self.rng);
             let batches = self.dataset.batches(self.batch_size);
 
-            loss = self.model.backprop(
+            losses.push(self.model.backprop(
                 params,
                 &mut self.grad,
                 &self.loss,
                 &mut self.optimizer,
                 batches,
-            );
+            ));
         }
 
-        (&self.grad, loss)
+        (&self.grad, losses)
     }
 }
 
@@ -90,7 +91,7 @@ where
     L: LossFn,
     R: Rng,
 {
-    fn train(&mut self, params: &mut [f32]) -> (&[f32], f32) {
+    fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
         self.train(params)
     }
 }

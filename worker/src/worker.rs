@@ -173,7 +173,7 @@ where
             let got = weights.len();
             debug!("training: worker_id={worker_id} step={step} params={got}");
 
-            let (grad, loss) = trainer.train(weights);
+            let (grad, losses) = trainer.train(weights);
 
             ps_tx
                 .send(&Msg::Data(Payload::Grad(grad)))
@@ -188,7 +188,7 @@ where
                     .send(&Msg::Control(Command::ReportLoss {
                         worker_id,
                         epoch,
-                        loss,
+                        losses,
                     }))
                     .await
                     .map_err(WorkerError::Io)?;

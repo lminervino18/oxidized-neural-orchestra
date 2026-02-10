@@ -18,10 +18,10 @@ impl TestTrainer {
 }
 
 impl Trainer for TestTrainer {
-    fn train(&mut self, weights: &mut [f32]) -> (&[f32], f32) {
+    fn train(&mut self, weights: &mut [f32]) -> (&[f32], Vec<f32>) {
         self.buf.clear();
         self.buf.extend(weights.iter().map(|x| 2.0 * x));
-        (&self.buf, 0.0)
+        (&self.buf, vec![0.0])
     }
 }
 
@@ -207,7 +207,7 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
             Msg::Control(Command::ReportLoss {
                 worker_id,
                 epoch,
-                loss: _,
+                losses: _,
             }) => {
                 assert_eq!(worker_id, 0);
                 assert_eq!(epoch, 1);

@@ -27,7 +27,7 @@ pub enum Command {
     ReportLoss {
         worker_id: usize,
         epoch: usize,
-        loss: f32,
+        losses: Vec<f32>,
     },
 
     Disconnect,
