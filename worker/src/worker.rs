@@ -1,7 +1,7 @@
 use comms::{
-    OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
     specs::worker::{AlgorithmSpec, LossReportSpec},
+    OnoReceiver, OnoSender,
 };
 use log::{debug, info, warn};
 use tokio::{
@@ -73,9 +73,7 @@ impl Worker {
                     self.worker_id, server_ip
                 );
 
-                let ps_stream = TcpStream::connect(server_ip)
-                    .await
-                    .map_err(WorkerError::Io)?;
+                let ps_stream = TcpStream::connect(server_ip).await?;
                 let (ps_rx, ps_tx) = ps_stream.into_split();
                 let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
 
@@ -108,7 +106,6 @@ impl Worker {
         Rorch: AsyncRead + Unpin + Send,
         Worch: AsyncWrite + Unpin + Send,
     {
-        // Extract what we need from `self` up-front.
         let worker_id = self.worker_id;
         let loss_report = self.loss_report;
         let mut trainer = self.trainer;
@@ -122,7 +119,7 @@ impl Worker {
 
             tokio::select! {
                 ps_msg = ps_rx.recv::<Msg>() => {
-                    let msg = ps_msg.map_err(WorkerError::Io)?;
+                    let msg = ps_msg?;
                     if handle_server_message(
                         worker_id,
                         loss_report,
@@ -137,7 +134,7 @@ impl Worker {
                 }
 
                 orch_msg = orch_rx.recv::<Msg>() => {
-                    let msg = orch_msg.map_err(WorkerError::Io)?;
+                    let msg = orch_msg?;
                     if handle_orchestrator_message(worker_id, step, msg) {
                         break;
                     }
@@ -175,10 +172,7 @@ where
 
             let (grad, losses) = trainer.train(weights);
 
-            ps_tx
-                .send(&Msg::Data(Payload::Grad(grad)))
-                .await
-                .map_err(WorkerError::Io)?;
+            ps_tx.send(&Msg::Data(Payload::Grad(grad))).await?;
 
             *step += 1;
 
@@ -190,8 +184,7 @@ where
                         epoch,
                         losses,
                     }))
-                    .await
-                    .map_err(WorkerError::Io)?;
+                    .await?;
             }
 
             Ok(false)

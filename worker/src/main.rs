@@ -1,16 +1,16 @@
-use std::{env, error::Error};
+use std::{env, io};
 
 use env_logger::Env;
 use log::info;
 use tokio::{net::TcpListener, signal};
 
-use worker::{WorkerAcceptor, WorkerBuilder, WorkerError};
+use worker::{WorkerAcceptor, WorkerBuilder};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: &str = "8765";
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> io::Result<()> {
     init_logging();
 
     let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::select! {
         ret = worker.run(orch_rx, orch_tx) => {
-            ret.map_err(WorkerError::into_io)?;
+            ret.map_err(io::Error::from)?;
             info!("worker finished");
         }
         _ = signal::ctrl_c() => {
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 /// Returns an `io::Error` if binding or accept fails.
 async fn accept_orchestrator_channel(
     listen_addr: &str,
-) -> std::io::Result<(
+) -> io::Result<(
     comms::OnoReceiver<tokio::net::tcp::OwnedReadHalf>,
     comms::OnoSender<tokio::net::tcp::OwnedWriteHalf>,
 )> {
