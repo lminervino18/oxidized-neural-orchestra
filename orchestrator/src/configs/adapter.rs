@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, net::SocketAddr};
 
 use comms::specs::{
     machine_learning::{
@@ -17,11 +17,14 @@ use crate::configs::{
 pub fn to_specs_adapter(
     model: ModelConfig,
     training: TrainingConfig,
-) -> io::Result<(WorkerSpec, Option<ServerSpec>)> {
-    Ok((
-        resolve_worker(&model, &training)?,
-        resolve_server(&model, &training),
-    ))
+) -> io::Result<(
+    Vec<SocketAddr>,
+    WorkerSpec,
+    Option<(SocketAddr, ServerSpec)>,
+)> {
+    let worker_spec = resolve_worker(&model, &training)?;
+    let server_spec = resolve_server(&model, &training);
+    Ok((training.worker_ips, worker_spec, server_spec))
 }
 
 fn resolve_worker(model: &ModelConfig, training: &TrainingConfig) -> io::Result<WorkerSpec> {
@@ -37,12 +40,16 @@ fn resolve_worker(model: &ModelConfig, training: &TrainingConfig) -> io::Result<
     Ok(worker)
 }
 
-fn resolve_server(model: &ModelConfig, training: &TrainingConfig) -> Option<ServerSpec> {
-    let (_, Some((synchronizer, store))) =
+fn resolve_server(
+    model: &ModelConfig,
+    training: &TrainingConfig,
+) -> Option<(SocketAddr, ServerSpec)> {
+    let (_, Some((server_ip, synchronizer, store))) =
         resolve_algorithm_synchronizer_store(&training.algorithm)
     else {
         return None;
     };
+
     let (_, param_gen) = resolve_model_param_gen(model);
     let optimizer = resolve_optimizer(training.optimizer);
 
@@ -55,12 +62,15 @@ fn resolve_server(model: &ModelConfig, training: &TrainingConfig) -> Option<Serv
         seed: training.seed,
     };
 
-    Some(server)
+    Some((server_ip, server))
 }
 
 fn resolve_algorithm_synchronizer_store(
     algorithm: &AlgorithmConfig,
-) -> (AlgorithmSpec, Option<(SynchronizerSpec, StoreSpec)>) {
+) -> (
+    AlgorithmSpec,
+    Option<(SocketAddr, SynchronizerSpec, StoreSpec)>,
+) {
     match algorithm {
         AlgorithmConfig::ParameterServer {
             server_ips,
@@ -73,7 +83,10 @@ fn resolve_algorithm_synchronizer_store(
             let synchronizer_spec = resolve_synchronizer(*synchronizer);
             let store_spec = resolve_store(*store);
 
-            (algorithm_spec, Some((synchronizer_spec, store_spec)))
+            (
+                algorithm_spec,
+                Some((server_ips[0], synchronizer_spec, store_spec)),
+            )
         }
     }
 }
