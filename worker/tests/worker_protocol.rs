@@ -5,7 +5,7 @@ use tokio::io as tokio_io;
 use comms::msg::{Command, Msg, Payload};
 use comms::specs::worker::{AlgorithmSpec, LossReportSpec};
 use machine_learning::training::Trainer;
-use worker::{Worker, WorkerError};
+use worker::Worker;
 
 struct TestTrainer {
     buf: Vec<f32>,
@@ -78,7 +78,7 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
         worker
             .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
-            .map_err(WorkerError::into_io)
+            .map_err(io::Error::from)
     };
 
     let server_fut = async move {
@@ -119,7 +119,7 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
         worker
             .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
-            .map_err(WorkerError::into_io)
+            .map_err(io::Error::from)
     };
 
     let server_fut = async move {
@@ -152,7 +152,7 @@ async fn worker_stops_on_disconnect() -> io::Result<()> {
         worker
             .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
-            .map_err(WorkerError::into_io)
+            .map_err(io::Error::from)
     };
 
     let server_fut = async move {
@@ -184,7 +184,7 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
         worker
             .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
-            .map_err(WorkerError::into_io)
+            .map_err(io::Error::from)
     };
 
     let server_fut = async move {

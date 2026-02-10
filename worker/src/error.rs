@@ -62,10 +62,10 @@ impl From<io::Error> for WorkerError {
     }
 }
 
-impl WorkerError {
-    /// Converts this error into an `io::Error` for boundary APIs.
-    pub fn into_io(self) -> io::Error {
-        match self {
+/// Boundary conversion for binaries / I/O APIs.
+impl From<WorkerError> for io::Error {
+    fn from(value: WorkerError) -> Self {
+        match value {
             WorkerError::Io(e) => e,
             other => io::Error::new(io::ErrorKind::InvalidData, other),
         }
