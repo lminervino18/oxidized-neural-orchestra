@@ -16,6 +16,7 @@ use crate::{
     training::ModelTrainer,
 };
 use rand::Rng;
+use std::num::NonZeroUsize;
 
 #[test]
 fn test_ml_and2_gate_convergence() {
@@ -35,13 +36,12 @@ fn test_ml_and2_gate_convergence() {
     ]);
     let mut params: Vec<f32> = vec![0.; model.size()];
     let optimizer = GradientDescent::new(10.);
-    let batch_size = NonZeroUsize::new(4).unwrap();
     let mut trainer = ModelTrainer::new(
         model,
         optimizer,
         dataset,
-        10000,
-        batch_size,
+        NonZeroUsize::new(10000).unwrap(),
+        NonZeroUsize::new(4).unwrap(),
         Mse,
         rand::rng(),
     );
@@ -90,13 +90,12 @@ fn test_ml_and3_gate_convergence() {
     ]);
     let mut params: Vec<f32> = vec![0.; model.size()];
     let optimizer = GradientDescent::new(1.);
-    let batch_size = NonZeroUsize::new(8).unwrap();
     let mut trainer = ModelTrainer::new(
         model,
         optimizer,
         dataset,
-        10000,
-        batch_size,
+        NonZeroUsize::new(10000).unwrap(),
+        NonZeroUsize::new(8).unwrap(),
         Mse,
         rand::rng(),
     );
@@ -144,13 +143,12 @@ fn test_ml_xor2_gate_convergence() {
         .map(|_| (rng.random::<f32>() - 0.5) * 2.)
         .collect();
     let optimizer = GradientDescent::new(1.0);
-    let batch_size = NonZeroUsize::new(4).unwrap();
     let mut trainer = ModelTrainer::new(
         model,
         optimizer,
         dataset,
-        5000,
-        batch_size,
+        NonZeroUsize::new(5000).unwrap(),
+        NonZeroUsize::new(4).unwrap(),
         Mse,
         rand::rng(),
     );
@@ -215,15 +213,15 @@ fn test_ml_xor4_gate_convergence() {
 
     // training
     let learning_rate = 1.;
-    let iters = 5000;
-    let batch_size = NonZeroUsize::new(16).unwrap();
+    let epochs = 5000;
+    let batch_size = 16;
     let optimizer = GradientDescent::new(learning_rate);
     let mut trainer = ModelTrainer::new(
         model.clone(),
         optimizer,
         dataset,
-        iters,
-        batch_size,
+        NonZeroUsize::new(epochs).unwrap(),
+        NonZeroUsize::new(batch_size).unwrap(),
         Mse,
         rand::rng(),
     );

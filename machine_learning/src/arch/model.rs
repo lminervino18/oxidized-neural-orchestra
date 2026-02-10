@@ -15,6 +15,9 @@ pub trait Model {
     /// * `loss` - The loss function.
     /// * `optimizer` - The optimizer that dictates how to update the weights on each gradient calculation.
     /// * `batches` - The batches of data.
+    ///
+    /// # Returns
+    /// The epoch loss.
     fn backprop<'a, L, O, I>(
         &mut self,
         params: &mut [f32],
@@ -22,7 +25,8 @@ pub trait Model {
         loss: &L,
         optimizer: &mut O,
         batches: I,
-    ) where
+    ) -> f32
+    where
         L: LossFn,
         O: Optimizer,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>;

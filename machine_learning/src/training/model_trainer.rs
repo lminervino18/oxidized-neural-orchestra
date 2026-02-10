@@ -8,6 +8,7 @@ use crate::{
     dataset::Dataset,
     optimization::Optimizer,
 };
+use std::num::NonZeroUsize;
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
 /// including the model itself.
@@ -18,7 +19,7 @@ pub struct ModelTrainer<M: Model, O: Optimizer, L: LossFn, R: Rng> {
     model: M,
     loss: L,
 
-    iters: usize,
+    epochs: NonZeroUsize,
     batch_size: NonZeroUsize,
     rng: R,
 }
@@ -30,14 +31,14 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// * `model` - The model that will be trained.
     /// * `optimizer` - The way of optimizing the model (e.g. stochastic gradient descent).
     /// * `dataset` - The dataset the model will be trained with.
-    /// * `iters` - The amount of training iterations performed on each call to `train`.
+    /// * `epochs` - The amount of training epochs performed on each call to `train`.
     /// * `loss` - The loss function used to measure the difference between a model's output and the expected one.
     /// * `rng` - A random number generator.
     pub fn new(
         model: M,
         optimizer: O,
         dataset: Dataset,
-        offline_iters: usize,
+        epochs: NonZeroUsize,
         batch_size: NonZeroUsize,
         loss: L,
         rng: R,
@@ -47,7 +48,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
             model,
             optimizer,
             dataset,
-            iters: offline_iters,
+            epochs,
             batch_size,
             loss,
             rng,
@@ -56,28 +57,34 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
 }
 
 impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
-    /// Performs `iters` iterations of training its model, using its optimizer, dataset, loss
+    /// Performs `epochs` epochs of training its model, using its optimizer, dataset, loss
     /// function and batch size.
     ///
     /// # Arguments
     /// * `params` - The parameters that will be optimized for the model that's being trained.
-    pub fn train(&mut self, params: &mut [f32]) -> &[f32] {
-        for i in 0..self.iters + 1 {
-            println!("epoch {i}");
+    ///
+    /// # Returns
+    /// A tuple with the param grads and the epoch loss.
+    pub fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
+        let epochs = self.epochs.get();
+        let batch_size = self.batch_size.get();
 
+        let mut losses = Vec::with_capacity(epochs);
+
+        for _ in 0..epochs {
             self.dataset.shuffle(&mut self.rng);
-            let batches = self.dataset.batches(self.batch_size);
+            let batches = self.dataset.batches(batch_size);
 
-            self.model.backprop(
+            losses.push(self.model.backprop(
                 params,
                 &mut self.grad,
                 &self.loss,
                 &mut self.optimizer,
                 batches,
-            );
+            ));
         }
 
-        &self.grad
+        (&self.grad, losses)
     }
 }
 
@@ -88,7 +95,7 @@ where
     L: LossFn,
     R: Rng,
 {
-    fn train(&mut self, params: &mut [f32]) -> &[f32] {
+    fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
         self.train(params)
     }
 }

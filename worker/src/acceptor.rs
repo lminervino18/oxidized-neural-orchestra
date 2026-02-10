@@ -1,9 +1,9 @@
 use std::io;
 
 use comms::{
+    OnoReceiver,
     msg::{Command, Msg},
     specs::worker::WorkerSpec,
-    OnoReceiver,
 };
 use log::{info, warn};
 use tokio::io::AsyncRead;

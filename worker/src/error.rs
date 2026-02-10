@@ -4,9 +4,20 @@ use std::{error::Error, fmt, io};
 #[derive(Debug)]
 pub enum WorkerError {
     Io(io::Error),
-    UnexpectedMessage { step: usize, got: &'static str },
-    WeightsLengthMismatch { step: usize, got: usize, expected: usize },
-    GradientLengthMismatch { step: usize, got: usize, expected: usize },
+    UnexpectedMessage {
+        step: usize,
+        got: &'static str,
+    },
+    WeightsLengthMismatch {
+        step: usize,
+        got: usize,
+        expected: usize,
+    },
+    GradientLengthMismatch {
+        step: usize,
+        got: usize,
+        expected: usize,
+    },
 }
 
 impl fmt::Display for WorkerError {
@@ -16,11 +27,19 @@ impl fmt::Display for WorkerError {
             WorkerError::UnexpectedMessage { step, got } => {
                 write!(f, "unexpected message at step {step}: got {got}")
             }
-            WorkerError::WeightsLengthMismatch { step, got, expected } => write!(
+            WorkerError::WeightsLengthMismatch {
+                step,
+                got,
+                expected,
+            } => write!(
                 f,
                 "weights length mismatch at step {step}: got {got}, expected {expected}"
             ),
-            WorkerError::GradientLengthMismatch { step, got, expected } => write!(
+            WorkerError::GradientLengthMismatch {
+                step,
+                got,
+                expected,
+            } => write!(
                 f,
                 "gradient length mismatch at step {step}: got {got}, expected {expected}"
             ),
@@ -43,10 +62,10 @@ impl From<io::Error> for WorkerError {
     }
 }
 
-impl WorkerError {
-    /// Converts this error into an `io::Error` for boundary APIs.
-    pub fn into_io(self) -> io::Error {
-        match self {
+/// Boundary conversion for binaries / I/O APIs.
+impl From<WorkerError> for io::Error {
+    fn from(value: WorkerError) -> Self {
+        match value {
             WorkerError::Io(e) => e,
             other => io::Error::new(io::ErrorKind::InvalidData, other),
         }
