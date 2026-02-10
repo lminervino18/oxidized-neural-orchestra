@@ -1,7 +1,7 @@
 use comms::{
-    msg::{Command, Msg, Payload},
-    specs::worker::{AlgorithmSpec, LossReportSpec},
     OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
+    specs::worker::AlgorithmSpec,
 };
 use log::{debug, info, warn};
 use tokio::{
@@ -16,7 +16,6 @@ use machine_learning::training::Trainer;
 pub struct Worker {
     worker_id: usize,
     algorithm: AlgorithmSpec,
-    loss_report: LossReportSpec,
     trainer: Box<dyn Trainer>,
 }
 
@@ -31,16 +30,10 @@ impl Worker {
     ///
     /// # Returns
     /// A new worker instance.
-    pub fn new(
-        worker_id: usize,
-        algorithm: AlgorithmSpec,
-        loss_report: LossReportSpec,
-        trainer: Box<dyn Trainer>,
-    ) -> Self {
+    pub fn new(worker_id: usize, algorithm: AlgorithmSpec, trainer: Box<dyn Trainer>) -> Self {
         Self {
             worker_id,
             algorithm,
-            loss_report,
             trainer,
         }
     }
@@ -107,7 +100,6 @@ impl Worker {
         Worch: AsyncWrite + Unpin + Send,
     {
         let worker_id = self.worker_id;
-        let loss_report = self.loss_report;
         let mut trainer = self.trainer;
 
         let mut step: usize = 0;
@@ -122,7 +114,6 @@ impl Worker {
                     let msg = ps_msg?;
                     if handle_server_message(
                         worker_id,
-                        loss_report,
                         &mut step,
                         &mut trainer,
                         &mut ps_tx,
@@ -149,7 +140,6 @@ impl Worker {
 
 async fn handle_server_message<Wps, Worch>(
     worker_id: usize,
-    loss_report: LossReportSpec,
     step: &mut usize,
     trainer: &mut Box<dyn Trainer>,
     ps_tx: &mut OnoSender<Wps>,
@@ -174,18 +164,9 @@ where
 
             ps_tx.send(&Msg::Data(Payload::Grad(grad))).await?;
 
-            *step += 1;
-
-            let epoch = *step;
-            if should_report_loss(loss_report, epoch) {
-                orch_tx
-                    .send(&Msg::Control(Command::ReportLoss {
-                        worker_id,
-                        epoch,
-                        losses,
-                    }))
-                    .await?;
-            }
+            orch_tx
+                .send(&Msg::Control(Command::ReportLoss { worker_id, losses }))
+                .await?;
 
             Ok(false)
         }
@@ -221,14 +202,6 @@ fn handle_orchestrator_message(worker_id: usize, step: usize, msg: Msg<'_>) -> b
             );
             false
         }
-    }
-}
-
-fn should_report_loss(policy: LossReportSpec, epoch: usize) -> bool {
-    match policy {
-        LossReportSpec::Disabled => false,
-        LossReportSpec::EveryEpoch => true,
-        LossReportSpec::EveryNEpochs { n } => n != 0 && epoch % n == 0,
     }
 }
 

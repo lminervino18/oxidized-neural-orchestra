@@ -12,16 +12,6 @@ pub struct WorkerSpec {
     pub worker_id: usize,
     pub trainer: TrainerSpec,
     pub algorithm: AlgorithmSpec,
-    pub loss_report: LossReportSpec,
-}
-
-/// Loss reporting policy for worker-to-orchestrator updates.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum LossReportSpec {
-    Disabled,
-    EveryEpoch,
-    EveryNEpochs { n: usize },
 }
 
 /// Distributed training algorithm selection.

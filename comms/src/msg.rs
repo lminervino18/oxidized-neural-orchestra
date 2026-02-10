@@ -26,7 +26,6 @@ pub enum Command {
     /// after completing an epoch (i.e., one full pass over that partial dataset).
     ReportLoss {
         worker_id: usize,
-        epoch: usize,
         losses: Vec<f32>,
     },
 

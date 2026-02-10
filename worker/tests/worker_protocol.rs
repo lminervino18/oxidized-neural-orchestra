@@ -3,7 +3,7 @@ use std::io;
 use tokio::io as tokio_io;
 
 use comms::msg::{Command, Msg, Payload};
-use comms::specs::worker::{AlgorithmSpec, LossReportSpec};
+use comms::specs::worker::AlgorithmSpec;
 use machine_learning::training::Trainer;
 use worker::Worker;
 
@@ -25,13 +25,12 @@ impl Trainer for TestTrainer {
     }
 }
 
-fn make_worker(loss_report: LossReportSpec) -> Worker {
+fn make_worker() -> Worker {
     Worker::new(
         0,
         AlgorithmSpec::ParameterServer {
             server_ip: "127.0.0.1:0".parse().unwrap(),
         },
-        loss_report,
         Box::new(TestTrainer::new()),
     )
 }
@@ -72,7 +71,7 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
 
     let ((orch_wk_rx, orch_wk_tx), (_orch_rx, _orch_tx)) = orch_pair();
 
-    let worker = make_worker(LossReportSpec::Disabled);
+    let worker = make_worker();
 
     let worker_fut = async move {
         worker
@@ -113,7 +112,7 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
 
     let ((orch_wk_rx, orch_wk_tx), (_orch_rx, _orch_tx)) = orch_pair();
 
-    let worker = make_worker(LossReportSpec::Disabled);
+    let worker = make_worker();
 
     let worker_fut = async move {
         worker
@@ -146,7 +145,7 @@ async fn worker_stops_on_disconnect() -> io::Result<()> {
 
     let ((orch_wk_rx, orch_wk_tx), (_orch_rx, _orch_tx)) = orch_pair();
 
-    let worker = make_worker(LossReportSpec::Disabled);
+    let worker = make_worker();
 
     let worker_fut = async move {
         worker
@@ -178,7 +177,7 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
 
     let ((orch_wk_rx, orch_wk_tx), (mut orch_rx, _orch_tx)) = orch_pair();
 
-    let worker = make_worker(LossReportSpec::EveryEpoch);
+    let worker = make_worker();
 
     let worker_fut = async move {
         worker
@@ -206,11 +205,9 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
         match msg {
             Msg::Control(Command::ReportLoss {
                 worker_id,
-                epoch,
                 losses: _,
             }) => {
                 assert_eq!(worker_id, 0);
-                assert_eq!(epoch, 1);
             }
             other => panic!("unexpected orchestrator message: {other:?}"),
         }
