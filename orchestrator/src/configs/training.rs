@@ -1,4 +1,8 @@
-use std::{net::SocketAddr, num::NonZeroUsize, path::PathBuf};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    num::NonZeroUsize,
+    path::PathBuf,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum LossFnConfig {
@@ -14,7 +18,14 @@ pub enum OptimizerConfig {
 
 #[derive(Debug)]
 pub enum DatasetConfig {
-    Local { path: PathBuf },
+    Local {
+        path: PathBuf,
+    },
+    Inline {
+        data: Vec<f32>,
+        x_size: usize,
+        y_size: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -32,7 +43,7 @@ pub enum StoreConfig {
 #[derive(Debug)]
 pub enum AlgorithmConfig {
     ParameterServer {
-        server_ips: Vec<SocketAddr>,
+        server_addrs: Vec<String>,
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
@@ -40,12 +51,12 @@ pub enum AlgorithmConfig {
 
 #[derive(Debug)]
 pub struct TrainingConfig {
-    pub worker_ips: Vec<SocketAddr>,
+    pub worker_addrs: Vec<String>,
     pub algorithm: AlgorithmConfig,
     pub dataset: DatasetConfig,
     pub optimizer: OptimizerConfig,
     pub loss_fn: LossFnConfig,
-    pub offline_epochs: usize,
+    pub epochs: NonZeroUsize,
     pub batch_size: NonZeroUsize,
     pub seed: Option<u64>,
 }

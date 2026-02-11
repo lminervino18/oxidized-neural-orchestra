@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
@@ -37,9 +35,9 @@ impl Session {
     /// # Returns
     /// A new `Session` instance.
     pub fn new(
-        worker_addrs: Vec<SocketAddr>,
+        worker_addrs: Vec<String>,
         worker_spec: WorkerSpec,
-        server_addr: SocketAddr,
+        server_addr: String,
         server_spec: ServerSpec,
     ) -> io::Result<Self> {
         let runtime = Runtime::new()?;
@@ -85,7 +83,7 @@ impl Session {
     /// # Returns
     /// The communication channel or an io error if failed to do so.
     async fn create_server(
-        server_addr: SocketAddr,
+        server_addr: String,
         server_spec: ServerSpec,
     ) -> io::Result<(NetRx, NetTx)> {
         let (rx, mut tx) = Self::open_channel(server_addr).await?;
@@ -103,7 +101,7 @@ impl Session {
     /// # Returns
     /// The communication channels or an io error if failed to do so.
     async fn create_workers(
-        worker_addrs: Vec<SocketAddr>,
+        worker_addrs: Vec<String>,
         worker_spec: WorkerSpec,
     ) -> io::Result<Vec<(NetRx, NetTx)>> {
         let msg = Msg::Control(Command::CreateWorker(worker_spec));
@@ -125,7 +123,7 @@ impl Session {
     ///
     /// # Returns
     /// A communication channel or an io error if failed to do so.
-    async fn open_channel(addr: SocketAddr) -> io::Result<(NetRx, NetTx)> {
+    async fn open_channel(addr: String) -> io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
         Ok(comms::channel(rx, tx))

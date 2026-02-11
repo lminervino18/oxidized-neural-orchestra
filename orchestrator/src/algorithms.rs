@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 use crate::configs::{
     AlgorithmConfig, DatasetConfig, LossFnConfig, OptimizerConfig, StoreConfig, SynchronizerConfig,
@@ -6,21 +6,21 @@ use crate::configs::{
 };
 
 pub fn parameter_server<Sy: Into<Option<SynchronizerConfig>>, PS: Into<Option<StoreConfig>>>(
-    worker_ips: Vec<SocketAddr>,
-    server_ips: Vec<SocketAddr>,
+    worker_addrs: Vec<String>,
+    server_addrs: Vec<String>,
     synchronizer: Sy,
     store: PS,
     dataset: DatasetConfig,
     optimizer: OptimizerConfig,
     loss_fn: LossFnConfig,
-    offline_epochs: usize,
+    epochs: NonZeroUsize,
     batch_size: NonZeroUsize,
     seed: Option<u64>,
 ) -> TrainingConfig {
     let synchronizer = synchronizer
         .into()
         .unwrap_or_else(|| SynchronizerConfig::Barrier {
-            barrier_size: worker_ips.len(),
+            barrier_size: worker_addrs.len(),
         });
 
     let store = store.into().unwrap_or_else(|| StoreConfig::Blocking {
@@ -28,16 +28,16 @@ pub fn parameter_server<Sy: Into<Option<SynchronizerConfig>>, PS: Into<Option<St
     });
 
     TrainingConfig {
-        worker_ips,
+        worker_addrs,
         algorithm: AlgorithmConfig::ParameterServer {
-            server_ips,
+            server_addrs,
             synchronizer,
             store,
         },
         dataset,
         optimizer,
         loss_fn,
-        offline_epochs,
+        epochs,
         batch_size,
         seed,
     }

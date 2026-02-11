@@ -3,6 +3,7 @@
 use std::num::NonZeroUsize;
 
 use ndarray::ArrayView2;
+use rand::Rng;
 
 use crate::{
     arch::{
@@ -15,8 +16,6 @@ use crate::{
     optimization::GradientDescent,
     training::ModelTrainer,
 };
-use rand::Rng;
-use std::num::NonZeroUsize;
 
 #[test]
 fn test_ml_and2_gate_convergence() {

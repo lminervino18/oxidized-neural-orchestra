@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, num::NonZeroUsize};
 
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +10,7 @@ use super::machine_learning::TrainerSpec;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkerSpec {
     pub worker_id: usize,
+    pub max_epochs: NonZeroUsize,
     pub trainer: TrainerSpec,
     pub algorithm: AlgorithmSpec,
 }
@@ -20,5 +21,5 @@ pub struct WorkerSpec {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmSpec {
-    ParameterServer { server_ip: SocketAddr },
+    ParameterServer { server_addr: String },
 }

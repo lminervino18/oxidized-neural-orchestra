@@ -8,7 +8,7 @@ DEFAULT_CONFIG_PATH = "config.json"
 DEFAULT_OUTPUT_PATH = "../compose.yml"
 
 # The various values for a yaml field.
-type YmlField = Union[bool, int, float, str, list[YmlField], dict[str, YmlField]]
+type YmlField = Union[bool, int, float, str, list[YmlField], dict[Union[str | int], YmlField]]
 
 
 def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
@@ -23,7 +23,7 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
     A dictionary containing the servers' part of the compose file.
     """
     mode = "release" if release else "debug"
-    log_level = "INFO" if release else "DEBUG"
+    log_level = "info" if release else "debug"
 
     return {
         f"server-{i}": {
@@ -34,6 +34,9 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
                     "MODE": mode,
                 },
             },
+            "ports": [
+                8765,
+            ],
             "networks": [
                 "training-network",
             ],
@@ -49,7 +52,7 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
 
 def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
     mode = "release" if release else "debug"
-    log_level = "INFO" if release else "DEBUG"
+    log_level = "info" if release else "debug"
 
     return {
         f"worker-{i}": {
@@ -60,12 +63,15 @@ def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
                     "MODE": mode,
                 },
             },
+            "ports": [
+                8764,
+            ],
             "networks": [
                 "training-network",
             ],
             "environment": {
                 "HOST": "0.0.0.0",
-                "PORT": 8765,
+                "PORT": 8764,
                 "RUST_LOG": log_level,
             },
         }

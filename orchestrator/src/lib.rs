@@ -1,5 +1,5 @@
 mod algorithms;
-mod configs;
+pub mod configs;
 mod session;
 
 use std::io;

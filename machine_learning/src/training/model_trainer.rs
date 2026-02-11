@@ -8,7 +8,6 @@ use crate::{
     dataset::Dataset,
     optimization::Optimizer,
 };
-use std::num::NonZeroUsize;
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
 /// including the model itself.
@@ -67,13 +66,11 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// A tuple with the param grads and the epoch loss.
     pub fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
         let epochs = self.epochs.get();
-        let batch_size = self.batch_size.get();
-
         let mut losses = Vec::with_capacity(epochs);
 
         for _ in 0..epochs {
             self.dataset.shuffle(&mut self.rng);
-            let batches = self.dataset.batches(batch_size);
+            let batches = self.dataset.batches(self.batch_size);
 
             losses.push(self.model.backprop(
                 params,

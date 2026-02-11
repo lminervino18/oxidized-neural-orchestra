@@ -1,4 +1,4 @@
-use std::{io, net::SocketAddr};
+use std::{io, num::NonZeroUsize};
 
 use comms::specs::{
     machine_learning::{
@@ -17,14 +17,10 @@ use crate::configs::{
 pub fn to_specs_adapter(
     model: ModelConfig,
     training: TrainingConfig,
-) -> io::Result<(
-    Vec<SocketAddr>,
-    WorkerSpec,
-    Option<(SocketAddr, ServerSpec)>,
-)> {
+) -> io::Result<(Vec<String>, WorkerSpec, Option<(String, ServerSpec)>)> {
     let worker_spec = resolve_worker(&model, &training)?;
-    let server_spec = resolve_server(&model, &training);
-    Ok((training.worker_ips, worker_spec, server_spec))
+    let server = resolve_server(&model, &training);
+    Ok((training.worker_addrs, worker_spec, server))
 }
 
 fn resolve_worker(model: &ModelConfig, training: &TrainingConfig) -> io::Result<WorkerSpec> {
@@ -33,6 +29,7 @@ fn resolve_worker(model: &ModelConfig, training: &TrainingConfig) -> io::Result<
 
     let worker = WorkerSpec {
         worker_id: 0,
+        max_epochs: NonZeroUsize::new(1).unwrap(),
         trainer,
         algorithm,
     };
@@ -40,10 +37,7 @@ fn resolve_worker(model: &ModelConfig, training: &TrainingConfig) -> io::Result<
     Ok(worker)
 }
 
-fn resolve_server(
-    model: &ModelConfig,
-    training: &TrainingConfig,
-) -> Option<(SocketAddr, ServerSpec)> {
+fn resolve_server(model: &ModelConfig, training: &TrainingConfig) -> Option<(String, ServerSpec)> {
     let (_, Some((server_ip, synchronizer, store))) =
         resolve_algorithm_synchronizer_store(&training.algorithm)
     else {
@@ -54,7 +48,7 @@ fn resolve_server(
     let optimizer = resolve_optimizer(training.optimizer);
 
     let server = ServerSpec {
-        nworkers: training.worker_ips.len(),
+        nworkers: training.worker_addrs.len(),
         param_gen,
         optimizer,
         synchronizer,
@@ -67,25 +61,22 @@ fn resolve_server(
 
 fn resolve_algorithm_synchronizer_store(
     algorithm: &AlgorithmConfig,
-) -> (
-    AlgorithmSpec,
-    Option<(SocketAddr, SynchronizerSpec, StoreSpec)>,
-) {
+) -> (AlgorithmSpec, Option<(String, SynchronizerSpec, StoreSpec)>) {
     match algorithm {
         AlgorithmConfig::ParameterServer {
-            server_ips,
+            server_addrs,
             synchronizer,
             store,
         } => {
             let algorithm_spec = AlgorithmSpec::ParameterServer {
-                server_ip: server_ips[0], // TODO: eventualmente esto tiene que pasar todas las ips
+                server_addr: server_addrs[0].clone(), // TODO: eventualmente esto tiene que pasar todas las ips
             };
             let synchronizer_spec = resolve_synchronizer(*synchronizer);
             let store_spec = resolve_store(*store);
 
             (
                 algorithm_spec,
-                Some((server_ips[0], synchronizer_spec, store_spec)),
+                Some((server_addrs[0].clone(), synchronizer_spec, store_spec)),
             )
         }
     }
@@ -116,7 +107,7 @@ fn resolve_trainer(model: &ModelConfig, training: &TrainingConfig) -> io::Result
         optimizer,
         dataset,
         loss_fn,
-        offline_epochs: training.offline_epochs,
+        epochs: training.epochs,
         batch_size: training.batch_size,
         seed: training.seed,
     };
@@ -131,8 +122,20 @@ fn resolve_loss_fn(loss_fn: LossFnConfig) -> LossFnSpec {
 }
 
 fn resolve_dataset(dataset: &DatasetConfig) -> io::Result<DatasetSpec> {
-    // deberia ir a buscar el archivo / bajarlo de internet / etc
-    todo!()
+    let dataset_spec = match dataset {
+        DatasetConfig::Local { path } => todo!(),
+        &DatasetConfig::Inline {
+            ref data,
+            x_size,
+            y_size,
+        } => DatasetSpec {
+            data: data.to_vec(),
+            x_size,
+            y_size,
+        },
+    };
+
+    Ok(dataset_spec)
 }
 
 fn resolve_optimizer(optimizer: OptimizerConfig) -> OptimizerSpec {
