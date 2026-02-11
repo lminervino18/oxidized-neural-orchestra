@@ -13,7 +13,6 @@ use tokio::{net::TcpListener, signal};
 use crate::service::ServerBuilder;
 
 const DEFAULT_HOST: &str = "0.0.0.0";
-const DEFAULT_PORT: &str = "8765";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -22,7 +21,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let addr = format!(
         "{}:{}",
         env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
-        env::var("PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string())
+        env::var("PORT")?,
     );
 
     let list = TcpListener::bind(&addr).await?;
