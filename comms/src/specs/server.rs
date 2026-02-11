@@ -19,7 +19,7 @@ pub enum DistributionSpec {
 }
 
 /// The specification for the `ParamGen` trait.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ParamGenSpec {
     Const {
@@ -54,6 +54,7 @@ pub enum StoreSpec {
 /// The specification for the `Server` trait.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerSpec {
+    pub id: usize,
     pub nworkers: usize,
     pub param_gen: ParamGenSpec,
     pub optimizer: OptimizerSpec,

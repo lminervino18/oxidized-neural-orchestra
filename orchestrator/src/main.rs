@@ -6,18 +6,15 @@ fn main() {
     let model_config = ModelConfig::Sequential {
         layers: vec![LayerConfig::Dense {
             dim: (1, 1),
-            init: ParamGenConfig::Const {
-                value: 0.0,
-                limit: 1,
-            },
+            init: ParamGenConfig::Const { value: 0.0 },
             act_fn: None,
         }],
     };
 
     let training_config = TrainingConfig {
-        worker_addrs: vec!["127.0.0.1:8764".into()],
+        worker_addrs: vec!["127.0.0.1:8764"],
         algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs: vec!["127.0.0.1:8765".into()],
+            server_addrs: vec!["127.0.0.1:8765"],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
             store: StoreConfig::Blocking {
                 shard_size: NonZeroUsize::new(1).unwrap(),
@@ -30,8 +27,9 @@ fn main() {
         },
         optimizer: OptimizerConfig::GradientDescent { lr: 0.1 },
         loss_fn: LossFnConfig::Mse,
-        epochs: NonZeroUsize::new(100).unwrap(),
         batch_size: NonZeroUsize::new(4).unwrap(),
+        max_epochs: NonZeroUsize::new(100).unwrap(),
+        offline_epochs: 0,
         seed: None,
     };
 

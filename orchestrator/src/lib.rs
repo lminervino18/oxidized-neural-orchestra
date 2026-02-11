@@ -1,20 +1,26 @@
-mod algorithms;
 pub mod configs;
 mod session;
 
-use std::io;
+use std::{io, net::ToSocketAddrs};
 
-use configs::to_specs_adapter;
+use configs::Adapter;
 use session::Session;
 
 use crate::configs::{ModelConfig, TrainingConfig};
 
-pub fn train(model: ModelConfig, training: TrainingConfig) -> io::Result<Session> {
-    let (worker_addrs, worker_spec, server) = to_specs_adapter(model, training)?;
-
-    if let Some((server_addr, server_spec)) = server {
-        return Session::new(worker_addrs, worker_spec, server_addr, server_spec);
-    }
-
-    unimplemented!("AllReduce is not yet implemented, a server must be specified");
+/// Initiazes the distributed training process.
+///
+/// # Arguments
+/// * `model` - The model's configuration.
+/// * `training` - The training's configuration.
+///
+/// # Returns
+/// A new ongoing session or an io error if occurred.
+pub fn train<A: ToSocketAddrs>(
+    model: ModelConfig,
+    training: TrainingConfig<A>,
+) -> io::Result<Session> {
+    let adapter = Adapter::new();
+    let (workers, servers) = adapter.adapt_configs(model, training)?;
+    Session::new(workers, servers)
 }

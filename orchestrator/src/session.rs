@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
@@ -27,27 +29,23 @@ impl Session {
     /// Creates a new `Session`.
     ///
     /// # Arguments
-    /// * `worker_addrs` - A list of the network addresses for the worker nodes.
-    /// * `worker_spec` - The specification for the worker nodes' configuration.
-    /// * `server_addr` - The network address for the parameter server node.
-    /// * `server_spec` - The specification for the server node's configuration.
+    /// * `workers` - A list of network addressses and worker specification tuples.
+    /// * `servers` - A list of network addressses and server specification tuples.
     ///
     /// # Returns
     /// A new `Session` instance.
     pub fn new(
-        worker_addrs: Vec<String>,
-        worker_spec: WorkerSpec,
-        server_addr: String,
-        server_spec: ServerSpec,
+        workers: Vec<(SocketAddr, WorkerSpec)>,
+        servers: Vec<(SocketAddr, ServerSpec)>,
     ) -> io::Result<Self> {
         let runtime = Runtime::new()?;
-        let server = runtime.block_on(Self::create_server(server_addr, server_spec))?;
-        let workers = runtime.block_on(Self::create_workers(worker_addrs, worker_spec))?;
+        let mut server_chans = runtime.block_on(Self::create_servers(servers))?;
+        let worker_chans = runtime.block_on(Self::create_workers(workers))?;
 
         Ok(Self {
             runtime,
-            workers,
-            server,
+            workers: worker_chans,
+            server: server_chans.remove(0), // One server for now.
         })
     }
 
@@ -77,38 +75,40 @@ impl Session {
     /// Tries to reach the parameter server and create it using the given specification.
     ///
     /// # Arguments
-    /// * `server_addr` - The network address for the parameter server node.
-    /// * `server_spec` - The specification for the server node's configuration.
+    /// * `servers` - A list of network addressses and server specification tuples.
     ///
     /// # Returns
-    /// The communication channel or an io error if failed to do so.
-    async fn create_server(
-        server_addr: String,
-        server_spec: ServerSpec,
-    ) -> io::Result<(NetRx, NetTx)> {
-        let (rx, mut tx) = Self::open_channel(server_addr).await?;
-        let msg = Msg::Control(Command::CreateServer(server_spec));
-        tx.send(&msg).await?;
-        Ok((rx, tx))
+    /// The communication channels or an io error if failed to do so.
+    async fn create_servers(
+        servers: Vec<(SocketAddr, ServerSpec)>,
+    ) -> io::Result<Vec<(NetRx, NetTx)>> {
+        let mut channels = Vec::with_capacity(servers.len());
+
+        for (addr, spec) in servers {
+            let (rx, mut tx) = Self::open_channel(addr).await?;
+            let msg = Msg::Control(Command::CreateServer(spec));
+            tx.send(&msg).await?;
+            channels.push((rx, tx));
+        }
+
+        Ok(channels)
     }
 
     /// Tries to reach the workers and create them using the given specification.
     ///
     /// # Arguments
-    /// * `worker_addrs` - A list of the network addresses for the worker nodes.
-    /// * `worker_spec` - The specification for the worker nodes' configuration.
+    /// * `workers` - A list of network addressses and worker specification tuples.
     ///
     /// # Returns
     /// The communication channels or an io error if failed to do so.
     async fn create_workers(
-        worker_addrs: Vec<String>,
-        worker_spec: WorkerSpec,
+        workers: Vec<(SocketAddr, WorkerSpec)>,
     ) -> io::Result<Vec<(NetRx, NetTx)>> {
-        let msg = Msg::Control(Command::CreateWorker(worker_spec));
-        let mut channels = Vec::with_capacity(worker_addrs.len());
+        let mut channels = Vec::with_capacity(workers.len());
 
-        for addr in worker_addrs {
+        for (addr, spec) in workers {
             let (rx, mut tx) = Self::open_channel(addr).await?;
+            let msg = Msg::Control(Command::CreateWorker(spec));
             tx.send(&msg).await?;
             channels.push((rx, tx));
         }
@@ -123,7 +123,7 @@ impl Session {
     ///
     /// # Returns
     /// A communication channel or an io error if failed to do so.
-    async fn open_channel(addr: String) -> io::Result<(NetRx, NetTx)> {
+    async fn open_channel(addr: SocketAddr) -> io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
         Ok(comms::channel(rx, tx))

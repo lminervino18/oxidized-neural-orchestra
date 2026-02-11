@@ -158,12 +158,20 @@ impl TrainerBuilder {
         O: Optimizer + 'static,
         L: LossFn + 'static,
     {
-        let epochs = spec.epochs;
+        let offline_epochs = spec.offline_epochs;
         let batch_size = spec.batch_size;
         let rng = self.generate_rng(spec.seed);
         let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
 
-        let trainer = ModelTrainer::new(model, optimizer, dataset, epochs, batch_size, loss, rng);
+        let trainer = ModelTrainer::new(
+            model,
+            optimizer,
+            dataset,
+            offline_epochs,
+            batch_size,
+            loss,
+            rng,
+        );
 
         Box::new(trainer)
     }

@@ -18,7 +18,7 @@ pub struct ModelTrainer<M: Model, O: Optimizer, L: LossFn, R: Rng> {
     model: M,
     loss: L,
 
-    epochs: NonZeroUsize,
+    offline_epochs: usize,
     batch_size: NonZeroUsize,
     rng: R,
 }
@@ -30,14 +30,14 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// * `model` - The model that will be trained.
     /// * `optimizer` - The way of optimizing the model (e.g. stochastic gradient descent).
     /// * `dataset` - The dataset the model will be trained with.
-    /// * `epochs` - The amount of training epochs performed on each call to `train`.
+    /// * `offline_epochs` - The amount of extra epochs to run per `train` call.
     /// * `loss` - The loss function used to measure the difference between a model's output and the expected one.
     /// * `rng` - A random number generator.
     pub fn new(
         model: M,
         optimizer: O,
         dataset: Dataset,
-        epochs: NonZeroUsize,
+        offline_epochs: usize,
         batch_size: NonZeroUsize,
         loss: L,
         rng: R,
@@ -47,7 +47,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
             model,
             optimizer,
             dataset,
-            epochs,
+            offline_epochs,
             batch_size,
             loss,
             rng,
@@ -65,7 +65,7 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
     pub fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
-        let epochs = self.epochs.get();
+        let epochs = self.offline_epochs + 1;
         let mut losses = Vec::with_capacity(epochs);
 
         for _ in 0..epochs {
