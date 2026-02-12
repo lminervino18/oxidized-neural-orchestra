@@ -43,7 +43,7 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
             "environment": {
                 "HOST": "0.0.0.0",
                 "PORT": base_port + i,
-                "LOG_LEVEL": log_level,
+                "RUST_LOG": log_level,
             },
         }
         for i in range(servers)
