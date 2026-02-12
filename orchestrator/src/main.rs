@@ -12,9 +12,9 @@ fn main() {
     };
 
     let training_config = TrainingConfig {
-        worker_addrs: vec!["127.0.0.1:8764"],
+        worker_addrs: vec!["worker-0:50000"],
         algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs: vec!["127.0.0.1:8765"],
+            server_addrs: vec!["server-0:40000"],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
             store: StoreConfig::Blocking {
                 shard_size: NonZeroUsize::new(1).unwrap(),

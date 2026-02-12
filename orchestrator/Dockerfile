@@ -1,5 +1,5 @@
 # 0. Define the arguments' default values.
-ARG PKG=parameter_server
+ARG PKG=orchestrator
 ARG MODE
 
 # 1. Install cargo-chef.
@@ -26,7 +26,7 @@ RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
   COPY $PKG    ./$PKG
 
   # Extra dependencies.
-  COPY comms ./comms
+  COPY comms            ./comms
 
 RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
   cargo build $FLAG --bin $PKG

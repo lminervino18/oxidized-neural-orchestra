@@ -4,7 +4,7 @@ mod service;
 mod storage;
 mod synchronization;
 
-use std::{env, error::Error};
+use std::{env, io};
 
 use comms::msg::{Command, Msg, Payload};
 use log::{info, warn};
@@ -15,13 +15,13 @@ use crate::service::ServerBuilder;
 const DEFAULT_HOST: &str = "0.0.0.0";
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> io::Result<()> {
     env_logger::init();
 
     let addr = format!(
         "{}:{}",
         env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
-        env::var("PORT")?,
+        env::var("PORT").map_err(|e| io::Error::other(e))?,
     );
 
     let list = TcpListener::bind(&addr).await?;
@@ -29,6 +29,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (stream, addr) = list.accept().await?;
     info!("orchestrator connected from {addr}");
+
     let (rx, tx) = stream.into_split();
     let (mut rx, mut tx) = comms::channel(rx, tx);
 
@@ -41,7 +42,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let nworkers = spec.nworkers;
-    let mut pserver = ServerBuilder::new().build(spec)?;
+    let mut pserver = ServerBuilder::new()
+        .build(spec)
+        .map_err(|e| io::Error::other(e))?;
 
     for i in 0..nworkers {
         let (stream, addr) = list.accept().await?;
