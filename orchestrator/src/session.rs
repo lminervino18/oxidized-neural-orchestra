@@ -59,9 +59,7 @@ impl Session {
                 while !matches!(rx.recv().await?, Msg::Control(Command::Disconnect)) {}
             }
 
-            let (mut rx, mut tx) = self.server;
-            let msg = Msg::Control(Command::Disconnect);
-            tx.send(&msg).await?;
+            let (mut rx, _) = self.server;
 
             match rx.recv().await? {
                 Msg::Data(Payload::Params(params)) => Ok(params.to_vec()),

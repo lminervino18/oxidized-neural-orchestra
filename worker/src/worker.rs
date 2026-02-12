@@ -59,14 +59,14 @@ impl Worker {
     ///
     /// # Errors
     /// Returns `WorkerError` on I/O failures or protocol violations.
-    pub async fn run<Rorch, Worch>(
+    pub async fn run<R, W>(
         self,
-        orch_rx: OnoReceiver<Rorch>,
-        orch_tx: OnoSender<Worch>,
+        orch_rx: OnoReceiver<R>,
+        orch_tx: OnoSender<W>,
     ) -> Result<(), WorkerError>
     where
-        Rorch: AsyncRead + Unpin + Send,
-        Worch: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         match self.algorithm {
             AlgorithmSpec::ParameterServer { ref server_addr } => {
@@ -112,10 +112,8 @@ impl Worker {
         let mut trainer = self.trainer;
         let mut epoch = 0;
 
-        info!("worker starting: worker_id={worker_id}");
-
         while epoch < self.max_epochs.get() {
-            debug!("waiting message: worker_id={worker_id} epoch={epoch}");
+            debug!("waiting for message");
 
             tokio::select! {
                 ps_msg = ps_rx.recv::<Msg>() => {
@@ -141,9 +139,12 @@ impl Worker {
             }
         }
 
-        info!("worker finished: worker_id={worker_id} epoch={epoch}");
+        info!("worker finished");
         let msg = Msg::Control(Command::Disconnect);
         orch_tx.send(&msg).await?;
+        ps_tx.send(&msg).await?;
+
+        while !matches!(ps_rx.recv().await?, Msg::Control(Command::Disconnect)) {}
 
         Ok(())
     }
@@ -154,7 +155,7 @@ async fn handle_server_message<Wps, Worch>(
     epoch: &mut usize,
     trainer: &mut Box<dyn Trainer>,
     ps_tx: &mut OnoSender<Wps>,
-    orch_tx: &mut OnoSender<Worch>,
+    _orch_tx: &mut OnoSender<Worch>,
     msg: Msg<'_>,
 ) -> Result<bool, WorkerError>
 where
@@ -162,23 +163,17 @@ where
     Worch: AsyncWrite + Unpin + Send,
 {
     match msg {
-        Msg::Control(Command::Disconnect) => {
-            info!("disconnect received from parameter server: worker_id={worker_id} epoch={epoch}");
-            Ok(true)
-        }
+        Msg::Data(Payload::Params(params)) => {
+            debug!("received new parameters: epoch={epoch}");
 
-        Msg::Data(Payload::Params(weights)) => {
-            let got = weights.len();
-            debug!("training: worker_id={worker_id} epoch={epoch} params={got}");
-
-            let (grad, losses) = trainer.train(weights);
+            let (grad, losses) = trainer.train(params);
             *epoch += losses.len();
 
-            let mut msg = Msg::Data(Payload::Grad(grad));
+            let msg = Msg::Data(Payload::Grad(grad));
             ps_tx.send(&msg).await?;
 
-            msg = Msg::Control(Command::ReportLoss { worker_id, losses });
-            orch_tx.send(&msg).await?;
+            // msg = Msg::Control(Command::ReportLoss { worker_id, losses });
+            // orch_tx.send(&msg).await?;
 
             Ok(false)
         }

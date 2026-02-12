@@ -93,11 +93,11 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
             //         amount of parameters in the storage.
             handle.pull_params(&mut buf).await.unwrap();
 
-            loop {
-                debug!(worker_id = id; "sending parameters");
-                let msg = Msg::Data(Payload::Params(&mut buf));
-                tx.send(&msg).await?;
+            debug!(worker_id = id; "sending parameters");
+            let msg = Msg::Data(Payload::Params(&mut buf));
+            tx.send(&msg).await?;
 
+            loop {
                 debug!(worker_id = id; "waiting to receive a message");
                 match rx.recv().await? {
                     Msg::Data(Payload::Grad(grad)) if params == grad.len() => {
@@ -106,9 +106,15 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
                         synchronizer.step(&handle, grad, &mut buf).await.unwrap();
+
+                        debug!(worker_id = id; "sending parameters");
+                        let msg = Msg::Data(Payload::Params(&mut buf));
+                        tx.send(&msg).await?;
                     }
                     Msg::Control(Command::Disconnect) => {
                         info!(worker_id = id; "gracefully disconnecting worker");
+                        let msg = Msg::Control(Command::Disconnect);
+                        tx.send(&msg).await?;
                         break;
                     }
                     Msg::Data(Payload::Grad(grad)) => {
