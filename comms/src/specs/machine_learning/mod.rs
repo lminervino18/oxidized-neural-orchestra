@@ -1,5 +1,10 @@
+pub mod dataset;
+mod send_dataset;
+
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
+
+pub use dataset::DatasetSpec;
 
 /// The specification for the `ActFn` enum.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -44,15 +49,6 @@ pub enum OptimizerSpec {
     },
 }
 
-/// The specification for the `Dataset`.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct DatasetSpec {
-    pub data: Vec<f32>,
-    pub x_size: usize,
-    pub y_size: usize,
-}
-
 /// The specification for the `LossFn` enum.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -62,10 +58,11 @@ pub enum LossFnSpec {
 
 /// The specification for the `Trainer` struct.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TrainerSpec {
+pub struct TrainerSpec<'a> {
     pub model: ModelSpec,
     pub optimizer: OptimizerSpec,
-    pub dataset: DatasetSpec,
+    #[serde(borrow)]
+    pub dataset: DatasetSpec<'a>,
     pub loss: LossFnSpec,
     pub epochs: NonZeroUsize,
     pub batch_size: NonZeroUsize,

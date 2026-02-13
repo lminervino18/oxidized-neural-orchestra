@@ -1,6 +1,6 @@
 use comms::{
     OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
+    msg::{Chunk, Command, Msg, Payload},
     specs::worker::AlgorithmSpec,
 };
 use log::{debug, info, warn};
@@ -211,5 +211,7 @@ fn msg_kind(msg: &Msg<'_>) -> &'static str {
         Msg::Err(_) => "err",
         Msg::Data(Payload::Grad(_)) => "data/gradient",
         Msg::Data(Payload::Params(_)) => "data/weights",
+        Msg::Dataset(Chunk::Header(_)) => "dataset/header",
+        Msg::Dataset(Chunk::Chunk(_)) => "dataset/chunk",
     }
 }
