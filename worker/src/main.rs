@@ -7,14 +7,13 @@ use tokio::{net::TcpListener, signal};
 use worker::{WorkerAcceptor, WorkerBuilder};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
-const DEFAULT_PORT: &str = "8765";
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     init_logging();
 
     let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
-    let port = env::var("PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string());
+    let port = env::var("PORT").map_err(|e| io::Error::other(e))?;
     let listen_addr = format!("{host}:{port}");
 
     let (mut orch_rx, orch_tx) = accept_orchestrator_channel(&listen_addr).await?;

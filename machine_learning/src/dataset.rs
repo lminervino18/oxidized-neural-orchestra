@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use ndarray::{ArrayView2, Axis};
 use rand::Rng;
 
@@ -66,10 +68,10 @@ impl Dataset {
     /// An iterator over the batches of the dataset in the form of tuples of `ArrayView2`s.
     pub fn batches<'a>(
         &'a self,
-        batch_size: usize,
+        batch_size: NonZeroUsize,
     ) -> impl Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)> + 'a {
-        (0..self.rows).step_by(batch_size).map(move |start| {
-            let n = (start + batch_size).min(self.rows) - start;
+        (0..self.rows).step_by(batch_size.get()).map(move |start| {
+            let n = (start + batch_size.get()).min(self.rows) - start;
             self.view_batch(start, n)
         })
     }

@@ -1,0 +1,8 @@
+[package]
+name = "orchestrator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+comms = { path = "../comms" }
+tokio = "1.49.0"

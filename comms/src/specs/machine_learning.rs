@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
+
+use serde::{Deserialize, Serialize};
 
 /// The specification for the `ActFn` enum.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -19,7 +20,7 @@ pub enum LayerSpec {
 }
 
 /// The specification for the `Model` trait.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelSpec {
     Sequential { layers: Vec<LayerSpec> },
@@ -45,7 +46,7 @@ pub enum OptimizerSpec {
 }
 
 /// The specification for the `Dataset`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetSpec {
     pub data: Vec<f32>,
@@ -61,13 +62,13 @@ pub enum LossFnSpec {
 }
 
 /// The specification for the `Trainer` struct.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainerSpec {
     pub model: ModelSpec,
     pub optimizer: OptimizerSpec,
     pub dataset: DatasetSpec,
-    pub loss: LossFnSpec,
-    pub epochs: NonZeroUsize,
+    pub loss_fn: LossFnSpec,
     pub batch_size: NonZeroUsize,
+    pub offline_epochs: usize,
     pub seed: Option<u64>,
 }

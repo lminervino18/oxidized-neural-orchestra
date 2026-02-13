@@ -37,4 +37,4 @@ RUN mv target/$MODE/$PKG /app/binary
 # 4. Execute the package.
 FROM debian:bookworm-slim
 COPY --from=builder /app/binary /usr/local/bin
-ENTRYPOINT /usr/local/bin/binary
+ENTRYPOINT ["/usr/local/bin/binary"]
