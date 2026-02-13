@@ -1,8 +1,9 @@
 pub mod dataset;
 
-pub use dataset::DatasetSpec;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
+
+pub use dataset::DatasetSpec;
 
 /// The specification for the `ActFn` enum.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

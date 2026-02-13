@@ -4,7 +4,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetSpec {
-    pub data: Vec<f32>,
+    pub size: usize,
     pub x_size: usize,
     pub y_size: usize,
+
+    pub first: ChunkSpec,
+}
+
+/// The specification for a `Dataset` chunk.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ChunkSpec {
+    pub offset: usize,
+    pub last: bool,
+
+    pub data: Vec<f32>,
 }
