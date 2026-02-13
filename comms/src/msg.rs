@@ -14,9 +14,10 @@ use super::protocol::*;
 /// The command for the `Control` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Command {
+pub enum Command<'a> {
     CreateServer(ServerSpec),
-    CreateWorker(WorkerSpec),
+    #[serde(borrow)]
+    CreateWorker(WorkerSpec<'a>),
 
     /// Reports a sequence of losses computed by the worker over its partial dataset
     /// after completing an epoch (i.e., one full pass over that partial dataset).
@@ -38,9 +39,10 @@ pub enum Payload<'a> {
 /// The data chunk for the `Dataset` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Chunk {
-    Header(DatasetSpec),
-    Chunk(ChunkSpec),
+pub enum Chunk<'a> {
+    #[serde(borrow)]
+    Header(DatasetSpec<'a>),
+    Chunk(ChunkSpec<'a>),
 }
 
 /// The errors for the `Err` variant of the `Msg` enum.
@@ -54,9 +56,9 @@ pub enum Detail {
 /// The application layer message for the entire system.
 #[derive(Debug)]
 pub enum Msg<'a> {
-    Control(Command),
+    Control(Command<'a>),
     Data(Payload<'a>),
-    Dataset(Chunk),
+    Dataset(Chunk<'a>),
     Err(Detail),
 }
 

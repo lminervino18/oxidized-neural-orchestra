@@ -58,10 +58,11 @@ pub enum LossFnSpec {
 
 /// The specification for the `Trainer` struct.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TrainerSpec {
+pub struct TrainerSpec<'a> {
     pub model: ModelSpec,
     pub optimizer: OptimizerSpec,
-    pub dataset: DatasetSpec,
+    #[serde(borrow)]
+    pub dataset: DatasetSpec<'a>,
     pub loss: LossFnSpec,
     pub epochs: NonZeroUsize,
     pub batch_size: NonZeroUsize,

@@ -3,20 +3,21 @@ use serde::{Deserialize, Serialize};
 /// The specification for the `Dataset`.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct DatasetSpec {
+pub struct DatasetSpec<'a> {
     pub size: usize,
     pub x_size: usize,
     pub y_size: usize,
 
-    pub first: ChunkSpec,
+    #[serde(borrow)]
+    pub first: ChunkSpec<'a>,
 }
 
 /// The specification for a `Dataset` chunk.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct ChunkSpec {
+pub struct ChunkSpec<'a> {
     pub offset: usize,
     pub last: bool,
 
-    pub data: Vec<f32>,
+    pub data: &'a [u8],
 }

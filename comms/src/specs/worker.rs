@@ -8,9 +8,10 @@ use super::machine_learning::TrainerSpec;
 ///
 /// This type is exchanged over the network during worker bootstrap.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WorkerSpec {
+pub struct WorkerSpec<'a> {
     pub worker_id: usize,
-    pub trainer: TrainerSpec,
+    #[serde(borrow)]
+    pub trainer: TrainerSpec<'a>,
     pub algorithm: AlgorithmSpec,
 }
 
