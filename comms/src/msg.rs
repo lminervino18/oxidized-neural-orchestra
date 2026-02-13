@@ -2,11 +2,9 @@ use std::io;
 
 use crate::{
     Deserialize, Serialize,
-    specs::{server::ServerSpec, worker::WorkerSpec},
 };
 
-type Header = u32;
-const HEADER_SIZE: usize = size_of::<Header>();
+use super::protocol::*;
 
 /// The payload data for the `Data` variant of the `Msg` enum.
 #[derive(Debug)]
@@ -56,10 +54,10 @@ impl Msg<'_> {
         ))
     }
 
-    fn invalid_kind_byte<T>(byte: u8) -> io::Result<T> {
+    fn invalid_header<T>(bytes: Header) -> io::Result<T> {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Received an invalid kind byte {byte}"),
+            format!("Received invalid header kind bytes {bytes:?}"),
         ))
     }
 }
@@ -68,8 +66,7 @@ impl<'a> Serialize<'a> for Msg<'a> {
     fn serialize(&'a self, buf: &mut Vec<u8>) -> Option<&'a [u8]> {
         match self {
             Msg::Err(detail) => {
-                let header = (0 as Header).to_be_bytes();
-                buf.extend_from_slice(&header);
+                buf.extend_from_slice(&ERR);
 
                 // SAFETY: Serialize impl for `Detail` is derived and not implemented
                 //         by hand. Nor has a non string-key map inside.
@@ -77,8 +74,7 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 None
             }
             Msg::Control(cmd) => {
-                let header = (1 as Header).to_be_bytes();
-                buf.extend_from_slice(&header);
+                buf.extend_from_slice(&CONTROL);
 
                 // SAFETY: Serialize impl for `Command` is derived and not implemented
                 //         by hand. Nor has a non string-key map inside.
@@ -86,13 +82,13 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 None
             }
             Msg::Data(payload) => {
-                let (kind, nums): (_, &[_]) = match payload {
-                    Payload::Grad(grad) => (2, grad),
-                    Payload::Params(params) => (3, params),
+                let (header, nums): (_, &[_]) = match payload {
+                    Payload::Grad(grad) => (&GRAD, grad),
+                    Payload::Params(params) => (&PARAMS, params),
+                    _ => todo!(),
                 };
 
-                let header = (kind as Header).to_be_bytes();
-                buf.extend_from_slice(&header);
+                buf.extend_from_slice(header);
                 Some(bytemuck::cast_slice(nums))
             }
         }
@@ -105,32 +101,32 @@ impl<'a> Deserialize<'a> for Msg<'a> {
             return Self::buf_is_too_small(buf.len());
         }
 
-        let (kind_buf, rest) = buf.split_at_mut(HEADER_SIZE);
+        let (header, rest) = buf.split_at_mut(HEADER_SIZE);
 
         // SAFETY: We splitted the buffer to be of size `HEADER_SIZE` just above.
-        let kind = Header::from_be_bytes(kind_buf.try_into().unwrap()) as u8;
+        let header: Header = header.try_into().unwrap();
 
-        match kind {
-            0 => {
+        match header {
+            ERR => {
                 let detail = serde_json::from_slice(rest)?;
                 Ok(Self::Err(detail))
             }
-            1 => {
+            CONTROL => {
                 let cmd = serde_json::from_slice(rest)?;
                 Ok(Self::Control(cmd))
             }
-            2..4 => {
+            GRAD | PARAMS => {
                 let nums = bytemuck::cast_slice_mut(rest);
 
-                let payload = match kind {
-                    2 => Payload::Grad(nums),
-                    3 => Payload::Params(nums),
+                let payload = match header {
+                    GRAD => Payload::Grad(nums),
+                    PARAMS => Payload::Params(nums),
                     _ => unreachable!(),
                 };
 
                 Ok(Self::Data(payload))
             }
-            byte => Self::invalid_kind_byte(byte),
+            bytes => Self::invalid_header(bytes),
         }
     }
 }
