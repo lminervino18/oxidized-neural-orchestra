@@ -2,16 +2,14 @@ use std::io;
 
 use crate::{
     Deserialize, Serialize,
+    specs::{
+        machine_learning::{DatasetSpec, dataset::ChunkSpec},
+        server::ServerSpec,
+        worker::WorkerSpec,
+    },
 };
 
 use super::protocol::*;
-
-/// The payload data for the `Data` variant of the `Msg` enum.
-#[derive(Debug)]
-pub enum Payload<'a> {
-    Grad(&'a [f32]),
-    Params(&'a mut [f32]),
-}
 
 /// The command for the `Control` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -30,6 +28,21 @@ pub enum Command {
     Disconnect,
 }
 
+/// The payload data for the `Data` variant of the `Msg` enum.
+#[derive(Debug)]
+pub enum Payload<'a> {
+    Grad(&'a [f32]),
+    Params(&'a mut [f32]),
+}
+
+/// The data chunk for the `Dataset` variant of the `Msg` enum.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Chunk {
+    Header(DatasetSpec),
+    Chunk(ChunkSpec),
+}
+
 /// The errors for the `Err` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,6 +56,7 @@ pub enum Detail {
 pub enum Msg<'a> {
     Control(Command),
     Data(Payload<'a>),
+    Dataset(Chunk),
     Err(Detail),
 }
 
@@ -85,11 +99,30 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 let (header, nums): (_, &[_]) = match payload {
                     Payload::Grad(grad) => (&GRAD, grad),
                     Payload::Params(params) => (&PARAMS, params),
-                    _ => todo!(),
                 };
 
                 buf.extend_from_slice(header);
                 Some(bytemuck::cast_slice(nums))
+            }
+            Msg::Dataset(chunk) => {
+                match chunk {
+                    Chunk::Header(spec) => {
+                        buf.extend_from_slice(&DATASET_HEADER);
+
+                        // SAFETY: Serialize impl for `DatasetSpec` is derived and not implemented
+                        //         by hand. Nor has a non string-key map inside.
+                        serde_json::to_writer(buf, &spec).unwrap();
+                    }
+                    Chunk::Chunk(spec) => {
+                        buf.extend_from_slice(&CHUNK);
+
+                        // SAFETY: Serialize impl for `ChunkSpec` is derived and not implemented
+                        //         by hand. Nor has a non string-key map inside.
+                        serde_json::to_writer(buf, &spec).unwrap();
+                    }
+                }
+
+                None
             }
         }
     }
@@ -125,6 +158,10 @@ impl<'a> Deserialize<'a> for Msg<'a> {
                 };
 
                 Ok(Self::Data(payload))
+            }
+            DATASET_HEADER | CHUNK => {
+                let chunk = serde_json::from_slice(rest)?;
+                Ok(Self::Dataset(chunk))
             }
             bytes => Self::invalid_header(bytes),
         }
