@@ -1,3 +1,6 @@
+pub mod dataset;
+
+pub use dataset::DatasetSpec;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
@@ -42,15 +45,6 @@ pub enum OptimizerSpec {
         learning_rate: f32,
         momentum: f32,
     },
-}
-
-/// The specification for the `Dataset`.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct DatasetSpec {
-    pub data: Vec<f32>,
-    pub x_size: usize,
-    pub y_size: usize,
 }
 
 /// The specification for the `LossFn` enum.
