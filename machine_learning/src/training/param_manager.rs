@@ -130,29 +130,14 @@ impl<'pm> FrontIter<'pm> {
     ///
     /// # Returns
     /// A slice of parameters or `None` if the iteration has ended.
-    pub fn take(&mut self, n: usize) -> Option<&'pm mut [f32]> {
+    pub fn take(&mut self, mut n: usize) -> Option<&'pm mut [f32]> {
         let server_id = *self.ordering.get(self.curr)?;
         self.curr += 1;
 
         // SAFETY: `ParamManager`'s constructor validates that every
         //         value in the ordering is lower than it's length.
         let sv_slice = mem::take(&mut self.slices[server_id]);
-
-        if n > sv_slice.len() {
-            // TODO: Ver como podemos garantizar la invariante, que no se pidan mas parametros
-            //       de los que de verdad se tiene.
-            //
-            //      Si se entra aca es porque:
-            //
-            //      - No se esta chequeando correctamente la cantidad de parametros que trae
-            //        cada servidor, el responsable de esta capa envio menos del tamaño de
-            //        la capa. Notar que si enviara mas no fallaria pero no podemos garantizar
-            //        que los datos sean correctos.
-            //
-            //      - El modelo pidio de mas, digamos que le pinto cualquiera.
-            //
-            panic!("Took more parameters than the ones available for this layer");
-        }
+        n = n.min(sv_slice.len());
 
         let (head, tail) = sv_slice.split_at_mut(n);
         self.slices[server_id] = tail;
@@ -175,7 +160,7 @@ impl<'pm> BackIter<'pm> {
     ///
     /// # Returns
     /// A slice of parameters or `None` if the iteration has ended.
-    pub fn take(&mut self, n: usize) -> Option<&'pm mut [f32]> {
+    pub fn take(&mut self, mut n: usize) -> Option<&'pm mut [f32]> {
         if self.curr == self.ordering.len() {
             return None;
         }
@@ -186,22 +171,7 @@ impl<'pm> BackIter<'pm> {
         // SAFETY: `ParamManager`'s constructor validates that every
         //         value in the ordering is lower than it's length.
         let sv_slice = mem::take(&mut self.slices[server_id]);
-
-        if n > sv_slice.len() {
-            // TODO: Ver como podemos garantizar la invariante, que no se pidan mas parametros
-            //       de los que de verdad se tiene.
-            //
-            //      Si se entra aca es porque:
-            //
-            //      - No se esta chequeando correctamente la cantidad de parametros que trae
-            //        cada servidor, el responsable de esta capa envio menos del tamaño de
-            //        la capa. Notar que si enviara mas no fallaria pero no podemos garantizar
-            //        que los datos sean correctos.
-            //
-            //      - El modelo pidio de mas, digamos que le pinto cualquiera.
-            //
-            panic!("Took more parameters than the ones available for this layer");
-        }
+        n = n.min(sv_slice.len());
 
         let (head, tail) = sv_slice.split_at_mut(sv_slice.len() - n);
         self.slices[server_id] = head;
