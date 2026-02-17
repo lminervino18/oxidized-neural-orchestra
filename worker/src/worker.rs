@@ -69,7 +69,9 @@ impl Worker {
         W: AsyncWrite + Unpin + Send,
     {
         match self.algorithm {
-            AlgorithmSpec::ParameterServer { ref server_addr } => {
+            AlgorithmSpec::ParameterServer { ref server_addrs } => {
+                let server_addr = &server_addrs[0];
+
                 info!(
                     "connecting to parameter server: worker_id={} server_addr={}",
                     self.worker_id, server_addr

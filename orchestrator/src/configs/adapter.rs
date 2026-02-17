@@ -79,7 +79,7 @@ impl Adapter {
                     worker_id: i,
                     max_epochs: training.max_epochs,
                     trainer: trainer.clone(),
-                    algorithm,
+                    algorithm: algorithm.clone(),
                 };
 
                 Ok((addr, worker))
@@ -149,12 +149,18 @@ impl Adapter {
     ) -> io::Result<AlgorithmSpec> {
         let spec = match algorithm {
             AlgorithmConfig::ParameterServer { server_addrs, .. } => {
-                let server_addr = server_addrs[0]
-                    .to_socket_addrs()?
-                    .next()
-                    .ok_or_else(|| io::Error::other("no addresses were given"))?;
+                let resolved = server_addrs
+                    .iter()
+                    .map(|addr| {
+                        addr.to_socket_addrs()?.next().ok_or_else(|| {
+                            io::Error::other("failed to resolve the address for a server")
+                        })
+                    })
+                    .collect::<io::Result<Vec<_>>>()?;
 
-                AlgorithmSpec::ParameterServer { server_addr }
+                AlgorithmSpec::ParameterServer {
+                    server_addrs: resolved,
+                }
             }
         };
 

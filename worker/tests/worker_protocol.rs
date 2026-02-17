@@ -30,7 +30,7 @@ fn make_worker() -> Worker {
         0,
         NonZeroUsize::new(1).unwrap(),
         AlgorithmSpec::ParameterServer {
-            server_addr: "127.0.0.1:0".parse().unwrap(),
+            server_addrs: vec!["127.0.0.1:0".parse().unwrap()],
         },
         Box::new(TestTrainer::new()),
     )
