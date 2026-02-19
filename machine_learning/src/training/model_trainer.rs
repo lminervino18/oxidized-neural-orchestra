@@ -6,7 +6,9 @@ use super::Trainer;
 use crate::{
     arch::{Model, loss::LossFn},
     dataset::Dataset,
+    error::Result,
     optimization::Optimizer,
+    training::ParamManager,
 };
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
@@ -60,28 +62,29 @@ impl<M: Model, O: Optimizer, L: LossFn, R: Rng> ModelTrainer<M, O, L, R> {
     /// function and batch size.
     ///
     /// # Arguments
-    /// * `params` - The parameters that will be optimized for the model that's being trained.
+    /// * `params` - The parameter manager used for this epoch.
     ///
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
-    pub fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
+    pub fn train<'a>(&'a mut self, params: &mut ParamManager<'a>) -> Result<(&'a [f32], Vec<f32>)> {
         let epochs = self.offline_epochs + 1;
         let mut losses = Vec::with_capacity(epochs);
 
         for _ in 0..epochs {
             self.dataset.shuffle(&mut self.rng);
             let batches = self.dataset.batches(self.batch_size);
-
-            losses.push(self.model.backprop(
+            let epoch_result = self.model.backprop(
                 params,
                 &mut self.grad,
                 &self.loss,
                 &mut self.optimizer,
                 batches,
-            ));
+            )?;
+
+            losses.push(epoch_result);
         }
 
-        (&self.grad, losses)
+        Ok((&self.grad, losses))
     }
 }
 
@@ -92,7 +95,7 @@ where
     L: LossFn,
     R: Rng,
 {
-    fn train(&mut self, params: &mut [f32]) -> (&[f32], Vec<f32>) {
+    fn train<'a>(&'a mut self, params: &mut ParamManager<'a>) -> Result<(&'a [f32], Vec<f32>)> {
         self.train(params)
     }
 }

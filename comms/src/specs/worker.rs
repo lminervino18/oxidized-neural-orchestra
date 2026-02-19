@@ -10,7 +10,10 @@ use super::machine_learning::TrainerSpec;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmSpec {
-    ParameterServer { server_addrs: Vec<SocketAddr> },
+    ParameterServer {
+        addrs: Vec<SocketAddr>,
+        ordering: Vec<usize>,
+    },
 }
 
 /// Wire-level bootstrap specification for a worker instance.
@@ -20,6 +23,6 @@ pub enum AlgorithmSpec {
 pub struct WorkerSpec {
     pub worker_id: usize,
     pub max_epochs: NonZeroUsize,
-    pub trainer: TrainerSpec,
     pub algorithm: AlgorithmSpec,
+    pub trainer: TrainerSpec,
 }

@@ -3,7 +3,6 @@ use std::{io, num::NonZeroUsize};
 use tokio::io as tokio_io;
 
 use comms::msg::{Command, Msg, Payload};
-use comms::specs::worker::AlgorithmSpec;
 use machine_learning::training::Trainer;
 use worker::Worker;
 
@@ -29,9 +28,6 @@ fn make_worker() -> Worker {
     Worker::new(
         0,
         NonZeroUsize::new(1).unwrap(),
-        AlgorithmSpec::ParameterServer {
-            server_addrs: vec!["127.0.0.1:0".parse().unwrap()],
-        },
         Box::new(TestTrainer::new()),
     )
 }
@@ -76,7 +72,7 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
 
     let worker_fut = async move {
         worker
-            .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
+            .handle_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
             .map_err(io::Error::from)
     };
@@ -117,7 +113,7 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
 
     let worker_fut = async move {
         worker
-            .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
+            .handle_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
             .map_err(io::Error::from)
     };
@@ -150,7 +146,7 @@ async fn worker_stops_on_disconnect() -> io::Result<()> {
 
     let worker_fut = async move {
         worker
-            .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
+            .handle_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
             .map_err(io::Error::from)
     };
@@ -182,7 +178,7 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
 
     let worker_fut = async move {
         worker
-            .run_parameter_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
+            .handle_server(wk_rx, wk_tx, orch_wk_rx, orch_wk_tx)
             .await
             .map_err(io::Error::from)
     };

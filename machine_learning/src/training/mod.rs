@@ -5,5 +5,5 @@ mod trainer;
 
 pub use builder::TrainerBuilder;
 pub use model_trainer::ModelTrainer;
-pub use param_manager::ParamManager;
+pub use param_manager::{BackIter, FrontIter, ParamManager};
 pub use trainer::Trainer;

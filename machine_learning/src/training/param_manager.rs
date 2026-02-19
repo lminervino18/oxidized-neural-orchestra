@@ -1,5 +1,7 @@
 use std::{collections::HashSet, mem};
 
+use crate::error::{MlErr, Result};
+
 /// Manages the parameters for the trainer.
 ///
 /// It will accumulate the parameters from different servers and yield
@@ -7,12 +9,12 @@ use std::{collections::HashSet, mem};
 ///
 /// The parameters can be iterated sequentially in order or in reverse
 /// through the `FrontIter` and the `BackIter`.
-pub struct ParamManager<'rx> {
+pub struct ParamManager<'a> {
     ordering: Vec<usize>,
-    params: Vec<Option<&'rx mut [f32]>>,
+    params: Vec<Option<&'a mut [f32]>>,
 }
 
-impl<'rx> ParamManager<'rx> {
+impl<'a> ParamManager<'a> {
     /// Creates a new `ParamManager`.
     ///
     /// # Arguments
@@ -20,10 +22,9 @@ impl<'rx> ParamManager<'rx> {
     ///
     /// # Returns
     /// A new `ParamManager` instance.
-    pub fn new(ordering: Vec<usize>) -> Option<Self> {
-        // TODO: Replace `Option` with a `Result` of some kind.
+    pub fn new(ordering: Vec<usize>) -> Result<Self> {
         if ordering.is_empty() {
-            return None;
+            return Err(MlErr::ParamManagerEmptyOrdering);
         }
 
         let mut max = ordering[0];
@@ -35,7 +36,10 @@ impl<'rx> ParamManager<'rx> {
         }
 
         if unique.len() != max + 1 {
-            return None;
+            return Err(MlErr::ParamManagerInvalidOrderingIds {
+                unique: unique.len(),
+                max,
+            });
         }
 
         let manager = Self {
@@ -43,7 +47,7 @@ impl<'rx> ParamManager<'rx> {
             params: (0..unique.len()).map(|_| None).collect(),
         };
 
-        Some(manager)
+        Ok(manager)
     }
 
     /// Adds parameters to the inner parameter buffer for this server.
@@ -54,7 +58,7 @@ impl<'rx> ParamManager<'rx> {
     ///
     /// # Returns
     /// `None` if the requested id is out of bounds or the given id already had an associated parameter slice.
-    pub fn add(&mut self, server_id: usize, params: &'rx mut [f32]) -> Option<()> {
+    pub fn add(&mut self, server_id: usize, params: &'a mut [f32]) -> Option<()> {
         // TODO: Return an error if the requested id is out of bounds instead of panicing.
         // TODO: Return an error if there were parameters for this server.
         let server_params = self.params.get_mut(server_id)?;
@@ -77,12 +81,16 @@ impl<'rx> ParamManager<'rx> {
     /// Creates a new iterator for the server parameters.
     ///
     /// # Returns
-    /// A new `FrontIter` iterator, or `None` if there are any missing parameters.
-    pub fn front(&mut self) -> Option<FrontIter<'_>> {
+    /// A new `FrontIter` iterator, or an error if there is an empty slice inside the parameter manager.
+    pub fn front(&mut self) -> Result<FrontIter<'_>> {
         let mut slices = Vec::with_capacity(self.params.len());
 
-        for param in &mut self.params {
-            slices.push(&mut **param.as_mut()?);
+        for (i, params) in self.params.iter_mut().enumerate() {
+            let slice = params
+                .as_mut()
+                .ok_or(MlErr::ParamManagerEmptySlice { corresponds: i })?;
+
+            slices.push(&mut **slice);
         }
 
         let front = FrontIter {
@@ -91,18 +99,22 @@ impl<'rx> ParamManager<'rx> {
             curr: 0,
         };
 
-        Some(front)
+        Ok(front)
     }
 
     /// Creates a new iterator for the server parameters.
     ///
     /// # Returns
     /// A new `BackIter` iterator, or `None` if there are any missing parameters.
-    pub fn back(&mut self) -> Option<BackIter<'_>> {
+    pub fn back(&mut self) -> Result<BackIter<'_>> {
         let mut slices = Vec::with_capacity(self.params.len());
 
-        for param in &mut self.params {
-            slices.push(&mut **param.as_mut()?);
+        for (i, params) in self.params.iter_mut().enumerate() {
+            let slice = params
+                .as_mut()
+                .ok_or_else(|| MlErr::ParamManagerEmptySlice { corresponds: i })?;
+
+            slices.push(&mut **slice);
         }
 
         let back = BackIter {
@@ -111,18 +123,18 @@ impl<'rx> ParamManager<'rx> {
             curr: 0,
         };
 
-        Some(back)
+        Ok(back)
     }
 }
 
 /// The servers' parameter iterator.
-pub struct FrontIter<'pm> {
-    ordering: &'pm [usize],
-    slices: Vec<&'pm mut [f32]>,
+pub struct FrontIter<'a> {
+    ordering: &'a [usize],
+    slices: Vec<&'a mut [f32]>,
     curr: usize,
 }
 
-impl<'pm> FrontIter<'pm> {
+impl<'a> FrontIter<'a> {
     /// Takes the next batch of `n` parameters following the manager's ordering.
     ///
     /// # Arguments
@@ -130,7 +142,7 @@ impl<'pm> FrontIter<'pm> {
     ///
     /// # Returns
     /// A slice of parameters or `None` if the iteration has ended.
-    pub fn take(&mut self, mut n: usize) -> Option<&'pm mut [f32]> {
+    pub fn take(&mut self, mut n: usize) -> Option<&'a mut [f32]> {
         let server_id = *self.ordering.get(self.curr)?;
         self.curr += 1;
 
@@ -146,13 +158,13 @@ impl<'pm> FrontIter<'pm> {
 }
 
 /// The reversed servers' parameter iterator.
-pub struct BackIter<'pm> {
-    ordering: &'pm [usize],
-    slices: Vec<&'pm mut [f32]>,
+pub struct BackIter<'a> {
+    ordering: &'a [usize],
+    slices: Vec<&'a mut [f32]>,
     curr: usize,
 }
 
-impl<'pm> BackIter<'pm> {
+impl<'a> BackIter<'a> {
     /// Takes the next batch of `n` parameters following the manager's reversed ordering.
     ///
     /// # Arguments
@@ -160,7 +172,7 @@ impl<'pm> BackIter<'pm> {
     ///
     /// # Returns
     /// A slice of parameters or `None` if the iteration has ended.
-    pub fn take(&mut self, mut n: usize) -> Option<&'pm mut [f32]> {
+    pub fn take(&mut self, mut n: usize) -> Option<&'a mut [f32]> {
         if self.curr == self.ordering.len() {
             return None;
         }
@@ -186,7 +198,7 @@ mod tests {
     #[test]
     fn creating_an_invalid_manager_fails() {
         let ordering = vec![0, 2];
-        assert!(ParamManager::new(ordering).is_none());
+        assert!(ParamManager::new(ordering).is_err());
     }
 
     #[test]
@@ -197,16 +209,16 @@ mod tests {
         let mut sv0 = [1.0, 2.0];
         let mut sv1 = [3.0, 4.0, 5.0];
 
-        assert!(pm.front().is_none());
-        assert!(pm.back().is_none());
+        assert!(pm.front().is_err());
+        assert!(pm.back().is_err());
         pm.add(0, &mut sv0).unwrap();
 
-        assert!(pm.front().is_none());
-        assert!(pm.back().is_none());
+        assert!(pm.front().is_err());
+        assert!(pm.back().is_err());
         pm.add(1, &mut sv1).unwrap();
 
-        assert!(pm.front().is_some());
-        assert!(pm.back().is_some());
+        assert!(pm.front().is_err());
+        assert!(pm.back().is_err());
     }
 
     #[test]
