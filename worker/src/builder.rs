@@ -15,6 +15,6 @@ impl WorkerBuilder {
     /// A fully initialized `Worker` instance.
     pub fn build(spec: WorkerSpec) -> Worker {
         let trainer = TrainerBuilder::new().build(spec.trainer);
-        Worker::new(spec.worker_id, spec.max_epochs, spec.algorithm, trainer)
+        Worker::new(spec.worker_id, spec.max_epochs, trainer)
     }
 }

@@ -7,10 +7,13 @@ use super::machine_learning::TrainerSpec;
 /// Distributed training algorithm selection.
 ///
 /// Only `parameter_server` is currently implemented.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmSpec {
-    ParameterServer { server_addr: SocketAddr },
+    ParameterServer {
+        addrs: Vec<SocketAddr>,
+        ordering: Vec<usize>,
+    },
 }
 
 /// Wire-level bootstrap specification for a worker instance.
@@ -20,6 +23,6 @@ pub enum AlgorithmSpec {
 pub struct WorkerSpec {
     pub worker_id: usize,
     pub max_epochs: NonZeroUsize,
-    pub trainer: TrainerSpec,
     pub algorithm: AlgorithmSpec,
+    pub trainer: TrainerSpec,
 }

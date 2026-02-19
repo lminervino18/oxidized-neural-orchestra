@@ -5,5 +5,5 @@ pub mod worker;
 
 pub use acceptor::WorkerAcceptor;
 pub use builder::WorkerBuilder;
-pub use error::WorkerError;
+pub use error::Result;
 pub use worker::Worker;

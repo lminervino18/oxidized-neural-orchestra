@@ -1,8 +1,11 @@
 use ndarray::ArrayView2;
 
-use crate::optimization::Optimizer;
-
 use super::{Model, layers::Layer, loss::LossFn};
+use crate::{
+    error::{MlErr, Result},
+    optimization::Optimizer,
+    training::{BackIter, FrontIter, ParamManager},
+};
 
 /// A sequential model: information flows forward when computing an output and backward when
 /// computing the *deltas* of its layers.
@@ -29,37 +32,59 @@ impl Sequential {
     /// output of the last one.
     ///
     /// # Arguments
-    /// * `params` - The parameters the layers use to compute their own outputs, that is, the weights and biases of the network.
+    /// * `params` - A filled parameter manager.
     /// * `x` - The x batch in the input layer.
+    ///
+    /// # Returns
+    /// The model's prediction for the given input.
     pub fn forward<'a>(
         &'a mut self,
-        mut params: &[f32],
+        mut params: FrontIter<'a>,
         mut x: ArrayView2<'a, f32>,
-    ) -> ArrayView2<'a, f32> {
-        for l in self.layers.iter_mut() {
-            let (curr, rest) = params.split_at(l.size());
-            (x, params) = (l.forward(curr, x), rest);
+    ) -> Result<ArrayView2<'a, f32>> {
+        let n = self.layers.len();
+
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            let size = layer.size();
+            let curr = params.take(size).ok_or_else(|| MlErr::SizeMismatch {
+                a: "the amount of slices in the parameter manager",
+                b: "the amount of layers of the model",
+                got: i,
+                expected: n,
+            })?;
+
+            x = layer.forward(curr, x);
         }
 
-        x
+        Ok(x)
     }
 
-    fn backward<L: LossFn>(
+    fn backward<'a, L: LossFn>(
         &mut self,
-        mut params: &[f32],
+        mut params: BackIter<'a>,
         mut grad: &mut [f32],
         y_pred: ArrayView2<f32>,
         y: ArrayView2<f32>,
         loss: &L,
-    ) {
+    ) -> Result<()> {
         let mut d_last = loss.loss_prime(y_pred, y);
         let mut d = d_last.view_mut();
+        let n = self.layers.len();
 
-        for l in self.layers.iter_mut().rev() {
-            let (ps_rest, ps_curr) = params.split_at(params.len() - l.size());
-            let (gs_rest, gs_curr) = grad.split_at_mut(grad.len() - l.size());
-            (d, params, grad) = (l.backward(ps_curr, gs_curr, d.view_mut()), ps_rest, gs_rest);
+        for (i, layer) in self.layers.iter_mut().rev().enumerate() {
+            let size = layer.size();
+            let curr = params.take(size).ok_or_else(|| MlErr::SizeMismatch {
+                a: "the amount of slices in the parameter manager",
+                b: "the amount of layers of the model",
+                got: i,
+                expected: n,
+            })?;
+
+            let (gs_rest, gs_curr) = grad.split_at_mut(grad.len() - size);
+            (d, grad) = (layer.backward(curr, gs_curr, d.view_mut()), gs_rest);
         }
+
+        Ok(())
     }
 }
 
@@ -73,34 +98,55 @@ impl Model for Sequential {
     // each batch (this is a good approximation), another option would be to sum the weighted
     // losses, that is, loss * batch_size and then diving by the also weighted sum of
     // num_batches.
-    fn backprop<'a, L, O, I>(
+    fn backprop<'a, 'b, L, O, I>(
         &mut self,
-        params: &mut [f32],
+        params: &mut ParamManager<'b>,
         grad: &mut [f32],
         loss: &L,
         optimizer: &mut O,
         batches: I,
-    ) -> f32
+    ) -> Result<f32>
     where
         L: LossFn,
         O: Optimizer,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
-        let mut total_loss = 0.0;
-        let mut num_batches = 0;
+        let mut total_loss = 0f64;
+        let mut num_batches = 0usize;
 
         for (x, y) in batches {
-            // TODO: sacar `to_owned`
             grad.fill(0.0);
-            let y_pred = self.forward(params, x).to_owned();
 
-            total_loss += loss.loss(y_pred.view(), y);
+            // TODO: sacar `to_owned`
+            let y_pred = self.forward(params.front()?, x)?.to_owned();
+            self.backward(params.back()?, grad, y_pred.view(), y, loss)?;
+            total_loss += loss.loss(y_pred.view(), y) as f64;
             num_batches += 1;
 
-            self.backward(params, grad, y_pred.view(), y, loss);
-            optimizer.update_params(params, grad);
+            let mut front = params.front()?;
+            let mut gs_rest = &*grad;
+            let slices: Vec<_> = self
+                .layers
+                .iter()
+                .map(|layer| {
+                    let size = layer.size();
+
+                    // SAFETY: Previously the forward pass was successful
+                    //         with these same sizes in this same order.
+                    let slice = front.take(size).unwrap();
+                    let (curr, rest) = grad.split_at(size);
+                    gs_rest = rest;
+                    (slice, curr)
+                })
+                .collect();
+
+            // TODO: Esto se puede paralelizar, habría que pasar a tener un optimizer por
+            //       servidor/capa, cosa que podamos tener optimizadores statefull, estilo Adam.
+            for (params, grad) in slices {
+                optimizer.update_params(params, grad);
+            }
         }
 
-        total_loss / num_batches as f32
+        Ok((total_loss / num_batches as f64) as f32)
     }
 }

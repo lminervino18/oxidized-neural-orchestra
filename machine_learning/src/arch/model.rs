@@ -1,4 +1,4 @@
-use crate::{arch::loss::LossFn, optimization::Optimizer};
+use crate::{arch::loss::LossFn, error::Result, optimization::Optimizer, training::ParamManager};
 use ndarray::ArrayView2;
 
 pub trait Model {
@@ -18,14 +18,14 @@ pub trait Model {
     ///
     /// # Returns
     /// The epoch loss.
-    fn backprop<'a, L, O, I>(
+    fn backprop<'a, 'b, L, O, I>(
         &mut self,
-        params: &mut [f32],
+        params: &mut ParamManager<'b>,
         grad: &mut [f32],
         loss: &L,
         optimizer: &mut O,
         batches: I,
-    ) -> f32
+    ) -> Result<f32>
     where
         L: LossFn,
         O: Optimizer,
