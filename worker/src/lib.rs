@@ -1,6 +1,7 @@
 pub mod acceptor;
 pub mod builder;
 pub mod error;
+pub mod middleware;
 pub mod worker;
 
 pub use acceptor::WorkerAcceptor;
