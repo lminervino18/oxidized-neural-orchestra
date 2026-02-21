@@ -28,9 +28,10 @@ impl WorkerAcceptor {
         R: AsyncRead + Unpin + Send,
     {
         info!("waiting for CreateWorker spec");
+        let mut buf = vec![0; 1028];
 
         let spec = loop {
-            match rx.recv::<Msg>().await {
+            match rx.recv_into(&mut buf).await {
                 Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
                 Ok(Msg::Control(Command::Disconnect)) => {
                     info!("received Disconnect before bootstrap, exiting");

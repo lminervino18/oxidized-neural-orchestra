@@ -1,5 +1,6 @@
 pub mod arch;
 pub mod dataset;
+pub mod middleware;
 pub mod optimization;
 mod test;
 pub mod training;

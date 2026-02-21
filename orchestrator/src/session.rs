@@ -23,6 +23,7 @@ pub struct Session {
     runtime: Runtime,
     server: (NetRx, NetTx),
     workers: Vec<(NetRx, NetTx)>,
+    buf: Vec<u32>,
 }
 
 impl Session {
@@ -46,6 +47,7 @@ impl Session {
             runtime,
             workers: worker_chans,
             server: server_chans.remove(0), // One server for now.
+            buf: vec![0; 1028],
         })
     }
 
@@ -53,15 +55,18 @@ impl Session {
     ///
     /// # Returns
     /// The parameters of the model or an io error if failed to do so.
-    pub fn wait(self) -> io::Result<Vec<f32>> {
+    pub fn wait(mut self) -> io::Result<Vec<f32>> {
         self.runtime.block_on(async move {
             for (mut rx, _) in self.workers {
-                while !matches!(rx.recv().await?, Msg::Control(Command::Disconnect)) {}
+                while !matches!(
+                    rx.recv_into(&mut self.buf).await?,
+                    Msg::Control(Command::Disconnect)
+                ) {}
             }
 
             let (mut rx, _) = self.server;
 
-            match rx.recv().await? {
+            match rx.recv_into(&mut self.buf).await? {
                 Msg::Data(Payload::Params(params)) => Ok(params.to_vec()),
                 msg => Err(io::Error::other(format!(
                     "Received an invalid msg kind: {msg:?}"

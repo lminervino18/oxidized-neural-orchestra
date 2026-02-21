@@ -1,6 +1,7 @@
-use std::{io, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
-use tokio::io as tokio_io;
+use comms::{OnoReceiver, OnoSender};
+use tokio::io::{self, DuplexStream, ReadHalf, WriteHalf};
 
 use comms::msg::{Command, Msg, Payload};
 use comms::specs::worker::AlgorithmSpec;
@@ -36,42 +37,28 @@ fn make_worker() -> Worker {
     )
 }
 
-/// Creates both ends of a duplex orchestrator channel:
-/// - the worker side (rx/tx) to pass into the worker runtime
-/// - the orchestrator side (rx/tx) to observe messages emitted by the worker
-fn orch_pair() -> (
+fn channel_pair() -> (
     (
-        comms::OnoReceiver<tokio_io::ReadHalf<tokio_io::DuplexStream>>,
-        comms::OnoSender<tokio_io::WriteHalf<tokio_io::DuplexStream>>,
+        OnoReceiver<ReadHalf<DuplexStream>>,
+        OnoSender<WriteHalf<DuplexStream>>,
     ),
     (
-        comms::OnoReceiver<tokio_io::ReadHalf<tokio_io::DuplexStream>>,
-        comms::OnoSender<tokio_io::WriteHalf<tokio_io::DuplexStream>>,
+        OnoReceiver<ReadHalf<DuplexStream>>,
+        OnoSender<WriteHalf<DuplexStream>>,
     ),
 ) {
-    let (wk_stream, orch_stream) = tokio_io::duplex(4096);
-
-    let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let wk = comms::channel(wk_rx, wk_tx);
-
-    let (orch_rx, orch_tx) = tokio_io::split(orch_stream);
-    let orch = comms::channel(orch_rx, orch_tx);
-
-    (wk, orch)
+    let (stream1, stream2) = io::duplex(4096);
+    let (rx1, tx1) = io::split(stream1);
+    let (rx2, tx2) = io::split(stream2);
+    let chan1 = comms::channel(rx1, tx1);
+    let chan2 = comms::channel(rx2, tx2);
+    (chan1, chan2)
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn worker_sends_gradient_on_weights() -> io::Result<()> {
-    let (sv_stream, wk_stream) = tokio_io::duplex(4096);
-
-    let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
-    let (mut sv_rx, mut sv_tx) = comms::channel(sv_rx, sv_tx);
-
-    let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
-
-    let ((orch_wk_rx, orch_wk_tx), (_orch_rx, _orch_tx)) = orch_pair();
-
+    let ((mut sv_rx, mut sv_tx), (wk_rx, wk_tx)) = channel_pair();
+    let ((orch_wk_rx, orch_wk_tx), _) = channel_pair();
     let worker = make_worker();
 
     let worker_fut = async move {
@@ -85,7 +72,8 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
         let mut w = [1.0_f32, 2.0];
         sv_tx.send(&Msg::Data(Payload::Params(&mut w))).await?;
 
-        let msg: Msg = sv_rx.recv().await?;
+        let mut buf = vec![0; 128];
+        let msg: Msg = sv_rx.recv_into(&mut buf).await?;
         match msg {
             Msg::Data(Payload::Grad(g)) => assert_eq!(g, &[2.0, 4.0]),
             other => panic!("unexpected message: {other:?}"),
@@ -95,24 +83,14 @@ async fn worker_sends_gradient_on_weights() -> io::Result<()> {
         Ok::<(), io::Error>(())
     };
 
-    let (worker_res, server_res) = tokio::join!(worker_fut, server_fut);
-    server_res?;
-    worker_res?;
+    tokio::try_join!(worker_fut, server_fut)?;
     Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn worker_rejects_unexpected_message() -> io::Result<()> {
-    let (sv_stream, wk_stream) = tokio_io::duplex(4096);
-
-    let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
-    let (_sv_rx, mut sv_tx) = comms::channel(sv_rx, sv_tx);
-
-    let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
-
-    let ((orch_wk_rx, orch_wk_tx), (_orch_rx, _orch_tx)) = orch_pair();
-
+    let ((_, mut sv_tx), (wk_rx, wk_tx)) = channel_pair();
+    let ((orch_wk_rx, orch_wk_tx), _) = channel_pair();
     let worker = make_worker();
 
     let worker_fut = async move {
@@ -136,16 +114,8 @@ async fn worker_rejects_unexpected_message() -> io::Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn worker_stops_on_disconnect() -> io::Result<()> {
-    let (sv_stream, wk_stream) = tokio_io::duplex(4096);
-
-    let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
-    let (_sv_rx, mut sv_tx) = comms::channel(sv_rx, sv_tx);
-
-    let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
-
-    let ((orch_wk_rx, orch_wk_tx), (_orch_rx, _orch_tx)) = orch_pair();
-
+    let ((_, mut sv_tx), (wk_rx, wk_tx)) = channel_pair();
+    let ((orch_wk_rx, orch_wk_tx), _) = channel_pair();
     let worker = make_worker();
 
     let worker_fut = async move {
@@ -160,24 +130,14 @@ async fn worker_stops_on_disconnect() -> io::Result<()> {
         Ok::<(), io::Error>(())
     };
 
-    let (worker_res, server_res) = tokio::join!(worker_fut, server_fut);
-    server_res?;
-    worker_res?;
+    tokio::try_join!(worker_fut, server_fut)?;
     Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
-    let (sv_stream, wk_stream) = tokio_io::duplex(4096);
-
-    let (sv_rx, sv_tx) = tokio_io::split(sv_stream);
-    let (mut sv_rx, mut sv_tx) = comms::channel(sv_rx, sv_tx);
-
-    let (wk_rx, wk_tx) = tokio_io::split(wk_stream);
-    let (wk_rx, wk_tx) = comms::channel(wk_rx, wk_tx);
-
-    let ((orch_wk_rx, orch_wk_tx), (mut orch_rx, _orch_tx)) = orch_pair();
-
+    let ((mut sv_rx, mut sv_tx), (wk_rx, wk_tx)) = channel_pair();
+    let ((orch_wk_rx, orch_wk_tx), (mut orch_rx, _orch_tx)) = channel_pair();
     let worker = make_worker();
 
     let worker_fut = async move {
@@ -191,7 +151,8 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
         let mut w = [1.0_f32, 2.0];
         sv_tx.send(&Msg::Data(Payload::Params(&mut w))).await?;
 
-        let msg: Msg = sv_rx.recv().await?;
+        let mut buf = vec![0; 128];
+        let msg: Msg = sv_rx.recv_into(&mut buf).await?;
         match msg {
             Msg::Data(Payload::Grad(g)) => assert_eq!(g, &[2.0, 4.0]),
             other => panic!("unexpected message: {other:?}"),
@@ -202,7 +163,8 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
     };
 
     let orchestrator_fut = async move {
-        let msg: Msg = orch_rx.recv().await?;
+        let mut buf = vec![0; 128];
+        let msg: Msg = orch_rx.recv_into(&mut buf).await?;
         match msg {
             Msg::Control(Command::ReportLoss {
                 worker_id,
@@ -215,9 +177,6 @@ async fn worker_reports_losses_each_epoch_when_enabled() -> io::Result<()> {
         Ok::<(), io::Error>(())
     };
 
-    let (worker_res, server_res, orch_res) = tokio::join!(worker_fut, server_fut, orchestrator_fut);
-    server_res?;
-    orch_res?;
-    worker_res?;
+    tokio::try_join!(worker_fut, server_fut, orchestrator_fut)?;
     Ok(())
 }

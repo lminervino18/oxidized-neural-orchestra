@@ -112,11 +112,14 @@ impl Worker {
         let mut trainer = self.trainer;
         let mut epoch = 0;
 
+        let mut ps_buf = vec![0; 1028];
+        let mut orch_buf = vec![0; 1028];
+
         while epoch < self.max_epochs.get() {
             debug!("waiting for message");
 
             tokio::select! {
-                ps_msg = ps_rx.recv::<Msg>() => {
+                ps_msg = ps_rx.recv_into(&mut ps_buf) => {
                     let msg = ps_msg?;
                     if handle_server_message(
                         worker_id,
@@ -130,7 +133,7 @@ impl Worker {
                     }
                 }
 
-                orch_msg = orch_rx.recv::<Msg>() => {
+                orch_msg = orch_rx.recv_into(&mut orch_buf) => {
                     let msg = orch_msg?;
                     if handle_orchestrator_message(worker_id, epoch, msg) {
                         break;
@@ -144,7 +147,10 @@ impl Worker {
         orch_tx.send(&msg).await?;
         ps_tx.send(&msg).await?;
 
-        while !matches!(ps_rx.recv().await?, Msg::Control(Command::Disconnect)) {}
+        while !matches!(
+            ps_rx.recv_into(&mut ps_buf).await?,
+            Msg::Control(Command::Disconnect)
+        ) {}
 
         Ok(())
     }

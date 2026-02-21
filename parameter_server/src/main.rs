@@ -32,9 +32,10 @@ async fn main() -> io::Result<()> {
 
     let (rx, tx) = stream.into_split();
     let (mut rx, mut tx) = comms::channel(rx, tx);
+    let mut buf = vec![0; 1028];
 
     let spec = loop {
-        match rx.recv().await {
+        match rx.recv_into(&mut buf).await {
             Ok(Msg::Control(Command::CreateServer(spec))) => break spec,
             Ok(msg) => warn!("expected CreateServer, got {msg:?}"),
             Err(e) => warn!("io error {e}"),

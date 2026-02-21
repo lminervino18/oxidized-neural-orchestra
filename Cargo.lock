@@ -340,9 +340,11 @@ name = "machine_learning"
 version = "0.1.0"
 dependencies = [
  "comms",
+ "futures",
  "ndarray",
  "ndarray-rand",
  "rand",
+ "tokio",
 ]
 
 [[package]]
