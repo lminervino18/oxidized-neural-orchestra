@@ -4,7 +4,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 /// The starting size of the rx buffer.
 const STARTING_RX_BUF_SIZE: usize = 1028;
 
-/// The state of the communication with a parameter server.
+/// The server's metadata to maintain while the training is going on.
 pub struct ServerMetadata<R, W>
 where
     R: AsyncRead + Unpin,
@@ -14,7 +14,6 @@ where
     pub rx: OnoReceiver<R>,
     pub tx: OnoSender<W>,
     pub grad: Vec<f32>,
-    pub has_msg: bool,
 }
 
 impl<R, W> ServerMetadata<R, W>
@@ -37,7 +36,12 @@ where
             rx,
             tx,
             grad: vec![0.0; size],
-            has_msg: false,
         }
     }
+}
+
+/// The state necessary to make forward and backward passes through the network.
+pub struct ServerParamsMetadata<'a> {
+    pub params: &'a mut [f32],
+    pub grad: &'a mut [f32],
 }

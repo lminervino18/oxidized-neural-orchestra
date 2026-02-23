@@ -28,10 +28,10 @@ async fn main() -> io::Result<()> {
     info!("listening at {addr}");
 
     let (stream, addr) = list.accept().await?;
-    info!("orchestrator connected from {addr}");
-
     let (rx, tx) = stream.into_split();
     let (mut rx, mut tx) = comms::channel(rx, tx);
+    info!("orchestrator connected from {addr}");
+
     let mut buf = vec![0; 1028];
 
     let spec = loop {

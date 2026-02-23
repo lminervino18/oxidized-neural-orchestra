@@ -344,6 +344,7 @@ dependencies = [
  "ndarray",
  "ndarray-rand",
  "rand",
+ "rayon",
  "tokio",
 ]
 

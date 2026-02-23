@@ -1,12 +1,11 @@
 use ndarray::ArrayView2;
 
-use crate::optimization::Optimizer;
+use crate::{middleware::ParamManager, optimization::Optimizer};
 
 use super::{Model, layers::Layer, loss::LossFn};
 
 /// A sequential model: information flows forward when computing an output and backward when
 /// computing the *deltas* of its layers.
-#[derive(Clone)]
 pub struct Sequential {
     layers: Vec<Layer>,
 }
@@ -25,41 +24,27 @@ impl Sequential {
         }
     }
 
-    /// Goes through the model's layers, computes all of their outputs and returns a view of the
-    /// output of the last one.
+    /// Makes a forward pass through the network.
     ///
     /// # Arguments
-    /// * `params` - The parameters the layers use to compute their own outputs, that is, the weights and biases of the network.
-    /// * `x` - The x batch in the input layer.
-    pub fn forward<'a>(
-        &'a mut self,
-        mut params: &[f32],
-        mut x: ArrayView2<'a, f32>,
-    ) -> ArrayView2<'a, f32> {
-        for l in self.layers.iter_mut() {
-            let (curr, rest) = params.split_at(l.size());
-            (x, params) = (l.forward(curr, x), rest);
+    /// * `param_manager` - The manager of parameters.
+    /// * `x` - The input data.
+    ///
+    /// # Returns
+    /// The prediction for the given input.
+    pub fn forward<'x, 'mw>(
+        &'x mut self,
+        param_manager: &mut ParamManager<'mw>,
+        mut x: ArrayView2<'x, f32>,
+    ) -> Option<ArrayView2<'x, f32>> {
+        let mut front = param_manager.front();
+
+        for layer in self.layers.iter_mut() {
+            let params = front.next()?;
+            x = layer.forward(params, x);
         }
 
-        x
-    }
-
-    fn backward<L: LossFn>(
-        &mut self,
-        mut params: &[f32],
-        mut grad: &mut [f32],
-        y_pred: ArrayView2<f32>,
-        y: ArrayView2<f32>,
-        loss: &L,
-    ) {
-        let mut d_last = loss.loss_prime(y_pred, y);
-        let mut d = d_last.view_mut();
-
-        for l in self.layers.iter_mut().rev() {
-            let (ps_rest, ps_curr) = params.split_at(params.len() - l.size());
-            let (gs_rest, gs_curr) = grad.split_at_mut(grad.len() - l.size());
-            (d, params, grad) = (l.backward(ps_curr, gs_curr, d.view_mut()), ps_rest, gs_rest);
-        }
+        Some(x)
     }
 }
 
@@ -73,12 +58,11 @@ impl Model for Sequential {
     // each batch (this is a good approximation), another option would be to sum the weighted
     // losses, that is, loss * batch_size and then diving by the also weighted sum of
     // num_batches.
-    fn backprop<'a, L, O, I>(
+    fn backprop<'a, 'mw, O, L, I>(
         &mut self,
-        params: &mut [f32],
-        grad: &mut [f32],
-        loss: &L,
-        optimizer: &mut O,
+        param_manager: &mut ParamManager<'mw>,
+        optimizers: &mut [O],
+        loss_fn: &L,
         batches: I,
     ) -> f32
     where
@@ -89,16 +73,26 @@ impl Model for Sequential {
         let mut total_loss = 0.0;
         let mut num_batches = 0;
 
-        for (x, y) in batches {
-            // TODO: sacar `to_owned`
-            grad.fill(0.0);
-            let y_pred = self.forward(params, x).to_owned();
+        for (mut x, y) in batches {
+            param_manager.zero_grad();
 
-            total_loss += loss.loss(y_pred.view(), y);
+            // TODO: Ver como justificar este unwrap o devolver un error
+            x = self.forward(param_manager, x).unwrap();
+
+            total_loss += loss_fn.loss(x, y);
             num_batches += 1;
 
-            self.backward(params, grad, y_pred.view(), y, loss);
-            optimizer.update_params(params, grad);
+            let mut back = param_manager.back();
+            let mut d_last = loss_fn.loss_prime(x, y);
+            let mut d = d_last.view_mut();
+
+            for layer in self.layers.iter_mut().rev() {
+                // TODO: Ver como justificar este unwrap o devolver un error
+                let (params, grad) = back.next().unwrap();
+                d = layer.backward(params, grad, d.view_mut());
+            }
+
+            param_manager.optimize(optimizers);
         }
 
         total_loss / num_batches as f32
