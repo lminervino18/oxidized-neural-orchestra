@@ -1,5 +1,5 @@
 /// This trait represents the *learning rule* that is to be taken when updating the parameters of a model.
-pub trait Optimizer: Send {
+pub trait Optimizer {
     /// Updates the provided parameters using the provided gradient according to the optimizer's
     /// learning rule.
     ///

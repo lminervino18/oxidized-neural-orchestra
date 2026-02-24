@@ -16,6 +16,7 @@ pub enum LayerSpec {
     Dense {
         dim: (usize, usize),
         act_fn: Option<ActFnSpec>,
+        size: usize,
     },
 }
 

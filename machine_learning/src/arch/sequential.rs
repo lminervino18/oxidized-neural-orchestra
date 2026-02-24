@@ -67,7 +67,7 @@ impl Model for Sequential {
     ) -> f32
     where
         L: LossFn,
-        O: Optimizer,
+        O: Optimizer + Send,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
         let mut total_loss = 0.0;

@@ -67,13 +67,15 @@ impl TrainerBuilder {
     /// A new `Trainer`.
     fn resolve_model<O>(&self, spec: TrainerSpec, optimizers: Vec<O>) -> Box<dyn Trainer>
     where
-        O: Optimizer + 'static,
+        O: Optimizer + Send + 'static,
     {
         match &spec.model {
             ModelSpec::Sequential {
                 layers: layer_specs,
             } => {
-                let layers = layer_specs.iter().map(|ls| self.resolve_layer(*ls));
+                let (layers, sizes): (Vec<_>, Vec<_>) =
+                    layer_specs.iter().map(|ls| self.resolve_layer(*ls)).unzip();
+
                 let model = Sequential::new(layers);
                 self.resolve_loss_fn(spec, optimizers, model)
             }
@@ -87,11 +89,11 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_layer(&self, spec: LayerSpec) -> Layer {
+    fn resolve_layer(&self, spec: LayerSpec) -> (Layer, usize) {
         match spec {
-            LayerSpec::Dense { dim, act_fn } => {
+            LayerSpec::Dense { dim, act_fn, size } => {
                 let factory = |act_fn| Layer::dense(dim, act_fn);
-                self.resolve_act_fn(act_fn, factory)
+                (self.resolve_act_fn(act_fn, factory), size)
             }
         }
     }
@@ -135,7 +137,7 @@ impl TrainerBuilder {
         model: M,
     ) -> Box<dyn Trainer>
     where
-        O: Optimizer + 'static,
+        O: Optimizer + Send + 'static,
         M: Model + 'static,
     {
         match spec.loss_fn {
@@ -164,7 +166,7 @@ impl TrainerBuilder {
         loss_fn: L,
     ) -> Box<dyn Trainer>
     where
-        O: Optimizer + 'static,
+        O: Optimizer + Send + 'static,
         M: Model + 'static,
         L: LossFn + 'static,
     {

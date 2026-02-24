@@ -69,7 +69,7 @@ where
 impl<M, O, L, R> ModelTrainer<M, O, L, R>
 where
     M: Model,
-    O: Optimizer,
+    O: Optimizer + Send,
     L: LossFn,
     R: Rng,
 {
@@ -103,7 +103,7 @@ where
 impl<M, O, L, R> Trainer for ModelTrainer<M, O, L, R>
 where
     M: Model,
-    O: Optimizer,
+    O: Optimizer + Send,
     L: LossFn,
     R: Rng,
 {

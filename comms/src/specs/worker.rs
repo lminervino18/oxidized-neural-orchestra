@@ -13,6 +13,7 @@ pub enum AlgorithmSpec {
     ParameterServer {
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
     },
 }
 

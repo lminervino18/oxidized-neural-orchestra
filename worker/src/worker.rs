@@ -6,13 +6,13 @@ use comms::{
 };
 use futures::future;
 use log::{debug, info, warn};
-use machine_learning::{middleware::ServerMetadata, optimization::Optimizer, training::Trainer};
+use machine_learning::training::Trainer;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
 };
 
-use crate::error::WorkerErr;
+use crate::error::{Result, WorkerErr};
 
 /// Infrastructure worker runtime.
 pub struct Worker {
@@ -57,25 +57,27 @@ impl Worker {
         orch_tx: OnoSender<W>,
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
-    ) -> Result<(), WorkerErr>
+    ) -> Result<()>
     where
         R: AsyncRead + Unpin + Send,
         W: AsyncWrite + Unpin + Send,
     {
-        let futs = server_addrs
-            .iter()
-            .zip(server_sizes)
-            .map(async |(addr, size)| {
-                let stream = TcpStream::connect(addr).await?;
-                let (rx, tx) = stream.into_split();
-                let (rx, tx) = comms::channel(rx, tx);
-                Ok(ServerMetadata::new(rx, tx, size))
-            });
+        // let futs = server_addrs
+        //     .iter()
+        //     .zip(server_sizes)
+        //     .map(async |(addr, size)| {
+        //         let stream = TcpStream::connect(addr).await?;
+        //         let (rx, tx) = stream.into_split();
+        //         let (rx, tx) = comms::channel(rx, tx);
+        //         Ok(ServerMetadata::new(rx, tx, size))
+        //     });
 
-        let metadatas = future::try_join_all(futs);
+        // let metadatas = future::try_join_all(futs).await?;
 
-        self.run_parameter_server(ps_rx, ps_tx, orch_rx, orch_tx)
-            .await
+        // self.run_parameter_server(ps_rx, ps_tx, orch_rx, orch_tx)
+        //     .await
+
+        todo!()
     }
 
     /// Runs the parameter-server protocol loop while listening to the orchestrator control plane.
@@ -94,7 +96,7 @@ impl Worker {
         mut ps_tx: OnoSender<Wps>,
         mut orch_rx: OnoReceiver<Rorch>,
         mut orch_tx: OnoSender<Worch>,
-    ) -> Result<(), WorkerErr>
+    ) -> Result<()>
     where
         Rps: AsyncRead + Unpin + Send,
         Wps: AsyncWrite + Unpin + Send,
@@ -146,50 +148,6 @@ impl Worker {
         ) {}
 
         Ok(())
-    }
-}
-
-async fn handle_server_message<Wps, Worch>(
-    worker_id: usize,
-    epoch: &mut usize,
-    trainer: &mut Box<dyn Trainer>,
-    ps_tx: &mut OnoSender<Wps>,
-    _orch_tx: &mut OnoSender<Worch>,
-    msg: Msg<'_>,
-) -> Result<bool, WorkerErr>
-where
-    Wps: AsyncWrite + Unpin + Send,
-    Worch: AsyncWrite + Unpin + Send,
-{
-    match msg {
-        Msg::Data(Payload::Params(params)) => {
-            debug!("received new parameters: epoch={epoch}");
-
-            let (grad, losses) = trainer.train(params);
-            *epoch += losses.len();
-
-            let msg = Msg::Data(Payload::Grad(grad));
-            ps_tx.send(&msg).await?;
-
-            // msg = Msg::Control(Command::ReportLoss { worker_id, losses });
-            // orch_tx.send(&msg).await?;
-
-            Ok(false)
-        }
-
-        other => {
-            warn!(
-                "unexpected message from parameter server: worker_id={} epoch={} got={}",
-                worker_id,
-                epoch,
-                msg_kind(&other)
-            );
-
-            Err(WorkerErr::UnexpectedMessage {
-                epoch: *epoch,
-                got: msg_kind(&other),
-            })
-        }
     }
 }
 

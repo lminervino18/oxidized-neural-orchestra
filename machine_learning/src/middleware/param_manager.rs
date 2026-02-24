@@ -76,14 +76,12 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Arguments
     /// * `optimizers` - A list of optimizers, one per server.
-    pub fn optimize<O: Optimizer>(&mut self, optimizers: &mut [O]) {
+    pub fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) {
         // TODO: Agregar un chequeo para validar que el largo de los servers y optimizers sea el mismo
         optimizers
             .par_iter_mut()
             .zip(&mut self.servers)
-            .for_each(|(optimizer, server)| {
-                optimizer.update_params(server.params, server.grad);
-            });
+            .for_each(|(optimizer, server)| optimizer.update_params(server.params, &server.grad));
     }
 
     /// Zeros out the gradients of every server.
