@@ -77,7 +77,6 @@ impl Adapter {
 
                 let worker = WorkerSpec {
                     worker_id: i,
-                    max_epochs: training.max_epochs,
                     trainer: trainer.clone(),
                     algorithm: algorithm.clone(),
                 };
@@ -235,6 +234,7 @@ impl Adapter {
             dataset,
             loss_fn,
             offline_epochs: training.offline_epochs,
+            max_epochs: training.max_epochs,
             batch_size: training.batch_size,
             seed: training.seed,
         };
@@ -400,7 +400,6 @@ impl Adapter {
                     LayerSpec::Dense {
                         dim: (n, m),
                         act_fn,
-                        size: layer.sizes().1,
                     },
                     self.adapt_param_gen(init, layer.sizes()),
                 )

@@ -1,6 +1,23 @@
 use crate::middleware::ParamManager;
 
-/// This trait acts as an interface for the `Worker` to use `machine_learning` related components.
+/// The result of a training call.
+///
+/// Either the training must go on or the last call was the last.
+pub struct TrainResult {
+    pub losses: Vec<f32>,
+    pub was_last: bool,
+}
+
+/// This trait generalizes all the different concrete `ModelTrainer` variations between optimizers, loss functions, ...
 pub trait Trainer {
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Vec<f32>;
+    /// Performs a single training 'cycle'.
+    ///
+    /// This cycle could involve one or more epochs.
+    ///
+    /// # Arguments
+    /// * `param_manager` - The manager of parameters for this training cycle.
+    ///
+    /// # Returns
+    /// A training result declaring if the trianing has finished or should continue.
+    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> TrainResult;
 }

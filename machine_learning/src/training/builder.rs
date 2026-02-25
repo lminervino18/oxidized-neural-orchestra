@@ -73,9 +73,7 @@ impl TrainerBuilder {
             ModelSpec::Sequential {
                 layers: layer_specs,
             } => {
-                let (layers, sizes): (Vec<_>, Vec<_>) =
-                    layer_specs.iter().map(|ls| self.resolve_layer(*ls)).unzip();
-
+                let layers = layer_specs.iter().map(|ls| self.resolve_layer(*ls));
                 let model = Sequential::new(layers);
                 self.resolve_loss_fn(spec, optimizers, model)
             }
@@ -89,11 +87,11 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_layer(&self, spec: LayerSpec) -> (Layer, usize) {
+    fn resolve_layer(&self, spec: LayerSpec) -> Layer {
         match spec {
-            LayerSpec::Dense { dim, act_fn, size } => {
+            LayerSpec::Dense { dim, act_fn } => {
                 let factory = |act_fn| Layer::dense(dim, act_fn);
-                (self.resolve_act_fn(act_fn, factory), size)
+                self.resolve_act_fn(act_fn, factory)
             }
         }
     }
@@ -170,18 +168,16 @@ impl TrainerBuilder {
         M: Model + 'static,
         L: LossFn + 'static,
     {
-        let offline_epochs = spec.offline_epochs;
-        let batch_size = spec.batch_size;
-        let rng = self.generate_rng(spec.seed);
         let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
         let trainer = ModelTrainer::new(
             model,
             optimizers,
             dataset,
-            offline_epochs,
-            batch_size,
+            spec.offline_epochs,
+            spec.max_epochs,
+            spec.batch_size,
             loss_fn,
-            rng,
+            self.generate_rng(spec.seed),
         );
 
         Box::new(trainer)

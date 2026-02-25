@@ -16,7 +16,6 @@ pub enum LayerSpec {
     Dense {
         dim: (usize, usize),
         act_fn: Option<ActFnSpec>,
-        size: usize,
     },
 }
 
@@ -69,7 +68,8 @@ pub struct TrainerSpec {
     pub optimizer: OptimizerSpec,
     pub dataset: DatasetSpec,
     pub loss_fn: LossFnSpec,
-    pub batch_size: NonZeroUsize,
     pub offline_epochs: usize,
+    pub max_epochs: NonZeroUsize,
+    pub batch_size: NonZeroUsize,
     pub seed: Option<u64>,
 }

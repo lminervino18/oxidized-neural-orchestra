@@ -1,11 +1,16 @@
 use std::{env, io};
 
-use comms::specs::worker::AlgorithmSpec;
-use env_logger::Env;
-use log::info;
-use tokio::{net::TcpListener, signal};
+use comms::{
+    msg::{Command, Msg},
+    specs::worker::AlgorithmSpec,
+};
+use log::{info, warn};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    signal,
+};
 
-use worker::{WorkerAcceptor, WorkerBuilder, middleware::Middleware};
+use worker::{builder::WorkerBuilder, middleware::Middleware};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
@@ -24,36 +29,37 @@ async fn main() -> io::Result<()> {
 
     let (stream, addr) = list.accept().await?;
     let (rx, tx) = stream.into_split();
-    let (mut rx, mut tx) = comms::channel(rx, tx);
+    let (mut rx, tx) = comms::channel(rx, tx);
     info!("orchestrator connected from {addr}");
 
-    let mut buf = vec![0; 1028];
-
+    let mut rx_buf = vec![0; 1028];
     let spec = loop {
-        match rx.recv_into(&mut buf).await {
+        match rx.recv_into(&mut rx_buf).await {
             Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
             Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
             Err(e) => warn!("io error {e}"),
         }
     };
 
-    let layer_sizes = spec
     let AlgorithmSpec::ParameterServer {
         server_addrs,
         server_sizes,
         server_ordering,
-    } = spec.algorithm
-    else {
-        unimplemented!();
-    };
-
+    } = spec.algorithm.clone();
 
     let worker_builder = WorkerBuilder::new();
-    let worker = worker_builder.build(spec, server_sizes);
-    let middleware = Middleware::new(server_ordering, layer_sizes);
+    let worker = worker_builder.build(spec, &server_sizes);
+    let mut middleware = Middleware::new(server_ordering);
+
+    for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
+        let stream = TcpStream::connect(addr).await?;
+        let (rx, tx) = stream.into_split();
+        let (rx, tx) = comms::channel(rx, tx);
+        middleware.spawn(rx, tx, size);
+    }
 
     tokio::select! {
-        ret = worker.run(rx, tx, server_addrs, server_sizes, server_ordering) => {
+        ret = worker.run(rx, tx, middleware) => {
             ret?;
             info!("wrapping up, disconnecting...");
         }

@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, num::NonZeroUsize};
+use std::net::SocketAddr;
 
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +23,6 @@ pub enum AlgorithmSpec {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkerSpec {
     pub worker_id: usize,
-    pub max_epochs: NonZeroUsize,
     pub trainer: TrainerSpec,
     pub algorithm: AlgorithmSpec,
 }

@@ -4,4 +4,4 @@ mod trainer;
 
 pub use builder::TrainerBuilder;
 pub use model_trainer::ModelTrainer;
-pub use trainer::Trainer;
+pub use trainer::{TrainResult, Trainer};

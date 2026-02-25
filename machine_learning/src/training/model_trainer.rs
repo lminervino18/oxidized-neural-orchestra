@@ -8,6 +8,7 @@ use crate::{
     dataset::Dataset,
     middleware::ParamManager,
     optimization::Optimizer,
+    training::trainer::TrainResult,
 };
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
@@ -24,7 +25,9 @@ where
     loss_fn: L,
     model: M,
 
+    epoch: usize,
     offline_epochs: usize,
+    max_epochs: NonZeroUsize,
     batch_size: NonZeroUsize,
     rng: R,
 }
@@ -43,13 +46,18 @@ where
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `dataset` - The dataset the model will be trained with.
     /// * `offline_epochs` - The amount of extra epochs to run per `train` call.
+    /// * `max_epochs` - The maximum amount of epochs to train.
     /// * `loss` - The loss function used to measure the difference between a model's output and the expected one.
     /// * `rng` - A random number generator.
+    ///
+    /// # Returns
+    /// A new `ModelTrainer` instance.
     pub fn new(
         model: M,
         optimizers: Vec<O>,
         dataset: Dataset,
         offline_epochs: usize,
+        max_epochs: NonZeroUsize,
         batch_size: NonZeroUsize,
         loss_fn: L,
         rng: R,
@@ -58,7 +66,9 @@ where
             model,
             dataset,
             optimizers,
+            epoch: 0,
             offline_epochs,
+            max_epochs,
             batch_size,
             loss_fn,
             rng,
@@ -73,16 +83,16 @@ where
     L: LossFn,
     R: Rng,
 {
-    /// Performs `epochs` epochs of training its model, using its optimizer, dataset, loss
-    /// function and batch size.
+    /// Performs
     ///
     /// # Arguments
     /// * `param_manager` - The manager of parameters for this training.
     ///
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
-    pub fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Vec<f32> {
-        let epochs = self.offline_epochs + 1;
+    pub fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> TrainResult {
+        let remaining = self.max_epochs.get() - self.epoch;
+        let epochs = remaining.min(self.offline_epochs + 1);
         let mut losses = Vec::with_capacity(epochs);
 
         for _ in 0..epochs {
@@ -96,7 +106,12 @@ where
             losses.push(loss);
         }
 
-        losses
+        self.epoch += epochs;
+
+        TrainResult {
+            losses,
+            was_last: self.epoch == self.max_epochs.get(),
+        }
     }
 }
 
@@ -107,7 +122,7 @@ where
     L: LossFn,
     R: Rng,
 {
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Vec<f32> {
+    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> TrainResult {
         self.train(param_manager)
     }
 }

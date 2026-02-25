@@ -4,7 +4,7 @@ use std::io;
 
 use comms::{
     OnoReceiver, OnoSender,
-    msg::{Msg, Payload},
+    msg::{Command, Msg, Payload},
 };
 use machine_learning::middleware::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -22,7 +22,6 @@ where
 {
     servers: Vec<ServerMetadata<R, W>>,
     server_ordering: Vec<usize>,
-    layer_sizes: Vec<usize>,
 }
 
 impl<R, W> Middleware<R, W>
@@ -34,15 +33,13 @@ where
     ///
     /// # Arguments
     /// * `server_ordering`: The ordering of the servers to know which layer's parameters corresponds to which server.
-    /// * `layer_sizes`: The amount of parameters per layer of the model.
     ///
     /// # Returns
     /// A new `Middleware` instance.
-    pub fn new(server_ordering: Vec<usize>, layer_sizes: Vec<usize>) -> Self {
+    pub fn new(server_ordering: Vec<usize>) -> Self {
         Self {
             servers: Vec::new(),
             server_ordering,
-            layer_sizes,
         }
     }
 
@@ -91,11 +88,36 @@ where
         Ok(ParamManager::new(servers, &self.server_ordering))
     }
 
+    /// Pushes the latest gradients to the servers.
+    ///
+    /// # Returns
+    /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         // TODO: Paralelizar esto
         for server in self.servers.iter_mut() {
             let msg = Msg::Data(Payload::Grad(&server.grad));
             server.tx.send(&msg).await?;
+        }
+
+        Ok(())
+    }
+
+    /// Disconnects this worker from all the servers.
+    ///
+    /// # Returns
+    /// an io error if occurred.
+    pub async fn disconnect(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Disconnect);
+
+        for server in self.servers.iter_mut() {
+            server.tx.send(&msg).await?;
+        }
+
+        for server in self.servers.iter_mut() {
+            while !matches!(
+                server.rx.recv_into(&mut server.rx_buf).await?,
+                Msg::Control(Command::Disconnect)
+            ) {}
         }
 
         Ok(())
