@@ -3,19 +3,19 @@ mod metadata;
 use std::io;
 
 use comms::{
-    Deserialize, OnoReceiver, OnoSender,
+    OnoReceiver, OnoSender,
     msg::{Msg, Payload},
 };
-use futures::future;
-use log::warn;
 use machine_learning::middleware::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use metadata::ServerMetadata;
 
+// The starting size of the receiver buffer.
 const STARTING_RX_BUF_SIZE: usize = 1028;
 
-pub struct ServerManager<R, W>
+// The communication manager between the worker process and the many servers.
+pub struct Middleware<R, W>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -25,11 +25,19 @@ where
     layer_sizes: Vec<usize>,
 }
 
-impl<R, W> ServerManager<R, W>
+impl<R, W> Middleware<R, W>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
+    /// Creates a new `Middleware`.
+    ///
+    /// # Arguments
+    /// * `server_ordering`: The ordering of the servers to know which layer's parameters corresponds to which server.
+    /// * `layer_sizes`: The amount of parameters per layer of the model.
+    ///
+    /// # Returns
+    /// A new `Middleware` instance.
     pub fn new(server_ordering: Vec<usize>, layer_sizes: Vec<usize>) -> Self {
         Self {
             servers: Vec::new(),
@@ -38,6 +46,12 @@ where
         }
     }
 
+    /// Adds a new server communicator to the middleware.
+    ///
+    /// # Arguments
+    /// * `rx` - The worker's receiving end of the communication.
+    /// * `tx` - The worker's sending end of the communication.
+    /// * `size` - The amount of parameters this server holds.
     pub fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>, size: usize) {
         let metadata = ServerMetadata {
             rx,
@@ -49,9 +63,14 @@ where
         self.servers.push(metadata);
     }
 
-    pub async fn param_manager(&mut self) -> io::Result<ParamManager<'_>> {
+    /// Pulls the new parameters from all the servers.
+    ///
+    /// # Returns
+    /// A new `ParamManager` instance with all the parameters.
+    pub async fn pull_params(&mut self) -> io::Result<ParamManager<'_>> {
         let mut servers = Vec::with_capacity(self.servers.len());
 
+        // TODO: paralelizar esto
         for (i, server) in self.servers.iter_mut().enumerate() {
             match server.rx.recv_into(&mut server.rx_buf).await? {
                 Msg::Data(Payload::Params(params)) => {
@@ -69,10 +88,16 @@ where
             }
         }
 
-        Ok(ParamManager::new(
-            servers,
-            &self.server_ordering,
-            &self.layer_sizes,
-        ))
+        Ok(ParamManager::new(servers, &self.server_ordering))
+    }
+
+    pub async fn push_grads(&mut self) -> io::Result<()> {
+        // TODO: Paralelizar esto
+        for server in self.servers.iter_mut() {
+            let msg = Msg::Data(Payload::Grad(&server.grad));
+            server.tx.send(&msg).await?;
+        }
+
+        Ok(())
     }
 }

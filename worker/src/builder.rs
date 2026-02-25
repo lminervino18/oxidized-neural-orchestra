@@ -6,6 +6,14 @@ use machine_learning::training::TrainerBuilder;
 pub struct WorkerBuilder;
 
 impl WorkerBuilder {
+    /// Creates a new `WorkerBuilder`.
+    ///
+    /// # Returns
+    /// A new `WorkerBuilder` instance.
+    pub fn new() -> Self {
+        Self
+    }
+
     /// Builds a `Worker` from a `WorkerSpec`.
     ///
     /// # Arguments

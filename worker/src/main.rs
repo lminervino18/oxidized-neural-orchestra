@@ -5,7 +5,7 @@ use env_logger::Env;
 use log::info;
 use tokio::{net::TcpListener, signal};
 
-use worker::{WorkerAcceptor, WorkerBuilder};
+use worker::{WorkerAcceptor, WorkerBuilder, middleware::Middleware};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
@@ -37,20 +37,24 @@ async fn main() -> io::Result<()> {
         }
     };
 
-    let worker = match spec.algorithm {
-        AlgorithmSpec::ParameterServer {
-            server_addrs,
-            server_sizes,
-        } => {
-            let worker_builder = WorkerBuilder::new();
-            worker_builder.build(spec, server_sizes)
-        }
-        _ => unimplmented!(),
+    let layer_sizes = spec
+    let AlgorithmSpec::ParameterServer {
+        server_addrs,
+        server_sizes,
+        server_ordering,
+    } = spec.algorithm
+    else {
+        unimplemented!();
     };
 
+
+    let worker_builder = WorkerBuilder::new();
+    let worker = worker_builder.build(spec, server_sizes);
+    let middleware = Middleware::new(server_ordering, layer_sizes);
+
     tokio::select! {
-        ret = worker.run(rx, tx, server_addrs, server_sizes) => {
-            ret.map_err(io::Error::from)?;
+        ret = worker.run(rx, tx, server_addrs, server_sizes, server_ordering) => {
+            ret?;
             info!("wrapping up, disconnecting...");
         }
         _ = signal::ctrl_c() => {

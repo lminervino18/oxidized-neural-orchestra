@@ -47,6 +47,7 @@ pub enum AlgorithmConfig<A: ToSocketAddrs> {
     ParameterServer {
         server_addrs: Vec<A>,
         server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },

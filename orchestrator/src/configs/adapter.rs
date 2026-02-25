@@ -152,6 +152,7 @@ impl Adapter {
             AlgorithmConfig::ParameterServer {
                 server_addrs,
                 server_sizes,
+                server_ordering,
                 ..
             } => {
                 if server_addrs.len() != server_sizes.len() {
@@ -172,6 +173,7 @@ impl Adapter {
                 AlgorithmSpec::ParameterServer {
                     server_addrs,
                     server_sizes: server_sizes.clone(),
+                    server_ordering: server_ordering.clone(),
                 }
             }
         };
@@ -398,6 +400,7 @@ impl Adapter {
                     LayerSpec::Dense {
                         dim: (n, m),
                         act_fn,
+                        size: layer.sizes().1,
                     },
                     self.adapt_param_gen(init, layer.sizes()),
                 )

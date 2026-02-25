@@ -1,18 +1,14 @@
-use std::{net::SocketAddr, num::NonZeroUsize};
+use std::{io, net::SocketAddr, num::NonZeroUsize};
 
 use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
 };
-use futures::future;
 use log::{debug, info, warn};
 use machine_learning::training::Trainer;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::TcpStream,
-};
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::error::{Result, WorkerErr};
+use crate::{error::Result, middleware::Middleware};
 
 /// Infrastructure worker runtime.
 pub struct Worker {
@@ -43,41 +39,58 @@ impl Worker {
     /// bidirectional channel to the orchestrator.
     ///
     /// # Args
-    /// * `orch_rx` - Receiving end of the orchestrator channel.
-    /// * `orch_tx` - Sending end of the orchestrator channel.
+    /// * `rx` - The receiving end of the communication between the worker and the orchestrator.
+    /// * `tx` - The sending end of the communication between the worker and the orchestrator.
+    /// * `middleware` - The communication manager between this worker and the parameter servers.
     ///
     /// # Returns
-    /// Returns `Ok(())` on graceful completion.
-    ///
-    /// # Errors
-    /// Returns `WorkerError` on I/O failures or protocol violations.
+    /// An io error if occurred.
     pub async fn run<R, W>(
         self,
-        orch_rx: OnoReceiver<R>,
-        orch_tx: OnoSender<W>,
-        server_addrs: Vec<SocketAddr>,
-        server_sizes: Vec<usize>,
-    ) -> Result<()>
+        mut rx: OnoReceiver<R>,
+        mut tx: OnoSender<W>,
+        mut middleware: Middleware<R, W>,
+    ) -> io::Result<()>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
     {
-        // let futs = server_addrs
-        //     .iter()
-        //     .zip(server_sizes)
-        //     .map(async |(addr, size)| {
-        //         let stream = TcpStream::connect(addr).await?;
-        //         let (rx, tx) = stream.into_split();
-        //         let (rx, tx) = comms::channel(rx, tx);
-        //         Ok(ServerMetadata::new(rx, tx, size))
-        //     });
+        let Self {
+            mut trainer,
+            max_epochs,
+            ..
+        } = self;
 
-        // let metadatas = future::try_join_all(futs).await?;
+        let mut rx_buf = vec![0; 1028];
+        let mut epoch = 0;
 
-        // self.run_parameter_server(ps_rx, ps_tx, orch_rx, orch_tx)
-        //     .await
+        while epoch < max_epochs.get() {
+            tokio::select! {
+                param_manager = middlware.pull_params() => {
 
-        todo!()
+                }
+            }
+
+            let mut param_manager = middleware.pull_params().await?;
+            let losses = trainer.train(&mut param_manager);
+            middleware.push_grads().await;
+
+            epoch += losses.len();
+            // let msg = Msg::Control(Command::ReportLoss { losses });
+            // tx.send(&msg).await?;
+
+            match rx.recv_into(&mut rx_buf).await? {
+                Msg::Control(Command::Disconnect) => {
+                    break;
+                }
+                msg => {
+                    warn!("unexpected message from orchestrator, got: {msg:?}");
+                    break;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Runs the parameter-server protocol loop while listening to the orchestrator control plane.

@@ -40,7 +40,8 @@ impl Sequential {
         let mut front = param_manager.front();
 
         for layer in self.layers.iter_mut() {
-            let params = front.next()?;
+            let size = layer.size();
+            let params = front.next(size)?;
             x = layer.forward(params, x);
         }
 
@@ -87,8 +88,9 @@ impl Model for Sequential {
             let mut d = d_last.view_mut();
 
             for layer in self.layers.iter_mut().rev() {
+                let size = layer.size();
                 // TODO: Ver como justificar este unwrap o devolver un error
-                let (params, grad) = back.next().unwrap();
+                let (params, grad) = back.next(size).unwrap();
                 d = layer.backward(params, grad, d.view_mut());
             }
 

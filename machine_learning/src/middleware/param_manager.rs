@@ -1,5 +1,3 @@
-// TODO: arreglar los docstrings
-
 use rayon::prelude::*;
 
 use super::ServerParamsMetadata;
@@ -11,7 +9,6 @@ use crate::optimization::Optimizer;
 pub struct ParamManager<'mw> {
     servers: Vec<ServerParamsMetadata<'mw>>,
     server_ordering: &'mw [usize],
-    layer_sizes: &'mw [usize],
     cursors: Vec<usize>,
 }
 
@@ -19,19 +16,15 @@ impl<'mw> ParamManager<'mw> {
     /// Creates a new `ParamManager`.
     ///
     /// # Arguments
-    /// * `middleware` - The middleware for the communication between the worker and the server.
+    /// * `servers` - A list of the necessary server metadata to have to iterate through the layers' parameters.
+    /// * `server_ordering` - The ordering of the servers to know which layer corresponds to which server.
     ///
     /// # Returns
     /// A new `ParamManager` instance.
-    pub fn new(
-        servers: Vec<ServerParamsMetadata<'mw>>,
-        server_ordering: &'mw [usize],
-        layer_sizes: &'mw [usize],
-    ) -> Self {
+    pub fn new(servers: Vec<ServerParamsMetadata<'mw>>, server_ordering: &'mw [usize]) -> Self {
         Self {
-            cursors: vec![0; layer_sizes.len()],
+            cursors: vec![0; server_ordering.len()],
             server_ordering,
-            layer_sizes,
             servers,
         }
     }
@@ -48,7 +41,6 @@ impl<'mw> ParamManager<'mw> {
         FrontIter {
             servers: &mut self.servers,
             server_ordering: self.server_ordering,
-            layer_sizes: self.layer_sizes,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -66,7 +58,6 @@ impl<'mw> ParamManager<'mw> {
         BackIter {
             servers: &mut self.servers,
             server_ordering: &self.server_ordering,
-            layer_sizes: &self.layer_sizes,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -84,7 +75,7 @@ impl<'mw> ParamManager<'mw> {
             .for_each(|(optimizer, server)| optimizer.update_params(server.params, &server.grad));
     }
 
-    /// Zeros out the gradients of every server.
+    /// Zeroes out the gradients of every server.
     pub fn zero_grad(&mut self) {
         self.servers
             .par_iter_mut()
@@ -98,7 +89,6 @@ impl<'mw> ParamManager<'mw> {
 pub struct FrontIter<'pm, 'mw> {
     servers: &'pm mut [ServerParamsMetadata<'mw>],
     server_ordering: &'mw [usize],
-    layer_sizes: &'mw [usize],
     cursors: &'pm mut [usize],
     curr: usize,
 }
@@ -106,18 +96,20 @@ pub struct FrontIter<'pm, 'mw> {
 impl FrontIter<'_, '_> {
     /// Tries to yield the next layer's parameters and gradient.
     ///
+    /// # Arguments
+    /// * `n` - The amount of parameters to take from the inner storage of the next server.
+    ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
-    pub fn next(&mut self) -> Option<&mut [f32]> {
+    pub fn next(&mut self, n: usize) -> Option<&mut [f32]> {
         if self.curr == self.server_ordering.len() {
             return None;
         }
 
         let server_id = self.server_ordering[self.curr];
-        let layer_size = self.layer_sizes[self.curr];
         let server = &mut self.servers[server_id];
         let start = self.cursors[server_id];
-        let end = start + layer_size;
+        let end = start + n;
 
         self.cursors[server_id] = end;
         self.curr += 1;
@@ -132,7 +124,6 @@ impl FrontIter<'_, '_> {
 pub struct BackIter<'pm, 'mw> {
     servers: &'pm mut [ServerParamsMetadata<'mw>],
     server_ordering: &'mw [usize],
-    layer_sizes: &'mw [usize],
     cursors: &'pm mut [usize],
     curr: usize,
 }
@@ -140,19 +131,21 @@ pub struct BackIter<'pm, 'mw> {
 impl BackIter<'_, '_> {
     /// Tries to yield the next layer's parameters and gradient.
     ///
+    /// # Arguments
+    /// * `n` - The amount of parameters to take from the inner storage of the next server.
+    ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
-    pub fn next(&mut self) -> Option<(&mut [f32], &mut [f32])> {
+    pub fn next(&mut self, n: usize) -> Option<(&mut [f32], &mut [f32])> {
         if self.curr == self.server_ordering.len() {
             return None;
         }
 
         let idx = self.server_ordering.len() - self.curr - 1;
         let server_id = self.server_ordering[idx];
-        let layer_size = self.layer_sizes[idx];
         let server = &mut self.servers[server_id];
         let start = self.cursors[server_id];
-        let end = start + layer_size;
+        let end = start + n;
 
         self.cursors[server_id] = end;
         self.curr += 1;
@@ -187,11 +180,11 @@ mod tests {
             .map(|(params, grad)| ServerParamsMetadata { params, grad })
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING, &LAYER_SIZES);
+        let mut manager = ParamManager::new(servers, &ORDERING);
         let mut front = manager.front();
 
-        for i in 0..LAYER_SIZES.len() {
-            let params = front.next().unwrap();
+        for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES) {
+            let params = front.next(size).unwrap();
             assert_eq!(params[0], ORDERING[i] as f32);
             assert_eq!(params.len(), LAYER_SIZES[i]);
         }
@@ -211,11 +204,11 @@ mod tests {
             .map(|(params, grad)| ServerParamsMetadata { params, grad })
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING, &LAYER_SIZES);
+        let mut manager = ParamManager::new(servers, &ORDERING);
         let mut back = manager.back();
 
-        for i in (0..LAYER_SIZES.len()).rev() {
-            let (params, grad) = back.next().unwrap();
+        for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
+            let (params, grad) = back.next(size).unwrap();
             assert_eq!(params[0], ORDERING[i] as f32);
             assert_eq!(params.len(), LAYER_SIZES[i]);
 
@@ -238,11 +231,11 @@ mod tests {
             .map(|(params, grad)| ServerParamsMetadata { params, grad })
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING, &LAYER_SIZES);
+        let mut manager = ParamManager::new(servers, &ORDERING);
         let mut back = manager.back();
 
-        for i in (0..LAYER_SIZES.len()).rev() {
-            let (params, grad) = back.next().unwrap();
+        for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
+            let (params, grad) = back.next(size).unwrap();
             assert_eq!(params[0], ORDERING[i] as f32);
             assert_eq!(params.len(), LAYER_SIZES[i]);
 

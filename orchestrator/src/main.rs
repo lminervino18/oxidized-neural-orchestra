@@ -16,6 +16,7 @@ fn main() {
         algorithm: AlgorithmConfig::ParameterServer {
             server_addrs: vec!["server-0:40000"],
             server_sizes: vec![2],
+            server_ordering: vec![0],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
             store: StoreConfig::Blocking {
                 shard_size: NonZeroUsize::new(1).unwrap(),
