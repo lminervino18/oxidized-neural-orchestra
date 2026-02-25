@@ -6,6 +6,7 @@ use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
 };
+use futures::future;
 use machine_learning::middleware::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -65,26 +66,28 @@ where
     /// # Returns
     /// A new `ParamManager` instance with all the parameters.
     pub async fn pull_params(&mut self) -> io::Result<ParamManager<'_>> {
-        let mut servers = Vec::with_capacity(self.servers.len());
+        let futs = self
+            .servers
+            .iter_mut()
+            .enumerate()
+            .map(
+                async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
+                    Msg::Data(Payload::Params(params)) => {
+                        let metadata = ServerParamsMetadata {
+                            params,
+                            grad: &mut server.grad,
+                        };
 
-        // TODO: paralelizar esto
-        for (i, server) in self.servers.iter_mut().enumerate() {
-            match server.rx.recv_into(&mut server.rx_buf).await? {
-                Msg::Data(Payload::Params(params)) => {
-                    let metadata = ServerParamsMetadata {
-                        params,
-                        grad: &mut server.grad,
-                    };
+                        Ok(metadata)
+                    }
+                    msg => {
+                        let text = format!("expected Params from server {i}, got: {msg:?}");
+                        Err(io::Error::other(text))
+                    }
+                },
+            );
 
-                    servers.push(metadata);
-                }
-                msg => {
-                    let text = format!("expected Params from server {i}, got: {msg:?}");
-                    return Err(io::Error::other(text));
-                }
-            }
-        }
-
+        let servers = future::try_join_all(futs).await?;
         Ok(ParamManager::new(servers, &self.server_ordering))
     }
 
@@ -93,12 +96,12 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
-        // TODO: Paralelizar esto
-        for server in self.servers.iter_mut() {
+        let futs = self.servers.iter_mut().map(async |server| {
             let msg = Msg::Data(Payload::Grad(&server.grad));
-            server.tx.send(&msg).await?;
-        }
+            server.tx.send(&msg).await
+        });
 
+        future::try_join_all(futs).await?;
         Ok(())
     }
 
@@ -109,17 +112,18 @@ where
     pub async fn disconnect(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Disconnect);
 
-        for server in self.servers.iter_mut() {
+        let futs = self.servers.iter_mut().map(async |server| {
             server.tx.send(&msg).await?;
-        }
 
-        for server in self.servers.iter_mut() {
             while !matches!(
                 server.rx.recv_into(&mut server.rx_buf).await?,
                 Msg::Control(Command::Disconnect)
             ) {}
-        }
 
+            Ok::<_, io::Error>(())
+        });
+
+        future::try_join_all(futs).await?;
         Ok(())
     }
 }
