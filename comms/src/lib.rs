@@ -12,6 +12,7 @@ pub use deserialize::Deserialize;
 pub use receiver::OnoReceiver;
 pub use sender::OnoSender;
 pub use serialize::Serialize;
+pub use share_dataset::recv_dataset;
 pub use share_dataset::send_dataset;
 
 type LenType = u64;
