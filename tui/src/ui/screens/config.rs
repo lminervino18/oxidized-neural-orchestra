@@ -356,6 +356,10 @@ fn draw_error_bar(f: &mut Frame, area: Rect, msg: &str) {
 }
 
 fn render_hints(f: &mut Frame, area: Rect, hints: &[(&str, &str)]) {
+    let key_col_width = hints.iter().map(|(k, _)| k.len() as u16 + 2).max().unwrap_or(8) + 2;
+
+    let outer = centered_rect(40, 100, area);
+
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -365,19 +369,28 @@ fn render_hints(f: &mut Frame, area: Rect, hints: &[(&str, &str)]) {
                 .chain(std::iter::once(Constraint::Min(0)))
                 .collect::<Vec<_>>(),
         )
-        .split(area);
+        .split(outer);
 
     for (i, (key, action)) in hints.iter().enumerate() {
-        let line = Line::from(vec![
-            Span::styled(format!("[{key}]"), Theme::accent_cyan()),
-            Span::styled(format!("  {action}"), Theme::dim()),
-        ]);
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(key_col_width),
+                Constraint::Min(0),
+            ])
+            .split(rows[i]);
+
         f.render_widget(
-            Paragraph::new(line).alignment(Alignment::Center),
-            rows[i],
+            Paragraph::new(Span::styled(format!("[{key}]"), Theme::accent_cyan())),
+            cols[0],
+        );
+        f.render_widget(
+            Paragraph::new(Span::styled(*action, Theme::dim())),
+            cols[1],
         );
     }
 }
+
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let vert = Layout::default()
