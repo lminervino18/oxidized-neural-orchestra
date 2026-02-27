@@ -92,7 +92,6 @@ pub fn handle_key(state: &mut ConfigState, key: KeyCode) -> Action {
         Step::ModelPath => handle_model_path(state, key),
         Step::TrainingPath => handle_training_path(state, key),
         Step::ExampleModel | Step::ExampleTraining => {
-            // any key goes back
             state.step = Step::ModelPath;
             Action::None
         }
@@ -197,7 +196,8 @@ pub fn draw(f: &mut Frame, state: &ConfigState) {
 
     match &state.step {
         Step::ModelPath => draw_path_input(
-            f, area,
+            f,
+            area,
             "Model Configuration",
             "model.json path",
             &state.model_path,
@@ -205,15 +205,18 @@ pub fn draw(f: &mut Frame, state: &ConfigState) {
             "Step 1 of 2",
         ),
         Step::TrainingPath => draw_path_input(
-            f, area,
+            f,
+            area,
             "Training Configuration",
             "training.json path",
             &state.training_path,
             DEFAULT_TRAINING_PATH,
             "Step 2 of 2",
         ),
-        Step::ExampleModel => draw_example(f, area, "model.json example", EXAMPLE_MODEL),
-        Step::ExampleTraining => draw_example(f, area, "training.json example", EXAMPLE_TRAINING),
+        Step::ExampleModel => draw_example(f, area, "model.json — example", EXAMPLE_MODEL),
+        Step::ExampleTraining => {
+            draw_example(f, area, "training.json — example", EXAMPLE_TRAINING)
+        }
     }
 
     if let Some(err) = &state.error {
@@ -230,17 +233,19 @@ fn draw_path_input(
     default: &str,
     step_label: &str,
 ) {
-    let outer = centered_rect(55, 50, area);
+    let outer = centered_rect(55, 70, area);
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(1),
+            Constraint::Length(1), // title
+            Constraint::Length(1), // step label
+            Constraint::Length(2), // spacer
+            Constraint::Length(3), // input box
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // default note
+            Constraint::Min(0),    // spacer
+            Constraint::Length(5), // keybinds
         ])
         .split(outer);
 
@@ -263,8 +268,8 @@ fn draw_path_input(
         .title(format!(" {label} "))
         .title_style(Theme::title());
 
-    let inner = input_block.inner(chunks[2]);
-    f.render_widget(input_block, chunks[2]);
+    let inner = input_block.inner(chunks[3]);
+    f.render_widget(input_block, chunks[3]);
 
     let display = if current.is_empty() {
         Line::from(vec![
@@ -282,13 +287,21 @@ fn draw_path_input(
 
     f.render_widget(
         Paragraph::new(Span::styled(
-            format!("Leave empty to use ./{default}"),
+            format!("leave empty to use ./{default}"),
             Theme::dim(),
         )),
-        chunks[3],
+        chunks[5],
     );
 
-    render_hint(f, chunks[5], "enter  confirm    ?  view example    esc  back");
+    render_hints(
+        f,
+        chunks[7],
+        &[
+            ("enter", "confirm"),
+            ("?", "view example"),
+            ("esc", "back"),
+        ],
+    );
 }
 
 fn draw_example(f: &mut Frame, area: Rect, title: &str, content: &str) {
@@ -323,7 +336,7 @@ fn draw_example(f: &mut Frame, area: Rect, title: &str, content: &str) {
         chunks[1],
     );
 
-    render_hint(f, chunks[2], "any key  back");
+    render_hints(f, chunks[2], &[("any key", "back")]);
 }
 
 fn draw_error_bar(f: &mut Frame, area: Rect, msg: &str) {
@@ -342,11 +355,28 @@ fn draw_error_bar(f: &mut Frame, area: Rect, msg: &str) {
     );
 }
 
-fn render_hint(f: &mut Frame, area: Rect, text: &str) {
-    f.render_widget(
-        Paragraph::new(Span::styled(text, Theme::muted())).alignment(Alignment::Center),
-        area,
-    );
+fn render_hints(f: &mut Frame, area: Rect, hints: &[(&str, &str)]) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            hints
+                .iter()
+                .map(|_| Constraint::Length(1))
+                .chain(std::iter::once(Constraint::Min(0)))
+                .collect::<Vec<_>>(),
+        )
+        .split(area);
+
+    for (i, (key, action)) in hints.iter().enumerate() {
+        let line = Line::from(vec![
+            Span::styled(format!("[{key}]"), Theme::accent_cyan()),
+            Span::styled(format!("  {action}"), Theme::dim()),
+        ]);
+        f.render_widget(
+            Paragraph::new(line).alignment(Alignment::Center),
+            rows[i],
+        );
+    }
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
