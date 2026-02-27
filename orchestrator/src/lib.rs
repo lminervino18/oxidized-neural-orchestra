@@ -6,16 +6,14 @@ use std::{io, net::ToSocketAddrs};
 use configs::Adapter;
 use session::Session;
 
+pub use session::TrainingEvent;
+
 use crate::configs::{ModelConfig, TrainingConfig};
 
-/// Initiazes the distributed training process.
+/// Starts the distributed training process and returns an active session.
 ///
-/// # Arguments
-/// * `model` - The model's configuration.
-/// * `training` - The training's configuration.
-///
-/// # Returns
-/// A new ongoing session or an io error if occurred.
+/// # Errors
+/// Returns an `io::Error` if connecting to any worker or server fails.
 pub fn train<A: ToSocketAddrs>(
     model: ModelConfig,
     training: TrainingConfig<A>,
