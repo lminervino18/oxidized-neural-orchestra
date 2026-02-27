@@ -34,10 +34,10 @@ pub enum TrainingEvent {
 /// Represents an ongoing training session.
 ///
 /// Spawns concurrent listeners for each worker and the parameter server.
-/// Events are delivered through the channel returned by [`Session::events`].
+/// Events are delivered through the channel obtained via [`Session::take_events`].
 pub struct Session {
     runtime: Runtime,
-    events_rx: mpsc::Receiver<TrainingEvent>,
+    events_rx: Option<mpsc::Receiver<TrainingEvent>>,
 }
 
 impl Session {
@@ -54,7 +54,6 @@ impl Session {
         let worker_chans = runtime.block_on(Self::connect_workers(workers))?;
         let mut server_chans = runtime.block_on(Self::connect_servers(servers))?;
 
-        // Channel capacity: workers + server, each can produce multiple events.
         let (tx, events_rx) = mpsc::channel(64);
 
         for (i, (rx, _tx)) in worker_chans.into_iter().enumerate() {
@@ -62,34 +61,39 @@ impl Session {
             runtime.spawn(Self::listen_worker(i, rx, tx));
         }
 
-        // One server for now.
         let (server_rx, _server_tx) = server_chans.remove(0);
         runtime.spawn(Self::listen_server(server_rx, tx));
 
-        Ok(Self { runtime, events_rx })
+        Ok(Self {
+            runtime,
+            events_rx: Some(events_rx),
+        })
     }
 
-    /// Returns the receiver side of the training events channel.
+    /// Takes the event receiver out of the session for external consumption.
     ///
-    /// The channel closes once all workers and the server have finished or errored.
-    pub fn events(&mut self) -> &mut mpsc::Receiver<TrainingEvent> {
-        &mut self.events_rx
+    /// Returns `None` if already taken.
+    pub fn take_events(&mut self) -> Option<mpsc::Receiver<TrainingEvent>> {
+        self.events_rx.take()
     }
 
     /// Blocks until training completes and returns the final model parameters.
     ///
-    /// Convenience method for non-TUI usage. Discards intermediate loss events.
+    /// Discards intermediate loss events. Consumes the session.
     ///
     /// # Errors
     /// Returns an error if the session ends without receiving final parameters.
     pub fn wait(mut self) -> io::Result<Vec<f32>> {
+        let mut rx = self
+            .events_rx
+            .take()
+            .expect("events already taken before wait()");
+
         self.runtime.block_on(async move {
-            while let Some(event) = self.events_rx.recv().await {
+            while let Some(event) = rx.recv().await {
                 match event {
                     TrainingEvent::Complete(params) => return Ok(params),
-                    TrainingEvent::Error(msg) => {
-                        return Err(io::Error::other(msg));
-                    }
+                    TrainingEvent::Error(msg) => return Err(io::Error::other(msg)),
                     _ => {}
                 }
             }
@@ -100,12 +104,7 @@ impl Session {
         })
     }
 
-    /// Listens to all messages from a single worker and forwards them as [`TrainingEvent`]s.
-    async fn listen_worker(
-        worker_id: usize,
-        mut rx: NetRx,
-        tx: mpsc::Sender<TrainingEvent>,
-    ) {
+    async fn listen_worker(worker_id: usize, mut rx: NetRx, tx: mpsc::Sender<TrainingEvent>) {
         loop {
             let event = match rx.recv().await {
                 Ok(Msg::Control(Command::ReportLoss { losses, .. })) => {
@@ -129,7 +128,6 @@ impl Session {
         }
     }
 
-    /// Listens to the parameter server and forwards its final response as a [`TrainingEvent`].
     async fn listen_server(mut rx: NetRx, tx: mpsc::Sender<TrainingEvent>) {
         let event = match rx.recv().await {
             Ok(Msg::Data(Payload::Params(params))) => TrainingEvent::Complete(params.to_vec()),
@@ -140,26 +138,15 @@ impl Session {
         let _ = tx.send(event).await;
     }
 
-    /// Connects to each worker and sends its [`WorkerSpec`].
-    async fn connect_workers(
-        workers: Vec<(SocketAddr, WorkerSpec)>,
-    ) -> io::Result<Vec<(NetRx, NetTx)>> {
+    async fn connect_workers(workers: Vec<(SocketAddr, WorkerSpec)>) -> io::Result<Vec<(NetRx, NetTx)>> {
         Self::connect_all(workers, |spec| Msg::Control(Command::CreateWorker(spec))).await
     }
 
-    /// Connects to each server and sends its [`ServerSpec`].
-    async fn connect_servers(
-        servers: Vec<(SocketAddr, ServerSpec)>,
-    ) -> io::Result<Vec<(NetRx, NetTx)>> {
+    async fn connect_servers(servers: Vec<(SocketAddr, ServerSpec)>) -> io::Result<Vec<(NetRx, NetTx)>> {
         Self::connect_all(servers, |spec| Msg::Control(Command::CreateServer(spec))).await
     }
 
-    /// Connects to a list of addresses, sends the initial message built from each spec, and
-    /// returns the open channels.
-    async fn connect_all<S, F>(
-        entries: Vec<(SocketAddr, S)>,
-        make_msg: F,
-    ) -> io::Result<Vec<(NetRx, NetTx)>>
+    async fn connect_all<S, F>(entries: Vec<(SocketAddr, S)>, make_msg: F) -> io::Result<Vec<(NetRx, NetTx)>>
     where
         F: Fn(S) -> Msg<'static>,
     {
@@ -175,7 +162,6 @@ impl Session {
         Ok(channels)
     }
 
-    /// Opens a framed TCP channel to the given address.
     async fn open_channel(addr: SocketAddr) -> io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
