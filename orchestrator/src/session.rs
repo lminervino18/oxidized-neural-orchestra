@@ -21,7 +21,7 @@ type NetTx = OnoSender<OwnedWriteHalf>;
 /// It lets it's owner interact with the entire system from a single instance.
 pub struct Session {
     runtime: Runtime,
-    server: (NetRx, NetTx),
+    servers: Vec<(NetRx, NetTx)>,
     workers: Vec<(NetRx, NetTx)>,
     buf: Vec<u32>,
 }
@@ -40,13 +40,13 @@ impl Session {
         servers: Vec<(SocketAddr, ServerSpec)>,
     ) -> io::Result<Self> {
         let runtime = Runtime::new()?;
-        let mut server_chans = runtime.block_on(Self::create_servers(servers))?;
+        let server_chans = runtime.block_on(Self::create_servers(servers))?;
         let worker_chans = runtime.block_on(Self::create_workers(workers))?;
 
         Ok(Self {
             runtime,
+            servers: server_chans,
             workers: worker_chans,
-            server: server_chans.remove(0), // One server for now.
             buf: vec![0; 1028],
         })
     }
@@ -55,7 +55,7 @@ impl Session {
     ///
     /// # Returns
     /// The parameters of the model or an io error if failed to do so.
-    pub fn wait(mut self) -> io::Result<Vec<f32>> {
+    pub fn wait(mut self) -> io::Result<Vec<Vec<f32>>> {
         self.runtime.block_on(async move {
             for (mut rx, _) in self.workers {
                 while !matches!(
@@ -64,14 +64,22 @@ impl Session {
                 ) {}
             }
 
-            let (mut rx, _) = self.server;
+            let mut all_params = Vec::with_capacity(self.servers.len());
 
-            match rx.recv_into(&mut self.buf).await? {
-                Msg::Data(Payload::Params(params)) => Ok(params.to_vec()),
-                msg => Err(io::Error::other(format!(
-                    "Received an invalid msg kind: {msg:?}"
-                ))),
+            for (mut rx, _) in self.servers {
+                match rx.recv_into(&mut self.buf).await? {
+                    Msg::Data(Payload::Params(params)) => {
+                        all_params.push(params.to_vec());
+                    }
+                    msg => {
+                        return Err(io::Error::other(format!(
+                            "Received an invalid msg kind: {msg:?}"
+                        )));
+                    }
+                };
             }
+
+            Ok(all_params)
         })
     }
 

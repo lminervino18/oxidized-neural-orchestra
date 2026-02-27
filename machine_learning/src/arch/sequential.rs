@@ -74,24 +74,24 @@ impl Model for Sequential {
         let mut total_loss = 0.0;
         let mut num_batches = 0;
 
-        for (mut x, y) in batches {
+        for (x, y) in batches {
             param_manager.zero_grad();
 
             // TODO: Ver como justificar este unwrap o devolver un error
-            x = self.forward(param_manager, x).unwrap();
+            let y_pred = self.forward(param_manager, x).unwrap();
 
-            total_loss += loss_fn.loss(x, y);
+            total_loss += loss_fn.loss(y_pred, y);
             num_batches += 1;
 
             let mut back = param_manager.back();
-            let mut d_last = loss_fn.loss_prime(x, y);
+            let mut d_last = loss_fn.loss_prime(y_pred, y);
             let mut d = d_last.view_mut();
 
             for layer in self.layers.iter_mut().rev() {
                 let size = layer.size();
                 // TODO: Ver como justificar este unwrap o devolver un error
                 let (params, grad) = back.next(size).unwrap();
-                d = layer.backward(params, grad, d.view_mut());
+                d = layer.backward(params, grad, d);
             }
 
             param_manager.optimize(optimizers);

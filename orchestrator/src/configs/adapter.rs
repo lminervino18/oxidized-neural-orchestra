@@ -1,4 +1,6 @@
 use std::{
+    cmp::Reverse,
+    collections::BinaryHeap,
     io,
     net::{SocketAddr, ToSocketAddrs},
 };
@@ -108,12 +110,26 @@ impl Adapter {
             ..
         } = &training.algorithm;
 
-        let (_, param_gen) = self.adapt_model_param_gen(model);
+        let (_, param_gens) = self.adapt_model_param_gen(model);
+
+        let items: Vec<_> = param_gens
+            .into_iter()
+            .map(|param_gen| {
+                let size = param_gen.size();
+                (param_gen, size)
+            })
+            .collect();
+
+        let param_gen_bins = balanced_partitions(items, server_addrs.len());
+        let chained_param_gens = param_gen_bins
+            .into_iter()
+            .map(|specs| ParamGenSpec::Chained { specs });
 
         let servers = server_addrs
             .iter()
+            .zip(chained_param_gens)
             .enumerate()
-            .map(|(i, addressable)| {
+            .map(|(i, (addressable, param_gen))| {
                 let addr = addressable
                     .to_socket_addrs()?
                     .next()
@@ -122,7 +138,7 @@ impl Adapter {
                 let server = ServerSpec {
                     id: i,
                     nworkers: training.worker_addrs.len(),
-                    param_gen: param_gen.clone(),
+                    param_gen,
                     optimizer: self.adapt_optimizer(training.optimizer),
                     synchronizer: self.adapt_synchronizer(synchronizer),
                     store: self.adapt_store(store),
@@ -313,7 +329,7 @@ impl Adapter {
     ///
     /// # Returns
     /// The model's and parameter generator's specification or an io error if occurred.
-    fn adapt_model_param_gen(&self, model: &ModelConfig) -> (ModelSpec, ParamGenSpec) {
+    fn adapt_model_param_gen(&self, model: &ModelConfig) -> (ModelSpec, Vec<ParamGenSpec>) {
         match model {
             ModelConfig::Sequential { layers } => {
                 let (layer_specs, param_gen_specs): (Vec<_>, Vec<_>) =
@@ -323,11 +339,7 @@ impl Adapter {
                     layers: layer_specs,
                 };
 
-                let param_gen_spec = ParamGenSpec::Chained {
-                    specs: param_gen_specs,
-                };
-
-                (model_spec, param_gen_spec)
+                (model_spec, param_gen_specs)
             }
         }
     }
@@ -421,4 +433,17 @@ impl Adapter {
 
         Some(act_fn_spec)
     }
+}
+
+fn balanced_partitions<T>(items: Vec<(T, usize)>, k: usize) -> Vec<Vec<T>> {
+    let mut sizes: BinaryHeap<_> = (0..k).map(|i| Reverse((0, i))).collect();
+    let mut bins: Vec<_> = (0..k).map(|_| Vec::new()).collect();
+
+    for (item, size) in items {
+        let Reverse((bin_size, i)) = sizes.pop().unwrap();
+        bins[i].push(item);
+        sizes.push(Reverse((bin_size + size, i)));
+    }
+
+    bins
 }

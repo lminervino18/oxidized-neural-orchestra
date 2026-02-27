@@ -4,19 +4,26 @@ use orchestrator::{configs::*, train};
 
 fn main() {
     let model_config = ModelConfig::Sequential {
-        layers: vec![LayerConfig::Dense {
-            dim: (1, 1),
-            init: ParamGenConfig::Const { value: 0.0 },
-            act_fn: None,
-        }],
+        layers: vec![
+            LayerConfig::Dense {
+                dim: (1, 1),
+                init: ParamGenConfig::Const { value: 0.0 },
+                act_fn: None,
+            },
+            LayerConfig::Dense {
+                dim: (1, 1),
+                init: ParamGenConfig::Const { value: 0.0 },
+                act_fn: None,
+            },
+        ],
     };
 
     let training_config = TrainingConfig {
         worker_addrs: vec!["worker-0:50000"],
         algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs: vec!["server-0:40000"],
-            server_sizes: vec![2],
-            server_ordering: vec![0],
+            server_addrs: vec!["server-0:40000", "server-1:40001"],
+            server_sizes: vec![2, 2],
+            server_ordering: vec![0, 1],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
             store: StoreConfig::Blocking {
                 shard_size: NonZeroUsize::new(1).unwrap(),

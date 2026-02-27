@@ -47,8 +47,7 @@ impl Worker {
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
-        let Self { mut trainer, .. } = self;
-
+        let mut trainer = self.trainer;
         let mut rx_buf = vec![0; 1028];
         let mut should_continue = true;
 
