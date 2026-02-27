@@ -1,8 +1,7 @@
 use ndarray::ArrayView2;
 
-use crate::{middleware::ParamManager, optimization::Optimizer};
-
 use super::{Model, layers::Layer, loss::LossFn};
+use crate::{MlErr, Result, middleware::ParamManager, optimization::Optimizer};
 
 /// A sequential model: information flows forward when computing an output and backward when
 /// computing the *deltas* of its layers.
@@ -11,10 +10,13 @@ pub struct Sequential {
 }
 
 impl Sequential {
-    /// Returns a new `Sequential`.
+    /// Creates a new `Sequential`.
     ///
     /// # Arguments
     /// * `layers` - The layers the sequential is composed of.
+    ///
+    /// # Returns
+    /// A new `Sequential` instance.
     pub fn new<I>(layers: I) -> Self
     where
         I: IntoIterator<Item = Layer>,
@@ -31,21 +33,27 @@ impl Sequential {
     /// * `x` - The input data.
     ///
     /// # Returns
-    /// The prediction for the given input.
+    /// The prediction for the given input or an error if occurred.
     pub fn forward<'x, 'mw>(
         &'x mut self,
         param_manager: &mut ParamManager<'mw>,
         mut x: ArrayView2<'x, f32>,
-    ) -> Option<ArrayView2<'x, f32>> {
+    ) -> Result<ArrayView2<'x, f32>> {
         let mut front = param_manager.front();
+        let nlayers = self.layers.len();
 
-        for layer in self.layers.iter_mut() {
+        for (i, layer) in self.layers.iter_mut().enumerate() {
             let size = layer.size();
-            let params = front.next(size)?;
-            x = layer.forward(params, x);
+            let params = front.next(size).ok_or_else(|| MlErr::SizeMismatch {
+                what: "layers",
+                got: i,
+                expected: nlayers,
+            })?;
+
+            x = layer.forward(params, x)?;
         }
 
-        Some(x)
+        Ok(x)
     }
 }
 
@@ -65,21 +73,20 @@ impl Model for Sequential {
         optimizers: &mut [O],
         loss_fn: &L,
         batches: I,
-    ) -> f32
+    ) -> Result<f32>
     where
         L: LossFn,
         O: Optimizer + Send,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
+        let nlayers = self.layers.len();
         let mut total_loss = 0.0;
         let mut num_batches = 0;
 
         for (x, y) in batches {
             param_manager.zero_grad();
 
-            // TODO: Ver como justificar este unwrap o devolver un error
-            let y_pred = self.forward(param_manager, x).unwrap();
-
+            let y_pred = self.forward(param_manager, x)?;
             total_loss += loss_fn.loss(y_pred, y);
             num_batches += 1;
 
@@ -87,16 +94,20 @@ impl Model for Sequential {
             let mut d_last = loss_fn.loss_prime(y_pred, y);
             let mut d = d_last.view_mut();
 
-            for layer in self.layers.iter_mut().rev() {
+            for (i, layer) in self.layers.iter_mut().rev().enumerate() {
                 let size = layer.size();
-                // TODO: Ver como justificar este unwrap o devolver un error
-                let (params, grad) = back.next(size).unwrap();
-                d = layer.backward(params, grad, d);
+                let (params, grad) = back.next(size).ok_or_else(|| MlErr::SizeMismatch {
+                    what: "layers",
+                    got: i,
+                    expected: nlayers,
+                })?;
+
+                d = layer.backward(params, grad, d)?;
             }
 
-            param_manager.optimize(optimizers);
+            param_manager.optimize(optimizers)?;
         }
 
-        total_loss / num_batches as f32
+        Ok(total_loss / num_batches as f32)
     }
 }

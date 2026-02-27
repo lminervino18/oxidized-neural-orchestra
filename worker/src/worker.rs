@@ -4,7 +4,7 @@ use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg},
 };
-use log::warn;
+use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -54,16 +54,24 @@ impl Worker {
         while should_continue {
             tokio::select! {
                 ret = middleware.pull_params() => {
+                    debug!("received parameters from all servers, training...");
+
                     let mut param_manager = ret?;
-                    let TrainResult { losses: _, was_last } = trainer.train(&mut param_manager);
+
+                    // TODO: Handlear esto mejor, capaz podemos mandarle mensajes a todos los servidores
+                    //       para que reintenten de enviar el ultimo mensaje o algo asi (todavia no se
+                    //       si tiene sentido tampoco que les avisemos, despues de todo ellos mandaron
+                    //       mal el mensaje)
+                    let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
                     middleware.push_grads().await?;
 
-                    // let msg = Msg::Control(Command::ReportLoss { losses });
-                    // tx.send(&msg).await?;
                     should_continue = !was_last;
+                    let msg = Msg::Control(Command::ReportLoss { losses });
+                    tx.send(&msg).await?;
                 }
                 ret = rx.recv_into(&mut rx_buf) => match ret? {
                     Msg::Control(Command::Disconnect) => {
+                        info!("received a Command::Disconnect from the orchestrator");
                         break;
                     }
                     other => {

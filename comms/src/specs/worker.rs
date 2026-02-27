@@ -17,9 +17,7 @@ pub enum AlgorithmSpec {
     },
 }
 
-/// Wire-level bootstrap specification for a worker instance.
-///
-/// This type is exchanged over the network during worker bootstrap.
+/// The specification for the `Worker`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkerSpec {
     pub worker_id: usize,

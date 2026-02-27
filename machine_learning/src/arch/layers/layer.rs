@@ -1,7 +1,7 @@
 use ndarray::prelude::*;
 
 use super::Dense;
-use crate::arch::activations::ActFn;
+use crate::{Result, arch::activations::ActFn};
 
 /// A type of model layer.
 #[derive(Clone)]
@@ -11,19 +11,25 @@ pub enum Layer {
 use Layer::*;
 
 impl Layer {
-    /// Returns a new `(Layer::)Dense`.
+    /// Returns a new `Layer::Dense` layer.
     ///
     /// # Arguments
     /// * `dim` - The dimension of the layer: (input dimension, and output dimension)
     /// * `act_fn` - The layer's activation function, can be `None` if the output is supposed to be the layer's weighted sums z.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
     pub fn dense<A: Into<Option<ActFn>>>(dim: (usize, usize), act_fn: A) -> Self {
         Self::Dense(Dense::new(dim, act_fn.into()))
     }
 
-    /// Returns the amount of parameters in the layer.
+    /// The size of the layer.
+    ///
+    /// # Returns
+    /// The amount of parameters the layer holds.
     pub fn size(&self) -> usize {
         match self {
-            Dense(l) => l.size(),
+            Dense(layer) => layer.size(),
         }
     }
 
@@ -32,9 +38,16 @@ impl Layer {
     /// # Arguments
     /// * `params` - The parameters to use for the forward pass.
     /// * `x` - The input x that is to be *forwarded*.
-    pub fn forward<'a>(&'a mut self, params: &[f32], x: ArrayView2<f32>) -> ArrayView2<'a, f32> {
+    ///
+    /// # Returns
+    /// The prediction for the given input `x`.
+    pub fn forward<'a>(
+        &'a mut self,
+        params: &[f32],
+        x: ArrayView2<f32>,
+    ) -> Result<ArrayView2<'a, f32>> {
         match self {
-            Dense(l) => l.forward(params, x),
+            Dense(layer) => layer.forward(params, x),
         }
     }
 
@@ -45,14 +58,17 @@ impl Layer {
     /// * `params` - The parameters to use for the backward pass.
     /// * `grad` - The buffer for writing the gradient of the layer.
     /// * `d` - The delta of the next layer.
+    ///
+    /// # Returns
+    /// The delta for this layer or an error if occurred.
     pub fn backward<'a>(
         &'a mut self,
         params: &[f32],
         grad: &mut [f32],
         d: ArrayViewMut2<f32>,
-    ) -> ArrayViewMut2<'a, f32> {
+    ) -> Result<ArrayViewMut2<'a, f32>> {
         match self {
-            Dense(l) => l.backward(params, grad, d),
+            Dense(layer) => layer.backward(params, grad, d),
         }
     }
 }

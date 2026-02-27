@@ -1,4 +1,4 @@
-use crate::middleware::ParamManager;
+use crate::{Result, middleware::ParamManager};
 
 /// The result of a training call.
 ///
@@ -19,5 +19,5 @@ pub trait Trainer {
     ///
     /// # Returns
     /// A training result declaring if the trianing has finished or should continue.
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> TrainResult;
+    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult>;
 }

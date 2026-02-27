@@ -81,7 +81,7 @@ where
                         Ok(metadata)
                     }
                     msg => {
-                        let text = format!("expected Params from server {i}, got: {msg:?}");
+                        let text = format!("expected params from server {i}, got: {msg:?}");
                         Err(io::Error::other(text))
                     }
                 },

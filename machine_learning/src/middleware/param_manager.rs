@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 
 use super::ServerParamsMetadata;
-use crate::optimization::Optimizer;
+use crate::{MlErr, Result, optimization::Optimizer};
 
 /// The manager of parameters, this middleware's module manages the model's parameter retrieval from the
 /// servers and selects which set of parameters to use for each layer of the model's trining when traversing
@@ -67,12 +67,23 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Arguments
     /// * `optimizers` - A list of optimizers, one per server.
-    pub fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) {
-        // TODO: Agregar un chequeo para validar que el largo de los servers y optimizers sea el mismo
+    pub fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) -> Result<()> {
+        if optimizers.len() != self.servers.len() {
+            return Err(MlErr::SizeMismatch {
+                what: "optimizers",
+                got: optimizers.len(),
+                expected: self.servers.len(),
+            });
+        }
+
         optimizers
             .par_iter_mut()
             .zip(&mut self.servers)
-            .for_each(|(optimizer, server)| optimizer.update_params(server.params, &server.grad));
+            .try_for_each(|(optimizer, server)| {
+                optimizer.update_params(&server.grad, server.params)
+            })?;
+
+        Ok(())
     }
 
     /// Zeroes out the gradients of every server.
@@ -109,7 +120,7 @@ impl FrontIter<'_, '_> {
         let server_id = self.server_ordering[self.curr];
         let server = &mut self.servers[server_id];
         let start = self.cursors[server_id];
-        let end = start + n;
+        let end = (start + n).min(server.params.len());
 
         self.cursors[server_id] = end;
         self.curr += 1;
@@ -145,7 +156,7 @@ impl BackIter<'_, '_> {
         let server_id = self.server_ordering[idx];
         let server = &mut self.servers[server_id];
         let start = self.cursors[server_id];
-        let end = start + n;
+        let end = (start + n).min(server.params.len());
 
         self.cursors[server_id] = end;
         self.curr += 1;

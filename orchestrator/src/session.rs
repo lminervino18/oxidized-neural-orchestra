@@ -57,11 +57,24 @@ impl Session {
     /// The parameters of the model or an io error if failed to do so.
     pub fn wait(mut self) -> io::Result<Vec<Vec<f32>>> {
         self.runtime.block_on(async move {
-            for (mut rx, _) in self.workers {
-                while !matches!(
-                    rx.recv_into(&mut self.buf).await?,
-                    Msg::Control(Command::Disconnect)
-                ) {}
+            let mut done_workers = vec![false; self.workers.len()];
+
+            while !done_workers.iter().all(|done| *done) {
+                for (id, (rx, _)) in self.workers.iter_mut().enumerate() {
+                    if done_workers[id] {
+                        continue;
+                    }
+
+                    match rx.recv_into(&mut self.buf).await? {
+                        Msg::Control(Command::Disconnect) => {
+                            done_workers[id] = true;
+                        }
+                        Msg::Control(Command::ReportLoss { losses }) => {
+                            println!("worker-{id} losses: {losses:?}")
+                        }
+                        _ => unreachable!(),
+                    }
+                }
             }
 
             let mut all_params = Vec::with_capacity(self.servers.len());

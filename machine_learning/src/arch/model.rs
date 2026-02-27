@@ -1,4 +1,4 @@
-use crate::{arch::loss::LossFn, middleware::ParamManager, optimization::Optimizer};
+use crate::{Result, arch::loss::LossFn, middleware::ParamManager, optimization::Optimizer};
 use ndarray::ArrayView2;
 
 pub trait Model {
@@ -17,14 +17,14 @@ pub trait Model {
     /// * `batches` - The batches of data.
     ///
     /// # Returns
-    /// The epoch loss.
+    /// The epoch loss or an error if the model failed to advance with the training.
     fn backprop<'a, 'mw, O, L, I>(
         &mut self,
         params: &mut ParamManager<'mw>,
         optimizers: &mut [O],
         loss: &L,
         batches: I,
-    ) -> f32
+    ) -> Result<f32>
     where
         L: LossFn,
         O: Optimizer + Send,

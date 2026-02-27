@@ -2,13 +2,13 @@ use std::num::NonZeroUsize;
 
 use rand::Rng;
 
-use super::Trainer;
+use super::{TrainResult, Trainer};
 use crate::{
+    Result,
     arch::{Model, loss::LossFn},
     dataset::Dataset,
     middleware::ParamManager,
     optimization::Optimizer,
-    training::trainer::TrainResult,
 };
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
@@ -90,7 +90,7 @@ where
     ///
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
-    pub fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> TrainResult {
+    pub fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<TrainResult> {
         let remaining = self.max_epochs.get() - self.epoch;
         let epochs = remaining.min(self.offline_epochs + 1);
         let mut losses = Vec::with_capacity(epochs);
@@ -101,17 +101,19 @@ where
 
             let loss =
                 self.model
-                    .backprop(param_manager, &mut self.optimizers, &self.loss_fn, batches);
+                    .backprop(param_manager, &mut self.optimizers, &self.loss_fn, batches)?;
 
             losses.push(loss);
+            self.epoch += 1;
         }
 
         self.epoch += epochs;
-
-        TrainResult {
+        let res = TrainResult {
             losses,
             was_last: self.epoch == self.max_epochs.get(),
-        }
+        };
+
+        Ok(res)
     }
 }
 
@@ -122,7 +124,7 @@ where
     L: LossFn,
     R: Rng,
 {
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> TrainResult {
+    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult> {
         self.train(param_manager)
     }
 }
