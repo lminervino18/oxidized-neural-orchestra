@@ -48,8 +48,9 @@ pub enum OptimizerSpec {
 /// The specification for the `Dataset`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+// sería bueno mandar `chunk_size` como parte del `DatasetSpec`?
 pub struct DatasetSpec {
-    pub data: Vec<f32>,
+    pub size: usize,
     pub x_size: usize,
     pub y_size: usize,
 }

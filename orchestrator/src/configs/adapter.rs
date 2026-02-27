@@ -244,13 +244,16 @@ impl Adapter {
     /// The dataset's specification or an io error if occurred.
     fn adapt_dataset(&self, dataset: &DatasetConfig) -> io::Result<DatasetSpec> {
         let dataset_spec = match dataset {
+            // NOTE: prefiero que manejemos estas dos variantes directamente en `share_dataset`,
+            // dejemos sólo `DatasetSpec` y después si es "inline" se manda un `Datachunk` con
+            // `size` del tamaño del dataset entero. Acá no iría `data`.
             DatasetConfig::Local { path: _path } => todo!(),
             &DatasetConfig::Inline {
                 ref data,
                 x_size,
                 y_size,
             } => DatasetSpec {
-                data: data.to_vec(),
+                size: data.len(),
                 x_size,
                 y_size,
             },
