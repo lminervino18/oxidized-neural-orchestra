@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::ui::theme::Theme;
 
-use super::Action;
+use super::{Action, Screen};
 
 const LOGO: &str = r#"
   ██████╗ ███╗   ██╗ ██████╗ 
@@ -49,7 +49,7 @@ pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Action {
             Action::None
         }
         KeyCode::Enter => match state.selected {
-            0 => Action::Transition(super::Screen::Menu(MenuState::new())), // placeholder → config step 2
+            0 => Action::Transition(Screen::Config(super::config::ConfigState::new())),
             1 => Action::Quit,
             _ => Action::None,
         },

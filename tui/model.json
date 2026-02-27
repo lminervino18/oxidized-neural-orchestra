@@ -1,0 +1,27 @@
+{
+  "layers": [
+    {
+      "n": 2,
+      "m": 4,
+      "init": "xavier_uniform",
+      "act_fn": "sigmoid",
+      "act_amp": 1.0
+    },
+    {
+      "n": 4,
+      "m": 8,
+      "init": "normal",
+      "init_mean": 0.0,
+      "init_std": 0.1,
+      "act_fn": "sigmoid",
+      "act_amp": 1.0
+    },
+    {
+      "n": 8,
+      "m": 1,
+      "init": "const",
+      "init_value": 0.0,
+      "act_fn": null
+    }
+  ]
+}

@@ -911,6 +911,7 @@ dependencies = [
  "crossterm",
  "orchestrator",
  "ratatui",
+ "serde_json",
  "tokio",
 ]
 
