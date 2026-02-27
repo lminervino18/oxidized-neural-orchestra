@@ -109,9 +109,9 @@ fn build_training(d: &TrainingDraft) -> Result<TrainingConfig<String>, String> {
             store,
         },
         dataset: DatasetConfig::Inline {
-            data: vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0],
-            x_size: 1,
-            y_size: 1,
+            data: d.dataset.data.clone(),
+            x_size: d.dataset.x_size,
+            y_size: d.dataset.y_size,
         },
         optimizer,
         loss_fn: LossFnConfig::Mse,

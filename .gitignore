@@ -21,3 +21,4 @@
 # Local dev scripts and configs
 *.sh
 *.json
+*.csv

@@ -1,6 +1,6 @@
 use super::model::{
-    ActFnKind, InitKind, LayerDraft, ModelDraft, OptimizerKind, StoreKind, SynchronizerKind,
-    TrainingDraft,
+    ActFnKind, DatasetDraft, InitKind, LayerDraft, ModelDraft, OptimizerKind, StoreKind,
+    SynchronizerKind, TrainingDraft,
 };
 
 /// Loads a [`ModelDraft`] from a JSON file.
@@ -29,7 +29,7 @@ pub fn load_model(path: &str) -> Result<ModelDraft, String> {
     Ok(ModelDraft { layers })
 }
 
-/// Loads a [`TrainingDraft`] from a JSON file.
+/// Loads a [`TrainingDraft`] from a JSON file, reading the dataset from the CSV path inside.
 ///
 /// # Errors
 /// Returns a human-readable string if the file cannot be read or parsed.
@@ -82,6 +82,8 @@ pub fn load_training(path: &str) -> Result<TrainingDraft, String> {
         other => return Err(format!("unknown optimizer: {other}")),
     };
 
+    let dataset = load_dataset(&val["dataset"])?;
+
     Ok(TrainingDraft {
         worker_addrs,
         server_addrs,
@@ -99,7 +101,54 @@ pub fn load_training(path: &str) -> Result<TrainingDraft, String> {
         b2: val["b2"].as_f64().unwrap_or(0.999) as f32,
         eps: val["eps"].as_f64().unwrap_or(1e-8) as f32,
         mu: val["mu"].as_f64().unwrap_or(0.9) as f32,
+        dataset,
     })
+}
+
+fn load_dataset(val: &serde_json::Value) -> Result<DatasetDraft, String> {
+    let csv_path = val["path"]
+        .as_str()
+        .ok_or("missing dataset.path")?;
+
+    let x_size = val["x_size"].as_u64().ok_or("missing dataset.x_size")? as usize;
+    let y_size = val["y_size"].as_u64().ok_or("missing dataset.y_size")? as usize;
+
+    let row_size = x_size + y_size;
+    let content = std::fs::read_to_string(csv_path)
+        .map_err(|e| format!("cannot read dataset '{csv_path}': {e}"))?;
+
+    let mut data = Vec::new();
+
+    for (i, line) in content.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        let values: Vec<f32> = line
+            .split(',')
+            .map(|v| {
+                v.trim()
+                    .parse::<f32>()
+                    .map_err(|_| format!("dataset line {i}: cannot parse '{v}' as f32"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if values.len() != row_size {
+            return Err(format!(
+                "dataset line {i}: expected {row_size} values (x_size={x_size} + y_size={y_size}), got {}",
+                values.len()
+            ));
+        }
+
+        data.extend(values);
+    }
+
+    if data.is_empty() {
+        return Err("dataset is empty".into());
+    }
+
+    Ok(DatasetDraft { data, x_size, y_size })
 }
 
 fn parse_layer(l: &serde_json::Value, idx: usize) -> Result<LayerDraft, String> {

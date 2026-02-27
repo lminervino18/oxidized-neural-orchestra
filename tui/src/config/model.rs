@@ -51,6 +51,14 @@ pub enum StoreKind {
     Wild,
 }
 
+/// Dataset loaded from a CSV file.
+#[derive(Debug, Clone)]
+pub struct DatasetDraft {
+    pub data: Vec<f32>,
+    pub x_size: usize,
+    pub y_size: usize,
+}
+
 /// Model architecture parsed from model.json.
 #[derive(Debug, Clone)]
 pub struct ModelDraft {
@@ -76,4 +84,5 @@ pub struct TrainingDraft {
     pub b2: f32,
     pub eps: f32,
     pub mu: f32,
+    pub dataset: DatasetDraft,
 }
