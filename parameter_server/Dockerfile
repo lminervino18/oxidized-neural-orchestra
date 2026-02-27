@@ -1,6 +1,6 @@
 # 0. Define the arguments' default values.
 ARG PKG=parameter_server
-ARG MODE=debug
+ARG MODE
 
 # 1. Install cargo-chef.
 FROM rust:1.92 AS chef
@@ -36,4 +36,4 @@ RUN mv target/$MODE/$PKG /app/binary
 # 4. Execute the package.
 FROM debian:bookworm-slim
 COPY --from=builder /app/binary /usr/local/bin
-ENTRYPOINT /usr/local/bin/binary
+ENTRYPOINT ["/usr/local/bin/binary"]

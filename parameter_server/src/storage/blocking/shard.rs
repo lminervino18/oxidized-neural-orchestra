@@ -1,35 +1,42 @@
-use std::ptr;
-
 use parking_lot::{Mutex, RwLock};
 
-use super::{Result, SizeMismatchErr};
-use crate::optimization::Optimizer;
+use crate::{
+    optimization::Optimizer,
+    storage::{Result, SizeMismatchErr},
+};
 
-/// A buffer for accumulating gradients and weights across multiple threads.
+/// A buffer for accumulating gradients and parameters across multiple threads using locks.
+///
+/// It implements a double-buffer strategy to let workers accumulate gradients in the active
+/// buffer while the frozen buffer stays inactive to be able to reset it via `update_params`
+/// without stoping other workers trying to accumulate more gradients.
 #[derive(Debug)]
-pub struct ParameterShard<O: Optimizer> {
-    params: usize,
+pub struct BlockingShard<O: Optimizer> {
+    nparams: usize,
     grads: [Mutex<Box<[f32]>>; 2],
-    weights: RwLock<Box<[f32]>>,
+    params: RwLock<Box<[f32]>>,
     optimizer: Mutex<O>,
 }
 
-impl<O: Optimizer> ParameterShard<O> {
-    /// Creates a new `ParameterShard`.
+impl<O: Optimizer> BlockingShard<O> {
+    /// Creates a new `BlockingShard` parameter shard.
     ///
     /// # Arguments
-    /// * `weights` - The initial state of the weights.
+    /// * `params` - The initial state of the parameters.
     /// * `optimizer` - The optimization algorithm.
-    pub fn new(weights: Vec<f32>, optimizer: O) -> Self {
-        let params = weights.len();
+    ///
+    /// # Returns
+    /// A new `BlockingShard` instance.
+    pub fn new(params: Vec<f32>, optimizer: O) -> Self {
+        let nparams = params.len();
 
         Self {
-            params,
+            nparams,
             grads: [
-                Mutex::new(vec![0.; params].into_boxed_slice()),
-                Mutex::new(vec![0.; params].into_boxed_slice()),
+                Mutex::new(vec![0.; nparams].into_boxed_slice()),
+                Mutex::new(vec![0.; nparams].into_boxed_slice()),
             ],
-            weights: RwLock::new(weights.into_boxed_slice()),
+            params: RwLock::new(params.into_boxed_slice()),
             optimizer: Mutex::new(optimizer),
         }
     }
@@ -43,7 +50,7 @@ impl<O: Optimizer> ParameterShard<O> {
     /// # Returns
     /// A `SizeMismatchErr` if `grad` isn't the same size as this shard.
     pub fn accumulate(&self, active_idx: usize, grad: &[f32]) -> Result<()> {
-        if self.params != grad.len() {
+        if self.nparams != grad.len() {
             return Err(SizeMismatchErr);
         }
 
@@ -56,42 +63,37 @@ impl<O: Optimizer> ParameterShard<O> {
         Ok(())
     }
 
-    /// Updates the weights using the frozen gradient via the optimizer and clears it.
+    /// Updates the parameters using the frozen gradient via the optimizer and clears it.
     ///
     /// # Arguments
     /// * `frozen_idx` - The index of the frozen gradient, must be `0` or `1`.
-    pub fn update_weights(&self, frozen_idx: usize) {
-        let mut weights = self.weights.write();
+    pub fn update_params(&self, frozen_idx: usize) {
+        let mut params = self.params.write();
         let mut grad = self.grads[frozen_idx].lock();
 
-        // SAFETY: Both grad and weights have the same size.
+        // SAFETY: Both grad and params have the same length.
         self.optimizer
             .lock()
-            .update_weights(&grad, &mut weights)
+            .update_params(&grad, &mut params)
             .unwrap();
 
         grad.fill(0.);
     }
 
-    /// Copies the shard's inner weights into the provided destination buffer.
+    /// Copies the shard's inner parameters into the provided destination buffer.
     ///
     /// # Arguments
-    /// * `out` - A mutable slice where the weights will be copied.
+    /// * `out` - A mutable slice where the parameters will be copied.
     ///
     /// # Returns
     /// A `SizeMismatchErr` if `out` isn't the same size as this shard.
-    pub fn pull_weights(&self, out: &mut [f32]) -> Result<()> {
-        if self.params != out.len() {
+    pub fn pull_params(&self, out: &mut [f32]) -> Result<()> {
+        if self.nparams != out.len() {
             return Err(SizeMismatchErr);
         }
 
-        let weights = self.weights.read();
-
-        // SAFETY: We've already checked that both slices have the same size.
-        unsafe {
-            ptr::copy_nonoverlapping(weights.as_ptr(), out.as_mut_ptr(), out.len());
-        }
-
+        let params = self.params.read();
+        out.copy_from_slice(&params);
         Ok(())
     }
 }
@@ -103,15 +105,15 @@ mod tests {
     struct AddOptimizer;
 
     impl Optimizer for AddOptimizer {
-        fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
-            weights.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
+        fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
+            params.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
             Ok(())
         }
     }
 
     #[test]
     fn test_accumulation_and_update() {
-        let shard = ParameterShard::new(vec![0.; 3], AddOptimizer);
+        let shard = BlockingShard::new(vec![0.; 3], AddOptimizer);
 
         shard.accumulate(0, &[1.0, 2.0, 3.0]).unwrap();
         shard.accumulate(0, &[1.0, 1.0, 1.0]).unwrap();
@@ -125,27 +127,27 @@ mod tests {
             assert_eq!(**grad1, [0., 0., 0.]);
         }
 
-        shard.update_weights(0);
+        shard.update_params(0);
 
         let mut out = [0.; 3];
-        shard.pull_weights(&mut out).unwrap();
+        shard.pull_params(&mut out).unwrap();
         assert_eq!(out, [2., 3., 4.]);
     }
 
     #[test]
     fn test_double_buffering_flow() {
-        let shard = ParameterShard::new(vec![0.], AddOptimizer);
+        let shard = BlockingShard::new(vec![0.], AddOptimizer);
 
         shard.accumulate(0, &[10.]).unwrap();
         shard.accumulate(1, &[5.]).unwrap();
-        shard.update_weights(0);
+        shard.update_params(0);
 
         let mut out = [0.];
-        shard.pull_weights(&mut out).unwrap();
+        shard.pull_params(&mut out).unwrap();
         assert_eq!(out, [10.]);
 
-        shard.update_weights(1);
-        shard.pull_weights(&mut out).unwrap();
+        shard.update_params(1);
+        shard.pull_params(&mut out).unwrap();
         assert_eq!(out, [15.]);
     }
 }

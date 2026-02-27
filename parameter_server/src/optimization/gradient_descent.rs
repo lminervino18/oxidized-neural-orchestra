@@ -11,21 +11,24 @@ impl GradientDescent {
     ///
     /// # Arguments
     /// * `learning_rate` - The small coefficient that modulates the amount of training per update.
+    ///
+    /// # Returns
+    /// A new `GradientDescent` instance.
     pub fn new(learning_rate: f32) -> Self {
         Self { learning_rate }
     }
 }
 
 impl Optimizer for GradientDescent {
-    fn update_weights(&mut self, grad: &[f32], weights: &mut [f32]) -> Result<()> {
-        if grad.len() != weights.len() {
+    fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
+        if grad.len() != params.len() {
             return Err(SizeMismatchErr);
         }
 
         let lr = self.learning_rate;
 
-        for (w, g) in weights.iter_mut().zip(grad) {
-            *w -= lr * g;
+        for (p, g) in params.iter_mut().zip(grad) {
+            *p -= lr * g;
         }
 
         Ok(())

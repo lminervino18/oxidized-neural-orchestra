@@ -2,6 +2,8 @@ use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
+use super::machine_learning::OptimizerSpec;
+
 /// The specification for the `Distribution` trait.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -16,10 +18,10 @@ pub enum DistributionSpec {
     Lecun { fan_in: usize },
 }
 
-/// The specification for the `WeightGen` trait.
-#[derive(Debug, Serialize, Deserialize)]
+/// The specification for the `ParamGen` trait.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum WeightGenSpec {
+pub enum ParamGenSpec {
     Const {
         value: f32,
         limit: usize,
@@ -29,44 +31,34 @@ pub enum WeightGenSpec {
         limit: usize,
     },
     Chained {
-        specs: Vec<WeightGenSpec>,
+        specs: Vec<ParamGenSpec>,
     },
 }
 
-/// The specification for the `Optimizer` trait.
+/// The specification for the `Synchronizer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum OptimizerSpec {
-    Adam {
-        learning_rate: f32,
-        beta1: f32,
-        beta2: f32,
-        epsilon: f32,
-    },
-    GradientDescent {
-        learning_rate: f32,
-    },
-    GradientDescentWithMomentum {
-        learning_rate: f32,
-        momentum: f32,
-    },
-}
-
-/// The specification for the `Trainer` trait.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TrainerSpec {
-    BarrierSync { barrier_size: usize },
+pub enum SynchronizerSpec {
+    Barrier { barrier_size: usize },
     NonBlocking,
+}
+
+/// The specification for the `Store` trait.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StoreSpec {
+    Blocking { shard_size: NonZeroUsize },
+    Wild { shard_size: NonZeroUsize },
 }
 
 /// The specification for the `Server` trait.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerSpec {
-    pub workers: usize,
-    pub shard_size: NonZeroUsize,
-    pub weight_gen: WeightGenSpec,
+    pub id: usize,
+    pub nworkers: usize,
+    pub param_gen: ParamGenSpec,
     pub optimizer: OptimizerSpec,
-    pub trainer: TrainerSpec,
+    pub synchronizer: SynchronizerSpec,
+    pub store: StoreSpec,
     pub seed: Option<u64>,
 }

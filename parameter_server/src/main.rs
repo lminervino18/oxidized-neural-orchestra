@@ -2,9 +2,9 @@ mod initialization;
 mod optimization;
 mod service;
 mod storage;
-mod training;
+mod synchronization;
 
-use std::{env, error::Error};
+use std::{env, io};
 
 use comms::msg::{Command, Msg, Payload};
 use log::{info, warn};
@@ -13,16 +13,15 @@ use tokio::{net::TcpListener, signal};
 use crate::service::ServerBuilder;
 
 const DEFAULT_HOST: &str = "0.0.0.0";
-const DEFAULT_PORT: &str = "8765";
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> io::Result<()> {
     env_logger::init();
 
     let addr = format!(
         "{}:{}",
         env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
-        env::var("PORT").unwrap_or_else(|_| DEFAULT_PORT.to_string())
+        env::var("PORT").map_err(|e| io::Error::other(e))?,
     );
 
     let list = TcpListener::bind(&addr).await?;
@@ -30,6 +29,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (stream, addr) = list.accept().await?;
     info!("orchestrator connected from {addr}");
+
     let (rx, tx) = stream.into_split();
     let (mut rx, mut tx) = comms::channel(rx, tx);
 
@@ -41,12 +41,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    let workers = spec.workers;
-    let mut pserver = ServerBuilder::new().build(spec)?;
+    let nworkers = spec.nworkers;
+    let mut pserver = ServerBuilder::new()
+        .build(spec)
+        .map_err(|e| io::Error::other(e))?;
 
-    for i in 0..workers {
+    for i in 0..nworkers {
         let (stream, addr) = list.accept().await?;
-        info!("worker {i}/{workers} connected from {addr}");
+        info!("worker {i}/{nworkers} connected from {addr}");
         let (rx, tx) = stream.into_split();
         let (rx, tx) = comms::channel(rx, tx);
         pserver.spawn(rx, tx);
@@ -54,9 +56,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tokio::select! {
         ret = pserver.run() => {
-            info!("wrapping up, sending weights...");
-            let mut weights = ret?;
-            let msg = Msg::Data(Payload::Weights(&mut weights));
+            info!("wrapping up, sending parameters...");
+            let mut params = ret?;
+            let msg = Msg::Data(Payload::Params(&mut params));
             tx.send(&msg).await?;
         },
         _ = signal::ctrl_c() => {

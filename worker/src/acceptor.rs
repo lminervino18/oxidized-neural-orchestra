@@ -1,9 +1,9 @@
 use std::io;
 
 use comms::{
+    OnoReceiver,
     msg::{Command, Msg},
     specs::worker::WorkerSpec,
-    OnoReceiver,
 };
 use log::{info, warn};
 use tokio::io::AsyncRead;
@@ -23,7 +23,7 @@ impl WorkerAcceptor {
     ///
     /// # Errors
     /// Returns `io::Error` if receiving fails.
-    pub async fn handshake<R>(rx: &mut OnoReceiver<R>) -> io::Result<Option<WorkerSpec>>
+    pub async fn bootstrap<R>(rx: &mut OnoReceiver<R>) -> io::Result<Option<WorkerSpec>>
     where
         R: AsyncRead + Unpin + Send,
     {
