@@ -18,7 +18,7 @@ pub enum Screen {
 }
 
 impl Screen {
-    pub fn draw(&self, f: &mut Frame) {
+    pub fn draw(&mut self, f: &mut Frame) {
         match self {
             Screen::Menu(s) => menu::draw(f, s),
             Screen::Config(s) => config::draw(f, s),

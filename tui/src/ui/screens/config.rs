@@ -116,7 +116,7 @@ fn handle_model_path(state: &mut ConfigState, key: KeyCode) -> Action {
             state.step = Step::TrainingPath;
             Action::None
         }
-        KeyCode::Esc | KeyCode::Char('q') => {
+        KeyCode::Esc  => {
             Action::Transition(Screen::Menu(crate::ui::screens::menu::MenuState::new()))
         }
         _ => Action::None,
