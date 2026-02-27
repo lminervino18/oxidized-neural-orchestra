@@ -1,9 +1,10 @@
-use anyhow::Result;
-
 mod app;
 mod state;
 mod ui;
 
-fn main() -> Result<()> {
-    app::run::run()
+fn main() {
+    if let Err(e) = app::run::run() {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
 }
