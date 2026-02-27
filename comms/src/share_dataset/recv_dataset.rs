@@ -6,11 +6,15 @@ use crate::{
     specs::machine_learning::DatasetSpec,
 };
 
-async fn recv_dataset<W: AsyncWrite + Unpin, R: AsyncRead + Unpin>(
+pub async fn recv_dataset<W, R>(
     storage: &mut W,
     spec: DatasetSpec,
     receiver: &mut OnoReceiver<R>,
-) -> std::io::Result<()> {
+) -> std::io::Result<()>
+where
+    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin,
+{
     let mut received = 0;
 
     while received < spec.size {

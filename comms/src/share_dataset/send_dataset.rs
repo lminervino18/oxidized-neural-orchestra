@@ -5,11 +5,15 @@ use crate::{
     msg::{Msg, Payload},
 };
 
-async fn send_dataset<R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+pub async fn send_dataset<R, W>(
     dataset: &mut R,
     chunk: usize,
     sender: &mut OnoSender<W>,
-) -> std::io::Result<()> {
+) -> std::io::Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
     let mut buf = vec![0u8; chunk];
 
     loop {
