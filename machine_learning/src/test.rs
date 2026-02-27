@@ -1,6 +1,9 @@
 #![cfg(test)]
 
+use std::num::NonZeroUsize;
+
 use ndarray::ArrayView2;
+use rand::Rng;
 
 use crate::{
     arch::{
@@ -13,8 +16,6 @@ use crate::{
     optimization::GradientDescent,
     training::ModelTrainer,
 };
-use rand::Rng;
-use std::num::NonZeroUsize;
 
 #[test]
 fn test_ml_and2_gate_convergence() {
@@ -38,7 +39,7 @@ fn test_ml_and2_gate_convergence() {
         model,
         optimizer,
         dataset,
-        NonZeroUsize::new(10000).unwrap(),
+        10000 - 1,
         NonZeroUsize::new(4).unwrap(),
         Mse,
         rand::rng(),
@@ -92,7 +93,7 @@ fn test_ml_and3_gate_convergence() {
         model,
         optimizer,
         dataset,
-        NonZeroUsize::new(10000).unwrap(),
+        10000 - 1,
         NonZeroUsize::new(8).unwrap(),
         Mse,
         rand::rng(),
@@ -145,7 +146,7 @@ fn test_ml_xor2_gate_convergence() {
         model,
         optimizer,
         dataset,
-        NonZeroUsize::new(5000).unwrap(),
+        5000 - 1,
         NonZeroUsize::new(4).unwrap(),
         Mse,
         rand::rng(),
@@ -211,15 +212,13 @@ fn test_ml_xor4_gate_convergence() {
 
     // training
     let learning_rate = 1.;
-    let epochs = 5000;
-    let batch_size = 16;
     let optimizer = GradientDescent::new(learning_rate);
     let mut trainer = ModelTrainer::new(
         model.clone(),
         optimizer,
         dataset,
-        NonZeroUsize::new(epochs).unwrap(),
-        NonZeroUsize::new(batch_size).unwrap(),
+        5000 - 1,
+        NonZeroUsize::new(16).unwrap(),
         Mse,
         rand::rng(),
     );

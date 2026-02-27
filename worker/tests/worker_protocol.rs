@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, num::NonZeroUsize};
 
 use tokio::io as tokio_io;
 
@@ -28,8 +28,9 @@ impl Trainer for TestTrainer {
 fn make_worker() -> Worker {
     Worker::new(
         0,
+        NonZeroUsize::new(1).unwrap(),
         AlgorithmSpec::ParameterServer {
-            server_ip: "127.0.0.1:0".parse().unwrap(),
+            server_addr: "127.0.0.1:0".parse().unwrap(),
         },
         Box::new(TestTrainer::new()),
     )

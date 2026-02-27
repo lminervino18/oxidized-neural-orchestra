@@ -2,6 +2,8 @@ use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
+use super::machine_learning::OptimizerSpec;
+
 /// The specification for the `Distribution` trait.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -17,7 +19,7 @@ pub enum DistributionSpec {
 }
 
 /// The specification for the `ParamGen` trait.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ParamGenSpec {
     Const {
@@ -30,25 +32,6 @@ pub enum ParamGenSpec {
     },
     Chained {
         specs: Vec<ParamGenSpec>,
-    },
-}
-
-/// The specification for the `Optimizer` trait.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum OptimizerSpec {
-    Adam {
-        learning_rate: f32,
-        beta1: f32,
-        beta2: f32,
-        epsilon: f32,
-    },
-    GradientDescent {
-        learning_rate: f32,
-    },
-    GradientDescentWithMomentum {
-        learning_rate: f32,
-        momentum: f32,
     },
 }
 
@@ -71,6 +54,7 @@ pub enum StoreSpec {
 /// The specification for the `Server` trait.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerSpec {
+    pub id: usize,
     pub nworkers: usize,
     pub param_gen: ParamGenSpec,
     pub optimizer: OptimizerSpec,

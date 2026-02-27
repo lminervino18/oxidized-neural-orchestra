@@ -5,16 +5,16 @@ use std::{error::Error, fmt, io};
 pub enum WorkerError {
     Io(io::Error),
     UnexpectedMessage {
-        step: usize,
+        epoch: usize,
         got: &'static str,
     },
     WeightsLengthMismatch {
-        step: usize,
+        epoch: usize,
         got: usize,
         expected: usize,
     },
     GradientLengthMismatch {
-        step: usize,
+        epoch: usize,
         got: usize,
         expected: usize,
     },
@@ -24,24 +24,24 @@ impl fmt::Display for WorkerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             WorkerError::Io(e) => write!(f, "io error: {e}"),
-            WorkerError::UnexpectedMessage { step, got } => {
-                write!(f, "unexpected message at step {step}: got {got}")
+            WorkerError::UnexpectedMessage { epoch, got } => {
+                write!(f, "unexpected message at step {epoch}: got {got}")
             }
             WorkerError::WeightsLengthMismatch {
-                step,
+                epoch,
                 got,
                 expected,
             } => write!(
                 f,
-                "weights length mismatch at step {step}: got {got}, expected {expected}"
+                "weights length mismatch at step {epoch}: got {got}, expected {expected}"
             ),
             WorkerError::GradientLengthMismatch {
-                step,
+                epoch,
                 got,
                 expected,
             } => write!(
                 f,
-                "gradient length mismatch at step {step}: got {got}, expected {expected}"
+                "gradient length mismatch at step {epoch}: got {got}, expected {expected}"
             ),
         }
     }

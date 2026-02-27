@@ -2,22 +2,25 @@ use std::io;
 
 use crate::{
     Deserialize, Serialize,
-    specs::{
-        machine_learning::{DatasetSpec, dataset::ChunkSpec},
-        server::ServerSpec,
-        worker::WorkerSpec,
-    },
+    specs::{server::ServerSpec, worker::WorkerSpec},
 };
 
-use super::protocol::*;
+type Header = u32;
+const HEADER_SIZE: usize = size_of::<Header>();
+
+/// The payload data for the `Data` variant of the `Msg` enum.
+#[derive(Debug)]
+pub enum Payload<'a> {
+    Grad(&'a [f32]),
+    Params(&'a mut [f32]),
+}
 
 /// The command for the `Control` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Command<'a> {
+pub enum Command {
     CreateServer(ServerSpec),
-    #[serde(borrow)]
-    CreateWorker(WorkerSpec<'a>),
+    CreateWorker(WorkerSpec),
 
     /// Reports a sequence of losses computed by the worker over its partial dataset
     /// after completing an epoch (i.e., one full pass over that partial dataset).
@@ -27,22 +30,6 @@ pub enum Command<'a> {
     },
 
     Disconnect,
-}
-
-/// The payload data for the `Data` variant of the `Msg` enum.
-#[derive(Debug)]
-pub enum Payload<'a> {
-    Grad(&'a [f32]),
-    Params(&'a mut [f32]),
-}
-
-/// The data chunk for the `Dataset` variant of the `Msg` enum.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Chunk<'a> {
-    #[serde(borrow)]
-    Header(DatasetSpec<'a>),
-    Chunk(ChunkSpec<'a>),
 }
 
 /// The errors for the `Err` variant of the `Msg` enum.
@@ -56,9 +43,8 @@ pub enum Detail {
 /// The application layer message for the entire system.
 #[derive(Debug)]
 pub enum Msg<'a> {
-    Control(Command<'a>),
+    Control(Command),
     Data(Payload<'a>),
-    Dataset(Chunk<'a>),
     Err(Detail),
 }
 
@@ -70,10 +56,10 @@ impl Msg<'_> {
         ))
     }
 
-    fn invalid_header<T>(bytes: Header) -> io::Result<T> {
+    fn invalid_kind_byte<T>(byte: u8) -> io::Result<T> {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Received invalid header kind bytes {bytes:?}"),
+            format!("Received an invalid kind byte {byte}"),
         ))
     }
 }
@@ -82,7 +68,8 @@ impl<'a> Serialize<'a> for Msg<'a> {
     fn serialize(&'a self, buf: &mut Vec<u8>) -> Option<&'a [u8]> {
         match self {
             Msg::Err(detail) => {
-                buf.extend_from_slice(&ERR);
+                let header = (0 as Header).to_be_bytes();
+                buf.extend_from_slice(&header);
 
                 // SAFETY: Serialize impl for `Detail` is derived and not implemented
                 //         by hand. Nor has a non string-key map inside.
@@ -90,7 +77,8 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 None
             }
             Msg::Control(cmd) => {
-                buf.extend_from_slice(&CONTROL);
+                let header = (1 as Header).to_be_bytes();
+                buf.extend_from_slice(&header);
 
                 // SAFETY: Serialize impl for `Command` is derived and not implemented
                 //         by hand. Nor has a non string-key map inside.
@@ -98,33 +86,14 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 None
             }
             Msg::Data(payload) => {
-                let (header, nums): (_, &[_]) = match payload {
-                    Payload::Grad(grad) => (&GRAD, grad),
-                    Payload::Params(params) => (&PARAMS, params),
+                let (kind, nums): (_, &[_]) = match payload {
+                    Payload::Grad(grad) => (2, grad),
+                    Payload::Params(params) => (3, params),
                 };
 
-                buf.extend_from_slice(header);
+                let header = (kind as Header).to_be_bytes();
+                buf.extend_from_slice(&header);
                 Some(bytemuck::cast_slice(nums))
-            }
-            Msg::Dataset(chunk) => {
-                match chunk {
-                    Chunk::Header(spec) => {
-                        buf.extend_from_slice(&DATASET_HEADER);
-
-                        // SAFETY: Serialize impl for `DatasetSpec` is derived and not implemented
-                        //         by hand. Nor has a non string-key map inside.
-                        serde_json::to_writer(buf, &spec).unwrap();
-                    }
-                    Chunk::Chunk(spec) => {
-                        buf.extend_from_slice(&CHUNK);
-
-                        // SAFETY: Serialize impl for `ChunkSpec` is derived and not implemented
-                        //         by hand. Nor has a non string-key map inside.
-                        serde_json::to_writer(buf, &spec).unwrap();
-                    }
-                }
-
-                None
             }
         }
     }
@@ -136,36 +105,32 @@ impl<'a> Deserialize<'a> for Msg<'a> {
             return Self::buf_is_too_small(buf.len());
         }
 
-        let (header, rest) = buf.split_at_mut(HEADER_SIZE);
+        let (kind_buf, rest) = buf.split_at_mut(HEADER_SIZE);
 
         // SAFETY: We splitted the buffer to be of size `HEADER_SIZE` just above.
-        let header: Header = header.try_into().unwrap();
+        let kind = Header::from_be_bytes(kind_buf.try_into().unwrap()) as u8;
 
-        match header {
-            ERR => {
+        match kind {
+            0 => {
                 let detail = serde_json::from_slice(rest)?;
                 Ok(Self::Err(detail))
             }
-            CONTROL => {
+            1 => {
                 let cmd = serde_json::from_slice(rest)?;
                 Ok(Self::Control(cmd))
             }
-            GRAD | PARAMS => {
+            2..4 => {
                 let nums = bytemuck::cast_slice_mut(rest);
 
-                let payload = match header {
-                    GRAD => Payload::Grad(nums),
-                    PARAMS => Payload::Params(nums),
+                let payload = match kind {
+                    2 => Payload::Grad(nums),
+                    3 => Payload::Params(nums),
                     _ => unreachable!(),
                 };
 
                 Ok(Self::Data(payload))
             }
-            DATASET_HEADER | CHUNK => {
-                let chunk = serde_json::from_slice(rest)?;
-                Ok(Self::Dataset(chunk))
-            }
-            bytes => Self::invalid_header(bytes),
+            byte => Self::invalid_kind_byte(byte),
         }
     }
 }

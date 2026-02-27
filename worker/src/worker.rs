@@ -1,6 +1,8 @@
+use std::num::NonZeroUsize;
+
 use comms::{
     OnoReceiver, OnoSender,
-    msg::{Chunk, Command, Msg, Payload},
+    msg::{Command, Msg, Payload},
     specs::worker::AlgorithmSpec,
 };
 use log::{debug, info, warn};
@@ -15,6 +17,7 @@ use machine_learning::training::Trainer;
 /// Infrastructure worker runtime.
 pub struct Worker {
     worker_id: usize,
+    max_epochs: NonZeroUsize,
     algorithm: AlgorithmSpec,
     trainer: Box<dyn Trainer>,
 }
@@ -24,15 +27,21 @@ impl Worker {
     ///
     /// # Args
     /// * `worker_id` - Identifier used for observability.
+    /// * `max_iters` - The maximum amount of iterations to run.
     /// * `algorithm` - Distributed algorithm selection for this worker.
-    /// * `loss_report` - Loss reporting policy used to emit epoch telemetry to the orchestrator.
     /// * `trainer` - Domain strategy used to compute gradients from weights.
     ///
     /// # Returns
     /// A new worker instance.
-    pub fn new(worker_id: usize, algorithm: AlgorithmSpec, trainer: Box<dyn Trainer>) -> Self {
+    pub fn new(
+        worker_id: usize,
+        max_iters: NonZeroUsize,
+        algorithm: AlgorithmSpec,
+        trainer: Box<dyn Trainer>,
+    ) -> Self {
         Self {
             worker_id,
+            max_epochs: max_iters,
             algorithm,
             trainer,
         }
@@ -50,23 +59,23 @@ impl Worker {
     ///
     /// # Errors
     /// Returns `WorkerError` on I/O failures or protocol violations.
-    pub async fn run<Rorch, Worch>(
+    pub async fn run<R, W>(
         self,
-        orch_rx: OnoReceiver<Rorch>,
-        orch_tx: OnoSender<Worch>,
+        orch_rx: OnoReceiver<R>,
+        orch_tx: OnoSender<W>,
     ) -> Result<(), WorkerError>
     where
-        Rorch: AsyncRead + Unpin + Send,
-        Worch: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         match self.algorithm {
-            AlgorithmSpec::ParameterServer { server_ip } => {
+            AlgorithmSpec::ParameterServer { ref server_addr } => {
                 info!(
                     "connecting to parameter server: worker_id={} server_addr={}",
-                    self.worker_id, server_ip
+                    self.worker_id, server_addr
                 );
 
-                let ps_stream = TcpStream::connect(server_ip).await?;
+                let ps_stream = TcpStream::connect(server_addr).await?;
                 let (ps_rx, ps_tx) = ps_stream.into_split();
                 let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
 
@@ -101,20 +110,17 @@ impl Worker {
     {
         let worker_id = self.worker_id;
         let mut trainer = self.trainer;
+        let mut epoch = 0;
 
-        let mut step: usize = 0;
-
-        info!("worker starting: worker_id={worker_id}");
-
-        loop {
-            debug!("waiting message: worker_id={worker_id} step={step}");
+        while epoch < self.max_epochs.get() {
+            debug!("waiting for message");
 
             tokio::select! {
                 ps_msg = ps_rx.recv::<Msg>() => {
                     let msg = ps_msg?;
                     if handle_server_message(
                         worker_id,
-                        &mut step,
+                        &mut epoch,
                         &mut trainer,
                         &mut ps_tx,
                         &mut orch_tx,
@@ -126,24 +132,30 @@ impl Worker {
 
                 orch_msg = orch_rx.recv::<Msg>() => {
                     let msg = orch_msg?;
-                    if handle_orchestrator_message(worker_id, step, msg) {
+                    if handle_orchestrator_message(worker_id, epoch, msg) {
                         break;
                     }
                 }
             }
         }
 
-        info!("worker finished: worker_id={worker_id} steps={step}");
+        info!("worker finished");
+        let msg = Msg::Control(Command::Disconnect);
+        orch_tx.send(&msg).await?;
+        ps_tx.send(&msg).await?;
+
+        while !matches!(ps_rx.recv().await?, Msg::Control(Command::Disconnect)) {}
+
         Ok(())
     }
 }
 
 async fn handle_server_message<Wps, Worch>(
     worker_id: usize,
-    step: &mut usize,
+    epoch: &mut usize,
     trainer: &mut Box<dyn Trainer>,
     ps_tx: &mut OnoSender<Wps>,
-    orch_tx: &mut OnoSender<Worch>,
+    _orch_tx: &mut OnoSender<Worch>,
     msg: Msg<'_>,
 ) -> Result<bool, WorkerError>
 where
@@ -151,53 +163,48 @@ where
     Worch: AsyncWrite + Unpin + Send,
 {
     match msg {
-        Msg::Control(Command::Disconnect) => {
-            info!("disconnect received from parameter server: worker_id={worker_id} step={step}");
-            Ok(true)
-        }
+        Msg::Data(Payload::Params(params)) => {
+            debug!("received new parameters: epoch={epoch}");
 
-        Msg::Data(Payload::Params(weights)) => {
-            let got = weights.len();
-            debug!("training: worker_id={worker_id} step={step} params={got}");
+            let (grad, losses) = trainer.train(params);
+            *epoch += losses.len();
 
-            let (grad, losses) = trainer.train(weights);
+            let msg = Msg::Data(Payload::Grad(grad));
+            ps_tx.send(&msg).await?;
 
-            ps_tx.send(&Msg::Data(Payload::Grad(grad))).await?;
-
-            orch_tx
-                .send(&Msg::Control(Command::ReportLoss { worker_id, losses }))
-                .await?;
+            // msg = Msg::Control(Command::ReportLoss { worker_id, losses });
+            // orch_tx.send(&msg).await?;
 
             Ok(false)
         }
 
         other => {
             warn!(
-                "unexpected message from parameter server: worker_id={} step={} got={}",
+                "unexpected message from parameter server: worker_id={} epoch={} got={}",
                 worker_id,
-                step,
+                epoch,
                 msg_kind(&other)
             );
 
             Err(WorkerError::UnexpectedMessage {
-                step: *step,
+                epoch: *epoch,
                 got: msg_kind(&other),
             })
         }
     }
 }
 
-fn handle_orchestrator_message(worker_id: usize, step: usize, msg: Msg<'_>) -> bool {
+fn handle_orchestrator_message(worker_id: usize, epoch: usize, msg: Msg<'_>) -> bool {
     match msg {
         Msg::Control(Command::Disconnect) => {
-            info!("disconnect received from orchestrator: worker_id={worker_id} step={step}");
+            info!("disconnect received from orchestrator: worker_id={worker_id} epoch={epoch}");
             true
         }
         other => {
             warn!(
-                "unexpected message from orchestrator: worker_id={} step={} got={}",
+                "unexpected message from orchestrator: worker_id={} epoch={} got={}",
                 worker_id,
-                step,
+                epoch,
                 msg_kind(&other),
             );
             false
@@ -211,7 +218,5 @@ fn msg_kind(msg: &Msg<'_>) -> &'static str {
         Msg::Err(_) => "err",
         Msg::Data(Payload::Grad(_)) => "data/gradient",
         Msg::Data(Payload::Params(_)) => "data/weights",
-        Msg::Dataset(Chunk::Header(_)) => "dataset/header",
-        Msg::Dataset(Chunk::Chunk(_)) => "dataset/chunk",
     }
 }
