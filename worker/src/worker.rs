@@ -217,6 +217,7 @@ fn msg_kind(msg: &Msg<'_>) -> &'static str {
         Msg::Control(_) => "control",
         Msg::Err(_) => "err",
         Msg::Data(Payload::Grad(_)) => "data/gradient",
-        Msg::Data(Payload::Params(_)) => "data/weights",
+        Msg::Data(Payload::Params(_)) => "data/params",
+        Msg::Data(Payload::Datachunk(_)) => "data/datachunk",
     }
 }

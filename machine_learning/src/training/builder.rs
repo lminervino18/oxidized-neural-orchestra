@@ -161,7 +161,8 @@ impl TrainerBuilder {
         let offline_epochs = spec.offline_epochs;
         let batch_size = spec.batch_size;
         let rng = self.generate_rng(spec.seed);
-        let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
+        // TODO
+        let dataset = Dataset::new(vec![], spec.dataset.x_size, spec.dataset.y_size);
 
         let trainer = ModelTrainer::new(
             model,

@@ -13,7 +13,7 @@ const HEADER_SIZE: usize = size_of::<Header>();
 pub enum Payload<'a> {
     Grad(&'a [f32]),
     Params(&'a mut [f32]),
-    Datachunk(&'a [u8]),
+    Datachunk(&'a [f32]),
 }
 
 /// The command for the `Control` variant of the `Msg` enum.
@@ -90,6 +90,7 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 let (kind, nums): (_, &[_]) = match payload {
                     Payload::Grad(grad) => (2, grad),
                     Payload::Params(params) => (3, params),
+                    Payload::Datachunk(chunk) => (4, chunk),
                 };
 
                 let header = (kind as Header).to_be_bytes();
@@ -120,12 +121,13 @@ impl<'a> Deserialize<'a> for Msg<'a> {
                 let cmd = serde_json::from_slice(rest)?;
                 Ok(Self::Control(cmd))
             }
-            2..4 => {
+            2..5 => {
                 let nums = bytemuck::cast_slice_mut(rest);
 
                 let payload = match kind {
                     2 => Payload::Grad(nums),
                     3 => Payload::Params(nums),
+                    4 => Payload::Datachunk(nums),
                     _ => unreachable!(),
                 };
 
