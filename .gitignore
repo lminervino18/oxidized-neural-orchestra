@@ -17,3 +17,7 @@
 
 # Docker compose files
 *compose*.yml
+
+# Local dev scripts and configs
+*.sh
+*.json
