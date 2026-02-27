@@ -13,6 +13,7 @@ const HEADER_SIZE: usize = size_of::<Header>();
 pub enum Payload<'a> {
     Grad(&'a [f32]),
     Params(&'a mut [f32]),
+    Datachunk(&'a [u8]),
 }
 
 /// The command for the `Control` variant of the `Msg` enum.
