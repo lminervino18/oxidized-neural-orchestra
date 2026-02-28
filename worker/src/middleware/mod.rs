@@ -12,9 +12,6 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use metadata::ServerMetadata;
 
-// The starting size of the receiver buffer.
-const STARTING_RX_BUF_SIZE: usize = 1028;
-
 // The communication manager between the worker process and the many servers.
 pub struct Middleware<R, W>
 where
@@ -51,14 +48,7 @@ where
     /// * `tx` - The worker's sending end of the communication.
     /// * `size` - The amount of parameters this server holds.
     pub fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>, size: usize) {
-        let metadata = ServerMetadata {
-            rx,
-            tx,
-            rx_buf: vec![0; STARTING_RX_BUF_SIZE],
-            grad: vec![0.0; size],
-        };
-
-        self.servers.push(metadata);
+        self.servers.push(ServerMetadata::new(rx, tx, size));
     }
 
     /// Pulls the new parameters from all the servers.
@@ -72,10 +62,19 @@ where
             .enumerate()
             .map(
                 async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
+                    Msg::Data(Payload::Params(params)) if params.len() != server.acc_grad_buf.len() => {
+                        let (expected, got) = (server.acc_grad_buf.len(), params.len());
+                        let text = format!("the length of the received params from server {i} is invalid, expected {expected}, got {got}");
+                        Err(io::Error::other(text))
+                    }
                     Msg::Data(Payload::Params(params)) => {
+                        // SAFETY: The length of both buffers is the same.
+                        server.acc_grad_buf.copy_from_slice(params);
+
                         let metadata = ServerParamsMetadata {
                             params,
                             grad: &mut server.grad,
+                            acc_grad_buf: &mut server.acc_grad_buf,
                         };
 
                         Ok(metadata)
@@ -97,8 +96,12 @@ where
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
-            let msg = Msg::Data(Payload::Grad(&server.grad));
-            server.tx.send(&msg).await
+            let msg = Msg::Data(Payload::Grad(&server.acc_grad_buf));
+            server.tx.send(&msg).await?;
+
+            // TODO: Maybe do this somewhere else.
+            server.acc_grad_buf.fill(0.0);
+            Ok::<_, io::Error>(())
         });
 
         future::try_join_all(futs).await?;

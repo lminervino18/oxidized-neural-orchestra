@@ -104,7 +104,6 @@ where
                     .backprop(param_manager, &mut self.optimizers, &self.loss_fn, batches)?;
 
             losses.push(loss);
-            self.epoch += 1;
         }
 
         self.epoch += epochs;

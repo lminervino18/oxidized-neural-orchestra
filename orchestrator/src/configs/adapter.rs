@@ -46,8 +46,8 @@ impl Adapter {
         model: ModelConfig,
         training: TrainingConfig<A>,
     ) -> io::Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
-        let workers = self.adapt_workers(&model, &training)?;
-        let servers = self.adapt_servers(&model, &training)?;
+        let (servers, server_sizes, server_ordering) = self.adapt_servers(&model, &training)?;
+        let workers = self.adapt_workers(&model, &training, server_sizes, server_ordering)?;
         Ok((workers, servers))
     }
 
@@ -56,6 +56,7 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
+    /// TODO: add arguments
     ///
     /// # Returns
     /// The worker's specification or an io error if occurred.
@@ -63,8 +64,10 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
+        sizes: Vec<usize>,
+        ordering: Vec<usize>,
     ) -> io::Result<Vec<(SocketAddr, WorkerSpec)>> {
-        let algorithm = self.adapt_algorithm(&training.algorithm)?;
+        let algorithm = self.adapt_algorithm(&training.algorithm, sizes, ordering)?;
         let trainer = self.adapt_trainer(model, training)?;
 
         let workers = training
@@ -97,12 +100,12 @@ impl Adapter {
     /// * `training` - The training's configuration.
     ///
     /// # Returns
-    /// The server's specification or an io error if occurred.
+    /// The server's specification, their sizes and ordering or an io error if occurred
     fn adapt_servers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> io::Result<Vec<(SocketAddr, ServerSpec)>> {
+    ) -> io::Result<(Vec<(SocketAddr, ServerSpec)>, Vec<usize>, Vec<usize>)> {
         let AlgorithmConfig::ParameterServer {
             server_addrs,
             synchronizer,
@@ -111,25 +114,44 @@ impl Adapter {
         } = &training.algorithm;
 
         let (_, param_gens) = self.adapt_model_param_gen(model);
+        let nlayers = param_gens.len();
 
         let items: Vec<_> = param_gens
             .into_iter()
-            .map(|param_gen| {
+            .enumerate()
+            .map(|(i, param_gen)| {
                 let size = param_gen.size();
-                (param_gen, size)
+                ((i, param_gen), size)
             })
             .collect();
 
         let param_gen_bins = balanced_partitions(items, server_addrs.len());
-        let chained_param_gens = param_gen_bins
-            .into_iter()
-            .map(|specs| ParamGenSpec::Chained { specs });
+        let mut server_ordering = vec![0; nlayers];
 
-        let servers = server_addrs
+        for (server_i, bin) in param_gen_bins.iter().enumerate() {
+            for &(layer_i, ..) in bin {
+                server_ordering[layer_i] = server_i;
+            }
+        }
+
+        let chained_param_gens = param_gen_bins.into_iter().map(|bin| {
+            let (specs, sizes): (Vec<_>, Vec<_>) = bin
+                .into_iter()
+                .map(|(_, spec)| {
+                    let size = spec.size();
+                    (spec, size)
+                })
+                .unzip();
+
+            let chained = ParamGenSpec::Chained { specs };
+            (chained, sizes.into_iter().sum::<usize>())
+        });
+
+        let (servers, server_sizes): (Vec<_>, Vec<_>) = server_addrs
             .iter()
             .zip(chained_param_gens)
             .enumerate()
-            .map(|(i, (addressable, param_gen))| {
+            .map(|(i, (addressable, (param_gen, size)))| {
                 let addr = addressable
                     .to_socket_addrs()?
                     .next()
@@ -145,37 +167,31 @@ impl Adapter {
                     seed: training.seed,
                 };
 
-                Ok((addr, server))
+                Ok(((addr, server), size))
             })
-            .collect::<io::Result<Vec<_>>>()?;
+            .collect::<io::Result<Vec<_>>>()?
+            .into_iter()
+            .unzip();
 
-        Ok(servers)
+        Ok((servers, server_sizes, server_ordering))
     }
 
     /// Adapts the configurations to `AlgorithmSpec`.
     ///
     /// # Args
     /// * `algorithm` - The algorithm's configuration.
+    /// TODO: add arguments
     ///
     /// # Returns
     /// The algorithm's specification or an io error if occurred.
     fn adapt_algorithm<A: ToSocketAddrs>(
         &self,
         algorithm: &AlgorithmConfig<A>,
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
     ) -> io::Result<AlgorithmSpec> {
         let spec = match algorithm {
-            AlgorithmConfig::ParameterServer {
-                server_addrs,
-                server_sizes,
-                server_ordering,
-                ..
-            } => {
-                if server_addrs.len() != server_sizes.len() {
-                    return Err(io::Error::other(
-                        "the server addresses and sizes should have the same amount of items",
-                    ));
-                }
-
+            AlgorithmConfig::ParameterServer { server_addrs, .. } => {
                 let server_addrs = server_addrs
                     .iter()
                     .map(|addr| {
@@ -187,8 +203,8 @@ impl Adapter {
 
                 AlgorithmSpec::ParameterServer {
                     server_addrs,
-                    server_sizes: server_sizes.clone(),
-                    server_ordering: server_ordering.clone(),
+                    server_sizes,
+                    server_ordering,
                 }
             }
         };
@@ -435,9 +451,11 @@ impl Adapter {
     }
 }
 
-fn balanced_partitions<T>(items: Vec<(T, usize)>, k: usize) -> Vec<Vec<T>> {
+fn balanced_partitions<T>(mut items: Vec<(T, usize)>, k: usize) -> Vec<Vec<T>> {
     let mut sizes: BinaryHeap<_> = (0..k).map(|i| Reverse((0, i))).collect();
     let mut bins: Vec<_> = (0..k).map(|_| Vec::new()).collect();
+
+    items.sort_unstable_by_key(|(_, size)| Reverse(*size));
 
     for (item, size) in items {
         let Reverse((bin_size, i)) = sizes.pop().unwrap();

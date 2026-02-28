@@ -1,5 +1,6 @@
 /// The state necessary to make forward and backward passes through the network.
-pub struct ServerParamsMetadata<'a> {
-    pub params: &'a mut [f32],
-    pub grad: &'a mut [f32],
+pub struct ServerParamsMetadata<'mw> {
+    pub params: &'mw mut [f32],
+    pub grad: &'mw mut [f32],
+    pub acc_grad_buf: &'mw mut [f32],
 }
