@@ -20,11 +20,11 @@ trait InplaceReshape {
     ///
     /// # Returns
     /// A new `Self` instance with a new inner memory size.
-    fn reshape_inplace(&mut self, shape: (usize, usize)) -> Self;
+    fn reshape_inplace(&mut self, shape: (usize, usize));
 }
 
 impl<T: Clone + Default> InplaceReshape for Array2<T> {
-    fn reshape_inplace(&mut self, shape: (usize, usize)) -> Self {
+    fn reshape_inplace(&mut self, shape: (usize, usize)) {
         let arr = mem::take(self);
 
         let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {
@@ -47,6 +47,6 @@ impl<T: Clone + Default> InplaceReshape for Array2<T> {
             v.resize(size, T::default());
         }
 
-        Array2::from_shape_vec(shape, v).unwrap()
+        *self = Array2::from_shape_vec(shape, v).unwrap();
     }
 }

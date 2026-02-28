@@ -19,8 +19,8 @@ impl Layer {
     ///
     /// # Returns
     /// A new `Layer` instance.
-    pub fn dense<A: Into<Option<ActFn>>>(dim: (usize, usize), act_fn: A) -> Self {
-        Self::Dense(Dense::new(dim, act_fn.into()))
+    pub fn dense<A: Into<Option<ActFn>>>(dim: (usize, usize), _act_fn: A) -> Self {
+        Self::Dense(Dense::new(dim))
     }
 
     /// The size of the layer.
