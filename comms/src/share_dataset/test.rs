@@ -18,7 +18,7 @@ async fn test_share_dataset() {
     let (_, tx) = io::split(tx);
     let (mut receiver, mut sender) = channel(rx, tx);
 
-    let size = 127 * 4;
+    let size = 127;
     let dataset: Vec<u8> = (0..size).map(|_| rand::rng().random()).collect();
 
     let mut recvr_storage = vec![];

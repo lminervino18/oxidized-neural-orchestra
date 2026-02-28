@@ -30,10 +30,8 @@ where
             }
         };
 
-        let byte_chunk = bytemuck::cast_slice(chunk);
-
-        storage.write_all(byte_chunk).await?;
-        received += byte_chunk.len();
+        storage.write_all(chunk).await?;
+        received += chunk.len();
     }
 
     Ok(())

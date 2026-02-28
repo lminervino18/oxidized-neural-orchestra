@@ -6,10 +6,6 @@ use crate::{
     msg::{Msg, Payload},
 };
 
-fn invalid_data() -> Result<()> {
-    Err(Error::new(ErrorKind::InvalidData, "invalid data"))
-}
-
 pub async fn send_dataset<R, W>(
     dataset: &mut R,
     chunk: usize,
@@ -19,26 +15,17 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    if chunk % 4 != 0 {
-        return Err(Error::new(
-            ErrorKind::InvalidData,
-            "chunk size should be a multiple a 4",
-        ));
-    }
-
-    let mut buf = vec![0f32; chunk / 4];
+    let mut buf = vec![0u8; chunk];
 
     loop {
-        let bytes_buf = bytemuck::cast_slice_mut(&mut buf);
-        let read = dataset.read(bytes_buf).await?;
+        let read = dataset.read(&mut buf).await?;
 
         if read > 0 {
-            let floats = read / 4;
-            let msg = Msg::Data(Payload::Datachunk(&buf[..floats]));
+            let msg = Msg::Data(Payload::Datachunk(&buf[..read]));
             sender.send(&msg).await?;
         }
 
-        if read < chunk {
+        if read == 0 {
             break;
         }
     }
