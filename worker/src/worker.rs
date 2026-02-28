@@ -63,7 +63,6 @@ impl Worker {
                     //       si tiene sentido tampoco que les avisemos, despues de todo ellos mandaron
                     //       mal el mensaje)
                     let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
-                    param_manager.acc_grad();
                     middleware.push_grads().await?;
 
                     should_continue = !was_last;

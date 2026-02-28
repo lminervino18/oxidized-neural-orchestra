@@ -86,20 +86,14 @@ impl<'mw> ParamManager<'mw> {
         Ok(())
     }
 
-    /// Writes the accumulated gradient onto the inner accumulated gradient buffer.
-    pub fn acc_grad(&mut self) {
-        self.servers.par_iter_mut().for_each(|server| {
-            for (acc, param) in server.acc_grad_buf.iter_mut().zip(server.params.iter()) {
-                *acc -= *param;
-            }
-        });
-    }
-
     /// Zeroes out the gradients of every server.
     pub fn zero_grad(&mut self) {
-        self.servers
-            .par_iter_mut()
-            .for_each(|server| server.grad.fill(0.0));
+        self.servers.par_iter_mut().for_each(|server| {
+            for (acc, g) in server.acc_grad_buf.iter_mut().zip(server.grad.iter_mut()) {
+                *acc += *g;
+                *g = 0.0;
+            }
+        });
     }
 }
 
