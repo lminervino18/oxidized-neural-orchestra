@@ -13,6 +13,7 @@ struct TestTrainer {
     nparams: usize,
     max_epochs: usize,
     epoch: usize,
+    losses: Vec<f32>,
 }
 
 impl TestTrainer {
@@ -21,12 +22,13 @@ impl TestTrainer {
             max_epochs,
             epoch: 0,
             nparams,
+            losses: vec![0.0],
         }
     }
 }
 
 impl Trainer for TestTrainer {
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult> {
+    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult<'_>> {
         self.epoch += 1;
 
         param_manager.zero_grad();
@@ -38,7 +40,7 @@ impl Trainer for TestTrainer {
         }
 
         let res = TrainResult {
-            losses: vec![0.0],
+            losses: &self.losses,
             was_last: self.epoch == self.max_epochs,
         };
 

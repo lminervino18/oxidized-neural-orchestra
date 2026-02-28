@@ -1,4 +1,4 @@
-use std::io;
+use std::{borrow::Cow, io};
 
 use crate::{
     Align1, Deserialize, Serialize,
@@ -18,10 +18,10 @@ pub enum Payload<'a> {
 /// The command for the `Control` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Command {
+pub enum Command<'a> {
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
-    ReportLoss { losses: Vec<f32> },
+    ReportLoss { losses: Cow<'a, [f32]> },
     Disconnect,
 }
 
@@ -36,7 +36,7 @@ pub enum Detail {
 /// The application layer message for the entire system.
 #[derive(Debug)]
 pub enum Msg<'a> {
-    Control(Command),
+    Control(Command<'a>),
     Data(Payload<'a>),
     Err(Detail),
 }

@@ -30,6 +30,8 @@ where
     max_epochs: NonZeroUsize,
     batch_size: NonZeroUsize,
     rng: R,
+
+    losses: Vec<f32>,
 }
 
 impl<M, O, L, R> ModelTrainer<M, O, L, R>
@@ -72,6 +74,7 @@ where
             batch_size,
             loss_fn,
             rng,
+            losses: Vec::with_capacity(1 + offline_epochs),
         }
     }
 }
@@ -90,10 +93,10 @@ where
     ///
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
-    pub fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<TrainResult> {
+    pub fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<TrainResult<'_>> {
         let remaining = self.max_epochs.get() - self.epoch;
         let epochs = remaining.min(self.offline_epochs + 1);
-        let mut losses = Vec::with_capacity(epochs);
+        self.losses.clear();
 
         for _ in 0..epochs {
             self.dataset.shuffle(&mut self.rng);
@@ -103,12 +106,12 @@ where
                 self.model
                     .backprop(param_manager, &mut self.optimizers, &self.loss_fn, batches)?;
 
-            losses.push(loss);
+            self.losses.push(loss);
         }
 
         self.epoch += epochs;
         let res = TrainResult {
-            losses,
+            losses: &self.losses,
             was_last: self.epoch == self.max_epochs.get(),
         };
 
@@ -123,7 +126,7 @@ where
     L: LossFn,
     R: Rng,
 {
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult> {
+    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult<'_>> {
         self.train(param_manager)
     }
 }

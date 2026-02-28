@@ -3,8 +3,8 @@ use crate::{Result, middleware::ParamManager};
 /// The result of a training call.
 ///
 /// Either the training must go on or the last call was the last.
-pub struct TrainResult {
-    pub losses: Vec<f32>,
+pub struct TrainResult<'trainer> {
+    pub losses: &'trainer [f32],
     pub was_last: bool,
 }
 
@@ -19,5 +19,5 @@ pub trait Trainer {
     ///
     /// # Returns
     /// A training result declaring if the trianing has finished or should continue.
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult>;
+    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult<'_>>;
 }
