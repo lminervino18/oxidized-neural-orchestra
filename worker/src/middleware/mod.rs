@@ -68,9 +68,6 @@ where
                         Err(io::Error::other(text))
                     }
                     Msg::Data(Payload::Params(params)) => {
-                        // SAFETY: The length of both buffers is the same.
-                        server.acc_grad_buf.copy_from_slice(params);
-
                         let metadata = ServerParamsMetadata {
                             params,
                             grad: &mut server.grad,

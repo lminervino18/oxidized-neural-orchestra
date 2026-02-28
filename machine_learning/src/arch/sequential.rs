@@ -5,6 +5,7 @@ use crate::{MlErr, Result, middleware::ParamManager, optimization::Optimizer};
 
 /// A sequential model: information flows forward when computing an output and backward when
 /// computing the *deltas* of its layers.
+#[derive(Clone)]
 pub struct Sequential {
     layers: Vec<Layer>,
 }
