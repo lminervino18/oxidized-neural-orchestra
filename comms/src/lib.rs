@@ -3,6 +3,7 @@ pub mod msg;
 mod receiver;
 mod sender;
 mod serialize;
+mod share_dataset;
 pub mod specs;
 
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -11,6 +12,8 @@ pub use deserialize::Deserialize;
 pub use receiver::OnoReceiver;
 pub use sender::OnoSender;
 pub use serialize::Serialize;
+pub use share_dataset::recv_dataset;
+pub use share_dataset::send_dataset;
 
 type LenType = u64;
 const LEN_TYPE_SIZE: usize = size_of::<LenType>();
