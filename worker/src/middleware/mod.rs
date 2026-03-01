@@ -62,17 +62,12 @@ where
             .enumerate()
             .map(
                 async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
-                    Msg::Data(Payload::Params(params)) if params.len() != server.acc_grad_buf.len() => {
-                        let (expected, got) = (server.acc_grad_buf.len(), params.len());
-                        let text = format!("the length of the received params from server {i} is invalid, expected {expected}, got {got}");
-                        Err(io::Error::other(text))
-                    }
                     Msg::Data(Payload::Params(params)) => {
-                        let metadata = ServerParamsMetadata {
+                        let metadata = ServerParamsMetadata::new(
                             params,
-                            grad: &mut server.grad,
-                            acc_grad_buf: &mut server.acc_grad_buf,
-                        };
+                            &mut server.grad,
+                            &mut server.acc_grad_buf,
+                        );
 
                         Ok(metadata)
                     }
@@ -108,7 +103,7 @@ where
     /// Disconnects this worker from all the servers.
     ///
     /// # Returns
-    /// an io error if occurred.
+    /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Disconnect);
 

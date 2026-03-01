@@ -33,6 +33,59 @@ fn gen_params_grads(server_sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>
 }
 
 #[test]
+fn test_ml_lineal_convergence() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let lineal = [
+        0.0, 1.0, // 2
+        1.0, 2.0, // 4
+        2.0, 3.0, // 6
+        3.0, 4.0, // 8
+    ];
+
+    let mut model = Sequential::new([Layer::dense((1, 1), None)]);
+    let nparams = model.size();
+    let optimizer = GradientDescent::new(0.1);
+    let dataset = Dataset::new(lineal.into(), 1, 1);
+    let offline_epochs = 0;
+    let max_epochs = NonZeroUsize::new(100).unwrap();
+    let batch_size = NonZeroUsize::new(4).unwrap();
+    let loss_fn = Mse::new();
+    let rng = rand::rng();
+
+    let mut trainer = ModelTrainer::new(
+        model.clone(),
+        vec![optimizer],
+        dataset,
+        offline_epochs,
+        max_epochs,
+        batch_size,
+        loss_fn,
+        rng,
+    );
+
+    let ordering = [0];
+    let mut params_grads = gen_params_grads(&[nparams]);
+    let servers: Vec<_> = params_grads
+        .iter_mut()
+        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .collect();
+
+    let mut param_manager = ParamManager::new(servers, &ordering);
+    while !trainer.train(&mut param_manager).unwrap().was_last {}
+
+    // 2
+
+    let data = ArrayView2::from_shape((4, 2), &lineal).unwrap();
+    let (x, y) = data.split_at(ndarray::Axis(1), 1);
+    let y_pred = model.forward(&mut param_manager, x).unwrap();
+
+    let loss = loss_fn.loss(y_pred, y);
+    println!("{y:#?}\n\n\n{y_pred:#?}");
+    println!("loss: {loss}");
+}
+
+#[test]
 fn test_ml_and2_gate_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
@@ -85,7 +138,7 @@ fn test_ml_and2_gate_convergence() {
 
     let loss = loss_fn.loss(y_pred, y);
     println!("{y:#?}\n\n\n{y_pred:#?}");
-    println!("err: {loss}");
+    println!("loss: {loss}");
 }
 
 #[test]
@@ -260,10 +313,7 @@ fn test_ml_xor2_gate_convergence() {
 //     let (x, y) = data.split_at(ndarray::Axis(1), 4);
 //     let y_pred = model.forward(&params, x);
 
+//     let loss = Mse.loss(y_pred, y);
 //     println!("{y:#?}\n\n\n{y_pred:#?}");
-//     println!("params: {params:?}");
-//     let err = Mse.loss(y_pred, y);
-
-//     println!("err: {}", err);
-//     // assert_eq!(err, 0.0);
+//     println!("loss: {loss}");
 // }
