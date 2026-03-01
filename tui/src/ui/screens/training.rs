@@ -92,7 +92,7 @@ impl TrainingState {
             }
         };
 
-        let events = session.take_events().expect("fresh session");
+        let events = session.take_events();
 
         let workers = (0..workers_total)
             .map(|id| WorkerState {
