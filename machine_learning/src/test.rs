@@ -13,8 +13,8 @@ use crate::{
         loss::{LossFn, Mse},
     },
     dataset::Dataset,
-    middleware::{ParamManager, ServerParamsMetadata},
     optimization::GradientDescent,
+    param_manager::{ParamManager, ServerParamsMetadata},
     training::ModelTrainer,
 };
 

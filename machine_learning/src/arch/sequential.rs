@@ -1,7 +1,7 @@
 use ndarray::ArrayView2;
 
 use super::{Model, layers::Layer, loss::LossFn};
-use crate::{MlErr, Result, middleware::ParamManager, optimization::Optimizer};
+use crate::{MlErr, Result, optimization::Optimizer, param_manager::ParamManager};
 
 /// A sequential model: information flows forward when computing an output and backward when
 /// computing the *deltas* of its layers.

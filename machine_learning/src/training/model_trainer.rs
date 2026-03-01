@@ -7,8 +7,8 @@ use crate::{
     Result,
     arch::{Model, loss::LossFn},
     dataset::Dataset,
-    middleware::ParamManager,
     optimization::Optimizer,
+    param_manager::ParamManager,
 };
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,

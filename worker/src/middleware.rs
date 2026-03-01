@@ -1,5 +1,3 @@
-mod metadata;
-
 use std::io;
 
 use comms::{
@@ -7,10 +5,25 @@ use comms::{
     msg::{Command, Msg, Payload},
 };
 use futures::future;
-use machine_learning::middleware::{ParamManager, ServerParamsMetadata};
+use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use metadata::ServerMetadata;
+/// The starting size of the receiver buffer.
+const STARTING_RX_BUF_SIZE: usize = 1028;
+
+/// The necessary information to maintain for the entire
+/// training duration for each of the servers.
+struct ServerMetadata<R, W>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    rx: OnoReceiver<R>,
+    tx: OnoSender<W>,
+    rx_buf: Vec<u32>,
+    grad: Vec<f32>,
+    acc_grad_buf: Vec<f32>,
+}
 
 // The communication manager between the worker process and the many servers.
 pub struct Middleware<R, W>
@@ -30,7 +43,8 @@ where
     /// Creates a new `Middleware`.
     ///
     /// # Arguments
-    /// * `server_ordering`: The ordering of the servers to know which layer's parameters corresponds to which server.
+    /// * `server_ordering`: The ordering of the servers to know which layer's
+    ///                      parameters correspond to which server.
     ///
     /// # Returns
     /// A new `Middleware` instance.
@@ -48,7 +62,15 @@ where
     /// * `tx` - The worker's sending end of the communication.
     /// * `size` - The amount of parameters this server holds.
     pub fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>, size: usize) {
-        self.servers.push(ServerMetadata::new(rx, tx, size));
+        let metadata = ServerMetadata {
+            rx,
+            tx,
+            rx_buf: vec![0; STARTING_RX_BUF_SIZE],
+            grad: vec![0.0; size],
+            acc_grad_buf: vec![0.0; size],
+        };
+
+        self.servers.push(metadata);
     }
 
     /// Pulls the new parameters from all the servers.

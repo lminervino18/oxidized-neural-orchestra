@@ -1,4 +1,4 @@
-use crate::{Result, middleware::ParamManager};
+use crate::{Result, param_manager::ParamManager};
 
 /// The result of a training call.
 ///
