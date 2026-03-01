@@ -155,7 +155,7 @@ async fn handle_server_message<Wps, Worch>(
     epoch: &mut usize,
     trainer: &mut Box<dyn Trainer>,
     ps_tx: &mut OnoSender<Wps>,
-    _orch_tx: &mut OnoSender<Worch>,
+    orch_tx: &mut OnoSender<Worch>,
     msg: Msg<'_>,
 ) -> Result<bool, WorkerError>
 where
@@ -172,8 +172,8 @@ where
             let msg = Msg::Data(Payload::Grad(grad));
             ps_tx.send(&msg).await?;
 
-            // msg = Msg::Control(Command::ReportLoss { worker_id, losses });
-            // orch_tx.send(&msg).await?;
+            let msg = Msg::Control(Command::ReportLoss { worker_id, losses });
+            orch_tx.send(&msg).await?;
 
             Ok(false)
         }

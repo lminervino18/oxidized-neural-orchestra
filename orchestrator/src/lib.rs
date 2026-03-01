@@ -1,26 +1,32 @@
 pub mod configs;
+pub mod error;
 mod session;
 
-use std::{io, net::ToSocketAddrs};
+use std::net::ToSocketAddrs;
 
 use configs::Adapter;
 use session::Session;
 
+pub use error::OrchestratorError;
+pub use session::TrainingEvent;
+
 use crate::configs::{ModelConfig, TrainingConfig};
 
-/// Initiazes the distributed training process.
+/// Starts the distributed training process and returns an active session.
 ///
-/// # Arguments
-/// * `model` - The model's configuration.
-/// * `training` - The training's configuration.
-///
-/// # Returns
-/// A new ongoing session or an io error if occurred.
+/// # Errors
+/// Returns an `OrchestratorError` if connecting to any worker or server fails.
 pub fn train<A: ToSocketAddrs>(
     model: ModelConfig,
     training: TrainingConfig<A>,
-) -> io::Result<Session> {
+) -> Result<Session, OrchestratorError> {
+    log::info!("adapting configs");
     let adapter = Adapter::new();
     let (workers, servers) = adapter.adapt_configs(model, training)?;
+    log::info!(
+        "connecting to {} worker(s) and {} server(s)",
+        workers.len(),
+        servers.len()
+    );
     Session::new(workers, servers)
 }
