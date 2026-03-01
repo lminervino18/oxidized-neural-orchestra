@@ -22,3 +22,7 @@
 *.sh
 *.json
 *.csv
+
+# Logs
+*.log
+temp/

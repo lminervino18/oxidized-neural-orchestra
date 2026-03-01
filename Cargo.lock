@@ -911,6 +911,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossterm",
+ "env_logger",
  "orchestrator",
  "ratatui",
  "serde_json",
