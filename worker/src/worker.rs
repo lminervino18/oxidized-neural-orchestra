@@ -157,7 +157,6 @@ async fn handle_server_message<Wps, Worch>(
     ps_tx: &mut OnoSender<Wps>,
     orch_tx: &mut OnoSender<Worch>,
     msg: Msg<'_>,
-
 ) -> Result<bool, WorkerError>
 where
     Wps: AsyncWrite + Unpin + Send,

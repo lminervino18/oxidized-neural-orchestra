@@ -23,12 +23,7 @@ fn main() {
             },
         },
         dataset: DatasetConfig::Inline {
-            data: vec![
-                1.0, 2.0,
-                2.0, 4.0,
-                3.0, 6.0,
-                4.0, 8.0,
-            ],
+            data: vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0, 4.0, 8.0],
             x_size: 1,
             y_size: 1,
         },

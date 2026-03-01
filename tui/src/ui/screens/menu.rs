@@ -1,10 +1,10 @@
 use crossterm::event::KeyCode;
 use ratatui::{
-    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
+    Frame,
 };
 
 use crate::ui::theme::Theme;
@@ -86,10 +86,7 @@ fn draw_logo(f: &mut Frame, area: Rect) {
         .map(|l| Line::from(Span::styled(l, Theme::title())))
         .collect();
 
-    f.render_widget(
-        Paragraph::new(lines).alignment(Alignment::Center),
-        area,
-    );
+    f.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
 }
 
 fn draw_menu(f: &mut Frame, area: Rect, state: &MenuState) {
@@ -126,10 +123,7 @@ fn draw_menu(f: &mut Frame, area: Rect, state: &MenuState) {
             Span::styled(*label, style),
         ]);
 
-        f.render_widget(
-            Paragraph::new(line).wrap(Wrap { trim: true }),
-            *item_area,
-        );
+        f.render_widget(Paragraph::new(line).wrap(Wrap { trim: true }), *item_area);
     }
 }
 

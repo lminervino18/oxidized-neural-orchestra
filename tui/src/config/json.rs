@@ -75,7 +75,10 @@ pub fn load_training(path: &str) -> Result<TrainingDraft, String> {
         other => return Err(format!("unknown store: {other}")),
     };
 
-    let optimizer = match val["optimizer"].as_str().ok_or("missing field: optimizer")? {
+    let optimizer = match val["optimizer"]
+        .as_str()
+        .ok_or("missing field: optimizer")?
+    {
         "gradient_descent" => OptimizerKind::GradientDescent,
         "adam" => OptimizerKind::Adam,
         "gradient_descent_with_momentum" => OptimizerKind::GradientDescentWithMomentum,
@@ -106,9 +109,7 @@ pub fn load_training(path: &str) -> Result<TrainingDraft, String> {
 }
 
 fn load_dataset(val: &serde_json::Value) -> Result<DatasetDraft, String> {
-    let csv_path = val["path"]
-        .as_str()
-        .ok_or("missing dataset.path")?;
+    let csv_path = val["path"].as_str().ok_or("missing dataset.path")?;
 
     let x_size = val["x_size"].as_u64().ok_or("missing dataset.x_size")? as usize;
     let y_size = val["y_size"].as_u64().ok_or("missing dataset.y_size")? as usize;
@@ -148,7 +149,11 @@ fn load_dataset(val: &serde_json::Value) -> Result<DatasetDraft, String> {
         return Err("dataset is empty".into());
     }
 
-    Ok(DatasetDraft { data, x_size, y_size })
+    Ok(DatasetDraft {
+        data,
+        x_size,
+        y_size,
+    })
 }
 
 fn parse_layer(l: &serde_json::Value, idx: usize) -> Result<LayerDraft, String> {

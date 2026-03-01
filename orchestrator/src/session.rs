@@ -82,10 +82,7 @@ impl Session {
                         loop {
                             match wrx.recv().await {
                                 Ok(Msg::Control(Command::ReportLoss { losses, .. })) => {
-                                    log::debug!(
-                                        "worker {i} reported {} losses",
-                                        losses.len()
-                                    );
+                                    log::debug!("worker {i} reported {} losses", losses.len());
                                     let _ = tx
                                         .send(TrainingEvent::Loss {
                                             worker_id: i,
@@ -115,9 +112,7 @@ impl Session {
                                 Err(e) => {
                                     log::error!("worker {i} error: {e}");
                                     let _ = tx
-                                        .send(TrainingEvent::Error(format!(
-                                            "worker {i}: {e}"
-                                        )))
+                                        .send(TrainingEvent::Error(format!("worker {i}: {e}")))
                                         .await;
                                     return;
                                 }

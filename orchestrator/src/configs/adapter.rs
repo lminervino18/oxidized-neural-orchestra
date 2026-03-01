@@ -316,9 +316,12 @@ impl Adapter {
     ///
     /// # Args
     /// * `param_gen` - The parameter generator's configuration.
+    /// * `(fan_in, limit, fan_out)` - Layer dimensions where `fan_in` is the number of inputs,
+    ///   `limit` is the total number of parameters in the layer (`n * m + m`), and `fan_out`
+    ///   is the number of outputs.
     ///
     /// # Returns
-    /// The parameter generator's specification or an io error if occurred.
+    /// The parameter generator's specification.
     fn adapt_param_gen(
         &self,
         param_gen: ParamGenConfig,

@@ -1,10 +1,10 @@
 use crossterm::event::KeyCode;
 use ratatui::{
-    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
+    Frame,
 };
 
 use crate::config::{builder, json};
@@ -116,7 +116,7 @@ fn handle_model_path(state: &mut ConfigState, key: KeyCode) -> Action {
             state.step = Step::TrainingPath;
             Action::None
         }
-        KeyCode::Esc  => {
+        KeyCode::Esc => {
             Action::Transition(Screen::Menu(crate::ui::screens::menu::MenuState::new()))
         }
         _ => Action::None,
@@ -214,9 +214,7 @@ pub fn draw(f: &mut Frame, state: &ConfigState) {
             "Step 2 of 2",
         ),
         Step::ExampleModel => draw_example(f, area, "model.json — example", EXAMPLE_MODEL),
-        Step::ExampleTraining => {
-            draw_example(f, area, "training.json — example", EXAMPLE_TRAINING)
-        }
+        Step::ExampleTraining => draw_example(f, area, "training.json — example", EXAMPLE_TRAINING),
     }
 
     if let Some(err) = &state.error {
@@ -296,11 +294,7 @@ fn draw_path_input(
     render_hints(
         f,
         chunks[7],
-        &[
-            ("enter", "confirm"),
-            ("?", "view example"),
-            ("esc", "back"),
-        ],
+        &[("enter", "confirm"), ("?", "view example"), ("esc", "back")],
     );
 }
 
@@ -356,7 +350,12 @@ fn draw_error_bar(f: &mut Frame, area: Rect, msg: &str) {
 }
 
 fn render_hints(f: &mut Frame, area: Rect, hints: &[(&str, &str)]) {
-    let key_col_width = hints.iter().map(|(k, _)| k.len() as u16 + 2).max().unwrap_or(8) + 2;
+    let key_col_width = hints
+        .iter()
+        .map(|(k, _)| k.len() as u16 + 2)
+        .max()
+        .unwrap_or(8)
+        + 2;
 
     let outer = centered_rect(40, 100, area);
 
@@ -374,23 +373,16 @@ fn render_hints(f: &mut Frame, area: Rect, hints: &[(&str, &str)]) {
     for (i, (key, action)) in hints.iter().enumerate() {
         let cols = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(key_col_width),
-                Constraint::Min(0),
-            ])
+            .constraints([Constraint::Length(key_col_width), Constraint::Min(0)])
             .split(rows[i]);
 
         f.render_widget(
             Paragraph::new(Span::styled(format!("[{key}]"), Theme::accent_cyan())),
             cols[0],
         );
-        f.render_widget(
-            Paragraph::new(Span::styled(*action, Theme::dim())),
-            cols[1],
-        );
+        f.render_widget(Paragraph::new(Span::styled(*action, Theme::dim())), cols[1]);
     }
 }
-
 
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let vert = Layout::default()

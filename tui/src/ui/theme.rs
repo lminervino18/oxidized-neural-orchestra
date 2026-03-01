@@ -61,7 +61,9 @@ impl Theme {
     }
 
     pub fn ok() -> Style {
-        Style::default().fg(Self::FG_NEON).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Self::FG_NEON)
+            .add_modifier(Modifier::BOLD)
     }
 
     pub fn warn() -> Style {
@@ -81,7 +83,9 @@ impl Theme {
     }
 
     pub fn accent_cyan() -> Style {
-        Style::default().fg(Self::ACCENT_CYAN).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Self::ACCENT_CYAN)
+            .add_modifier(Modifier::BOLD)
     }
 
     pub fn accent_magenta() -> Style {

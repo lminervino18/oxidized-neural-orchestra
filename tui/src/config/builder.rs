@@ -31,7 +31,9 @@ fn build_model(d: &ModelDraft) -> Result<ModelConfig, String> {
         .enumerate()
         .map(|(i, l)| {
             let init = match l.init {
-                InitKind::Const => ParamGenConfig::Const { value: l.init_value },
+                InitKind::Const => ParamGenConfig::Const {
+                    value: l.init_value,
+                },
                 InitKind::Uniform => ParamGenConfig::Uniform {
                     low: l.init_low,
                     high: l.init_high,

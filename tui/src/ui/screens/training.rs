@@ -1,16 +1,17 @@
 use std::time::Instant;
 
 use crossterm::event::KeyCode;
-use orchestrator::{TrainingEvent, configs::{ModelConfig, TrainingConfig}};
+use orchestrator::{
+    configs::{ModelConfig, TrainingConfig},
+    TrainingEvent,
+};
 use ratatui::{
-    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span},
-    widgets::{
-        Axis, Block, Borders, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table, Wrap,
-    },
+    widgets::{Axis, Block, Borders, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table, Wrap},
+    Frame,
 };
 use tokio::sync::mpsc;
 
@@ -20,11 +21,11 @@ use super::Action;
 
 // One color per worker, cycling if more than palette size.
 const WORKER_COLORS: &[Color] = &[
-    Color::Rgb(57, 255, 20),   // neon green
-    Color::Rgb(0, 255, 255),   // cyan
-    Color::Rgb(255, 0, 255),   // magenta
-    Color::Rgb(255, 255, 0),   // yellow
-    Color::Rgb(255, 130, 0),   // orange
+    Color::Rgb(57, 255, 20), // neon green
+    Color::Rgb(0, 255, 255), // cyan
+    Color::Rgb(255, 0, 255), // magenta
+    Color::Rgb(255, 255, 0), // yellow
+    Color::Rgb(255, 130, 0), // orange
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,11 +71,7 @@ enum LogLevel {
 }
 
 impl TrainingState {
-    pub fn new(
-        model: ModelConfig,
-        training: TrainingConfig<String>,
-        workers_total: usize,
-    ) -> Self {
+    pub fn new(model: ModelConfig, training: TrainingConfig<String>, workers_total: usize) -> Self {
         let optimizer_label = format!("{:?}", training.optimizer)
             .split_whitespace()
             .next()
@@ -113,7 +110,10 @@ impl TrainingState {
             started_at: Instant::now(),
             workers,
             loss_series,
-            logs: vec![(LogLevel::Info, "connecting to workers and parameter server...".into())],
+            logs: vec![(
+                LogLevel::Info,
+                "connecting to workers and parameter server...".into(),
+            )],
             final_params: None,
             error: None,
             events,
@@ -147,53 +147,53 @@ impl TrainingState {
     }
 
     fn apply(&mut self, event: TrainingEvent) {
-    match event {
-        TrainingEvent::Loss { worker_id, losses } => {
-            self.phase = Phase::Training;
+        match event {
+            TrainingEvent::Loss { worker_id, losses } => {
+                self.phase = Phase::Training;
 
-            if worker_id < self.workers.len() {
-                for loss in &losses {
-                    self.workers[worker_id].epochs_done += 1;
-                    self.workers[worker_id].last_loss = Some(*loss);
+                if worker_id < self.workers.len() {
+                    for loss in &losses {
+                        self.workers[worker_id].epochs_done += 1;
+                        self.workers[worker_id].last_loss = Some(*loss);
 
-                    if let Some(series) = self.loss_series.get_mut(worker_id) {
-                        let epoch = self.workers[worker_id].epochs_done as f64;
-                        series.push((epoch, *loss as f64));
+                        if let Some(series) = self.loss_series.get_mut(worker_id) {
+                            let epoch = self.workers[worker_id].epochs_done as f64;
+                            series.push((epoch, *loss as f64));
+                        }
                     }
-                }
 
-                let epochs_done = self.workers[worker_id].epochs_done;
-                let last = losses.last().copied().unwrap_or(0.0);
+                    let epochs_done = self.workers[worker_id].epochs_done;
+                    let last = losses.last().copied().unwrap_or(0.0);
+                    self.push_log(
+                        LogLevel::Info,
+                        format!("worker {worker_id}  epoch {epochs_done}  loss={last:.4}"),
+                    );
+                }
+            }
+
+            TrainingEvent::WorkerDone(worker_id) => {
+                if worker_id < self.workers.len() {
+                    self.workers[worker_id].done = true;
+                }
+                self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
+            }
+
+            TrainingEvent::Complete(params) => {
+                self.phase = Phase::Finished;
                 self.push_log(
                     LogLevel::Info,
-                    format!("worker {worker_id}  epoch {epochs_done}  loss={last:.4}"),
+                    format!("training complete — {} parameters received", params.len()),
                 );
+                self.final_params = Some(params);
             }
-        }
 
-        TrainingEvent::WorkerDone(worker_id) => {
-            if worker_id < self.workers.len() {
-                self.workers[worker_id].done = true;
+            TrainingEvent::Error(msg) => {
+                self.phase = Phase::Error;
+                self.error = Some(msg.clone());
+                self.push_log(LogLevel::Error, msg);
             }
-            self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
-        }
-
-        TrainingEvent::Complete(params) => {
-            self.phase = Phase::Finished;
-            self.push_log(
-                LogLevel::Info,
-                format!("training complete — {} parameters received", params.len()),
-            );
-            self.final_params = Some(params);
-        }
-
-        TrainingEvent::Error(msg) => {
-            self.phase = Phase::Error;
-            self.error = Some(msg.clone());
-            self.push_log(LogLevel::Error, msg);
         }
     }
-}
 
     fn push_log(&mut self, level: LogLevel, msg: String) {
         self.logs.push((level, msg));
@@ -214,8 +214,8 @@ impl TrainingState {
 
 pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
     match key {
-        KeyCode::Char('q') | KeyCode::Esc if state.phase == Phase::Finished
-            || state.phase == Phase::Error =>
+        KeyCode::Char('q') | KeyCode::Esc
+            if state.phase == Phase::Finished || state.phase == Phase::Error =>
         {
             Action::Transition(super::Screen::Menu(
                 crate::ui::screens::menu::MenuState::new(),
@@ -234,9 +234,9 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // header
-            Constraint::Min(10),    // body
-            Constraint::Length(8),  // log
+            Constraint::Length(3), // header
+            Constraint::Min(10),   // body
+            Constraint::Length(8), // log
         ])
         .split(area);
 
@@ -295,10 +295,7 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
             Theme::dim(),
         ),
         Span::styled("  │  ", Theme::muted()),
-        Span::styled(
-            format!("optimizer {}", state.optimizer_label),
-            Theme::dim(),
-        ),
+        Span::styled(format!("optimizer {}", state.optimizer_label), Theme::dim()),
     ]);
 
     f.render_widget(
@@ -408,8 +405,7 @@ fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
 
             Row::new(vec![
                 Cell::from(format!("{}", w.id)).style(Theme::text()),
-                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs))
-                    .style(Theme::text()),
+                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs)).style(Theme::text()),
                 Cell::from(loss_str).style(Theme::text()),
                 status_cell,
             ])
@@ -465,9 +461,7 @@ fn draw_params(f: &mut Frame, area: Rect, state: &TrainingState) {
                     .borders(Borders::ALL)
                     .border_style(Theme::accent_magenta())
                     .title(" Final Parameters ")
-                    .title_style(
-                        Theme::accent_magenta().add_modifier(Modifier::BOLD),
-                    ),
+                    .title_style(Theme::accent_magenta().add_modifier(Modifier::BOLD)),
             )
             .wrap(Wrap { trim: true }),
         area,
