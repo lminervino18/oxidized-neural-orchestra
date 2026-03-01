@@ -62,8 +62,9 @@ pub struct TrainingState {
     error: Option<String>,
     events: mpsc::Receiver<TrainingEvent>,
     confirm_quit: ConfirmQuit,
-    /// Index of the worker currently shown in the per-worker chart.
     selected_worker: usize,
+    /// Set when session fails to start — shown as full-screen error before training.
+    startup_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -83,7 +84,7 @@ impl TrainingState {
 
         let max_epochs = training.max_epochs.get();
 
-        let mut session = match orchestrator::train(model, training) {
+        let session = match orchestrator::train(model, training) {
             Ok(s) => s,
             Err(e) => {
                 return Self::dead(workers_total, optimizer_label, max_epochs, e.to_string());
@@ -120,6 +121,7 @@ impl TrainingState {
             events,
             confirm_quit: ConfirmQuit::Hidden,
             selected_worker: 0,
+            startup_error: None,
         }
     }
 
@@ -133,12 +135,13 @@ impl TrainingState {
             started_at: Instant::now(),
             workers: Vec::new(),
             loss_series: Vec::new(),
-            logs: vec![(LogLevel::Error, err.clone())],
+            logs: Vec::new(),
             final_params: None,
-            error: Some(err),
+            error: Some(err.clone()),
             events: rx,
             confirm_quit: ConfirmQuit::Hidden,
             selected_worker: 0,
+            startup_error: Some(err),
         }
     }
 
@@ -218,7 +221,6 @@ impl TrainingState {
         matches!(self.phase, Phase::Connecting | Phase::Training)
     }
 
-    /// Builds the average loss series across all workers.
     fn avg_loss_series(&self) -> Vec<(f64, f64)> {
         let max_len = self.loss_series.iter().map(|s| s.len()).max().unwrap_or(0);
         if max_len == 0 {
@@ -263,8 +265,14 @@ impl TrainingState {
 }
 
 pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
+    // If there's a startup error, any key goes back to menu.
+    if state.startup_error.is_some() {
+        return Action::Transition(super::Screen::Menu(
+            crate::ui::screens::menu::MenuState::new(),
+        ));
+    }
+
     match (key, state.confirm_quit, state.is_active()) {
-        // Navigate workers with arrows (always available)
         (KeyCode::Left, ConfirmQuit::Hidden, _) => {
             state.prev_worker();
             Action::None
@@ -273,21 +281,17 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
             state.next_worker();
             Action::None
         }
-        // During training: q/esc opens confirmation
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, true) => {
             state.confirm_quit = ConfirmQuit::Visible;
             Action::None
         }
-        // Confirmation: y confirms exit
         (KeyCode::Char('y') | KeyCode::Char('Y'), ConfirmQuit::Visible, _) => Action::Transition(
             super::Screen::Menu(crate::ui::screens::menu::MenuState::new()),
         ),
-        // Confirmation: n or esc cancels
         (KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc, ConfirmQuit::Visible, _) => {
             state.confirm_quit = ConfirmQuit::Hidden;
             Action::None
         }
-        // Finished or error: q/esc goes back to menu
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => Action::Transition(
             super::Screen::Menu(crate::ui::screens::menu::MenuState::new()),
         ),
@@ -300,6 +304,12 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     let area = f.size();
     f.render_widget(Block::default().style(Theme::base()), area);
+
+    // If session failed to start, show full-screen error instead of training UI.
+    if let Some(err) = &state.startup_error.clone() {
+        draw_startup_error(f, area, err);
+        return;
+    }
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -339,6 +349,78 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     if state.confirm_quit == ConfirmQuit::Visible {
         draw_confirm_quit(f, area);
     }
+}
+
+fn draw_startup_error(f: &mut Frame, area: Rect, err: &str) {
+    let outer = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Min(0),
+            Constraint::Percentage(20),
+        ])
+        .split(area)[1];
+
+    let outer = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(15),
+            Constraint::Min(0),
+            Constraint::Percentage(15),
+        ])
+        .split(outer)[1];
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // title
+            Constraint::Length(1), // subtitle
+            Constraint::Length(1), // spacer
+            Constraint::Min(4),    // error box
+            Constraint::Length(1), // spacer
+            Constraint::Length(1), // hint
+        ])
+        .split(outer);
+
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            "Failed to Start Training",
+            Theme::error().add_modifier(Modifier::BOLD),
+        )),
+        chunks[0],
+    );
+
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            "Could not connect to workers or servers. Please check your JSON files and try again.",
+            Theme::muted(),
+        ))
+        .wrap(Wrap { trim: true }),
+        chunks[1],
+    );
+
+    f.render_widget(
+        Paragraph::new(err)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Theme::error())
+                    .title(" Error ")
+                    .title_style(Theme::error().add_modifier(Modifier::BOLD)),
+            )
+            .style(Theme::text())
+            .wrap(Wrap { trim: true }),
+        chunks[3],
+    );
+
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            "Press any key to go back to the menu.",
+            Theme::dim(),
+        ))
+        .alignment(Alignment::Center),
+        chunks[5],
+    );
 }
 
 fn draw_charts(f: &mut Frame, area: Rect, state: &TrainingState) {

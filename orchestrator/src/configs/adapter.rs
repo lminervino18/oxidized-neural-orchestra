@@ -1,4 +1,6 @@
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+};
 
 use comms::specs::{
     machine_learning::{
@@ -30,10 +32,131 @@ impl Adapter {
         training: TrainingConfig<A>,
     ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>), OrchestratorError>
     {
+        self.validate_model(&model)?;
+        self.validate_training(&training)?;
+
         let workers = self.adapt_workers(&model, &training)?;
         let servers = self.adapt_servers(&model, &training)?;
         Ok((workers, servers))
     }
+
+    // -------------------------------------------------------------------------
+    // Validation
+    // -------------------------------------------------------------------------
+
+    fn validate_model(&self, model: &ModelConfig) -> Result<(), OrchestratorError> {
+        match model {
+            ModelConfig::Sequential { layers } => {
+                if layers.is_empty() {
+                    return Err(OrchestratorError::InvalidConfig(
+                        "model must have at least one layer".into(),
+                    ));
+                }
+
+                // Adjacent layers must have compatible dimensions: prev.m == next.n
+                for i in 1..layers.len() {
+                    let prev_m = match layers[i - 1] {
+                        LayerConfig::Dense { dim: (_, m), .. } => m,
+                    };
+                    let curr_n = match layers[i] {
+                        LayerConfig::Dense { dim: (n, _), .. } => n,
+                    };
+                    if prev_m != curr_n {
+                        return Err(OrchestratorError::InvalidConfig(format!(
+                            "layer {i}: input size ({curr_n}) does not match \
+                             previous layer output size ({prev_m})"
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_training<A: ToSocketAddrs>(
+        &self,
+        training: &TrainingConfig<A>,
+    ) -> Result<(), OrchestratorError> {
+        // At least one worker
+        if training.worker_addrs.is_empty() {
+            return Err(OrchestratorError::InvalidConfig(
+                "at least one worker address is required".into(),
+            ));
+        }
+
+        // At least one server
+        let AlgorithmConfig::ParameterServer {
+            server_addrs,
+            synchronizer,
+            ..
+        } = &training.algorithm;
+
+        if server_addrs.is_empty() {
+            return Err(OrchestratorError::InvalidConfig(
+                "at least one server address is required".into(),
+            ));
+        }
+
+        // barrier_size must not exceed number of workers
+        if let SynchronizerConfig::Barrier { barrier_size } = synchronizer {
+            if *barrier_size > training.worker_addrs.len() {
+                return Err(OrchestratorError::InvalidConfig(format!(
+                    "barrier_size ({barrier_size}) cannot exceed number of workers ({})",
+                    training.worker_addrs.len()
+                )));
+            }
+            if *barrier_size == 0 {
+                return Err(OrchestratorError::InvalidConfig(
+                    "barrier_size must be greater than 0".into(),
+                ));
+            }
+        }
+
+        // Dataset must have at least one sample
+        let dataset_samples = match &training.dataset {
+            DatasetConfig::Inline { data, x_size, y_size } => {
+                let row_size = x_size + y_size;
+                if row_size == 0 {
+                    return Err(OrchestratorError::InvalidConfig(
+                        "x_size + y_size must be greater than 0".into(),
+                    ));
+                }
+                if data.len() % row_size != 0 {
+                    return Err(OrchestratorError::InvalidConfig(format!(
+                        "dataset length ({}) is not divisible by x_size + y_size ({row_size})",
+                        data.len()
+                    )));
+                }
+                data.len() / row_size
+            }
+            DatasetConfig::Local { path } => {
+                return Err(OrchestratorError::InvalidConfig(format!(
+                    "local dataset loading not yet implemented: {}",
+                    path.display()
+                )));
+            }
+        };
+
+        if dataset_samples == 0 {
+            return Err(OrchestratorError::InvalidConfig(
+                "dataset must have at least one sample".into(),
+            ));
+        }
+
+        // batch_size must not exceed dataset size
+        if training.batch_size.get() > dataset_samples {
+            return Err(OrchestratorError::InvalidConfig(format!(
+                "batch_size ({}) exceeds dataset size ({dataset_samples} samples)",
+                training.batch_size
+            )));
+        }
+
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Adaptation
+    // -------------------------------------------------------------------------
 
     fn adapt_workers<A: ToSocketAddrs>(
         &self,
@@ -43,7 +166,7 @@ impl Adapter {
         let algorithm = self.adapt_algorithm(&training.algorithm)?;
         let trainer = self.adapt_trainer(model, training)?;
 
-        let workers = training
+        training
             .worker_addrs
             .iter()
             .enumerate()
@@ -55,24 +178,18 @@ impl Adapter {
                         source: e,
                     })?
                     .next()
-                    .ok_or_else(|| {
-                        OrchestratorError::InvalidConfig(format!(
-                            "worker[{i}]: could not resolve address"
-                        ))
-                    })?;
+                    .ok_or_else(|| OrchestratorError::InvalidConfig(
+                        format!("worker[{i}]: could not resolve address")
+                    ))?;
 
-                let worker = WorkerSpec {
+                Ok((addr, WorkerSpec {
                     worker_id: i,
                     max_epochs: training.max_epochs,
                     trainer: trainer.clone(),
                     algorithm,
-                };
-
-                Ok((addr, worker))
+                }))
             })
-            .collect::<Result<Vec<_>, OrchestratorError>>()?;
-
-        Ok(workers)
+            .collect()
     }
 
     fn adapt_servers<A: ToSocketAddrs>(
@@ -88,7 +205,7 @@ impl Adapter {
 
         let (_, param_gen) = self.adapt_model_param_gen(model);
 
-        let servers = server_addrs
+        server_addrs
             .iter()
             .enumerate()
             .map(|(i, addressable)| {
@@ -99,13 +216,11 @@ impl Adapter {
                         source: e,
                     })?
                     .next()
-                    .ok_or_else(|| {
-                        OrchestratorError::InvalidConfig(format!(
-                            "server[{i}]: could not resolve address"
-                        ))
-                    })?;
+                    .ok_or_else(|| OrchestratorError::InvalidConfig(
+                        format!("server[{i}]: could not resolve address")
+                    ))?;
 
-                let server = ServerSpec {
+                Ok((addr, ServerSpec {
                     id: i,
                     nworkers: training.worker_addrs.len(),
                     param_gen: param_gen.clone(),
@@ -113,20 +228,16 @@ impl Adapter {
                     synchronizer: self.adapt_synchronizer(synchronizer),
                     store: self.adapt_store(store),
                     seed: training.seed,
-                };
-
-                Ok((addr, server))
+                }))
             })
-            .collect::<Result<Vec<_>, OrchestratorError>>()?;
-
-        Ok(servers)
+            .collect()
     }
 
     fn adapt_algorithm<A: ToSocketAddrs>(
         &self,
         algorithm: &AlgorithmConfig<A>,
     ) -> Result<AlgorithmSpec, OrchestratorError> {
-        let spec = match algorithm {
+        match algorithm {
             AlgorithmConfig::ParameterServer { server_addrs, .. } => {
                 let server_addr = server_addrs[0]
                     .to_socket_addrs()
@@ -135,15 +246,13 @@ impl Adapter {
                         source: e,
                     })?
                     .next()
-                    .ok_or_else(|| {
-                        OrchestratorError::InvalidConfig("no server addresses provided".into())
-                    })?;
+                    .ok_or_else(|| OrchestratorError::InvalidConfig(
+                        "no server addresses provided".into()
+                    ))?;
 
-                AlgorithmSpec::ParameterServer { server_addr }
+                Ok(AlgorithmSpec::ParameterServer { server_addr })
             }
-        };
-
-        Ok(spec)
+        }
     }
 
     fn adapt_synchronizer(&self, synchronizer: &SynchronizerConfig) -> SynchronizerSpec {
@@ -195,11 +304,7 @@ impl Adapter {
                 "local dataset loading not yet implemented: {}",
                 path.display()
             ))),
-            DatasetConfig::Inline {
-                data,
-                x_size,
-                y_size,
-            } => Ok(DatasetSpec {
+            DatasetConfig::Inline { data, x_size, y_size } => Ok(DatasetSpec {
                 data: data.to_vec(),
                 x_size: *x_size,
                 y_size: *y_size,
@@ -234,12 +339,8 @@ impl Adapter {
                     layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
 
                 (
-                    ModelSpec::Sequential {
-                        layers: layer_specs,
-                    },
-                    ParamGenSpec::Chained {
-                        specs: param_gen_specs,
-                    },
+                    ModelSpec::Sequential { layers: layer_specs },
+                    ParamGenSpec::Chained { specs: param_gen_specs },
                 )
             }
         }
@@ -289,17 +390,10 @@ impl Adapter {
 
     fn adapt_layer(&self, layer: &LayerConfig) -> (LayerSpec, ParamGenSpec) {
         match *layer {
-            LayerConfig::Dense {
-                dim: (n, m),
-                init,
-                act_fn,
-            } => {
+            LayerConfig::Dense { dim: (n, m), init, act_fn } => {
                 let act_fn = self.adapt_act_fn(act_fn.as_ref());
                 (
-                    LayerSpec::Dense {
-                        dim: (n, m),
-                        act_fn,
-                    },
+                    LayerSpec::Dense { dim: (n, m), act_fn },
                     self.adapt_param_gen(init, layer.sizes()),
                 )
             }
@@ -312,3 +406,4 @@ impl Adapter {
         }
     }
 }
+

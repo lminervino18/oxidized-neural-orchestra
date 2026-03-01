@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
@@ -65,6 +65,8 @@ enum Step {
     TrainingPath,
     ExampleModel,
     ExampleTraining,
+    /// Config loaded but invalid — show error and let user go back to fix JSONs.
+    InvalidConfig { reason: String },
 }
 
 pub struct ConfigState {
@@ -88,13 +90,24 @@ impl ConfigState {
 pub fn handle_key(state: &mut ConfigState, key: KeyCode) -> Action {
     state.error = None;
 
-    match state.step {
+    match state.step.clone() {
         Step::ModelPath => handle_model_path(state, key),
         Step::TrainingPath => handle_training_path(state, key),
         Step::ExampleModel | Step::ExampleTraining => {
             state.step = Step::ModelPath;
             Action::None
         }
+        Step::InvalidConfig { .. } => match key {
+            // q or esc → back to menu
+            KeyCode::Char('q') | KeyCode::Esc => {
+                Action::Transition(Screen::Menu(crate::ui::screens::menu::MenuState::new()))
+            }
+            // any other key → back to path input to fix JSONs
+            _ => {
+                state.step = Step::ModelPath;
+                Action::None
+            }
+        },
     }
 }
 
@@ -183,8 +196,8 @@ fn try_load(state: &mut ConfigState) -> Action {
                 crate::ui::screens::training::TrainingState::new(model, training, workers_total),
             ))
         }
-        Err(e) => {
-            state.error = Some(e);
+        Err(reason) => {
+            state.step = Step::InvalidConfig { reason };
             Action::None
         }
     }
@@ -214,12 +227,70 @@ pub fn draw(f: &mut Frame, state: &ConfigState) {
             "Step 2 of 2",
         ),
         Step::ExampleModel => draw_example(f, area, "model.json — example", EXAMPLE_MODEL),
-        Step::ExampleTraining => draw_example(f, area, "training.json — example", EXAMPLE_TRAINING),
+        Step::ExampleTraining => {
+            draw_example(f, area, "training.json — example", EXAMPLE_TRAINING)
+        }
+        Step::InvalidConfig { reason } => draw_invalid_config(f, area, reason),
     }
 
     if let Some(err) = &state.error {
         draw_error_bar(f, area, err);
     }
+}
+
+fn draw_invalid_config(f: &mut Frame, area: Rect, reason: &str) {
+    let outer = centered_rect(60, 60, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // title
+            Constraint::Length(1), // subtitle
+            Constraint::Length(1), // spacer
+            Constraint::Min(4),    // reason box
+            Constraint::Length(1), // spacer
+            Constraint::Length(3), // hints
+        ])
+        .split(outer);
+
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            "Invalid Configuration",
+            Theme::error().add_modifier(Modifier::BOLD),
+        )),
+        chunks[0],
+    );
+
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            "Please fix your JSON files and try again.",
+            Theme::muted(),
+        )),
+        chunks[1],
+    );
+
+    f.render_widget(
+        Paragraph::new(reason)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Theme::error())
+                    .title(" Reason ")
+                    .title_style(Theme::error()),
+            )
+            .style(Theme::text())
+            .wrap(Wrap { trim: true }),
+        chunks[3],
+    );
+
+    render_hints(
+        f,
+        chunks[5],
+        &[
+            ("any key", "edit config files"),
+            ("q / esc", "back to menu"),
+        ],
+    );
 }
 
 fn draw_path_input(
