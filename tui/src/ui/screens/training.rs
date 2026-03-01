@@ -189,8 +189,9 @@ impl TrainingState {
                 self.final_params = Some(params);
             }
 
-            TrainingEvent::Error(msg) => {
+            TrainingEvent::Error(e) => {
                 self.phase = Phase::Error;
+                let msg = e.to_string();
                 self.error = Some(msg.clone());
                 self.push_log(LogLevel::Error, msg);
             }
@@ -278,22 +279,18 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
             Action::None
         }
         // Confirmation: y confirms exit
-        (KeyCode::Char('y') | KeyCode::Char('Y'), ConfirmQuit::Visible, _) => {
-            Action::Transition(super::Screen::Menu(
-                crate::ui::screens::menu::MenuState::new(),
-            ))
-        }
+        (KeyCode::Char('y') | KeyCode::Char('Y'), ConfirmQuit::Visible, _) => Action::Transition(
+            super::Screen::Menu(crate::ui::screens::menu::MenuState::new()),
+        ),
         // Confirmation: n or esc cancels
         (KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc, ConfirmQuit::Visible, _) => {
             state.confirm_quit = ConfirmQuit::Hidden;
             Action::None
         }
         // Finished or error: q/esc goes back to menu
-        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => {
-            Action::Transition(super::Screen::Menu(
-                crate::ui::screens::menu::MenuState::new(),
-            ))
-        }
+        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => Action::Transition(
+            super::Screen::Menu(crate::ui::screens::menu::MenuState::new()),
+        ),
         _ => Action::None,
     }
 }
@@ -413,10 +410,7 @@ fn draw_selected_worker_chart(f: &mut Frame, area: Rect, state: &TrainingState) 
     let worker_id = state.selected_worker;
     let color = WORKER_COLORS[worker_id % WORKER_COLORS.len()];
 
-    let title = format!(
-        " Worker {} — Loss  [←/→ to switch] ",
-        worker_id
-    );
+    let title = format!(" Worker {} — Loss  [←/→ to switch] ", worker_id);
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -603,8 +597,7 @@ fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
 
             Row::new(vec![
                 Cell::from(format!("{}", w.id)).style(id_style),
-                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs))
-                    .style(Theme::text()),
+                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs)).style(Theme::text()),
                 Cell::from(loss_str).style(Theme::text()),
                 status_cell,
             ])

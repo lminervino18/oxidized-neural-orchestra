@@ -7,7 +7,6 @@ use comms::{
     specs::{server::ServerSpec, worker::WorkerSpec},
 };
 use tokio::{
-    io,
     net::{
         TcpStream,
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -15,6 +14,8 @@ use tokio::{
     runtime::Runtime,
     sync::mpsc,
 };
+
+use crate::error::OrchestratorError;
 
 type NetRx = OnoReceiver<OwnedReadHalf>;
 type NetTx = OnoSender<OwnedWriteHalf>;
@@ -29,7 +30,7 @@ pub enum TrainingEvent {
     /// Training completed and the server returned the final model parameters.
     Complete(Vec<f32>),
     /// A worker or server produced an unrecoverable error.
-    Error(String),
+    Error(OrchestratorError),
 }
 
 /// Represents an ongoing training session.
@@ -43,7 +44,7 @@ impl Session {
     pub fn new(
         workers: Vec<(SocketAddr, WorkerSpec)>,
         servers: Vec<(SocketAddr, ServerSpec)>,
-    ) -> io::Result<Self> {
+    ) -> Result<Self, OrchestratorError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
@@ -63,8 +64,6 @@ impl Session {
 
     /// Takes an event receiver, spawning a background thread that drives
     /// the session and forwards events through the channel.
-    ///
-    /// Consumes the session — cannot call `wait()` after this.
     pub fn take_events(self) -> mpsc::Receiver<TrainingEvent> {
         let (tx, rx) = mpsc::channel(256);
 
@@ -82,10 +81,7 @@ impl Session {
                         loop {
                             match wrx.recv().await {
                                 Ok(Msg::Control(Command::ReportLoss { losses, .. })) => {
-                                    log::debug!(
-                                        "worker {i} reported {} losses",
-                                        losses.len()
-                                    );
+                                    log::debug!("worker {i} reported {} losses", losses.len());
                                     let _ = tx
                                         .send(TrainingEvent::Loss {
                                             worker_id: i,
@@ -101,9 +97,12 @@ impl Session {
                                 Ok(msg) => {
                                     log::warn!("worker {i}: unexpected message {msg:?}");
                                     let _ = tx
-                                        .send(TrainingEvent::Error(format!(
-                                            "worker {i}: unexpected {msg:?}"
-                                        )))
+                                        .send(TrainingEvent::Error(
+                                            OrchestratorError::WorkerError {
+                                                worker_id: i,
+                                                msg: format!("unexpected message {msg:?}"),
+                                            },
+                                        ))
                                         .await;
                                     return;
                                 }
@@ -115,9 +114,12 @@ impl Session {
                                 Err(e) => {
                                     log::error!("worker {i} error: {e}");
                                     let _ = tx
-                                        .send(TrainingEvent::Error(format!(
-                                            "worker {i}: {e}"
-                                        )))
+                                        .send(TrainingEvent::Error(
+                                            OrchestratorError::WorkerError {
+                                                worker_id: i,
+                                                msg: e.to_string(),
+                                            },
+                                        ))
                                         .await;
                                     return;
                                 }
@@ -139,11 +141,13 @@ impl Session {
                     }
                     Ok(msg) => {
                         log::error!("server: unexpected message {msg:?}");
-                        TrainingEvent::Error(format!("server: unexpected {msg:?}"))
+                        TrainingEvent::Error(OrchestratorError::ServerError(format!(
+                            "unexpected message {msg:?}"
+                        )))
                     }
                     Err(e) => {
                         log::error!("server error: {e}");
-                        TrainingEvent::Error(format!("server: {e}"))
+                        TrainingEvent::Error(OrchestratorError::ServerError(e.to_string()))
                     }
                 };
                 let _ = tx.send(event).await;
@@ -154,16 +158,8 @@ impl Session {
     }
 
     /// Blocks until training completes and returns the final model parameters.
-    ///
-    /// Listens to all workers concurrently then reads the final parameters
-    /// from the server. Consumes the session.
-    ///
-    /// # Errors
-    /// Returns an error if any worker fails or the server does not send parameters.
-    pub fn wait(self) -> io::Result<Vec<f32>> {
+    pub fn wait(self) -> Result<Vec<f32>, OrchestratorError> {
         self.runtime.block_on(async move {
-            // Drain all workers concurrently — each task discards non-Disconnect
-            // messages and resolves when its worker sends Disconnect or closes.
             let handles: Vec<_> = self
                 .workers
                 .into_iter()
@@ -172,12 +168,18 @@ impl Session {
                     tokio::spawn(async move {
                         log::debug!("wait: listening to worker {i}");
                         loop {
-                            match rx.recv().await? {
-                                Msg::Control(Command::Disconnect) => {
+                            match rx.recv().await {
+                                Ok(Msg::Control(Command::Disconnect)) => {
                                     log::info!("wait: worker {i} done");
-                                    return Ok::<_, io::Error>(());
+                                    return Ok::<_, OrchestratorError>(());
                                 }
-                                _ => {}
+                                Ok(_) => {}
+                                Err(e) => {
+                                    return Err(OrchestratorError::WorkerError {
+                                        worker_id: i,
+                                        msg: e.to_string(),
+                                    });
+                                }
                             }
                         }
                     })
@@ -185,32 +187,38 @@ impl Session {
                 .collect();
 
             for h in handles {
-                h.await.map_err(|e| io::Error::other(e))??;
+                h.await
+                    .map_err(|e| OrchestratorError::Io(std::io::Error::other(e.to_string())))??;
             }
 
-            // All workers done — read final params from server.
             let (mut rx, _) = self.server;
             log::debug!("wait: reading final params from server");
 
-            match rx.recv().await? {
-                Msg::Data(Payload::Params(params)) => {
+            match rx.recv().await {
+                Ok(Msg::Data(Payload::Params(params))) => {
                     log::info!("wait: received {} parameters", params.len());
                     Ok(params.to_vec())
                 }
-                msg => Err(io::Error::other(format!(
-                    "received an invalid message: {msg:?}"
+                Ok(msg) => Err(OrchestratorError::ServerError(format!(
+                    "unexpected message: {msg:?}"
                 ))),
+                Err(e) => Err(OrchestratorError::ServerError(e.to_string())),
             }
         })
     }
 
     async fn create_servers(
         servers: Vec<(SocketAddr, ServerSpec)>,
-    ) -> io::Result<Vec<(NetRx, NetTx)>> {
+    ) -> Result<Vec<(NetRx, NetTx)>, OrchestratorError> {
         let mut channels = Vec::with_capacity(servers.len());
         for (addr, spec) in servers {
             log::debug!("connecting to server at {addr}");
-            let (rx, mut tx) = Self::open_channel(addr).await?;
+            let (rx, mut tx) = Self::open_channel(addr).await.map_err(|e| {
+                OrchestratorError::ConnectionFailed {
+                    addr: addr.to_string(),
+                    source: e,
+                }
+            })?;
             tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
             log::info!("server at {addr} ready");
             channels.push((rx, tx));
@@ -220,11 +228,16 @@ impl Session {
 
     async fn create_workers(
         workers: Vec<(SocketAddr, WorkerSpec)>,
-    ) -> io::Result<Vec<(NetRx, NetTx)>> {
+    ) -> Result<Vec<(NetRx, NetTx)>, OrchestratorError> {
         let mut channels = Vec::with_capacity(workers.len());
         for (addr, spec) in workers {
             log::debug!("connecting to worker at {addr}");
-            let (rx, mut tx) = Self::open_channel(addr).await?;
+            let (rx, mut tx) = Self::open_channel(addr).await.map_err(|e| {
+                OrchestratorError::ConnectionFailed {
+                    addr: addr.to_string(),
+                    source: e,
+                }
+            })?;
             tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
             log::info!("worker at {addr} ready");
             channels.push((rx, tx));
@@ -232,7 +245,7 @@ impl Session {
         Ok(channels)
     }
 
-    async fn open_channel(addr: SocketAddr) -> io::Result<(NetRx, NetTx)> {
+    async fn open_channel(addr: SocketAddr) -> std::io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
         Ok(comms::channel(rx, tx))
@@ -245,4 +258,3 @@ fn is_eof(e: &std::io::Error) -> bool {
         std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionReset
     ) || e.to_string().contains("early eof")
 }
-
