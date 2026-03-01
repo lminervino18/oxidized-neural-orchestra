@@ -3,6 +3,7 @@ mod optimization;
 mod service;
 mod storage;
 mod synchronization;
+mod test;
 
 use std::{env, io};
 
@@ -28,13 +29,14 @@ async fn main() -> io::Result<()> {
     info!("listening at {addr}");
 
     let (stream, addr) = list.accept().await?;
-    info!("orchestrator connected from {addr}");
-
     let (rx, tx) = stream.into_split();
     let (mut rx, mut tx) = comms::channel(rx, tx);
+    info!("orchestrator connected from {addr}");
+
+    let mut buf = vec![0; 1028];
 
     let spec = loop {
-        match rx.recv().await {
+        match rx.recv_into(&mut buf).await {
             Ok(Msg::Control(Command::CreateServer(spec))) => break spec,
             Ok(msg) => warn!("expected CreateServer, got {msg:?}"),
             Err(e) => warn!("io error {e}"),

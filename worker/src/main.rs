@@ -1,75 +1,72 @@
 use std::{env, io};
 
-use env_logger::Env;
-use log::info;
-use tokio::{net::TcpListener, signal};
+use comms::{
+    msg::{Command, Msg},
+    specs::worker::AlgorithmSpec,
+};
+use log::{info, warn};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    signal,
+};
 
-use worker::{WorkerAcceptor, WorkerBuilder};
+use worker::{builder::WorkerBuilder, middleware::Middleware};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    init_logging();
+    env_logger::init();
 
-    let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
-    let port = env::var("PORT").map_err(|e| io::Error::other(e))?;
-    let listen_addr = format!("{host}:{port}");
+    let addr = format!(
+        "{}:{}",
+        env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
+        env::var("PORT").map_err(|e| io::Error::other(e))?,
+    );
 
-    let (mut orch_rx, orch_tx) = accept_orchestrator_channel(&listen_addr).await?;
+    let list = TcpListener::bind(&addr).await?;
+    info!("listening at {addr}");
 
-    let Some(spec) = WorkerAcceptor::bootstrap(&mut orch_rx).await? else {
-        info!("disconnected before bootstrap");
-        return Ok(());
+    let (stream, addr) = list.accept().await?;
+    let (rx, tx) = stream.into_split();
+    let (mut rx, tx) = comms::channel(rx, tx);
+    info!("orchestrator connected from {addr}");
+
+    let mut rx_buf = vec![0; 1028];
+    let spec = loop {
+        match rx.recv_into(&mut rx_buf).await {
+            Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
+            Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
+            Err(e) => warn!("io error {e}"),
+        }
     };
 
-    info!("worker bootstrapped: worker_id={}", spec.worker_id);
+    let AlgorithmSpec::ParameterServer {
+        server_addrs,
+        server_sizes,
+        server_ordering,
+    } = spec.algorithm.clone();
 
-    let worker = WorkerBuilder::build(spec);
+    let worker_builder = WorkerBuilder::new();
+    let worker = worker_builder.build(spec, &server_sizes);
+    let mut middleware = Middleware::new(server_ordering);
+
+    for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
+        let stream = TcpStream::connect(addr).await?;
+        let (rx, tx) = stream.into_split();
+        let (rx, tx) = comms::channel(rx, tx);
+        middleware.spawn(rx, tx, size);
+    }
 
     tokio::select! {
-        ret = worker.run(orch_rx, orch_tx) => {
-            ret.map_err(io::Error::from)?;
-            info!("worker finished");
+        ret = worker.run(rx, tx, middleware) => {
+            ret?;
+            info!("wrapping up, disconnecting...");
         }
         _ = signal::ctrl_c() => {
-            info!("received shutdown signal");
+            info!("received SIGTERM");
         }
     }
 
     Ok(())
-}
-
-/// Accepts an orchestrator connection and returns the communication channel.
-///
-/// # Args
-/// * `listen_addr` - Address to bind and accept the orchestrator connection.
-///
-/// # Returns
-/// A receiver/sender pair for orchestrator messages.
-///
-/// # Errors
-/// Returns an `io::Error` if binding or accept fails.
-async fn accept_orchestrator_channel(
-    listen_addr: &str,
-) -> io::Result<(
-    comms::OnoReceiver<tokio::net::tcp::OwnedReadHalf>,
-    comms::OnoSender<tokio::net::tcp::OwnedWriteHalf>,
-)> {
-    info!("listening for orchestrator at {listen_addr}");
-    let listener = TcpListener::bind(listen_addr).await?;
-
-    let (stream, peer) = listener.accept().await?;
-    info!("orchestrator connected from {peer}");
-
-    let (rx, tx) = stream.into_split();
-    let (rx, tx) = comms::channel(rx, tx);
-
-    Ok((rx, tx))
-}
-
-fn init_logging() {
-    env_logger::Builder::from_env(Env::default())
-        .format_timestamp_millis()
-        .init();
 }

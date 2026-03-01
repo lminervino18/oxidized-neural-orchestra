@@ -1,4 +1,4 @@
-use comms::{Deserialize, Serialize};
+use comms::{Align1, Deserialize, Serialize};
 use tokio::io;
 
 struct MyStr<'a>(&'a str);
@@ -10,8 +10,9 @@ impl<'a> Serialize<'a> for MyStr<'_> {
 }
 
 impl<'a> Deserialize<'a> for MyStr<'a> {
-    fn deserialize(buf: &'a mut [u8]) -> io::Result<Self> {
-        Ok(Self(str::from_utf8(buf).unwrap()))
+    fn deserialize<B: Align1>(buf: &'a mut [B]) -> io::Result<Self> {
+        let bytes = bytemuck::cast_slice_mut(buf);
+        Ok(Self(str::from_utf8(bytes).unwrap()))
     }
 }
 
@@ -39,7 +40,8 @@ async fn send_recv() {
     let (rx, tx) = io::split(two);
     let (mut rx, _) = comms::channel(rx, tx);
 
-    let s: MyStr = rx.recv().await.unwrap();
+    let mut buf = vec![0; SIZE];
+    let s: MyStr = rx.recv_into(&mut buf).await.unwrap();
 
     assert_eq!(msg.0, s.0);
 }

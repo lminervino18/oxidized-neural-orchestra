@@ -1,222 +1,89 @@
-use std::num::NonZeroUsize;
+use std::{borrow::Cow, io};
 
 use comms::{
     OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
-    specs::worker::AlgorithmSpec,
+    msg::{Command, Msg},
 };
 use log::{debug, info, warn};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::TcpStream,
-};
+use machine_learning::training::{TrainResult, Trainer};
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::error::WorkerError;
-use machine_learning::training::Trainer;
+use crate::middleware::Middleware;
 
-/// Infrastructure worker runtime.
+/// The middleman between the parameter server and the model trainer.
 pub struct Worker {
-    worker_id: usize,
-    max_epochs: NonZeroUsize,
-    algorithm: AlgorithmSpec,
     trainer: Box<dyn Trainer>,
 }
 
 impl Worker {
-    /// Worker runtime that maps weights snapshots into gradient updates.
+    /// Creates a new `Worker`.
     ///
     /// # Args
-    /// * `worker_id` - Identifier used for observability.
-    /// * `max_iters` - The maximum amount of iterations to run.
-    /// * `algorithm` - Distributed algorithm selection for this worker.
     /// * `trainer` - Domain strategy used to compute gradients from weights.
     ///
     /// # Returns
-    /// A new worker instance.
-    pub fn new(
-        worker_id: usize,
-        max_iters: NonZeroUsize,
-        algorithm: AlgorithmSpec,
-        trainer: Box<dyn Trainer>,
-    ) -> Self {
-        Self {
-            worker_id,
-            max_epochs: max_iters,
-            algorithm,
-            trainer,
-        }
+    /// A new `Worker` instance.
+    pub fn new(trainer: Box<dyn Trainer>) -> Self {
+        Self { trainer }
     }
 
     /// Runs the worker using its configured distributed algorithm while keeping a live
     /// bidirectional channel to the orchestrator.
     ///
     /// # Args
-    /// * `orch_rx` - Receiving end of the orchestrator channel.
-    /// * `orch_tx` - Sending end of the orchestrator channel.
+    /// * `rx` - The receiving end of the communication between the worker and the orchestrator.
+    /// * `tx` - The sending end of the communication between the worker and the orchestrator.
+    /// * `middleware` - The communication manager between this worker and the parameter servers.
     ///
     /// # Returns
-    /// Returns `Ok(())` on graceful completion.
-    ///
-    /// # Errors
-    /// Returns `WorkerError` on I/O failures or protocol violations.
+    /// An io error if occurred.
     pub async fn run<R, W>(
         self,
-        orch_rx: OnoReceiver<R>,
-        orch_tx: OnoSender<W>,
-    ) -> Result<(), WorkerError>
+        mut rx: OnoReceiver<R>,
+        mut tx: OnoSender<W>,
+        mut middleware: Middleware<R, W>,
+    ) -> io::Result<()>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
     {
-        match self.algorithm {
-            AlgorithmSpec::ParameterServer { ref server_addr } => {
-                info!(
-                    "connecting to parameter server: worker_id={} server_addr={}",
-                    self.worker_id, server_addr
-                );
-
-                let ps_stream = TcpStream::connect(server_addr).await?;
-                let (ps_rx, ps_tx) = ps_stream.into_split();
-                let (ps_rx, ps_tx) = comms::channel(ps_rx, ps_tx);
-
-                self.run_parameter_server(ps_rx, ps_tx, orch_rx, orch_tx)
-                    .await
-            }
-        }
-    }
-
-    /// Runs the parameter-server protocol loop while listening to the orchestrator control plane.
-    ///
-    /// # Args
-    /// * `ps_rx` - Receiving end of the parameter-server channel.
-    /// * `ps_tx` - Sending end of the parameter-server channel.
-    /// * `orch_rx` - Receiving end of the orchestrator channel.
-    /// * `orch_tx` - Sending end of the orchestrator channel.
-    ///
-    /// # Errors
-    /// Returns `WorkerError` on I/O failures or protocol invariant violations.
-    pub async fn run_parameter_server<Rps, Wps, Rorch, Worch>(
-        self,
-        mut ps_rx: OnoReceiver<Rps>,
-        mut ps_tx: OnoSender<Wps>,
-        mut orch_rx: OnoReceiver<Rorch>,
-        mut orch_tx: OnoSender<Worch>,
-    ) -> Result<(), WorkerError>
-    where
-        Rps: AsyncRead + Unpin + Send,
-        Wps: AsyncWrite + Unpin + Send,
-        Rorch: AsyncRead + Unpin + Send,
-        Worch: AsyncWrite + Unpin + Send,
-    {
-        let worker_id = self.worker_id;
         let mut trainer = self.trainer;
-        let mut epoch = 0;
+        let mut rx_buf = vec![0; 1028];
+        let mut should_continue = true;
 
-        while epoch < self.max_epochs.get() {
-            debug!("waiting for message");
-
+        while should_continue {
             tokio::select! {
-                ps_msg = ps_rx.recv::<Msg>() => {
-                    let msg = ps_msg?;
-                    if handle_server_message(
-                        worker_id,
-                        &mut epoch,
-                        &mut trainer,
-                        &mut ps_tx,
-                        &mut orch_tx,
-                        msg,
-                    ).await? {
+                ret = middleware.pull_params() => {
+                    debug!("received parameters from all servers, training...");
+
+                    let mut param_manager = ret?;
+
+                    // TODO: Handlear esto mejor, capaz podemos mandarle mensajes a todos los servidores
+                    //       para que reintenten de enviar el ultimo mensaje o algo asi (todavia no se
+                    //       si tiene sentido tampoco que les avisemos, despues de todo ellos mandaron
+                    //       mal el mensaje)
+                    let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
+                    middleware.push_grads().await?;
+
+                    should_continue = !was_last;
+                    let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
+                    tx.send(&msg).await?;
+                }
+                ret = rx.recv_into(&mut rx_buf) => match ret? {
+                    Msg::Control(Command::Disconnect) => {
+                        info!("received a Command::Disconnect from the orchestrator");
                         break;
                     }
-                }
-
-                orch_msg = orch_rx.recv::<Msg>() => {
-                    let msg = orch_msg?;
-                    if handle_orchestrator_message(worker_id, epoch, msg) {
-                        break;
+                    other => {
+                        warn!("unexpected message from orchestrator, got: {other:?}");
                     }
                 }
             }
         }
 
-        info!("worker finished");
+        middleware.disconnect().await?;
         let msg = Msg::Control(Command::Disconnect);
-        orch_tx.send(&msg).await?;
-        ps_tx.send(&msg).await?;
-
-        while !matches!(ps_rx.recv().await?, Msg::Control(Command::Disconnect)) {}
-
+        tx.send(&msg).await?;
         Ok(())
-    }
-}
-
-async fn handle_server_message<Wps, Worch>(
-    worker_id: usize,
-    epoch: &mut usize,
-    trainer: &mut Box<dyn Trainer>,
-    ps_tx: &mut OnoSender<Wps>,
-    _orch_tx: &mut OnoSender<Worch>,
-    msg: Msg<'_>,
-) -> Result<bool, WorkerError>
-where
-    Wps: AsyncWrite + Unpin + Send,
-    Worch: AsyncWrite + Unpin + Send,
-{
-    match msg {
-        Msg::Data(Payload::Params(params)) => {
-            debug!("received new parameters: epoch={epoch}");
-
-            let (grad, losses) = trainer.train(params);
-            *epoch += losses.len();
-
-            let msg = Msg::Data(Payload::Grad(grad));
-            ps_tx.send(&msg).await?;
-
-            // msg = Msg::Control(Command::ReportLoss { worker_id, losses });
-            // orch_tx.send(&msg).await?;
-
-            Ok(false)
-        }
-
-        other => {
-            warn!(
-                "unexpected message from parameter server: worker_id={} epoch={} got={}",
-                worker_id,
-                epoch,
-                msg_kind(&other)
-            );
-
-            Err(WorkerError::UnexpectedMessage {
-                epoch: *epoch,
-                got: msg_kind(&other),
-            })
-        }
-    }
-}
-
-fn handle_orchestrator_message(worker_id: usize, epoch: usize, msg: Msg<'_>) -> bool {
-    match msg {
-        Msg::Control(Command::Disconnect) => {
-            info!("disconnect received from orchestrator: worker_id={worker_id} epoch={epoch}");
-            true
-        }
-        other => {
-            warn!(
-                "unexpected message from orchestrator: worker_id={} epoch={} got={}",
-                worker_id,
-                epoch,
-                msg_kind(&other),
-            );
-            false
-        }
-    }
-}
-
-fn msg_kind(msg: &Msg<'_>) -> &'static str {
-    match msg {
-        Msg::Control(_) => "control",
-        Msg::Err(_) => "err",
-        Msg::Data(Payload::Grad(_)) => "data/gradient",
-        Msg::Data(Payload::Params(_)) => "data/weights",
     }
 }
