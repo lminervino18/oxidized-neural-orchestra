@@ -82,7 +82,10 @@ impl Session {
                         loop {
                             match wrx.recv().await {
                                 Ok(Msg::Control(Command::ReportLoss { losses, .. })) => {
-                                    log::debug!("worker {i} reported {} losses", losses.len());
+                                    log::debug!(
+                                        "worker {i} reported {} losses",
+                                        losses.len()
+                                    );
                                     let _ = tx
                                         .send(TrainingEvent::Loss {
                                             worker_id: i,
@@ -112,7 +115,9 @@ impl Session {
                                 Err(e) => {
                                     log::error!("worker {i} error: {e}");
                                     let _ = tx
-                                        .send(TrainingEvent::Error(format!("worker {i}: {e}")))
+                                        .send(TrainingEvent::Error(format!(
+                                            "worker {i}: {e}"
+                                        )))
                                         .await;
                                     return;
                                 }
@@ -148,17 +153,50 @@ impl Session {
         rx
     }
 
-    /// Original blocking wait — unchanged from before.
+    /// Blocks until training completes and returns the final model parameters.
+    ///
+    /// Listens to all workers concurrently then reads the final parameters
+    /// from the server. Consumes the session.
+    ///
+    /// # Errors
+    /// Returns an error if any worker fails or the server does not send parameters.
     pub fn wait(self) -> io::Result<Vec<f32>> {
         self.runtime.block_on(async move {
-            for (mut rx, _) in self.workers {
-                while !matches!(rx.recv().await?, Msg::Control(Command::Disconnect)) {}
+            // Drain all workers concurrently — each task discards non-Disconnect
+            // messages and resolves when its worker sends Disconnect or closes.
+            let handles: Vec<_> = self
+                .workers
+                .into_iter()
+                .enumerate()
+                .map(|(i, (mut rx, _))| {
+                    tokio::spawn(async move {
+                        log::debug!("wait: listening to worker {i}");
+                        loop {
+                            match rx.recv().await? {
+                                Msg::Control(Command::Disconnect) => {
+                                    log::info!("wait: worker {i} done");
+                                    return Ok::<_, io::Error>(());
+                                }
+                                _ => {}
+                            }
+                        }
+                    })
+                })
+                .collect();
+
+            for h in handles {
+                h.await.map_err(|e| io::Error::other(e))??;
             }
 
+            // All workers done — read final params from server.
             let (mut rx, _) = self.server;
+            log::debug!("wait: reading final params from server");
 
             match rx.recv().await? {
-                Msg::Data(Payload::Params(params)) => Ok(params.to_vec()),
+                Msg::Data(Payload::Params(params)) => {
+                    log::info!("wait: received {} parameters", params.len());
+                    Ok(params.to_vec())
+                }
                 msg => Err(io::Error::other(format!(
                     "received an invalid message: {msg:?}"
                 ))),
@@ -207,3 +245,4 @@ fn is_eof(e: &std::io::Error) -> bool {
         std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionReset
     ) || e.to_string().contains("early eof")
 }
+
