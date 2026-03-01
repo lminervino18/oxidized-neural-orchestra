@@ -19,13 +19,12 @@ use crate::ui::theme::Theme;
 
 use super::Action;
 
-// One color per worker, cycling if more than palette size.
 const WORKER_COLORS: &[Color] = &[
-    Color::Rgb(57, 255, 20), // neon green
-    Color::Rgb(0, 255, 255), // cyan
-    Color::Rgb(255, 0, 255), // magenta
-    Color::Rgb(255, 255, 0), // yellow
-    Color::Rgb(255, 130, 0), // orange
+    Color::Rgb(57, 255, 20),
+    Color::Rgb(0, 255, 255),
+    Color::Rgb(255, 0, 255),
+    Color::Rgb(255, 255, 0),
+    Color::Rgb(255, 130, 0),
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +33,12 @@ enum Phase {
     Training,
     Finished,
     Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfirmQuit {
+    Hidden,
+    Visible,
 }
 
 #[derive(Debug, Clone)]
@@ -45,22 +50,20 @@ struct WorkerState {
 }
 
 pub struct TrainingState {
-    // Config kept for display
     workers_total: usize,
     optimizer_label: String,
     max_epochs: usize,
-
-    // Live state
     phase: Phase,
     started_at: Instant,
     workers: Vec<WorkerState>,
-    // Per-worker loss history as (epoch, loss) for the Chart widget
     loss_series: Vec<Vec<(f64, f64)>>,
     logs: Vec<(LogLevel, String)>,
     final_params: Option<Vec<f32>>,
     error: Option<String>,
-
     events: mpsc::Receiver<TrainingEvent>,
+    confirm_quit: ConfirmQuit,
+    /// Index of the worker currently shown in the per-worker chart.
+    selected_worker: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -80,11 +83,9 @@ impl TrainingState {
 
         let max_epochs = training.max_epochs.get();
 
-        // Start the session — connects and spawns listeners.
         let mut session = match orchestrator::train(model, training) {
             Ok(s) => s,
             Err(e) => {
-                // Can't connect: build a dead state with error.
                 return Self::dead(workers_total, optimizer_label, max_epochs, e.to_string());
             }
         };
@@ -102,7 +103,7 @@ impl TrainingState {
 
         let loss_series = vec![Vec::new(); workers_total];
 
-        let state = Self {
+        Self {
             workers_total,
             optimizer_label,
             max_epochs,
@@ -117,9 +118,9 @@ impl TrainingState {
             final_params: None,
             error: None,
             events,
-        };
-
-        state
+            confirm_quit: ConfirmQuit::Hidden,
+            selected_worker: 0,
+        }
     }
 
     fn dead(workers_total: usize, optimizer_label: String, max_epochs: usize, err: String) -> Self {
@@ -136,10 +137,11 @@ impl TrainingState {
             final_params: None,
             error: Some(err),
             events: rx,
+            confirm_quit: ConfirmQuit::Hidden,
+            selected_worker: 0,
         }
     }
 
-    /// Drains pending events and updates state. Called every frame.
     pub fn tick(&mut self) {
         while let Ok(event) = self.events.try_recv() {
             self.apply(event);
@@ -210,13 +212,84 @@ impl TrainingState {
     fn workers_done(&self) -> usize {
         self.workers.iter().filter(|w| w.done).count()
     }
+
+    fn is_active(&self) -> bool {
+        matches!(self.phase, Phase::Connecting | Phase::Training)
+    }
+
+    /// Builds the average loss series across all workers.
+    fn avg_loss_series(&self) -> Vec<(f64, f64)> {
+        let max_len = self.loss_series.iter().map(|s| s.len()).max().unwrap_or(0);
+        if max_len == 0 {
+            return Vec::new();
+        }
+
+        (0..max_len)
+            .filter_map(|i| {
+                let values: Vec<f64> = self
+                    .loss_series
+                    .iter()
+                    .filter_map(|s| s.get(i).map(|(_, y)| *y))
+                    .collect();
+
+                if values.is_empty() {
+                    return None;
+                }
+
+                let epoch = self
+                    .loss_series
+                    .iter()
+                    .find_map(|s| s.get(i).map(|(x, _)| *x))
+                    .unwrap_or(i as f64 + 1.0);
+
+                Some((epoch, values.iter().sum::<f64>() / values.len() as f64))
+            })
+            .collect()
+    }
+
+    fn next_worker(&mut self) {
+        if self.workers_total > 0 {
+            self.selected_worker = (self.selected_worker + 1) % self.workers_total;
+        }
+    }
+
+    fn prev_worker(&mut self) {
+        if self.workers_total > 0 {
+            self.selected_worker =
+                (self.selected_worker + self.workers_total - 1) % self.workers_total;
+        }
+    }
 }
 
 pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
-    match key {
-        KeyCode::Char('q') | KeyCode::Esc
-            if state.phase == Phase::Finished || state.phase == Phase::Error =>
-        {
+    match (key, state.confirm_quit, state.is_active()) {
+        // Navigate workers with arrows (always available)
+        (KeyCode::Left, ConfirmQuit::Hidden, _) => {
+            state.prev_worker();
+            Action::None
+        }
+        (KeyCode::Right, ConfirmQuit::Hidden, _) => {
+            state.next_worker();
+            Action::None
+        }
+        // During training: q/esc opens confirmation
+        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, true) => {
+            state.confirm_quit = ConfirmQuit::Visible;
+            Action::None
+        }
+        // Confirmation: y confirms exit
+        (KeyCode::Char('y') | KeyCode::Char('Y'), ConfirmQuit::Visible, _) => {
+            Action::Transition(super::Screen::Menu(
+                crate::ui::screens::menu::MenuState::new(),
+            ))
+        }
+        // Confirmation: n or esc cancels
+        (KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc, ConfirmQuit::Visible, _) => {
+            state.confirm_quit = ConfirmQuit::Hidden;
+            Action::None
+        }
+        // Finished or error: q/esc goes back to menu
+        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => {
             Action::Transition(super::Screen::Menu(
                 crate::ui::screens::menu::MenuState::new(),
             ))
@@ -234,9 +307,9 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // header
-            Constraint::Min(10),   // body
-            Constraint::Length(8), // log
+            Constraint::Length(3),
+            Constraint::Min(10),
+            Constraint::Length(8),
         ])
         .split(area);
 
@@ -244,21 +317,15 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     let body = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(65), // chart
-            Constraint::Percentage(35), // right panel
-        ])
+        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
         .split(rows[1]);
 
-    draw_chart(f, body[0], state);
+    draw_charts(f, body[0], state);
 
     let right = Layout::default()
         .direction(Direction::Vertical)
         .constraints(if state.final_params.is_some() {
-            vec![
-                Constraint::Min(4),    // workers table
-                Constraint::Length(5), // params panel
-            ]
+            vec![Constraint::Min(4), Constraint::Length(5)]
         } else {
             vec![Constraint::Min(4)]
         })
@@ -271,51 +338,32 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     }
 
     draw_log(f, rows[2], state);
+
+    if state.confirm_quit == ConfirmQuit::Visible {
+        draw_confirm_quit(f, area);
+    }
 }
 
-fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let phase_span = match state.phase {
-        Phase::Connecting => Span::styled("CONNECTING", Theme::accent_cyan()),
-        Phase::Training => Span::styled("TRAINING", Theme::ok()),
-        Phase::Finished => Span::styled("FINISHED", Theme::accent_magenta()),
-        Phase::Error => Span::styled("ERROR", Theme::error()),
-    };
+fn draw_charts(f: &mut Frame, area: Rect, state: &TrainingState) {
+    let halves = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
+        .split(area);
 
-    let workers_done = state.workers_done();
-
-    let line = Line::from(vec![
-        Span::styled(" ONO  ", Theme::title().add_modifier(Modifier::BOLD)),
-        Span::styled("│  ", Theme::muted()),
-        phase_span,
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(format!("elapsed {}", state.elapsed_str()), Theme::dim()),
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(
-            format!("workers {}/{}", workers_done, state.workers_total),
-            Theme::dim(),
-        ),
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(format!("optimizer {}", state.optimizer_label), Theme::dim()),
-    ]);
-
-    f.render_widget(
-        Paragraph::new(line).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Theme::border()),
-        ),
-        area,
-    );
+    draw_avg_chart(f, halves[0], state);
+    draw_selected_worker_chart(f, halves[1], state);
 }
 
-fn draw_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
+fn draw_avg_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border())
-        .title(" Loss ")
+        .title(" Average Loss — all workers ")
         .title_style(Theme::title());
 
-    if state.loss_series.iter().all(|s| s.is_empty()) {
+    let avg = state.avg_loss_series();
+
+    if avg.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled("waiting for data...", Theme::muted()))
                 .block(block)
@@ -325,36 +373,17 @@ fn draw_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
         return;
     }
 
-    // Compute axis bounds
-    let max_epoch = state
-        .loss_series
-        .iter()
-        .flat_map(|s| s.iter().map(|(x, _)| *x))
-        .fold(1.0_f64, f64::max);
+    let max_epoch = avg.iter().map(|(x, _)| *x).fold(1.0_f64, f64::max);
+    let max_loss = avg.iter().map(|(_, y)| *y).fold(0.01_f64, f64::max);
 
-    let max_loss = state
-        .loss_series
-        .iter()
-        .flat_map(|s| s.iter().map(|(_, y)| *y))
-        .fold(0.01_f64, f64::max);
+    let dataset = Dataset::default()
+        .name("avg")
+        .marker(symbols::Marker::Braille)
+        .graph_type(GraphType::Line)
+        .style(Style::default().fg(Color::White))
+        .data(&avg);
 
-    let datasets: Vec<Dataset> = state
-        .loss_series
-        .iter()
-        .enumerate()
-        .filter(|(_, s)| !s.is_empty())
-        .map(|(i, series)| {
-            let color = WORKER_COLORS[i % WORKER_COLORS.len()];
-            Dataset::default()
-                .name(format!("w{i}"))
-                .marker(symbols::Marker::Braille)
-                .graph_type(GraphType::Line)
-                .style(Style::default().fg(color))
-                .data(series)
-        })
-        .collect();
-
-    let chart = Chart::new(datasets)
+    let chart = Chart::new(vec![dataset])
         .block(block)
         .x_axis(
             Axis::default()
@@ -380,6 +409,166 @@ fn draw_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
     f.render_widget(chart, area);
 }
 
+fn draw_selected_worker_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
+    let worker_id = state.selected_worker;
+    let color = WORKER_COLORS[worker_id % WORKER_COLORS.len()];
+
+    let title = format!(
+        " Worker {} — Loss  [←/→ to switch] ",
+        worker_id
+    );
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(color))
+        .title(title)
+        .title_style(Style::default().fg(color).add_modifier(Modifier::BOLD));
+
+    let series = match state.loss_series.get(worker_id) {
+        Some(s) => s,
+        None => {
+            f.render_widget(
+                Paragraph::new(Span::styled("no data", Theme::muted()))
+                    .block(block)
+                    .alignment(Alignment::Center),
+                area,
+            );
+            return;
+        }
+    };
+
+    if series.is_empty() {
+        f.render_widget(
+            Paragraph::new(Span::styled("waiting for data...", Theme::muted()))
+                .block(block)
+                .alignment(Alignment::Center),
+            area,
+        );
+        return;
+    }
+
+    let max_epoch = series.iter().map(|(x, _)| *x).fold(1.0_f64, f64::max);
+    let max_loss = series.iter().map(|(_, y)| *y).fold(0.01_f64, f64::max);
+
+    let dataset = Dataset::default()
+        .name(format!("w{worker_id}"))
+        .marker(symbols::Marker::Braille)
+        .graph_type(GraphType::Line)
+        .style(Style::default().fg(color))
+        .data(series);
+
+    let chart = Chart::new(vec![dataset])
+        .block(block)
+        .x_axis(
+            Axis::default()
+                .title("epoch")
+                .style(Theme::dim())
+                .bounds([0.0, max_epoch])
+                .labels(vec![
+                    Span::styled("0", Theme::muted()),
+                    Span::styled(format!("{}", max_epoch as usize), Theme::muted()),
+                ]),
+        )
+        .y_axis(
+            Axis::default()
+                .title("loss")
+                .style(Theme::dim())
+                .bounds([0.0, max_loss * 1.1])
+                .labels(vec![
+                    Span::styled("0", Theme::muted()),
+                    Span::styled(format!("{max_loss:.2}"), Theme::muted()),
+                ]),
+        );
+
+    f.render_widget(chart, area);
+}
+
+fn draw_confirm_quit(f: &mut Frame, area: Rect) {
+    let popup = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(45),
+            Constraint::Length(5),
+            Constraint::Percentage(55),
+        ])
+        .split(area)[1];
+
+    let popup = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(35),
+            Constraint::Length(36),
+            Constraint::Percentage(35),
+        ])
+        .split(popup)[1];
+
+    let text = vec![
+        Line::from(Span::styled("Training is still running.", Theme::warn())),
+        Line::from(Span::raw("")),
+        Line::from(vec![
+            Span::styled("[y]", Theme::ok()),
+            Span::styled(" back to menu    ", Theme::text()),
+            Span::styled("[n]", Theme::error()),
+            Span::styled(" keep training", Theme::text()),
+        ]),
+    ];
+
+    f.render_widget(
+        Paragraph::new(text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Theme::warn())
+                    .title(" Leave? ")
+                    .title_style(Theme::warn().add_modifier(Modifier::BOLD)),
+            )
+            .alignment(Alignment::Center),
+        popup,
+    );
+}
+
+fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
+    let phase_span = match state.phase {
+        Phase::Connecting => Span::styled("CONNECTING", Theme::accent_cyan()),
+        Phase::Training => Span::styled("TRAINING", Theme::ok()),
+        Phase::Finished => Span::styled("FINISHED", Theme::accent_magenta()),
+        Phase::Error => Span::styled("ERROR", Theme::error()),
+    };
+
+    let hint = if state.is_active() {
+        Span::styled("  [q] leave  [←/→] worker", Theme::muted())
+    } else {
+        Span::styled("  [q] menu  [←/→] worker", Theme::muted())
+    };
+
+    let workers_done = state.workers_done();
+
+    let line = Line::from(vec![
+        Span::styled(" ONO  ", Theme::title().add_modifier(Modifier::BOLD)),
+        Span::styled("│  ", Theme::muted()),
+        phase_span,
+        Span::styled("  │  ", Theme::muted()),
+        Span::styled(format!("elapsed {}", state.elapsed_str()), Theme::dim()),
+        Span::styled("  │  ", Theme::muted()),
+        Span::styled(
+            format!("workers {}/{}", workers_done, state.workers_total),
+            Theme::dim(),
+        ),
+        Span::styled("  │  ", Theme::muted()),
+        Span::styled(format!("optimizer {}", state.optimizer_label), Theme::dim()),
+        hint,
+    ]);
+
+    f.render_widget(
+        Paragraph::new(line).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Theme::border()),
+        ),
+        area,
+    );
+}
+
 fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
     let header = Row::new(vec![
         Cell::from("id").style(Theme::title()),
@@ -392,10 +581,19 @@ fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
         .workers
         .iter()
         .map(|w| {
+            let is_selected = w.id == state.selected_worker;
+
             let status_cell = if w.done {
                 Cell::from("done").style(Theme::muted())
             } else {
                 Cell::from("active").style(Theme::ok())
+            };
+
+            let id_style = if is_selected {
+                let color = WORKER_COLORS[w.id % WORKER_COLORS.len()];
+                Style::default().fg(color).add_modifier(Modifier::BOLD)
+            } else {
+                Theme::text()
             };
 
             let loss_str = w
@@ -404,8 +602,9 @@ fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
                 .unwrap_or_else(|| "—".into());
 
             Row::new(vec![
-                Cell::from(format!("{}", w.id)).style(Theme::text()),
-                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs)).style(Theme::text()),
+                Cell::from(format!("{}", w.id)).style(id_style),
+                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs))
+                    .style(Theme::text()),
                 Cell::from(loss_str).style(Theme::text()),
                 status_cell,
             ])

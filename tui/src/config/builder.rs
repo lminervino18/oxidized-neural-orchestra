@@ -29,7 +29,7 @@ fn build_model(d: &ModelDraft) -> Result<ModelConfig, String> {
         .layers
         .iter()
         .enumerate()
-        .map(|(i, l)| {
+        .map(|(_i, l)| {
             let init = match l.init {
                 InitKind::Const => ParamGenConfig::Const {
                     value: l.init_value,
