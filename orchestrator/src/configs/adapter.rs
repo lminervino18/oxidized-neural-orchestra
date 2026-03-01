@@ -56,7 +56,8 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
-    /// TODO: add arguments
+    /// * `server_sizes` - The amounts of parameters per server.
+    /// * `server_ordering` - The ordering of the layer owners.
     ///
     /// # Returns
     /// The worker's specification or an io error if occurred.
@@ -64,11 +65,12 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-        sizes: Vec<usize>,
-        ordering: Vec<usize>,
+        server_sizes: Vec<usize>,
+        serveer_ordering: Vec<usize>,
     ) -> io::Result<Vec<(SocketAddr, WorkerSpec)>> {
-        let algorithm = self.adapt_algorithm(&training.algorithm, sizes, ordering)?;
         let trainer = self.adapt_trainer(model, training)?;
+        let algorithm =
+            self.adapt_algorithm(&training.algorithm, server_sizes, serveer_ordering)?;
 
         let workers = training
             .worker_addrs
@@ -180,7 +182,8 @@ impl Adapter {
     ///
     /// # Args
     /// * `algorithm` - The algorithm's configuration.
-    /// TODO: add arguments
+    /// * `server_sizes` - The amount of parameters per server.
+    /// * `server_ordering` - The ordering of the layer owners.
     ///
     /// # Returns
     /// The algorithm's specification or an io error if occurred.

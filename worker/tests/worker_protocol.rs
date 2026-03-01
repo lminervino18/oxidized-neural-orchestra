@@ -63,7 +63,7 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut optimizer = GradientDescent::new(0.1);
+    let mut optimizer = GradientDescent::new(1.0);
     let mut params = vec![0.5; nparams];
     let mut rx_buf = vec![0; 128];
 
