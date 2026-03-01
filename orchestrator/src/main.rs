@@ -17,7 +17,7 @@ fn main() {
             server_addrs: vec!["server-0:40000"],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
             store: StoreConfig::Blocking {
-                shard_size: NonZeroUsize::new(1).unwrap(),
+                shard_size: NonZeroUsize::new(2).unwrap(),
             },
         },
         dataset: DatasetConfig::Inline {

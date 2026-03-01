@@ -101,7 +101,9 @@ impl Model for Sequential {
                     expected: nlayers,
                 })?;
 
+                println!("pre-back grad: {grad:?}");
                 d = layer.backward(params, grad, d)?;
+                println!("post-back grad: {grad:?}");
             }
 
             param_manager.optimize(optimizers)?;
