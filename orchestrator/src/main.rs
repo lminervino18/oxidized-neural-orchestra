@@ -3,6 +3,8 @@ use std::num::NonZeroUsize;
 use orchestrator::{configs::*, train};
 
 fn main() {
+    env_logger::init();
+
     let model_config = ModelConfig::Sequential {
         layers: vec![LayerConfig::Dense {
             dim: (1, 1),
@@ -20,7 +22,6 @@ fn main() {
                 shard_size: NonZeroUsize::new(1).expect("1 is non-zero"),
             },
         },
-        
         dataset: DatasetConfig::Inline {
             data: vec![
                 1.0, 2.0,
@@ -39,11 +40,19 @@ fn main() {
         seed: Some(42),
     };
 
+    log::info!("starting distributed training session");
+
     match train(model_config, training_config) {
-        Err(e) => eprintln!("failed to start session: {e}"),
-        Ok(session) => match session.wait() {
-            Ok(params) => println!("trained params: {params:?}"),
-            Err(e) => eprintln!("training failed: {e}"),
-        },
+        Err(e) => log::error!("failed to start session: {e}"),
+        Ok(session) => {
+            log::info!("session started, waiting for completion");
+            match session.wait() {
+                Ok(params) => {
+                    log::info!("training complete");
+                    println!("trained params: {params:?}");
+                }
+                Err(e) => log::error!("training failed: {e}"),
+            }
+        }
     }
 }

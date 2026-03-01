@@ -18,7 +18,13 @@ pub fn train<A: ToSocketAddrs>(
     model: ModelConfig,
     training: TrainingConfig<A>,
 ) -> io::Result<Session> {
+    log::info!("adapting configs");
     let adapter = Adapter::new();
     let (workers, servers) = adapter.adapt_configs(model, training)?;
+    log::info!(
+        "connecting to {} worker(s) and {} server(s)",
+        workers.len(),
+        servers.len()
+    );
     Session::new(workers, servers)
 }

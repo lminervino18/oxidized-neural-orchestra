@@ -44,9 +44,15 @@ impl Session {
         workers: Vec<(SocketAddr, WorkerSpec)>,
         servers: Vec<(SocketAddr, ServerSpec)>,
     ) -> io::Result<Self> {
-        let runtime = Runtime::new()?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+
+        log::debug!("connecting to servers");
         let mut server_chans = runtime.block_on(Self::create_servers(servers))?;
+        log::debug!("connecting to workers");
         let worker_chans = runtime.block_on(Self::create_workers(workers))?;
+        log::info!("all connections established");
 
         Ok(Self {
             runtime,
@@ -60,70 +66,94 @@ impl Session {
     ///
     /// Consumes the session — cannot call `wait()` after this.
     pub fn take_events(self) -> mpsc::Receiver<TrainingEvent> {
-    let (tx, rx) = mpsc::channel(256);
+        let (tx, rx) = mpsc::channel(256);
 
-    std::thread::spawn(move || {
-        let (server_rx, _server_tx) = self.server; // keep _server_tx alive
-        
-        self.runtime.block_on(async move {
-            let mut handles = Vec::new();
+        thread::spawn(move || {
+            let (server_rx, _server_tx) = self.server;
 
-            for (i, (mut wrx, _wtx)) in self.workers.into_iter().enumerate() {
-                let tx = tx.clone();
-                handles.push(tokio::spawn(async move {
-                    let _wtx = _wtx; // keep alive
-                    loop {
-                        match wrx.recv().await {
-                            Ok(Msg::Control(Command::ReportLoss { losses, .. })) => {
-                                let _ = tx.send(TrainingEvent::Loss { worker_id: i, losses }).await;
-                            }
-                            Ok(Msg::Control(Command::Disconnect)) => {
-                                let _ = tx.send(TrainingEvent::WorkerDone(i)).await;
-                                return;
-                            }
-                            Ok(msg) => {
-                                let _ = tx.send(TrainingEvent::Error(format!(
-                                    "worker {i}: unexpected {msg:?}"
-                                ))).await;
-                                return;
-                            }
-                            Err(e) if is_eof(&e) => {
-                                let _ = tx.send(TrainingEvent::WorkerDone(i)).await;
-                                return;
-                            }
-                            Err(e) => {
-                                let _ = tx.send(TrainingEvent::Error(format!(
-                                    "worker {i}: {e}"
-                                ))).await;
-                                return;
+            self.runtime.block_on(async move {
+                let mut handles = Vec::new();
+
+                for (i, (mut wrx, _wtx)) in self.workers.into_iter().enumerate() {
+                    let tx = tx.clone();
+                    handles.push(tokio::spawn(async move {
+                        let _wtx = _wtx;
+                        log::debug!("listening to worker {i}");
+                        loop {
+                            match wrx.recv().await {
+                                Ok(Msg::Control(Command::ReportLoss { losses, .. })) => {
+                                    log::debug!(
+                                        "worker {i} reported {} losses",
+                                        losses.len()
+                                    );
+                                    let _ = tx
+                                        .send(TrainingEvent::Loss {
+                                            worker_id: i,
+                                            losses,
+                                        })
+                                        .await;
+                                }
+                                Ok(Msg::Control(Command::Disconnect)) => {
+                                    log::info!("worker {i} disconnected");
+                                    let _ = tx.send(TrainingEvent::WorkerDone(i)).await;
+                                    return;
+                                }
+                                Ok(msg) => {
+                                    log::warn!("worker {i}: unexpected message {msg:?}");
+                                    let _ = tx
+                                        .send(TrainingEvent::Error(format!(
+                                            "worker {i}: unexpected {msg:?}"
+                                        )))
+                                        .await;
+                                    return;
+                                }
+                                Err(e) if is_eof(&e) => {
+                                    log::info!("worker {i} closed connection");
+                                    let _ = tx.send(TrainingEvent::WorkerDone(i)).await;
+                                    return;
+                                }
+                                Err(e) => {
+                                    log::error!("worker {i} error: {e}");
+                                    let _ = tx
+                                        .send(TrainingEvent::Error(format!(
+                                            "worker {i}: {e}"
+                                        )))
+                                        .await;
+                                    return;
+                                }
                             }
                         }
-                    }
-                }));
-            }
-
-            for h in handles {
-                let _ = h.await;
-            }
-
-            let mut srx = server_rx;
-            let event = match srx.recv().await {
-                Ok(Msg::Data(Payload::Params(params))) => {
-                    TrainingEvent::Complete(params.to_vec())
+                    }));
                 }
-                Ok(msg) => TrainingEvent::Error(format!("server: unexpected {msg:?}")),
-                Err(e) => TrainingEvent::Error(format!("server: {e}")),
-            };
-            let _ = tx.send(event).await;
-        });
-    });
 
-    rx
-}
+                for h in handles {
+                    let _ = h.await;
+                }
+
+                log::debug!("all workers done, reading final params from server");
+                let mut srx = server_rx;
+                let event = match srx.recv().await {
+                    Ok(Msg::Data(Payload::Params(params))) => {
+                        log::info!("received {} final parameters", params.len());
+                        TrainingEvent::Complete(params.to_vec())
+                    }
+                    Ok(msg) => {
+                        log::error!("server: unexpected message {msg:?}");
+                        TrainingEvent::Error(format!("server: unexpected {msg:?}"))
+                    }
+                    Err(e) => {
+                        log::error!("server error: {e}");
+                        TrainingEvent::Error(format!("server: {e}"))
+                    }
+                };
+                let _ = tx.send(event).await;
+            });
+        });
+
+        rx
+    }
 
     /// Original blocking wait — unchanged from before.
-    ///
-    /// Blocks until training completes and returns the final model parameters.
     pub fn wait(self) -> io::Result<Vec<f32>> {
         self.runtime.block_on(async move {
             for (mut rx, _) in self.workers {
@@ -146,8 +176,10 @@ impl Session {
     ) -> io::Result<Vec<(NetRx, NetTx)>> {
         let mut channels = Vec::with_capacity(servers.len());
         for (addr, spec) in servers {
+            log::debug!("connecting to server at {addr}");
             let (rx, mut tx) = Self::open_channel(addr).await?;
             tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
+            log::info!("server at {addr} ready");
             channels.push((rx, tx));
         }
         Ok(channels)
@@ -158,8 +190,10 @@ impl Session {
     ) -> io::Result<Vec<(NetRx, NetTx)>> {
         let mut channels = Vec::with_capacity(workers.len());
         for (addr, spec) in workers {
+            log::debug!("connecting to worker at {addr}");
             let (rx, mut tx) = Self::open_channel(addr).await?;
             tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+            log::info!("worker at {addr} ready");
             channels.push((rx, tx));
         }
         Ok(channels)
