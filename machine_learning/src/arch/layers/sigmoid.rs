@@ -6,14 +6,18 @@ use crate::Result;
 #[derive(Clone, Debug, Default)]
 pub struct Sigmoid {
     amp: f32,
+
+    // Forward metadata
     activations: Array2<f32>,
-    delta: Array2<f32>, // TODO: ver si se puede sacar este buffer e ir pasando &mut Array2 para
-                        // poder usar mapv_inplace y devolver esa ref
+
+    delta: Array2<f32>, // TODO: sacar este buffer e ir pasando &mut Array2 para
+                        // poder usar mapv_inplace y devolver esa ref u otra solución
 }
 
 impl Sigmoid {
     pub fn new(amp: f32) -> Self {
         let zeros = Array2::zeros((1, 1));
+
         Self {
             amp,
             activations: zeros.clone(),

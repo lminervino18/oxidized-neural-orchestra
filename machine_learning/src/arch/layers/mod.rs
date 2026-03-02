@@ -1,5 +1,6 @@
 mod dense;
 mod layer;
+mod sigmoid;
 
 use std::mem;
 
@@ -7,6 +8,7 @@ use ndarray::Array2;
 
 pub(super) use dense::Dense;
 pub use layer::Layer;
+pub use sigmoid::Sigmoid;
 
 /// A trait whose sole purpose is to give the ndarray::ArrayX
 /// types a way to resize their inner memory regions inplace.

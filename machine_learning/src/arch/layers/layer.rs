@@ -1,12 +1,13 @@
 use ndarray::prelude::*;
 
-use super::Dense;
+use super::{Dense, Sigmoid};
 use crate::{Result, arch::activations::ActFn};
 
 /// A type of model layer.
 #[derive(Clone)]
 pub enum Layer {
     Dense(Dense),
+    Sigmoid(Sigmoid),
 }
 use Layer::*;
 
@@ -23,6 +24,10 @@ impl Layer {
         Self::Dense(Dense::new(dim))
     }
 
+    pub fn sigmoid(amp: f32) -> Self {
+        Self::Sigmoid(Sigmoid::new(amp))
+    }
+
     /// The size of the layer.
     ///
     /// # Returns
@@ -30,6 +35,7 @@ impl Layer {
     pub fn size(&self) -> usize {
         match self {
             Dense(layer) => layer.size(),
+            Sigmoid(layer) => layer.size(),
         }
     }
 
@@ -48,6 +54,7 @@ impl Layer {
     ) -> Result<ArrayView2<'a, f32>> {
         match self {
             Dense(layer) => layer.forward(params, x),
+            Sigmoid(layer) => layer.forward(x),
         }
     }
 
@@ -69,6 +76,7 @@ impl Layer {
     ) -> Result<ArrayViewMut2<'a, f32>> {
         match self {
             Dense(layer) => layer.backward(params, grad, d),
+            Sigmoid(layer) => layer.backward(d),
         }
     }
 }
