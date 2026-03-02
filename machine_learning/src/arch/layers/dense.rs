@@ -21,22 +21,6 @@ pub struct Dense {
     delta: Array2<f32>,
 }
 
-trait MultiplyInplace {
-    fn multiply_into(&mut self, matrix: ArrayView2<f32>, other: ArrayView2<f32>);
-}
-
-impl MultiplyInplace for Array2<f32> {
-    fn multiply_into(&mut self, matrix: ArrayView2<f32>, other: ArrayView2<f32>) {
-        linalg::general_mat_mul(1.0, &matrix, &other, 0.0, self);
-    }
-}
-
-impl MultiplyInplace for ArrayViewMut2<'_, f32> {
-    fn multiply_into(&mut self, matrix: ArrayView2<f32>, other: ArrayView2<f32>) {
-        linalg::general_mat_mul(1.0, &matrix, &other, 0.0, self);
-    }
-}
-
 impl Dense {
     pub fn new(dim: (usize, usize)) -> Self {
         let zeros = Array2::zeros((1, 1));
@@ -60,7 +44,7 @@ impl Dense {
 
         self.w_sums.reshape_inplace(shape);
 
-        self.w_sums.multiply_into(x, w);
+        linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.w_sums);
         self.w_sums += &b;
 
         // TODO: See if this `to_owned` call can be removed.
