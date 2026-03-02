@@ -1,4 +1,4 @@
-use std::io;
+use std::{borrow::Cow, io};
 
 use comms::{
     OnoReceiver, OnoSender,
@@ -66,7 +66,7 @@ impl Worker {
                     middleware.push_grads().await?;
 
                     should_continue = !was_last;
-                    let msg = Msg::Control(Command::ReportLoss { losses });
+                    let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
                     tx.send(&msg).await?;
                 }
                 ret = rx.recv_into(&mut rx_buf) => match ret? {

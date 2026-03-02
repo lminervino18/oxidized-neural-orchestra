@@ -22,9 +22,5 @@ pub fn train<A: ToSocketAddrs>(
 ) -> io::Result<Session> {
     let adapter = Adapter::new();
     let (workers, servers) = adapter.adapt_configs(model, training)?;
-
-    println!("workers: {workers:#?}");
-    println!("servers: {servers:#?}");
-
     Session::new(workers, servers)
 }

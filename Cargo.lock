@@ -901,6 +901,7 @@ dependencies = [
  "futures",
  "log",
  "machine_learning",
+ "rand",
  "tokio",
 ]
 

@@ -1,7 +1,32 @@
 use rayon::prelude::*;
 
-use super::ServerParamsMetadata;
 use crate::{MlErr, Result, optimization::Optimizer};
+
+/// The state necessary to make forward and backward passes through the network.
+pub struct ServerParamsMetadata<'mw> {
+    params: &'mw mut [f32],
+    grad: &'mw mut [f32],
+    acc_grad_buf: &'mw mut [f32],
+}
+
+impl<'mw> ServerParamsMetadata<'mw> {
+    /// Creates a new `ServerParamsMetadata`.
+    ///
+    /// # Arguments
+    /// * `params` - The mutable slice of this server's parameters.
+    /// * `grad` - The server's dedicated gradient slice.
+    /// * `acc_grad_buf` - The server's accumulated gradient buffer.
+    ///
+    /// # Returns
+    /// A new `ServerParamsMetadata` instance.
+    pub fn new(params: &'mw mut [f32], grad: &'mw mut [f32], acc_grad_buf: &'mw mut [f32]) -> Self {
+        Self {
+            params,
+            grad,
+            acc_grad_buf,
+        }
+    }
+}
 
 /// The manager of parameters, this middleware's module manages the model's parameter retrieval from the
 /// servers and selects which set of parameters to use for each layer of the model's trining when traversing
@@ -88,10 +113,16 @@ impl<'mw> ParamManager<'mw> {
 
     /// Zeroes out the gradients of every server.
     pub fn zero_grad(&mut self) {
+        self.servers
+            .par_iter_mut()
+            .for_each(|server| server.grad.fill(0.0));
+    }
+
+    /// Accumulates the current gradient onto the inner accumulated gradients buffer.
+    pub fn acc_grad(&mut self) {
         self.servers.par_iter_mut().for_each(|server| {
-            for (acc, g) in server.acc_grad_buf.iter_mut().zip(server.grad.iter_mut()) {
+            for (acc, g) in server.acc_grad_buf.iter_mut().zip(server.grad.iter()) {
                 *acc += *g;
-                *g = 0.0;
             }
         });
     }

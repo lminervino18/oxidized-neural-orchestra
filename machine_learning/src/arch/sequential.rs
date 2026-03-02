@@ -1,7 +1,7 @@
 use ndarray::ArrayView2;
 
 use super::{Model, layers::Layer, loss::LossFn};
-use crate::{MlErr, Result, middleware::ParamManager, optimization::Optimizer};
+use crate::{MlErr, Result, optimization::Optimizer, param_manager::ParamManager};
 
 /// A sequential model: information flows forward when computing an output and backward when
 /// computing the *deltas* of its layers.
@@ -85,8 +85,6 @@ impl Model for Sequential {
         let mut num_batches = 0;
 
         for (x, y) in batches {
-            param_manager.zero_grad();
-
             let y_pred = self.forward(param_manager, x)?;
             total_loss += loss_fn.loss(y_pred, y);
             num_batches += 1;
@@ -107,6 +105,8 @@ impl Model for Sequential {
             }
 
             param_manager.optimize(optimizers)?;
+            param_manager.acc_grad();
+            param_manager.zero_grad();
         }
 
         Ok(total_loss / num_batches as f32)

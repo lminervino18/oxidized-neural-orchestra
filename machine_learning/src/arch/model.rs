@@ -1,4 +1,4 @@
-use crate::{Result, arch::loss::LossFn, middleware::ParamManager, optimization::Optimizer};
+use crate::{Result, arch::loss::LossFn, optimization::Optimizer, param_manager::ParamManager};
 use ndarray::ArrayView2;
 
 pub trait Model {

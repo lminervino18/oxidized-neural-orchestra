@@ -1,8 +1,8 @@
 pub mod arch;
 pub mod dataset;
 pub mod error;
-pub mod middleware;
 pub mod optimization;
+pub mod param_manager;
 mod test;
 pub mod training;
 
