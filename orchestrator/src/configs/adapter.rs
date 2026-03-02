@@ -19,13 +19,26 @@ use crate::{
     error::OrchestratorError,
 };
 
+/// Converts orchestrator configs into wire-level specs ready to be sent to workers and servers.
 pub struct Adapter;
 
 impl Adapter {
+    /// Creates a new `Adapter` instance.
     pub fn new() -> Self {
         Self
     }
 
+    /// Validates and adapts model and training configs into worker and server specs.
+    ///
+    /// # Args
+    /// * `model` - The model architecture configuration.
+    /// * `training` - The training configuration.
+    ///
+    /// # Returns
+    /// A pair of worker spec lists and server spec lists with their resolved addresses.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if validation fails or any address cannot be resolved.
     pub fn adapt_configs<A: ToSocketAddrs>(
         &self,
         model: ModelConfig,
@@ -44,6 +57,11 @@ impl Adapter {
     // Validation
     // -------------------------------------------------------------------------
 
+    /// Validates the model configuration.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if the model has no layers or adjacent
+    /// layers have incompatible dimensions.
     fn validate_model(&self, model: &ModelConfig) -> Result<(), OrchestratorError> {
         match model {
             ModelConfig::Sequential { layers } => {
@@ -73,6 +91,11 @@ impl Adapter {
         Ok(())
     }
 
+    /// Validates the training configuration.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if worker or server address lists are empty,
+    /// the barrier size is invalid, or the dataset is inconsistent with the batch size.
     fn validate_training<A: ToSocketAddrs>(
         &self,
         training: &TrainingConfig<A>,
@@ -158,6 +181,10 @@ impl Adapter {
     // Adaptation
     // -------------------------------------------------------------------------
 
+    /// Adapts worker addresses and model/training configs into `WorkerSpec`s.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if any address cannot be resolved.
     fn adapt_workers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
@@ -182,16 +209,21 @@ impl Adapter {
                         format!("worker[{i}]: could not resolve address")
                     ))?;
 
-                Ok((addr, WorkerSpec {
+                let spec = WorkerSpec {
                     worker_id: i,
                     max_epochs: training.max_epochs,
                     trainer: trainer.clone(),
                     algorithm,
-                }))
+                };
+                Ok((addr, spec))
             })
             .collect()
     }
 
+    /// Adapts server addresses and model/training configs into `ServerSpec`s.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if any address cannot be resolved.
     fn adapt_servers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
@@ -220,7 +252,7 @@ impl Adapter {
                         format!("server[{i}]: could not resolve address")
                     ))?;
 
-                Ok((addr, ServerSpec {
+                let spec = ServerSpec {
                     id: i,
                     nworkers: training.worker_addrs.len(),
                     param_gen: param_gen.clone(),
@@ -228,11 +260,16 @@ impl Adapter {
                     synchronizer: self.adapt_synchronizer(synchronizer),
                     store: self.adapt_store(store),
                     seed: training.seed,
-                }))
+                };
+                Ok((addr, spec))
             })
             .collect()
     }
 
+    /// Resolves the primary server address for the algorithm spec.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if the address cannot be resolved.
     fn adapt_algorithm<A: ToSocketAddrs>(
         &self,
         algorithm: &AlgorithmConfig<A>,
@@ -255,6 +292,7 @@ impl Adapter {
         }
     }
 
+    /// Converts a `SynchronizerConfig` into a `SynchronizerSpec`.
     fn adapt_synchronizer(&self, synchronizer: &SynchronizerConfig) -> SynchronizerSpec {
         match *synchronizer {
             SynchronizerConfig::Barrier { barrier_size } => {
@@ -264,6 +302,7 @@ impl Adapter {
         }
     }
 
+    /// Converts a `StoreConfig` into a `StoreSpec`.
     fn adapt_store(&self, store: &StoreConfig) -> StoreSpec {
         match *store {
             StoreConfig::Blocking { shard_size } => StoreSpec::Blocking { shard_size },
@@ -271,6 +310,10 @@ impl Adapter {
         }
     }
 
+    /// Builds a `TrainerSpec` from the model and training configs.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if the dataset config is invalid.
     fn adapt_trainer<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
@@ -281,7 +324,7 @@ impl Adapter {
         let dataset = self.adapt_dataset(&training.dataset)?;
         let loss_fn = self.adapt_loss_fn(training.loss_fn);
 
-        Ok(TrainerSpec {
+        let trainer = TrainerSpec {
             model: model_spec,
             optimizer,
             dataset,
@@ -289,15 +332,21 @@ impl Adapter {
             offline_epochs: training.offline_epochs,
             batch_size: training.batch_size,
             seed: training.seed,
-        })
+        };
+        Ok(trainer)
     }
 
+    /// Converts a `LossFnConfig` into a `LossFnSpec`.
     fn adapt_loss_fn(&self, loss_fn: LossFnConfig) -> LossFnSpec {
         match loss_fn {
             LossFnConfig::Mse => LossFnSpec::Mse,
         }
     }
 
+    /// Converts a `DatasetConfig` into a `DatasetSpec`.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if the dataset variant is not yet supported.
     fn adapt_dataset(&self, dataset: &DatasetConfig) -> Result<DatasetSpec, OrchestratorError> {
         match dataset {
             DatasetConfig::Local { path } => Err(OrchestratorError::InvalidConfig(format!(
@@ -312,6 +361,7 @@ impl Adapter {
         }
     }
 
+    /// Converts an `OptimizerConfig` into an `OptimizerSpec`.
     fn adapt_optimizer(&self, optimizer: OptimizerConfig) -> OptimizerSpec {
         match optimizer {
             OptimizerConfig::Adam { lr, b1, b2, eps } => OptimizerSpec::Adam {
@@ -332,6 +382,7 @@ impl Adapter {
         }
     }
 
+    /// Converts a `ModelConfig` into a `ModelSpec` and its associated `ParamGenSpec`.
     fn adapt_model_param_gen(&self, model: &ModelConfig) -> (ModelSpec, ParamGenSpec) {
         match model {
             ModelConfig::Sequential { layers } => {
@@ -346,6 +397,11 @@ impl Adapter {
         }
     }
 
+    /// Converts a `ParamGenConfig` into a `ParamGenSpec` given the layer dimensions.
+    ///
+    /// # Args
+    /// * `param_gen` - The parameter generator configuration.
+    /// * `(fan_in, limit, fan_out)` - Layer sizing info used by distribution-based generators.
     fn adapt_param_gen(
         &self,
         param_gen: ParamGenConfig,
@@ -388,9 +444,14 @@ impl Adapter {
         }
     }
 
+    /// Converts a `LayerConfig` into a `LayerSpec` and its associated `ParamGenSpec`.
     fn adapt_layer(&self, layer: &LayerConfig) -> (LayerSpec, ParamGenSpec) {
         match *layer {
-            LayerConfig::Dense { dim: (n, m), init, act_fn } => {
+            LayerConfig::Dense {
+                dim: (n, m),
+                init,
+                act_fn,
+            } => {
                 let act_fn = self.adapt_act_fn(act_fn.as_ref());
                 (
                     LayerSpec::Dense { dim: (n, m), act_fn },
@@ -400,10 +461,11 @@ impl Adapter {
         }
     }
 
+    /// Converts an optional `ActFnConfig` reference into an optional `ActFnSpec`.
     fn adapt_act_fn(&self, act_fn: Option<&ActFnConfig>) -> Option<ActFnSpec> {
-        match *act_fn? {
+        let act_fn = act_fn?;
+        match *act_fn {
             ActFnConfig::Sigmoid { amp } => Some(ActFnSpec::Sigmoid { amp }),
         }
     }
 }
-

@@ -14,8 +14,16 @@ use crate::configs::{ModelConfig, TrainingConfig};
 
 /// Starts the distributed training process and returns an active session.
 ///
+/// # Args
+/// * `model` - The model architecture configuration.
+/// * `training` - The training configuration, including worker and server addresses.
+///
+/// # Returns
+/// A new ongoing session.
+///
 /// # Errors
-/// Returns an `OrchestratorError` if connecting to any worker or server fails.
+/// Returns an `OrchestratorError` if config validation fails or connecting to
+/// any worker or server fails.
 pub fn train<A: ToSocketAddrs>(
     model: ModelConfig,
     training: TrainingConfig<A>,

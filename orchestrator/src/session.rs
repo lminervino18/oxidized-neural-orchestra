@@ -41,6 +41,17 @@ pub struct Session {
 }
 
 impl Session {
+    /// Creates a new session by connecting to all workers and servers.
+    ///
+    /// # Args
+    /// * `workers` - List of (address, spec) pairs for each worker.
+    /// * `servers` - List of (address, spec) pairs for each parameter server.
+    ///
+    /// # Returns
+    /// A ready session with all connections established.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if any connection or bootstrap message fails.
     pub fn new(
         workers: Vec<(SocketAddr, WorkerSpec)>,
         servers: Vec<(SocketAddr, ServerSpec)>,
@@ -62,8 +73,13 @@ impl Session {
         })
     }
 
-    /// Takes an event receiver, spawning a background thread that drives
-    /// the session and forwards events through the channel.
+    /// Consumes the session and returns a channel receiver of training events.
+    ///
+    /// Spawns a background thread that drives the session, listening to all
+    /// workers and the parameter server, and forwards events through the channel.
+    ///
+    /// # Returns
+    /// A receiver that yields `TrainingEvent`s as training progresses.
     pub fn take_events(self) -> mpsc::Receiver<TrainingEvent> {
         let (tx, rx) = mpsc::channel(256);
 
@@ -157,7 +173,13 @@ impl Session {
         rx
     }
 
-    /// Blocks until training completes and returns the final model parameters.
+    /// Blocks until all workers finish and returns the final model parameters.
+    ///
+    /// # Returns
+    /// The final parameter vector received from the parameter server.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if any worker or the server reports a failure.
     pub fn wait(self) -> Result<Vec<f32>, OrchestratorError> {
         self.runtime.block_on(async move {
             let handles: Vec<_> = self
@@ -207,6 +229,16 @@ impl Session {
         })
     }
 
+    /// Connects to all parameter servers and sends each its bootstrap spec.
+    ///
+    /// # Args
+    /// * `servers` - List of (address, spec) pairs for each parameter server.
+    ///
+    /// # Returns
+    /// A list of open (receiver, sender) channel pairs, one per server.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if any connection or send fails.
     async fn create_servers(
         servers: Vec<(SocketAddr, ServerSpec)>,
     ) -> Result<Vec<(NetRx, NetTx)>, OrchestratorError> {
@@ -226,6 +258,16 @@ impl Session {
         Ok(channels)
     }
 
+    /// Connects to all workers and sends each its bootstrap spec.
+    ///
+    /// # Args
+    /// * `workers` - List of (address, spec) pairs for each worker.
+    ///
+    /// # Returns
+    /// A list of open (receiver, sender) channel pairs, one per worker.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if any connection or send fails.
     async fn create_workers(
         workers: Vec<(SocketAddr, WorkerSpec)>,
     ) -> Result<Vec<(NetRx, NetTx)>, OrchestratorError> {
@@ -245,6 +287,16 @@ impl Session {
         Ok(channels)
     }
 
+    /// Opens a raw TCP channel to the given address.
+    ///
+    /// # Args
+    /// * `addr` - The socket address to connect to.
+    ///
+    /// # Returns
+    /// A (receiver, sender) channel pair backed by the TCP stream.
+    ///
+    /// # Errors
+    /// Returns an `io::Error` if the TCP connection fails.
     async fn open_channel(addr: SocketAddr) -> std::io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
