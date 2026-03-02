@@ -324,37 +324,41 @@ impl TrainingState {
 ///
 /// # Returns
 /// An `Action` indicating what the application should do next.
-pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
+pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
     if state.startup_error.is_some() {
-        return Action::Transition(super::Screen::Menu(
+        return Some(Action::Transition(super::Screen::Menu(
             crate::ui::screens::menu::MenuState::new(),
-        ));
+        )));
     }
 
     match (key, state.confirm_quit, state.is_active()) {
         (KeyCode::Left, ConfirmQuit::Hidden, _) => {
             state.prev_worker();
-            Action::None
+            None
         }
         (KeyCode::Right, ConfirmQuit::Hidden, _) => {
             state.next_worker();
-            Action::None
+            None
         }
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, true) => {
             state.confirm_quit = ConfirmQuit::Visible;
-            Action::None
+            None
         }
-        (KeyCode::Char('y') | KeyCode::Char('Y'), ConfirmQuit::Visible, _) => Action::Transition(
-            super::Screen::Menu(crate::ui::screens::menu::MenuState::new()),
-        ),
+        (KeyCode::Char('y') | KeyCode::Char('Y'), ConfirmQuit::Visible, _) => {
+            Some(Action::Transition(super::Screen::Menu(
+                crate::ui::screens::menu::MenuState::new(),
+            )))
+        }
         (KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc, ConfirmQuit::Visible, _) => {
             state.confirm_quit = ConfirmQuit::Hidden;
-            Action::None
+            None
         }
-        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => Action::Transition(
-            super::Screen::Menu(crate::ui::screens::menu::MenuState::new()),
-        ),
-        _ => Action::None,
+        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => {
+            Some(Action::Transition(super::Screen::Menu(
+                crate::ui::screens::menu::MenuState::new(),
+            )))
+        }
+        _ => None,
     }
 }
 

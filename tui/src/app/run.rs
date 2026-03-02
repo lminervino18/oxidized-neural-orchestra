@@ -55,10 +55,11 @@ pub fn run() -> Result<()> {
                 if k.kind != KeyEventKind::Press {
                     continue;
                 }
-                match screen.handle_key(k.code) {
-                    Action::Quit => break,
-                    Action::Transition(next) => screen = next,
-                    Action::None => {}
+                if let Some(action) = screen.handle_key(k.code) {
+                    match action {
+                        Action::Quit => break,
+                        Action::Transition(next) => screen = next,
+                    }
                 }
             }
         }

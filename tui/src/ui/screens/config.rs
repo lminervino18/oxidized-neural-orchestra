@@ -35,7 +35,8 @@ const EXAMPLE_MODEL: &str = concat!(
     "init values: const, uniform, uniform_inclusive,\n",
     "  xavier_uniform, lecun_uniform, normal,\n",
     "  kaiming, xavier, lecun\n",
-    "act_fn values: sigmoid, null",
+    "act_fn values: sigmoid\n",
+    "  omit field or set to null to disable",
 );
 
 const EXAMPLE_TRAINING: &str = concat!(
@@ -66,7 +67,8 @@ enum Step {
     TrainingPath,
     ExampleModel,
     ExampleTraining,
-    /// Config loaded but invalid — show error and let user go back to fix JSONs.
+    /// JSON parsing failed — shows a full-screen error with the reason before
+    /// letting the user go back and fix their config files.
     InvalidConfig { reason: String },
 }
 
@@ -75,7 +77,6 @@ pub struct ConfigState {
     step: Step,
     model_path: String,
     training_path: String,
-    pub error: Option<String>,
 }
 
 impl ConfigState {
@@ -85,7 +86,6 @@ impl ConfigState {
             step: Step::ModelPath,
             model_path: String::new(),
             training_path: String::new(),
-            error: None,
         }
     }
 }
@@ -97,78 +97,76 @@ impl ConfigState {
 /// * `key` - The key that was pressed.
 ///
 /// # Returns
-/// An `Action` indicating what the application should do next.
-pub fn handle_key(state: &mut ConfigState, key: KeyCode) -> Action {
-    state.error = None;
-
+/// `Some(Action)` if the application state should change, `None` otherwise.
+pub fn handle_key(state: &mut ConfigState, key: KeyCode) -> Option<Action> {
     match state.step.clone() {
         Step::ModelPath => handle_model_path(state, key),
         Step::TrainingPath => handle_training_path(state, key),
         Step::ExampleModel | Step::ExampleTraining => {
             state.step = Step::ModelPath;
-            Action::None
+            None
         }
         Step::InvalidConfig { .. } => match key {
-            KeyCode::Char('q') | KeyCode::Esc => {
-                Action::Transition(Screen::Menu(crate::ui::screens::menu::MenuState::new()))
-            }
+            KeyCode::Char('q') | KeyCode::Esc => Some(Action::Transition(Screen::Menu(
+                crate::ui::screens::menu::MenuState::new(),
+            ))),
             _ => {
                 state.step = Step::ModelPath;
-                Action::None
+                None
             }
         },
     }
 }
 
-fn handle_model_path(state: &mut ConfigState, key: KeyCode) -> Action {
+fn handle_model_path(state: &mut ConfigState, key: KeyCode) -> Option<Action> {
     match key {
         KeyCode::Char('?') => {
             state.step = Step::ExampleModel;
-            Action::None
+            None
         }
         KeyCode::Char(c) => {
             state.model_path.push(c);
-            Action::None
+            None
         }
         KeyCode::Backspace => {
             state.model_path.pop();
-            Action::None
+            None
         }
         KeyCode::Enter => {
             state.step = Step::TrainingPath;
-            Action::None
+            None
         }
-        KeyCode::Esc => {
-            Action::Transition(Screen::Menu(crate::ui::screens::menu::MenuState::new()))
-        }
-        _ => Action::None,
+        KeyCode::Esc => Some(Action::Transition(Screen::Menu(
+            crate::ui::screens::menu::MenuState::new(),
+        ))),
+        _ => None,
     }
 }
 
-fn handle_training_path(state: &mut ConfigState, key: KeyCode) -> Action {
+fn handle_training_path(state: &mut ConfigState, key: KeyCode) -> Option<Action> {
     match key {
         KeyCode::Char('?') => {
             state.step = Step::ExampleTraining;
-            Action::None
+            None
         }
         KeyCode::Char(c) => {
             state.training_path.push(c);
-            Action::None
+            None
         }
         KeyCode::Backspace => {
             state.training_path.pop();
-            Action::None
+            None
         }
         KeyCode::Enter => try_load(state),
         KeyCode::Esc => {
             state.step = Step::ModelPath;
-            Action::None
+            None
         }
-        _ => Action::None,
+        _ => None,
     }
 }
 
-fn try_load(state: &mut ConfigState) -> Action {
+fn try_load(state: &mut ConfigState) -> Option<Action> {
     let model_path = if state.model_path.trim().is_empty() {
         DEFAULT_MODEL_PATH
     } else {
@@ -184,27 +182,30 @@ fn try_load(state: &mut ConfigState) -> Action {
     let model_json = match json::load_model(model_path) {
         Ok(d) => d,
         Err(e) => {
-            state.error = Some(format!("model.json: {e}"));
-            state.step = Step::ModelPath;
-            return Action::None;
+            state.step = Step::InvalidConfig {
+                reason: format!("model.json: {e}"),
+            };
+            return None;
         }
     };
 
     let training_json = match json::load_training(training_path) {
         Ok(d) => d,
         Err(e) => {
-            state.error = Some(format!("training.json: {e}"));
-            return Action::None;
+            state.step = Step::InvalidConfig {
+                reason: format!("training.json: {e}"),
+            };
+            return None;
         }
     };
 
-    Action::Transition(Screen::Training(
+    Some(Action::Transition(Screen::Training(
         crate::ui::screens::training::TrainingState::new(
             model_json.config,
             training_json.config,
             training_json.worker_count,
         ),
-    ))
+    )))
 }
 
 /// Draws the configuration screen.
@@ -240,10 +241,6 @@ pub fn draw(f: &mut Frame, state: &ConfigState) {
             draw_example(f, area, "training.json — example", EXAMPLE_TRAINING)
         }
         Step::InvalidConfig { reason } => draw_invalid_config(f, area, reason),
-    }
-
-    if let Some(err) = &state.error {
-        draw_error_bar(f, area, err);
     }
 }
 
@@ -411,22 +408,6 @@ fn draw_example(f: &mut Frame, area: Rect, title: &str, content: &str) {
     );
 
     render_hints(f, chunks[2], &[("any key", "back")]);
-}
-
-fn draw_error_bar(f: &mut Frame, area: Rect, msg: &str) {
-    let bar = Rect {
-        x: area.x + 1,
-        y: area.y + area.height - 1,
-        width: area.width.saturating_sub(2),
-        height: 1,
-    };
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(" ✖ ", Theme::error()),
-            Span::styled(msg, Theme::error()),
-        ])),
-        bar,
-    );
 }
 
 fn render_hints(f: &mut Frame, area: Rect, hints: &[(&str, &str)]) {

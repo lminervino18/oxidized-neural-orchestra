@@ -45,27 +45,29 @@ impl MenuState {
 ///
 /// # Returns
 /// An `Action` indicating what the application should do next.
-pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Action {
+pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Option<Action> {
     match key {
         KeyCode::Up | KeyCode::Char('k') => {
             if state.selected > 0 {
                 state.selected -= 1;
             }
-            Action::None
+            None
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if state.selected < MENU_ITEMS.len() - 1 {
                 state.selected += 1;
             }
-            Action::None
+            None
         }
         KeyCode::Enter => match state.selected {
-            0 => Action::Transition(Screen::Config(super::config::ConfigState::new())),
-            1 => Action::Quit,
-            _ => Action::None,
+            0 => Some(Action::Transition(Screen::Config(
+                super::config::ConfigState::new(),
+            ))),
+            1 => Some(Action::Quit),
+            _ => None,
         },
-        KeyCode::Char('q') => Action::Quit,
-        _ => Action::None,
+        KeyCode::Char('q') => Some(Action::Quit),
+        _ => None,
     }
 }
 

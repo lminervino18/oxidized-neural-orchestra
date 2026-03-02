@@ -281,7 +281,7 @@ fn parse_act_fn(l: &serde_json::Value, idx: usize) -> Result<Option<ActFnConfig>
     let ctx = |f: &str| format!("layer {idx}: {f}");
 
     match l["act_fn"].as_str() {
-        None | Some("null") => Ok(None),
+        None => Ok(None),
         Some("sigmoid") => {
             let amp = l["act_amp"]
                 .as_f64()

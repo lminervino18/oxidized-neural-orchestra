@@ -11,8 +11,6 @@ use training::TrainingState;
 
 /// An action produced by a screen in response to a key event.
 pub enum Action {
-    /// No state change required.
-    None,
     /// The application should exit.
     Quit,
     /// The application should transition to a new screen.
@@ -48,8 +46,8 @@ impl Screen {
     /// * `key` - The key that was pressed.
     ///
     /// # Returns
-    /// An `Action` indicating what the application should do next.
-    pub fn handle_key(&mut self, key: KeyCode) -> Action {
+    /// `Some(Action)` if the application state should change, `None` otherwise.
+    pub fn handle_key(&mut self, key: KeyCode) -> Option<Action> {
         match self {
             Screen::Menu(s) => menu::handle_key(s, key),
             Screen::Config(s) => config::handle_key(s, key),
