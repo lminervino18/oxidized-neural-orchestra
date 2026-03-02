@@ -1,10 +1,14 @@
-/// This trait represents the *learning rule* that is to be taken when updating the parameters of a model.
+use crate::Result;
+
+/// Defines the strategy for updating model parameters based on calculated gradients.
 pub trait Optimizer {
-    /// Updates the provided parameters using the provided gradient according to the optimizer's
-    /// learning rule.
+    /// Updates the provided slice of parameters using the accumulated gradients.
     ///
     /// # Arguments
-    /// * `params` - The parameters to be updated
-    /// * `grad` - The gradient used to update the parameters
-    fn update_params(&mut self, params: &mut [f32], grad: &[f32]);
+    /// * `grad` - A reference to the model's gradient.
+    /// * `params` - The parameters to update.
+    ///
+    /// # Returns
+    /// An error if there's a mismatch in the sizes of `grad` and `params`.
+    fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()>;
 }

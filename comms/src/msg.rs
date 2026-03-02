@@ -1,7 +1,7 @@
-use std::io;
+use std::{borrow::Cow, io};
 
 use crate::{
-    Deserialize, Serialize,
+    Align1, Deserialize, Serialize,
     specs::{server::ServerSpec, worker::WorkerSpec},
 };
 
@@ -18,17 +18,10 @@ pub enum Payload<'a> {
 /// The command for the `Control` variant of the `Msg` enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Command {
+pub enum Command<'a> {
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
-
-    /// Reports a sequence of losses computed by the worker over its partial dataset
-    /// after completing an epoch (i.e., one full pass over that partial dataset).
-    ReportLoss {
-        worker_id: usize,
-        losses: Vec<f32>,
-    },
-
+    ReportLoss { losses: Cow<'a, [f32]> },
     Disconnect,
 }
 
@@ -43,7 +36,7 @@ pub enum Detail {
 /// The application layer message for the entire system.
 #[derive(Debug)]
 pub enum Msg<'a> {
-    Control(Command),
+    Control(Command<'a>),
     Data(Payload<'a>),
     Err(Detail),
 }
@@ -100,28 +93,23 @@ impl<'a> Serialize<'a> for Msg<'a> {
 }
 
 impl<'a> Deserialize<'a> for Msg<'a> {
-    fn deserialize(buf: &'a mut [u8]) -> io::Result<Self> {
-        if buf.len() < HEADER_SIZE {
-            return Self::buf_is_too_small(buf.len());
+    fn deserialize<B: Align1>(buf: &'a mut [B]) -> io::Result<Self> {
+        let bytes = bytemuck::cast_slice_mut(buf);
+
+        if bytes.len() < HEADER_SIZE {
+            return Self::buf_is_too_small(bytes.len());
         }
 
-        let (kind_buf, rest) = buf.split_at_mut(HEADER_SIZE);
+        let (kind_buf, rest) = bytes.split_at_mut(HEADER_SIZE);
 
         // SAFETY: We splitted the buffer to be of size `HEADER_SIZE` just above.
         let kind = Header::from_be_bytes(kind_buf.try_into().unwrap()) as u8;
 
         match kind {
-            0 => {
-                let detail = serde_json::from_slice(rest)?;
-                Ok(Self::Err(detail))
-            }
-            1 => {
-                let cmd = serde_json::from_slice(rest)?;
-                Ok(Self::Control(cmd))
-            }
+            0 => Ok(Self::Err(serde_json::from_slice(rest)?)),
+            1 => Ok(Self::Control(serde_json::from_slice(rest)?)),
             2..4 => {
                 let nums = bytemuck::cast_slice_mut(rest);
-
                 let payload = match kind {
                     2 => Payload::Grad(nums),
                     3 => Payload::Params(nums),

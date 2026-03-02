@@ -84,31 +84,32 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
         let id = self.tasks.len() + 1;
         let handle = self.handle.clone();
         let synchronizer = self.synchronizer.clone();
+        let mut msg_buf = vec![0; 1028];
 
         let task = async move {
-            let params = handle.len();
-            let mut buf = vec![0.; params];
+            let nparams = handle.len();
+            let mut params = vec![0.; nparams];
 
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
-            handle.pull_params(&mut buf).await.unwrap();
+            handle.pull_params(&mut params).await.unwrap();
 
             debug!(worker_id = id; "sending parameters");
-            let msg = Msg::Data(Payload::Params(&mut buf));
+            let msg = Msg::Data(Payload::Params(&mut params));
             tx.send(&msg).await?;
 
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
-                match rx.recv().await? {
-                    Msg::Data(Payload::Grad(grad)) if params == grad.len() => {
+                match rx.recv_into(&mut msg_buf).await? {
+                    Msg::Data(Payload::Grad(grad)) if nparams == grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
 
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
-                        synchronizer.step(&handle, grad, &mut buf).await.unwrap();
+                        synchronizer.step(&handle, grad, &mut params).await.unwrap();
 
                         debug!(worker_id = id; "sending parameters");
-                        let msg = Msg::Data(Payload::Params(&mut buf));
+                        let msg = Msg::Data(Payload::Params(&mut params));
                         tx.send(&msg).await?;
                     }
                     Msg::Control(Command::Disconnect) => {
@@ -118,11 +119,12 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                         break;
                     }
                     Msg::Data(Payload::Grad(grad)) => {
-                        warn!(worker_id = id; "gradient size mismatch, expected {params}, got {}", grad.len());
+                        let ngrad = grad.len();
+                        warn!(worker_id = id; "gradient size mismatch, expected {nparams}, got {ngrad}");
 
                         let msg = Msg::Err(Detail::BufferSizeMismatch {
-                            expected: params,
-                            got: grad.len(),
+                            expected: nparams,
+                            got: ngrad,
                         });
 
                         tx.send(&msg).await?;

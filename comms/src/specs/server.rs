@@ -35,6 +35,16 @@ pub enum ParamGenSpec {
     },
 }
 
+impl ParamGenSpec {
+    pub fn size(&self) -> usize {
+        match self {
+            ParamGenSpec::Const { limit, .. } => *limit,
+            ParamGenSpec::Rand { limit, .. } => *limit,
+            ParamGenSpec::Chained { specs } => specs.iter().map(|spec| spec.size()).sum(),
+        }
+    }
+}
+
 /// The specification for the `Synchronizer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
