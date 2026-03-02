@@ -9,11 +9,17 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use crate::ui::screens::{menu, Screen};
+use crate::ui::screens::{menu::MenuState, Action, Screen};
 
+/// RAII guard that enables raw mode and the alternate screen on construction,
+/// and restores the terminal to its original state on drop.
 struct TerminalGuard;
 
 impl TerminalGuard {
+    /// Enters raw mode and switches to the alternate screen.
+    ///
+    /// # Errors
+    /// Returns an error if either terminal operation fails.
     fn enter() -> Result<Self> {
         enable_raw_mode()?;
         execute!(io::stdout(), EnterAlternateScreen)?;
@@ -39,7 +45,7 @@ pub fn run() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let mut screen = Screen::Menu(menu::MenuState::new());
+    let mut screen = Screen::Menu(MenuState::new());
 
     loop {
         terminal.draw(|f| screen.draw(f))?;
@@ -50,9 +56,9 @@ pub fn run() -> Result<()> {
                     continue;
                 }
                 match screen.handle_key(k.code) {
-                    crate::ui::screens::Action::Quit => break,
-                    crate::ui::screens::Action::Transition(next) => screen = next,
-                    crate::ui::screens::Action::None => {}
+                    Action::Quit => break,
+                    Action::Transition(next) => screen = next,
+                    Action::None => {}
                 }
             }
         }
