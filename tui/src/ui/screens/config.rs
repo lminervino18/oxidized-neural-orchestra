@@ -9,6 +9,7 @@ use ratatui::{
 
 use crate::config::json;
 use crate::ui::theme::Theme;
+use crate::ui::utils::centered_rect;
 
 use super::{Action, Screen};
 
@@ -461,24 +462,4 @@ fn render_hints(f: &mut Frame, area: Rect, hints: &[(&str, &str)]) {
         );
         f.render_widget(Paragraph::new(Span::styled(*action, Theme::dim())), cols[1]);
     }
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let vert = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(vert[1])[1]
 }

@@ -8,6 +8,7 @@ use ratatui::{
 };
 
 use crate::ui::theme::Theme;
+use crate::ui::utils::centered_rect;
 
 use super::{Action, Screen};
 
@@ -24,16 +25,26 @@ oxidized-neural-orchestra
 
 const MENU_ITEMS: &[&str] = &["Start Training", "Quit"];
 
+/// State for the main menu screen.
 pub struct MenuState {
     pub selected: usize,
 }
 
 impl MenuState {
+    /// Creates a new `MenuState` with the first item selected.
     pub fn new() -> Self {
         Self { selected: 0 }
     }
 }
 
+/// Handles a key event for the menu screen.
+///
+/// # Args
+/// * `state` - The current menu state.
+/// * `key` - The key that was pressed.
+///
+/// # Returns
+/// An `Action` indicating what the application should do next.
 pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Action {
     match key {
         KeyCode::Up | KeyCode::Char('k') => {
@@ -58,6 +69,11 @@ pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Action {
     }
 }
 
+/// Draws the main menu screen.
+///
+/// # Args
+/// * `f` - The ratatui frame to draw into.
+/// * `state` - The current menu state.
 pub fn draw(f: &mut Frame, state: &MenuState) {
     let area = f.size();
     f.render_widget(Block::default().style(Theme::base()), area);
@@ -139,24 +155,4 @@ fn draw_hint(f: &mut Frame, area: Rect) {
     .alignment(Alignment::Center);
 
     f.render_widget(hint, area);
-}
-
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let vert = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(vert[1])[1]
 }
