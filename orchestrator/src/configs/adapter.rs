@@ -1,6 +1,4 @@
-use std::{
-    net::{SocketAddr, ToSocketAddrs},
-};
+use std::net::{SocketAddr, ToSocketAddrs};
 
 use comms::specs::{
     machine_learning::{
@@ -16,7 +14,7 @@ use crate::{
         ActFnConfig, AlgorithmConfig, DatasetConfig, LayerConfig, LossFnConfig, OptimizerConfig,
         ParamGenConfig, StoreConfig, SynchronizerConfig,
     },
-    error::OrchestratorError,
+    error::{OrchestratorError, Result},
 };
 
 /// Converts orchestrator configs into wire-level specs ready to be sent to workers and servers.
@@ -43,8 +41,7 @@ impl Adapter {
         &self,
         model: ModelConfig,
         training: TrainingConfig<A>,
-    ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>), OrchestratorError>
-    {
+    ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
         self.validate_model(&model)?;
         self.validate_training(&training)?;
 
@@ -62,7 +59,7 @@ impl Adapter {
     /// # Errors
     /// Returns an `OrchestratorError` if the model has no layers or adjacent
     /// layers have incompatible dimensions.
-    fn validate_model(&self, model: &ModelConfig) -> Result<(), OrchestratorError> {
+    fn validate_model(&self, model: &ModelConfig) -> Result<()> {
         match model {
             ModelConfig::Sequential { layers } => {
                 if layers.is_empty() {
@@ -96,18 +93,13 @@ impl Adapter {
     /// # Errors
     /// Returns an `OrchestratorError` if worker or server address lists are empty,
     /// the barrier size is invalid, or the dataset is inconsistent with the batch size.
-    fn validate_training<A: ToSocketAddrs>(
-        &self,
-        training: &TrainingConfig<A>,
-    ) -> Result<(), OrchestratorError> {
-        // At least one worker
+    fn validate_training<A: ToSocketAddrs>(&self, training: &TrainingConfig<A>) -> Result<()> {
         if training.worker_addrs.is_empty() {
             return Err(OrchestratorError::InvalidConfig(
                 "at least one worker address is required".into(),
             ));
         }
 
-        // At least one server
         let AlgorithmConfig::ParameterServer {
             server_addrs,
             synchronizer,
@@ -120,7 +112,6 @@ impl Adapter {
             ));
         }
 
-        // barrier_size must not exceed number of workers
         if let SynchronizerConfig::Barrier { barrier_size } = synchronizer {
             if *barrier_size > training.worker_addrs.len() {
                 return Err(OrchestratorError::InvalidConfig(format!(
@@ -135,7 +126,6 @@ impl Adapter {
             }
         }
 
-        // Dataset must have at least one sample
         let dataset_samples = match &training.dataset {
             DatasetConfig::Inline { data, x_size, y_size } => {
                 let row_size = x_size + y_size;
@@ -166,7 +156,6 @@ impl Adapter {
             ));
         }
 
-        // batch_size must not exceed dataset size
         if training.batch_size.get() > dataset_samples {
             return Err(OrchestratorError::InvalidConfig(format!(
                 "batch_size ({}) exceeds dataset size ({dataset_samples} samples)",
@@ -189,7 +178,7 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> Result<Vec<(SocketAddr, WorkerSpec)>, OrchestratorError> {
+    ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
         let algorithm = self.adapt_algorithm(&training.algorithm)?;
         let trainer = self.adapt_trainer(model, training)?;
 
@@ -205,9 +194,11 @@ impl Adapter {
                         source: e,
                     })?
                     .next()
-                    .ok_or_else(|| OrchestratorError::InvalidConfig(
-                        format!("worker[{i}]: could not resolve address")
-                    ))?;
+                    .ok_or_else(|| {
+                        OrchestratorError::InvalidConfig(format!(
+                            "worker[{i}]: could not resolve address"
+                        ))
+                    })?;
 
                 let spec = WorkerSpec {
                     worker_id: i,
@@ -228,7 +219,7 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> Result<Vec<(SocketAddr, ServerSpec)>, OrchestratorError> {
+    ) -> Result<Vec<(SocketAddr, ServerSpec)>> {
         let AlgorithmConfig::ParameterServer {
             server_addrs,
             synchronizer,
@@ -248,9 +239,11 @@ impl Adapter {
                         source: e,
                     })?
                     .next()
-                    .ok_or_else(|| OrchestratorError::InvalidConfig(
-                        format!("server[{i}]: could not resolve address")
-                    ))?;
+                    .ok_or_else(|| {
+                        OrchestratorError::InvalidConfig(format!(
+                            "server[{i}]: could not resolve address"
+                        ))
+                    })?;
 
                 let spec = ServerSpec {
                     id: i,
@@ -273,19 +266,24 @@ impl Adapter {
     fn adapt_algorithm<A: ToSocketAddrs>(
         &self,
         algorithm: &AlgorithmConfig<A>,
-    ) -> Result<AlgorithmSpec, OrchestratorError> {
+    ) -> Result<AlgorithmSpec> {
         match algorithm {
             AlgorithmConfig::ParameterServer { server_addrs, .. } => {
                 let server_addr = server_addrs[0]
                     .to_socket_addrs()
                     .map_err(|e| OrchestratorError::ConnectionFailed {
-                        addr: "server[0]".into(),
+                        addr: server_addrs[0]
+                            .to_socket_addrs()
+                            .ok()
+                            .and_then(|mut it| it.next())
+                            .map(|a| a.to_string())
+                            .unwrap_or_else(|| "server[0]".into()),
                         source: e,
                     })?
                     .next()
-                    .ok_or_else(|| OrchestratorError::InvalidConfig(
-                        "no server addresses provided".into()
-                    ))?;
+                    .ok_or_else(|| {
+                        OrchestratorError::InvalidConfig("no server addresses provided".into())
+                    })?;
 
                 Ok(AlgorithmSpec::ParameterServer { server_addr })
             }
@@ -318,7 +316,7 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> Result<TrainerSpec, OrchestratorError> {
+    ) -> Result<TrainerSpec> {
         let (model_spec, _) = self.adapt_model_param_gen(model);
         let optimizer = self.adapt_optimizer(training.optimizer);
         let dataset = self.adapt_dataset(&training.dataset)?;
@@ -347,7 +345,7 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if the dataset variant is not yet supported.
-    fn adapt_dataset(&self, dataset: &DatasetConfig) -> Result<DatasetSpec, OrchestratorError> {
+    fn adapt_dataset(&self, dataset: &DatasetConfig) -> Result<DatasetSpec> {
         match dataset {
             DatasetConfig::Local { path } => Err(OrchestratorError::InvalidConfig(format!(
                 "local dataset loading not yet implemented: {}",
