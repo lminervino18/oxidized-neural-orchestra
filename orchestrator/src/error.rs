@@ -18,6 +18,10 @@ pub enum OrchestratorError {
     Io(std::io::Error),
 }
 
+/// Convenience alias to avoid repeating `OrchestratorError` as the error type
+/// throughout the module, mirroring the pattern used by `io::Result<T>`.
+pub type Result<T> = std::result::Result<T, OrchestratorError>;
+
 impl fmt::Display for OrchestratorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
