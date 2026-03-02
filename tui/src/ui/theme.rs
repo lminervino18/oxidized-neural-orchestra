@@ -6,6 +6,12 @@ use ratatui::style::{Color, Modifier, Style};
 /// All rendering code should use these methods rather than inline colors.
 pub struct Theme;
 
+impl Default for Theme {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl Theme {
     /// Near-black background color.
     pub const BG: Color = Color::Rgb(0, 0, 0);
