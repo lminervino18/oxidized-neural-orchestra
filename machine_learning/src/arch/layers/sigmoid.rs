@@ -9,9 +9,6 @@ pub struct Sigmoid {
 
     // Forward metadata
     activations: Array2<f32>,
-
-    delta: Array2<f32>, // TODO: sacar este buffer e ir pasando &mut Array2 para
-                        // poder usar mapv_inplace y devolver esa ref u otra solución
 }
 
 impl Sigmoid {
@@ -20,8 +17,7 @@ impl Sigmoid {
 
         Self {
             amp,
-            activations: zeros.clone(),
-            delta: zeros,
+            activations: zeros,
         }
     }
 
@@ -44,13 +40,16 @@ impl Sigmoid {
         Ok(self.activations.view())
     }
 
-    pub fn backward(&mut self, d: ArrayViewMut2<f32>) -> Result<ArrayViewMut2<'_, f32>> {
+    pub fn backward<'a>(
+        &mut self,
+        mut d: ArrayViewMut2<'a, f32>,
+    ) -> Result<ArrayViewMut2<'a, f32>> {
         let sigmoid_prime = |z| self.sigmoid_prime(z);
         let amp = self.amp;
 
-        self.delta = d.mapv(|z| amp * sigmoid_prime(z));
+        d.mapv_inplace(|z| amp * sigmoid_prime(z));
 
-        Ok(self.delta.view_mut())
+        Ok(d)
     }
 
     pub fn size(&self) -> usize {
