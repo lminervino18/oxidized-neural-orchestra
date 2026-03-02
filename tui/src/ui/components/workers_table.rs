@@ -48,8 +48,7 @@ pub fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
 
             Row::new(vec![
                 Cell::from(format!("{}", w.id)).style(id_style),
-                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs))
-                    .style(Theme::text()),
+                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs)).style(Theme::text()),
                 Cell::from(loss_str).style(Theme::text()),
                 status_cell,
             ])

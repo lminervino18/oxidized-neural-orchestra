@@ -69,7 +69,9 @@ enum Step {
     ExampleTraining,
     /// JSON parsing failed — shows a full-screen error with the reason before
     /// letting the user go back and fix their config files.
-    InvalidConfig { reason: String },
+    InvalidConfig {
+        reason: String,
+    },
 }
 
 /// State for the configuration screen.
@@ -237,9 +239,7 @@ pub fn draw(f: &mut Frame, state: &ConfigState) {
             "Step 2 of 2",
         ),
         Step::ExampleModel => draw_example(f, area, "model.json — example", EXAMPLE_MODEL),
-        Step::ExampleTraining => {
-            draw_example(f, area, "training.json — example", EXAMPLE_TRAINING)
-        }
+        Step::ExampleTraining => draw_example(f, area, "training.json — example", EXAMPLE_TRAINING),
         Step::InvalidConfig { reason } => draw_invalid_config(f, area, reason),
     }
 }

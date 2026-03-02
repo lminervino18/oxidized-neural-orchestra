@@ -127,7 +127,11 @@ impl Adapter {
         }
 
         let dataset_samples = match &training.dataset {
-            DatasetConfig::Inline { data, x_size, y_size } => {
+            DatasetConfig::Inline {
+                data,
+                x_size,
+                y_size,
+            } => {
                 let row_size = x_size + y_size;
                 if row_size == 0 {
                     return Err(OrchestratorError::InvalidConfig(
@@ -351,7 +355,11 @@ impl Adapter {
                 "local dataset loading not yet implemented: {}",
                 path.display()
             ))),
-            DatasetConfig::Inline { data, x_size, y_size } => Ok(DatasetSpec {
+            DatasetConfig::Inline {
+                data,
+                x_size,
+                y_size,
+            } => Ok(DatasetSpec {
                 data: data.to_vec(),
                 x_size: *x_size,
                 y_size: *y_size,
@@ -388,8 +396,12 @@ impl Adapter {
                     layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
 
                 (
-                    ModelSpec::Sequential { layers: layer_specs },
-                    ParamGenSpec::Chained { specs: param_gen_specs },
+                    ModelSpec::Sequential {
+                        layers: layer_specs,
+                    },
+                    ParamGenSpec::Chained {
+                        specs: param_gen_specs,
+                    },
                 )
             }
         }
@@ -452,7 +464,10 @@ impl Adapter {
             } => {
                 let act_fn = self.adapt_act_fn(act_fn.as_ref());
                 (
-                    LayerSpec::Dense { dim: (n, m), act_fn },
+                    LayerSpec::Dense {
+                        dim: (n, m),
+                        act_fn,
+                    },
                     self.adapt_param_gen(init, layer.sizes()),
                 )
             }
@@ -460,7 +475,7 @@ impl Adapter {
     }
 
     /// Converts an optional `ActFnConfig` reference into an optional `ActFnSpec`.
-   fn adapt_act_fn(&self, act_fn: Option<&ActFnConfig>) -> Option<ActFnSpec> {
+    fn adapt_act_fn(&self, act_fn: Option<&ActFnConfig>) -> Option<ActFnSpec> {
         Some(match *act_fn? {
             ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
         })

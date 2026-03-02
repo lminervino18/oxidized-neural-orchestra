@@ -132,7 +132,10 @@ pub fn load_training(path: &str) -> Result<TrainingJson, String> {
 }
 
 fn parse_synchronizer(val: &serde_json::Value) -> Result<SynchronizerConfig, String> {
-    match val["synchronizer"].as_str().ok_or("missing field: synchronizer")? {
+    match val["synchronizer"]
+        .as_str()
+        .ok_or("missing field: synchronizer")?
+    {
         "barrier" => {
             let barrier_size = val["barrier_size"]
                 .as_u64()
@@ -148,8 +151,7 @@ fn parse_store(val: &serde_json::Value) -> Result<StoreConfig, String> {
     let shard_size = val["shard_size"]
         .as_u64()
         .ok_or("missing field: shard_size")? as usize;
-    let shard_size =
-        NonZeroUsize::new(shard_size).ok_or("shard_size must be greater than zero")?;
+    let shard_size = NonZeroUsize::new(shard_size).ok_or("shard_size must be greater than zero")?;
 
     match val["store"].as_str().ok_or("missing field: store")? {
         "blocking" => Ok(StoreConfig::Blocking { shard_size }),
@@ -166,7 +168,10 @@ fn parse_optimizer(val: &serde_json::Value) -> Result<OptimizerConfig, String> {
             .map(|v| v as f32)
     };
 
-    match val["optimizer"].as_str().ok_or("missing field: optimizer")? {
+    match val["optimizer"]
+        .as_str()
+        .ok_or("missing field: optimizer")?
+    {
         "gradient_descent" => Ok(OptimizerConfig::GradientDescent { lr: req_f32("lr")? }),
         "adam" => Ok(OptimizerConfig::Adam {
             lr: req_f32("lr")?,
@@ -227,7 +232,11 @@ fn parse_dataset(val: &serde_json::Value) -> Result<DatasetConfig, String> {
         return Err("dataset is empty".into());
     }
 
-    Ok(DatasetConfig::Inline { data, x_size, y_size })
+    Ok(DatasetConfig::Inline {
+        data,
+        x_size,
+        y_size,
+    })
 }
 
 fn parse_layer(l: &serde_json::Value, idx: usize) -> Result<LayerConfig, String> {
@@ -249,7 +258,10 @@ fn parse_layer(l: &serde_json::Value, idx: usize) -> Result<LayerConfig, String>
 fn parse_param_gen(l: &serde_json::Value, idx: usize) -> Result<ParamGenConfig, String> {
     let ctx = |f: &str| format!("layer {idx}: {f}");
 
-    match l["init"].as_str().ok_or_else(|| ctx("missing field: init"))? {
+    match l["init"]
+        .as_str()
+        .ok_or_else(|| ctx("missing field: init"))?
+    {
         "const" => {
             let value = l["init_value"]
                 .as_f64()
@@ -257,18 +269,30 @@ fn parse_param_gen(l: &serde_json::Value, idx: usize) -> Result<ParamGenConfig, 
             Ok(ParamGenConfig::Const { value })
         }
         "uniform" => Ok(ParamGenConfig::Uniform {
-            low: l["init_low"].as_f64().ok_or_else(|| ctx("missing field: init_low"))? as f32,
-            high: l["init_high"].as_f64().ok_or_else(|| ctx("missing field: init_high"))? as f32,
+            low: l["init_low"]
+                .as_f64()
+                .ok_or_else(|| ctx("missing field: init_low"))? as f32,
+            high: l["init_high"]
+                .as_f64()
+                .ok_or_else(|| ctx("missing field: init_high"))? as f32,
         }),
         "uniform_inclusive" => Ok(ParamGenConfig::UniformInclusive {
-            low: l["init_low"].as_f64().ok_or_else(|| ctx("missing field: init_low"))? as f32,
-            high: l["init_high"].as_f64().ok_or_else(|| ctx("missing field: init_high"))? as f32,
+            low: l["init_low"]
+                .as_f64()
+                .ok_or_else(|| ctx("missing field: init_low"))? as f32,
+            high: l["init_high"]
+                .as_f64()
+                .ok_or_else(|| ctx("missing field: init_high"))? as f32,
         }),
         "xavier_uniform" => Ok(ParamGenConfig::XavierUniform),
         "lecun_uniform" => Ok(ParamGenConfig::LecunUniform),
         "normal" => Ok(ParamGenConfig::Normal {
-            mean: l["init_mean"].as_f64().ok_or_else(|| ctx("missing field: init_mean"))? as f32,
-            std_dev: l["init_std"].as_f64().ok_or_else(|| ctx("missing field: init_std"))? as f32,
+            mean: l["init_mean"]
+                .as_f64()
+                .ok_or_else(|| ctx("missing field: init_mean"))? as f32,
+            std_dev: l["init_std"]
+                .as_f64()
+                .ok_or_else(|| ctx("missing field: init_std"))? as f32,
         }),
         "kaiming" => Ok(ParamGenConfig::Kaiming),
         "xavier" => Ok(ParamGenConfig::Xavier),

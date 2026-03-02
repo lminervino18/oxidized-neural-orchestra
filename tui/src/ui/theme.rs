@@ -62,6 +62,7 @@ impl Theme {
         Style::default().fg(Self::FG_MUTED)
     }
 
+    #[allow(dead_code)]
     /// Style for highlighted table rows.
     pub fn highlight_bg() -> Style {
         Style::default()
@@ -90,6 +91,7 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
+    #[allow(dead_code)]
     /// Style for informational text, equivalent to `dim`.
     pub fn info() -> Style {
         Style::default().fg(Self::FG_DIM)

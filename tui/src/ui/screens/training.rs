@@ -67,6 +67,7 @@ pub struct WorkerState {
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
     Info,
+    #[allow(dead_code)]
     Warn,
     Error,
 }
