@@ -460,10 +460,9 @@ impl Adapter {
     }
 
     /// Converts an optional `ActFnConfig` reference into an optional `ActFnSpec`.
-    fn adapt_act_fn(&self, act_fn: Option<&ActFnConfig>) -> Option<ActFnSpec> {
-        let act_fn = act_fn?;
-        match *act_fn {
-            ActFnConfig::Sigmoid { amp } => Some(ActFnSpec::Sigmoid { amp }),
-        }
+   fn adapt_act_fn(&self, act_fn: Option<&ActFnConfig>) -> Option<ActFnSpec> {
+        Some(match *act_fn? {
+            ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
+        })
     }
 }
