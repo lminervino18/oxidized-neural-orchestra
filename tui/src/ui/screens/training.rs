@@ -6,21 +6,23 @@ use orchestrator::{
     TrainingEvent,
 };
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    symbols,
-    text::{Line, Span},
-    widgets::{Axis, Block, Borders, Cell, Chart, Dataset, GraphType, Paragraph, Row, Table, Wrap},
+    layout::{Constraint, Direction, Layout},
+    style::Color,
+    widgets::Block,
     Frame,
 };
 use tokio::sync::mpsc;
 
+use crate::ui::components::{
+    confirm_quit::draw_confirm_quit, header::draw_header, log_panel::draw_log,
+    loss_chart::draw_charts, params_panel::draw_params, workers_table::draw_workers_table,
+};
 use crate::ui::theme::Theme;
 
 use super::Action;
 
 /// Per-worker colors for charts and table highlights.
-const WORKER_COLORS: &[Color] = &[
+pub const WORKER_COLORS: &[Color] = &[
     Color::Rgb(57, 255, 20),
     Color::Rgb(0, 255, 255),
     Color::Rgb(255, 0, 255),
@@ -30,7 +32,7 @@ const WORKER_COLORS: &[Color] = &[
 
 /// The current phase of the training session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Phase {
+pub enum Phase {
     /// Waiting for all workers and servers to connect.
     Connecting,
     /// Training is in progress.
@@ -43,50 +45,50 @@ enum Phase {
 
 /// Whether the quit-confirmation popup is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ConfirmQuit {
+pub enum ConfirmQuit {
     Hidden,
     Visible,
 }
 
 /// Live state for a single worker node.
 #[derive(Debug, Clone)]
-struct WorkerState {
+pub struct WorkerState {
     /// Worker index.
-    id: usize,
+    pub id: usize,
     /// Number of epochs completed so far.
-    epochs_done: usize,
+    pub epochs_done: usize,
     /// Most recently reported loss value.
-    last_loss: Option<f32>,
+    pub last_loss: Option<f32>,
     /// Whether the worker has disconnected.
-    done: bool,
-}
-
-/// Full state for the training dashboard screen.
-pub struct TrainingState {
-    workers_total: usize,
-    optimizer_label: String,
-    max_epochs: usize,
-    phase: Phase,
-    started_at: Instant,
-    workers: Vec<WorkerState>,
-    /// Per-worker loss time series as (epoch, loss) pairs.
-    loss_series: Vec<Vec<(f64, f64)>>,
-    logs: Vec<(LogLevel, String)>,
-    final_params: Option<Vec<f32>>,
-    error: Option<String>,
-    events: mpsc::Receiver<TrainingEvent>,
-    confirm_quit: ConfirmQuit,
-    selected_worker: usize,
-    /// Set when the session fails to start — shown as a full-screen error.
-    startup_error: Option<String>,
+    pub done: bool,
 }
 
 /// Severity level for log entries.
 #[derive(Debug, Clone, Copy)]
-enum LogLevel {
+pub enum LogLevel {
     Info,
     Warn,
     Error,
+}
+
+/// Full state for the training dashboard screen.
+pub struct TrainingState {
+    pub workers_total: usize,
+    pub optimizer_label: String,
+    pub max_epochs: usize,
+    pub phase: Phase,
+    pub started_at: Instant,
+    pub workers: Vec<WorkerState>,
+    /// Per-worker loss time series as (epoch, loss) pairs.
+    pub loss_series: Vec<Vec<(f64, f64)>>,
+    pub logs: Vec<(LogLevel, String)>,
+    pub final_params: Option<Vec<f32>>,
+    pub error: Option<String>,
+    pub events: mpsc::Receiver<TrainingEvent>,
+    pub confirm_quit: ConfirmQuit,
+    pub selected_worker: usize,
+    /// Set when the session fails to start — shown as a full-screen error.
+    pub startup_error: Option<String>,
 }
 
 impl TrainingState {
@@ -250,18 +252,18 @@ impl TrainingState {
     }
 
     /// Returns the elapsed time since the session started as a `MM:SS` string.
-    fn elapsed_str(&self) -> String {
+    pub fn elapsed_str(&self) -> String {
         let s = self.started_at.elapsed().as_secs();
         format!("{:02}:{:02}", s / 60, s % 60)
     }
 
     /// Returns the number of workers that have finished.
-    fn workers_done(&self) -> usize {
+    pub fn workers_done(&self) -> usize {
         self.workers.iter().filter(|w| w.done).count()
     }
 
     /// Returns `true` if the session is still connecting or training.
-    fn is_active(&self) -> bool {
+    pub fn is_active(&self) -> bool {
         matches!(self.phase, Phase::Connecting | Phase::Training)
     }
 
@@ -269,7 +271,7 @@ impl TrainingState {
     ///
     /// # Returns
     /// A vector of (epoch, avg_loss) pairs aligned by index.
-    fn avg_loss_series(&self) -> Vec<(f64, f64)> {
+    pub fn avg_loss_series(&self) -> Vec<(f64, f64)> {
         let max_len = self.loss_series.iter().map(|s| s.len()).max().unwrap_or(0);
         if max_len == 0 {
             return Vec::new();
@@ -299,14 +301,14 @@ impl TrainingState {
     }
 
     /// Advances the selected worker to the next one (wrapping).
-    fn next_worker(&mut self) {
+    pub fn next_worker(&mut self) {
         if self.workers_total > 0 {
             self.selected_worker = (self.selected_worker + 1) % self.workers_total;
         }
     }
 
     /// Moves the selected worker to the previous one (wrapping).
-    fn prev_worker(&mut self) {
+    pub fn prev_worker(&mut self) {
         if self.workers_total > 0 {
             self.selected_worker =
                 (self.selected_worker + self.workers_total - 1) % self.workers_total;
@@ -412,7 +414,20 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     }
 }
 
-fn draw_startup_error(f: &mut Frame, area: Rect, err: &str) {
+/// Draws the full-screen startup error shown when the session fails to connect.
+///
+/// # Args
+/// * `f` - The ratatui frame to draw into.
+/// * `area` - The full terminal area.
+/// * `err` - The error message to display.
+fn draw_startup_error(f: &mut Frame, area: ratatui::layout::Rect, err: &str) {
+    use ratatui::{
+        layout::{Alignment, Constraint, Direction, Layout},
+        style::Modifier,
+        text::Span,
+        widgets::{Block, Borders, Paragraph, Wrap},
+    };
+
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -481,360 +496,5 @@ fn draw_startup_error(f: &mut Frame, area: Rect, err: &str) {
         ))
         .alignment(Alignment::Center),
         chunks[5],
-    );
-}
-
-fn draw_charts(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let halves = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
-        .split(area);
-
-    draw_avg_chart(f, halves[0], state);
-    draw_selected_worker_chart(f, halves[1], state);
-}
-
-fn draw_avg_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Theme::border())
-        .title(" Average Loss — all workers ")
-        .title_style(Theme::title());
-
-    let avg = state.avg_loss_series();
-
-    if avg.is_empty() {
-        f.render_widget(
-            Paragraph::new(Span::styled("waiting for data...", Theme::muted()))
-                .block(block)
-                .alignment(Alignment::Center),
-            area,
-        );
-        return;
-    }
-
-    let max_epoch = avg.iter().map(|(x, _)| *x).fold(1.0_f64, f64::max);
-    let max_loss = avg.iter().map(|(_, y)| *y).fold(0.01_f64, f64::max);
-
-    let dataset = Dataset::default()
-        .name("avg")
-        .marker(symbols::Marker::Braille)
-        .graph_type(GraphType::Line)
-        .style(Style::default().fg(Color::White))
-        .data(&avg);
-
-    let chart = Chart::new(vec![dataset])
-        .block(block)
-        .x_axis(
-            Axis::default()
-                .title("epoch")
-                .style(Theme::dim())
-                .bounds([0.0, max_epoch])
-                .labels(vec![
-                    Span::styled("0", Theme::muted()),
-                    Span::styled(format!("{}", max_epoch as usize), Theme::muted()),
-                ]),
-        )
-        .y_axis(
-            Axis::default()
-                .title("loss")
-                .style(Theme::dim())
-                .bounds([0.0, max_loss * 1.1])
-                .labels(vec![
-                    Span::styled("0", Theme::muted()),
-                    Span::styled(format!("{max_loss:.2}"), Theme::muted()),
-                ]),
-        );
-
-    f.render_widget(chart, area);
-}
-
-fn draw_selected_worker_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let worker_id = state.selected_worker;
-    let color = WORKER_COLORS[worker_id % WORKER_COLORS.len()];
-
-    let title = format!(" Worker {} — Loss  [←/→ to switch] ", worker_id);
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(color))
-        .title(title)
-        .title_style(Style::default().fg(color).add_modifier(Modifier::BOLD));
-
-    let series = match state.loss_series.get(worker_id) {
-        Some(s) => s,
-        None => {
-            f.render_widget(
-                Paragraph::new(Span::styled("no data", Theme::muted()))
-                    .block(block)
-                    .alignment(Alignment::Center),
-                area,
-            );
-            return;
-        }
-    };
-
-    if series.is_empty() {
-        f.render_widget(
-            Paragraph::new(Span::styled("waiting for data...", Theme::muted()))
-                .block(block)
-                .alignment(Alignment::Center),
-            area,
-        );
-        return;
-    }
-
-    let max_epoch = series.iter().map(|(x, _)| *x).fold(1.0_f64, f64::max);
-    let max_loss = series.iter().map(|(_, y)| *y).fold(0.01_f64, f64::max);
-
-    let dataset = Dataset::default()
-        .name(format!("w{worker_id}"))
-        .marker(symbols::Marker::Braille)
-        .graph_type(GraphType::Line)
-        .style(Style::default().fg(color))
-        .data(series);
-
-    let chart = Chart::new(vec![dataset])
-        .block(block)
-        .x_axis(
-            Axis::default()
-                .title("epoch")
-                .style(Theme::dim())
-                .bounds([0.0, max_epoch])
-                .labels(vec![
-                    Span::styled("0", Theme::muted()),
-                    Span::styled(format!("{}", max_epoch as usize), Theme::muted()),
-                ]),
-        )
-        .y_axis(
-            Axis::default()
-                .title("loss")
-                .style(Theme::dim())
-                .bounds([0.0, max_loss * 1.1])
-                .labels(vec![
-                    Span::styled("0", Theme::muted()),
-                    Span::styled(format!("{max_loss:.2}"), Theme::muted()),
-                ]),
-        );
-
-    f.render_widget(chart, area);
-}
-
-fn draw_confirm_quit(f: &mut Frame, area: Rect) {
-    let popup = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(45),
-            Constraint::Length(5),
-            Constraint::Percentage(55),
-        ])
-        .split(area)[1];
-
-    let popup = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(35),
-            Constraint::Length(36),
-            Constraint::Percentage(35),
-        ])
-        .split(popup)[1];
-
-    let text = vec![
-        Line::from(Span::styled("Training is still running.", Theme::warn())),
-        Line::from(Span::raw("")),
-        Line::from(vec![
-            Span::styled("[y]", Theme::ok()),
-            Span::styled(" back to menu    ", Theme::text()),
-            Span::styled("[n]", Theme::error()),
-            Span::styled(" keep training", Theme::text()),
-        ]),
-    ];
-
-    f.render_widget(
-        Paragraph::new(text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Theme::warn())
-                    .title(" Leave? ")
-                    .title_style(Theme::warn().add_modifier(Modifier::BOLD)),
-            )
-            .alignment(Alignment::Center),
-        popup,
-    );
-}
-
-fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let phase_span = match state.phase {
-        Phase::Connecting => Span::styled("CONNECTING", Theme::accent_cyan()),
-        Phase::Training => Span::styled("TRAINING", Theme::ok()),
-        Phase::Finished => Span::styled("FINISHED", Theme::accent_magenta()),
-        Phase::Error => Span::styled("ERROR", Theme::error()),
-    };
-
-    let hint = if state.is_active() {
-        Span::styled("  [q] leave  [←/→] worker", Theme::muted())
-    } else {
-        Span::styled("  [q] menu  [←/→] worker", Theme::muted())
-    };
-
-    let workers_done = state.workers_done();
-
-    let line = Line::from(vec![
-        Span::styled(" ONO  ", Theme::title().add_modifier(Modifier::BOLD)),
-        Span::styled("│  ", Theme::muted()),
-        phase_span,
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(format!("elapsed {}", state.elapsed_str()), Theme::dim()),
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(
-            format!("workers {}/{}", workers_done, state.workers_total),
-            Theme::dim(),
-        ),
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(format!("optimizer {}", state.optimizer_label), Theme::dim()),
-        hint,
-    ]);
-
-    f.render_widget(
-        Paragraph::new(line).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Theme::border()),
-        ),
-        area,
-    );
-}
-
-fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let header = Row::new(vec![
-        Cell::from("id").style(Theme::title()),
-        Cell::from("epochs").style(Theme::title()),
-        Cell::from("last loss").style(Theme::title()),
-        Cell::from("status").style(Theme::title()),
-    ]);
-
-    let rows: Vec<Row> = state
-        .workers
-        .iter()
-        .map(|w| {
-            let is_selected = w.id == state.selected_worker;
-
-            let status_cell = if w.done {
-                Cell::from("done").style(Theme::muted())
-            } else {
-                Cell::from("active").style(Theme::ok())
-            };
-
-            let id_style = if is_selected {
-                let color = WORKER_COLORS[w.id % WORKER_COLORS.len()];
-                Style::default().fg(color).add_modifier(Modifier::BOLD)
-            } else {
-                Theme::text()
-            };
-
-            let loss_str = w
-                .last_loss
-                .map(|l| format!("{l:.4}"))
-                .unwrap_or_else(|| "—".into());
-
-            Row::new(vec![
-                Cell::from(format!("{}", w.id)).style(id_style),
-                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs))
-                    .style(Theme::text()),
-                Cell::from(loss_str).style(Theme::text()),
-                status_cell,
-            ])
-        })
-        .collect();
-
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Length(4),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(8),
-        ],
-    )
-    .header(header)
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Theme::border())
-            .title(" Workers ")
-            .title_style(Theme::title()),
-    );
-
-    f.render_widget(table, area);
-}
-
-fn draw_params(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let params = state.final_params.as_ref().unwrap();
-
-    let preview: String = params
-        .iter()
-        .take(6)
-        .map(|p| format!("{p:.4}"))
-        .collect::<Vec<_>>()
-        .join("  ");
-
-    let suffix = if params.len() > 6 {
-        format!("  … +{} more", params.len() - 6)
-    } else {
-        String::new()
-    };
-
-    let line = Line::from(vec![
-        Span::styled(preview, Theme::ok()),
-        Span::styled(suffix, Theme::muted()),
-    ]);
-
-    f.render_widget(
-        Paragraph::new(line)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Theme::accent_magenta())
-                    .title(" Final Parameters ")
-                    .title_style(Theme::accent_magenta().add_modifier(Modifier::BOLD)),
-            )
-            .wrap(Wrap { trim: true }),
-        area,
-    );
-}
-
-fn draw_log(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let log_height = area.height.saturating_sub(2) as usize;
-    let tail = state
-        .logs
-        .iter()
-        .rev()
-        .take(log_height)
-        .rev()
-        .map(|(level, msg)| {
-            let (tag, tag_style) = match level {
-                LogLevel::Info => ("[info] ", Theme::dim()),
-                LogLevel::Warn => ("[warn] ", Theme::warn()),
-                LogLevel::Error => ("[error]", Theme::error()),
-            };
-            Line::from(vec![
-                Span::styled(tag, tag_style),
-                Span::styled(msg.as_str(), Theme::text()),
-            ])
-        })
-        .collect::<Vec<_>>();
-
-    f.render_widget(
-        Paragraph::new(tail)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Theme::border())
-                    .title(" Events ")
-                    .title_style(Theme::title()),
-            )
-            .wrap(Wrap { trim: true }),
-        area,
     );
 }
