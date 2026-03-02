@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::config::{builder, json};
+use crate::config::json;
 use crate::ui::theme::Theme;
 
 use super::{Action, Screen};
@@ -69,6 +69,7 @@ enum Step {
     InvalidConfig { reason: String },
 }
 
+/// State for the configuration screen.
 pub struct ConfigState {
     step: Step,
     model_path: String,
@@ -77,6 +78,7 @@ pub struct ConfigState {
 }
 
 impl ConfigState {
+    /// Creates a new `ConfigState` at the first input step.
     pub fn new() -> Self {
         Self {
             step: Step::ModelPath,
@@ -87,6 +89,14 @@ impl ConfigState {
     }
 }
 
+/// Handles a key event for the configuration screen.
+///
+/// # Args
+/// * `state` - The current configuration screen state.
+/// * `key` - The key that was pressed.
+///
+/// # Returns
+/// An `Action` indicating what the application should do next.
 pub fn handle_key(state: &mut ConfigState, key: KeyCode) -> Action {
     state.error = None;
 
@@ -98,11 +108,9 @@ pub fn handle_key(state: &mut ConfigState, key: KeyCode) -> Action {
             Action::None
         }
         Step::InvalidConfig { .. } => match key {
-            // q or esc → back to menu
             KeyCode::Char('q') | KeyCode::Esc => {
                 Action::Transition(Screen::Menu(crate::ui::screens::menu::MenuState::new()))
             }
-            // any other key → back to path input to fix JSONs
             _ => {
                 state.step = Step::ModelPath;
                 Action::None
@@ -172,7 +180,7 @@ fn try_load(state: &mut ConfigState) -> Action {
         state.training_path.trim()
     };
 
-    let model_draft = match json::load_model(model_path) {
+    let model_json = match json::load_model(model_path) {
         Ok(d) => d,
         Err(e) => {
             state.error = Some(format!("model.json: {e}"));
@@ -181,7 +189,7 @@ fn try_load(state: &mut ConfigState) -> Action {
         }
     };
 
-    let training_draft = match json::load_training(training_path) {
+    let training_json = match json::load_training(training_path) {
         Ok(d) => d,
         Err(e) => {
             state.error = Some(format!("training.json: {e}"));
@@ -189,20 +197,20 @@ fn try_load(state: &mut ConfigState) -> Action {
         }
     };
 
-    match builder::build(&model_draft, &training_draft) {
-        Ok((model, training)) => {
-            let workers_total = training_draft.worker_addrs.len();
-            Action::Transition(Screen::Training(
-                crate::ui::screens::training::TrainingState::new(model, training, workers_total),
-            ))
-        }
-        Err(reason) => {
-            state.step = Step::InvalidConfig { reason };
-            Action::None
-        }
-    }
+    Action::Transition(Screen::Training(
+        crate::ui::screens::training::TrainingState::new(
+            model_json.config,
+            training_json.config,
+            training_json.worker_count,
+        ),
+    ))
 }
 
+/// Draws the configuration screen.
+///
+/// # Args
+/// * `f` - The ratatui frame to draw into.
+/// * `state` - The current configuration screen state.
 pub fn draw(f: &mut Frame, state: &ConfigState) {
     let area = f.size();
     f.render_widget(Block::default().style(Theme::base()), area);
@@ -244,12 +252,12 @@ fn draw_invalid_config(f: &mut Frame, area: Rect, reason: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // title
-            Constraint::Length(1), // subtitle
-            Constraint::Length(1), // spacer
-            Constraint::Min(4),    // reason box
-            Constraint::Length(1), // spacer
-            Constraint::Length(3), // hints
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(4),
+            Constraint::Length(1),
+            Constraint::Length(3),
         ])
         .split(outer);
 
@@ -307,14 +315,14 @@ fn draw_path_input(
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // title
-            Constraint::Length(1), // step label
-            Constraint::Length(2), // spacer
-            Constraint::Length(3), // input box
-            Constraint::Length(1), // spacer
-            Constraint::Length(1), // default note
-            Constraint::Min(0),    // spacer
-            Constraint::Length(5), // keybinds
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(2),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(5),
         ])
         .split(outer);
 
