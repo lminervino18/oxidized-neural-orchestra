@@ -19,6 +19,7 @@ use crate::ui::theme::Theme;
 
 use super::Action;
 
+/// Per-worker colors for charts and table highlights.
 const WORKER_COLORS: &[Color] = &[
     Color::Rgb(57, 255, 20),
     Color::Rgb(0, 255, 255),
@@ -27,28 +28,40 @@ const WORKER_COLORS: &[Color] = &[
     Color::Rgb(255, 130, 0),
 ];
 
+/// The current phase of the training session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Phase {
+    /// Waiting for all workers and servers to connect.
     Connecting,
+    /// Training is in progress.
     Training,
+    /// Training completed successfully.
     Finished,
+    /// A fatal error occurred.
     Error,
 }
 
+/// Whether the quit-confirmation popup is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ConfirmQuit {
     Hidden,
     Visible,
 }
 
+/// Live state for a single worker node.
 #[derive(Debug, Clone)]
 struct WorkerState {
+    /// Worker index.
     id: usize,
+    /// Number of epochs completed so far.
     epochs_done: usize,
+    /// Most recently reported loss value.
     last_loss: Option<f32>,
+    /// Whether the worker has disconnected.
     done: bool,
 }
 
+/// Full state for the training dashboard screen.
 pub struct TrainingState {
     workers_total: usize,
     optimizer_label: String,
@@ -56,6 +69,7 @@ pub struct TrainingState {
     phase: Phase,
     started_at: Instant,
     workers: Vec<WorkerState>,
+    /// Per-worker loss time series as (epoch, loss) pairs.
     loss_series: Vec<Vec<(f64, f64)>>,
     logs: Vec<(LogLevel, String)>,
     final_params: Option<Vec<f32>>,
@@ -63,10 +77,11 @@ pub struct TrainingState {
     events: mpsc::Receiver<TrainingEvent>,
     confirm_quit: ConfirmQuit,
     selected_worker: usize,
-    /// Set when session fails to start — shown as full-screen error before training.
+    /// Set when the session fails to start — shown as a full-screen error.
     startup_error: Option<String>,
 }
 
+/// Severity level for log entries.
 #[derive(Debug, Clone, Copy)]
 enum LogLevel {
     Info,
@@ -75,6 +90,15 @@ enum LogLevel {
 }
 
 impl TrainingState {
+    /// Creates a new `TrainingState`, starting the training session immediately.
+    ///
+    /// If the session fails to start, the state transitions to an error screen
+    /// rather than panicking.
+    ///
+    /// # Args
+    /// * `model` - The model architecture configuration.
+    /// * `training` - The training configuration.
+    /// * `workers_total` - The number of worker nodes expected.
     pub fn new(model: ModelConfig, training: TrainingConfig<String>, workers_total: usize) -> Self {
         let optimizer_label = format!("{:?}", training.optimizer)
             .split_whitespace()
@@ -125,6 +149,13 @@ impl TrainingState {
         }
     }
 
+    /// Creates a dead state used when the session fails to start.
+    ///
+    /// # Args
+    /// * `workers_total` - Expected worker count.
+    /// * `optimizer_label` - Display label for the optimizer.
+    /// * `max_epochs` - Configured epoch limit.
+    /// * `err` - The error message to display.
     fn dead(workers_total: usize, optimizer_label: String, max_epochs: usize, err: String) -> Self {
         let (_, rx) = mpsc::channel(1);
         Self {
@@ -145,12 +176,17 @@ impl TrainingState {
         }
     }
 
+    /// Drains all pending training events and applies them to the state.
     pub fn tick(&mut self) {
         while let Ok(event) = self.events.try_recv() {
             self.apply(event);
         }
     }
 
+    /// Applies a single training event to the state.
+    ///
+    /// # Args
+    /// * `event` - The event received from the session.
     fn apply(&mut self, event: TrainingEvent) {
         match event {
             TrainingEvent::Loss { worker_id, losses } => {
@@ -201,6 +237,11 @@ impl TrainingState {
         }
     }
 
+    /// Appends a log entry, evicting the oldest if the buffer exceeds 200 entries.
+    ///
+    /// # Args
+    /// * `level` - Severity of the log entry.
+    /// * `msg` - The message to log.
     fn push_log(&mut self, level: LogLevel, msg: String) {
         self.logs.push((level, msg));
         if self.logs.len() > 200 {
@@ -208,19 +249,26 @@ impl TrainingState {
         }
     }
 
+    /// Returns the elapsed time since the session started as a `MM:SS` string.
     fn elapsed_str(&self) -> String {
         let s = self.started_at.elapsed().as_secs();
         format!("{:02}:{:02}", s / 60, s % 60)
     }
 
+    /// Returns the number of workers that have finished.
     fn workers_done(&self) -> usize {
         self.workers.iter().filter(|w| w.done).count()
     }
 
+    /// Returns `true` if the session is still connecting or training.
     fn is_active(&self) -> bool {
         matches!(self.phase, Phase::Connecting | Phase::Training)
     }
 
+    /// Computes the average loss series across all workers.
+    ///
+    /// # Returns
+    /// A vector of (epoch, avg_loss) pairs aligned by index.
     fn avg_loss_series(&self) -> Vec<(f64, f64)> {
         let max_len = self.loss_series.iter().map(|s| s.len()).max().unwrap_or(0);
         if max_len == 0 {
@@ -250,12 +298,14 @@ impl TrainingState {
             .collect()
     }
 
+    /// Advances the selected worker to the next one (wrapping).
     fn next_worker(&mut self) {
         if self.workers_total > 0 {
             self.selected_worker = (self.selected_worker + 1) % self.workers_total;
         }
     }
 
+    /// Moves the selected worker to the previous one (wrapping).
     fn prev_worker(&mut self) {
         if self.workers_total > 0 {
             self.selected_worker =
@@ -264,8 +314,15 @@ impl TrainingState {
     }
 }
 
+/// Handles a key event for the training screen.
+///
+/// # Args
+/// * `state` - The current training screen state.
+/// * `key` - The key that was pressed.
+///
+/// # Returns
+/// An `Action` indicating what the application should do next.
 pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
-    // If there's a startup error, any key goes back to menu.
     if state.startup_error.is_some() {
         return Action::Transition(super::Screen::Menu(
             crate::ui::screens::menu::MenuState::new(),
@@ -299,13 +356,17 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Action {
     }
 }
 
+/// Draws the training dashboard screen.
+///
+/// # Args
+/// * `f` - The ratatui frame to draw into.
+/// * `state` - The current training screen state.
 pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     state.tick();
 
     let area = f.size();
     f.render_widget(Block::default().style(Theme::base()), area);
 
-    // If session failed to start, show full-screen error instead of training UI.
     if let Some(err) = &state.startup_error.clone() {
         draw_startup_error(f, area, err);
         return;
@@ -373,12 +434,12 @@ fn draw_startup_error(f: &mut Frame, area: Rect, err: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // title
-            Constraint::Length(1), // subtitle
-            Constraint::Length(1), // spacer
-            Constraint::Min(4),    // error box
-            Constraint::Length(1), // spacer
-            Constraint::Length(1), // hint
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(4),
+            Constraint::Length(1),
+            Constraint::Length(1),
         ])
         .split(outer);
 
@@ -679,7 +740,8 @@ fn draw_workers_table(f: &mut Frame, area: Rect, state: &TrainingState) {
 
             Row::new(vec![
                 Cell::from(format!("{}", w.id)).style(id_style),
-                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs)).style(Theme::text()),
+                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs))
+                    .style(Theme::text()),
                 Cell::from(loss_str).style(Theme::text()),
                 status_cell,
             ])
