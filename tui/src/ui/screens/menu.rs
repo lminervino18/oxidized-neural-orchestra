@@ -23,7 +23,9 @@ const LOGO: &str = r#"
 oxidized-neural-orchestra
 "#;
 
-const MENU_ITEMS: &[&str] = &["Start Training", "Quit"];
+const MENU_ITEMS: &[&str] = &["Start Training", "Repository", "Quit"];
+
+const REPO_URL: &str = "https://github.com/lminervino18/oxidized-neural-orchestra";
 
 /// State for the main menu screen.
 pub struct MenuState {
@@ -44,7 +46,7 @@ impl MenuState {
 /// * `key` - The key that was pressed.
 ///
 /// # Returns
-/// An `Action` indicating what the application should do next.
+/// `Some(Action)` if the application state should change, `None` otherwise.
 pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Option<Action> {
     match key {
         KeyCode::Up | KeyCode::Char('k') => {
@@ -63,7 +65,11 @@ pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Option<Action> {
             0 => Some(Action::Transition(Screen::Config(
                 super::config::ConfigState::new(),
             ))),
-            1 => Some(Action::Quit),
+            1 => {
+                let _ = open::that(REPO_URL);
+                None
+            }
+            2 => Some(Action::Quit),
             _ => None,
         },
         KeyCode::Char('q') => Some(Action::Quit),
