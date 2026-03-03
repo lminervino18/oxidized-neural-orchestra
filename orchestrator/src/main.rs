@@ -3,6 +3,8 @@ use std::num::NonZeroUsize;
 use orchestrator::{configs::*, train};
 
 fn main() {
+    env_logger::init();
+
     let model_config = ModelConfig::Sequential {
         layers: vec![
             LayerConfig::Dense {
@@ -19,19 +21,14 @@ fn main() {
     };
 
     let training_config = TrainingConfig {
-        worker_addrs: vec!["worker-0:50000"],
+        worker_addrs: vec!["worker-0:50000".to_string()],
         algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs: vec!["server-0:40000", "server-1:40001"],
+            server_addrs: vec!["server-0:40000".to_string(), "server-1:40001".to_string()],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
             store: StoreConfig::Blocking,
         },
         dataset: DatasetConfig::Inline {
-            data: vec![
-                0.0, 0.0, 0.0, //
-                0.0, 1.0, 1.0, //
-                1.0, 0.0, 1.0, //
-                1.0, 1.0, 1.0, //
-            ],
+            data: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0],
             x_size: 2,
             y_size: 1,
         },
@@ -40,10 +37,22 @@ fn main() {
         batch_size: NonZeroUsize::new(4).unwrap(),
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
-        seed: None,
+        seed: Some(42),
     };
 
-    let session = train(model_config, training_config).unwrap();
-    let params = session.wait().unwrap();
-    println!("trained params: {params:?}");
+    log::info!("starting distributed training session");
+
+    match train(model_config, training_config) {
+        Err(e) => log::error!("failed to start session: {e}"),
+        Ok(session) => {
+            log::info!("session started, waiting for completion");
+            match session.wait() {
+                Ok(params) => {
+                    log::info!("training complete");
+                    println!("trained params: {params:?}");
+                }
+                Err(e) => log::error!("training failed: {e}"),
+            }
+        }
+    }
 }
