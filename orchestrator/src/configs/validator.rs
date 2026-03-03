@@ -1,3 +1,5 @@
+use std::net::ToSocketAddrs;
+
 use super::{
     AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, SynchronizerConfig, TrainingConfig,
 };
@@ -21,7 +23,11 @@ impl Validator {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any invariant is violated.
-    pub fn validate(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<()> {
+    pub fn validate<A: ToSocketAddrs>(
+        &self,
+        model: &ModelConfig,
+        training: &TrainingConfig<A>,
+    ) -> Result<()> {
         self.validate_model(model)?;
         self.validate_training(training)
     }
@@ -64,7 +70,7 @@ impl Validator {
     /// # Errors
     /// Returns an `OrchestratorError` if worker or server address lists are empty,
     /// the barrier size is invalid, or the dataset is inconsistent with the batch size.
-    fn validate_training(&self, training: &TrainingConfig) -> Result<()> {
+    fn validate_training<A: ToSocketAddrs>(&self, training: &TrainingConfig<A>) -> Result<()> {
         if training.worker_addrs.is_empty() {
             return Err(OrchestratorError::InvalidConfig(
                 "at least one worker address is required".into(),
@@ -98,11 +104,7 @@ impl Validator {
         }
 
         let dataset_samples = match &training.dataset {
-            DatasetConfig::Inline {
-                data,
-                x_size,
-                y_size,
-            } => {
+            DatasetConfig::Inline { data, x_size, y_size } => {
                 let row_size = x_size + y_size;
                 if row_size == 0 {
                     return Err(OrchestratorError::InvalidConfig(

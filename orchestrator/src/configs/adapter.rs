@@ -43,10 +43,10 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if validation fails or any address cannot be resolved.
-    pub fn adapt_configs(
+    pub fn adapt_configs<A: ToSocketAddrs>(
         &self,
         model: ModelConfig,
-        training: TrainingConfig,
+        training: TrainingConfig<A>,
     ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
         Validator::new().validate(&model, &training)?;
 
@@ -76,10 +76,10 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any address cannot be resolved.
-    fn adapt_workers(
+    fn adapt_workers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig,
+        training: &TrainingConfig<A>,
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
@@ -126,10 +126,10 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any address cannot be resolved.
-    fn adapt_servers(
+    fn adapt_servers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig,
+        training: &TrainingConfig<A>,
     ) -> Result<(
         Vec<(SocketAddr, ServerSpec)>,
         Vec<SocketAddr>,
@@ -278,7 +278,11 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if the dataset config is invalid.
-    fn adapt_trainer(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<TrainerSpec> {
+    fn adapt_trainer<A: ToSocketAddrs>(
+        &self,
+        model: &ModelConfig,
+        training: &TrainingConfig<A>,
+    ) -> Result<TrainerSpec> {
         let (model_spec, _) = self.adapt_model_param_gen(model);
         let optimizer = self.adapt_optimizer(training.optimizer);
         let dataset = self.adapt_dataset(&training.dataset)?;
@@ -325,11 +329,7 @@ impl Adapter {
                 "local dataset loading not yet implemented: {}",
                 path.display()
             ))),
-            DatasetConfig::Inline {
-                data,
-                x_size,
-                y_size,
-            } => Ok(DatasetSpec {
+            DatasetConfig::Inline { data, x_size, y_size } => Ok(DatasetSpec {
                 data: data.to_vec(),
                 x_size: *x_size,
                 y_size: *y_size,
@@ -378,9 +378,7 @@ impl Adapter {
                     layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
 
                 (
-                    ModelSpec::Sequential {
-                        layers: layer_specs,
-                    },
+                    ModelSpec::Sequential { layers: layer_specs },
                     param_gen_specs,
                 )
             }
@@ -446,17 +444,10 @@ impl Adapter {
     /// A tuple of the resolved `LayerSpec` and its `ParamGenSpec`.
     fn adapt_layer(&self, layer: &LayerConfig) -> (LayerSpec, ParamGenSpec) {
         match *layer {
-            LayerConfig::Dense {
-                dim: (n, m),
-                init,
-                act_fn,
-            } => {
+            LayerConfig::Dense { dim: (n, m), init, act_fn } => {
                 let act_fn = self.adapt_act_fn(act_fn.as_ref());
                 (
-                    LayerSpec::Dense {
-                        dim: (n, m),
-                        act_fn,
-                    },
+                    LayerSpec::Dense { dim: (n, m), act_fn },
                     self.adapt_param_gen(init, layer.sizes()),
                 )
             }

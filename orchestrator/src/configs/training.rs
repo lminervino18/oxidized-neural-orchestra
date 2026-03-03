@@ -1,4 +1,4 @@
-use std::{num::NonZeroUsize, path::PathBuf};
+use std::{net::ToSocketAddrs, num::NonZeroUsize, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -22,9 +22,7 @@ pub enum OptimizerConfig {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum DatasetConfig {
-    Local {
-        path: PathBuf,
-    },
+    Local { path: PathBuf },
     Inline {
         data: Vec<f32>,
         x_size: usize,
@@ -50,10 +48,10 @@ pub enum StoreConfig {
 
 /// The `Algorithm` configuration.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum AlgorithmConfig {
+#[serde(rename_all = "snake_case", tag = "type", bound = "A: Serialize + serde::de::DeserializeOwned")]
+pub enum AlgorithmConfig<A: ToSocketAddrs> {
     ParameterServer {
-        server_addrs: Vec<String>,
+        server_addrs: Vec<A>,
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
@@ -61,9 +59,10 @@ pub enum AlgorithmConfig {
 
 /// The `Training` configuration.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TrainingConfig {
-    pub worker_addrs: Vec<String>,
-    pub algorithm: AlgorithmConfig,
+#[serde(bound = "A: Serialize + serde::de::DeserializeOwned")]
+pub struct TrainingConfig<A: ToSocketAddrs> {
+    pub worker_addrs: Vec<A>,
+    pub algorithm: AlgorithmConfig<A>,
     pub dataset: DatasetConfig,
     pub optimizer: OptimizerConfig,
     pub loss_fn: LossFnConfig,
