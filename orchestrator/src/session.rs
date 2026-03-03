@@ -36,8 +36,9 @@ pub enum TrainingEvent {
 /// Represents an ongoing training session.
 pub struct Session {
     runtime: Runtime,
-    server: (NetRx, NetTx),
+    servers: Vec<(NetRx, NetTx)>,
     workers: Vec<(NetRx, NetTx)>,
+    buf: Vec<u32>,
 }
 
 impl Session {
@@ -68,6 +69,7 @@ impl Session {
 
         Ok(Self {
             runtime,
+            servers: server_chans,
             workers: worker_chans,
             server: server_chans.remove(0),
         })
@@ -226,6 +228,8 @@ impl Session {
                 ))),
                 Err(e) => Err(OrchestratorError::ServerError(e.to_string())),
             }
+
+            Ok(all_params)
         })
     }
 

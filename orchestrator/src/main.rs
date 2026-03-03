@@ -6,31 +6,41 @@ fn main() {
     env_logger::init();
 
     let model_config = ModelConfig::Sequential {
-        layers: vec![LayerConfig::Dense {
-            dim: (1, 1),
-            init: ParamGenConfig::Const { value: 0.0 },
-            act_fn: None,
-        }],
+        layers: vec![
+            LayerConfig::Dense {
+                dim: (2, 2),
+                init: ParamGenConfig::Kaiming,
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+            },
+            LayerConfig::Dense {
+                dim: (2, 1),
+                init: ParamGenConfig::Kaiming,
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+            },
+        ],
     };
 
     let training_config = TrainingConfig {
         worker_addrs: vec!["worker-0:50000"],
         algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs: vec!["server-0:40000"],
+            server_addrs: vec!["server-0:40000", "server-1:40001"],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
-            store: StoreConfig::Blocking {
-                shard_size: NonZeroUsize::new(1).expect("1 is non-zero"),
-            },
+            store: StoreConfig::Blocking,
         },
         dataset: DatasetConfig::Inline {
-            data: vec![1.0, 2.0, 2.0, 4.0, 3.0, 6.0, 4.0, 8.0],
-            x_size: 1,
+            data: vec![
+                0.0, 0.0, 0.0, //
+                0.0, 1.0, 1.0, //
+                1.0, 0.0, 1.0, //
+                1.0, 1.0, 1.0, //
+            ],
+            x_size: 2,
             y_size: 1,
         },
-        optimizer: OptimizerConfig::GradientDescent { lr: 0.01 },
+        optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
         loss_fn: LossFnConfig::Mse,
-        batch_size: NonZeroUsize::new(4).expect("non-zero"),
-        max_epochs: NonZeroUsize::new(700).expect("non-zero"),
+        batch_size: NonZeroUsize::new(4).unwrap(),
+        max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
     };

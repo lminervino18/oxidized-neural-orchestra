@@ -3,7 +3,7 @@ use ndarray::{Array2, ArrayView2};
 use super::LossFn;
 
 /// Mean squared error loss function.
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct Mse;
 
 impl Mse {

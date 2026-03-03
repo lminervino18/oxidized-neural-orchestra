@@ -161,6 +161,10 @@ impl<R: Rng> RandParamGen<R, Normal<f32>> {
 }
 
 impl<R: Rng, D: Distribution<f32>> ParamGen for RandParamGen<R, D> {
+    fn size(&self) -> usize {
+        self.remaining
+    }
+
     fn sample(&mut self, mut n: usize) -> Option<Vec<f32>> {
         if self.remaining == 0 {
             return None;

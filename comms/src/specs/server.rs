@@ -1,5 +1,3 @@
-use std::num::NonZeroUsize;
-
 use serde::{Deserialize, Serialize};
 
 use super::machine_learning::OptimizerSpec;
@@ -35,6 +33,16 @@ pub enum ParamGenSpec {
     },
 }
 
+impl ParamGenSpec {
+    pub fn size(&self) -> usize {
+        match self {
+            ParamGenSpec::Const { limit, .. } => *limit,
+            ParamGenSpec::Rand { limit, .. } => *limit,
+            ParamGenSpec::Chained { specs } => specs.iter().map(|spec| spec.size()).sum(),
+        }
+    }
+}
+
 /// The specification for the `Synchronizer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -47,8 +55,8 @@ pub enum SynchronizerSpec {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StoreSpec {
-    Blocking { shard_size: NonZeroUsize },
-    Wild { shard_size: NonZeroUsize },
+    Blocking,
+    Wild,
 }
 
 /// The specification for the `Server` trait.

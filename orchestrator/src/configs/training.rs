@@ -37,8 +37,8 @@ pub enum SynchronizerConfig {
 /// The `Store` configuration.
 #[derive(Debug, Clone, Copy)]
 pub enum StoreConfig {
-    Blocking { shard_size: NonZeroUsize },
-    Wild { shard_size: NonZeroUsize },
+    Blocking,
+    Wild,
 }
 
 /// The `Algorithm` configuration.
