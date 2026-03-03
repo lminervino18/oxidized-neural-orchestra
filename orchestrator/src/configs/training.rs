@@ -1,13 +1,17 @@
-use std::{net::ToSocketAddrs, num::NonZeroUsize, path::PathBuf};
+use std::{num::NonZeroUsize, path::PathBuf};
+
+use serde::{Deserialize, Serialize};
 
 /// The `LossFn` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LossFnConfig {
     Mse,
 }
 
 /// The `Optimizer` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
 pub enum OptimizerConfig {
     Adam { lr: f32, b1: f32, b2: f32, eps: f32 },
     GradientDescent { lr: f32 },
@@ -15,7 +19,8 @@ pub enum OptimizerConfig {
 }
 
 /// The `Dataset` configuration.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
 pub enum DatasetConfig {
     Local {
         path: PathBuf,
@@ -28,34 +33,37 @@ pub enum DatasetConfig {
 }
 
 /// The `Synchronizer` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
 pub enum SynchronizerConfig {
     Barrier { barrier_size: usize },
     NonBlocking,
 }
 
 /// The `Store` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum StoreConfig {
     Blocking,
     Wild,
 }
 
 /// The `Algorithm` configuration.
-#[derive(Debug)]
-pub enum AlgorithmConfig<A: ToSocketAddrs> {
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum AlgorithmConfig {
     ParameterServer {
-        server_addrs: Vec<A>,
+        server_addrs: Vec<String>,
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
 }
 
 /// The `Training` configuration.
-#[derive(Debug)]
-pub struct TrainingConfig<A: ToSocketAddrs> {
-    pub worker_addrs: Vec<A>,
-    pub algorithm: AlgorithmConfig<A>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrainingConfig {
+    pub worker_addrs: Vec<String>,
+    pub algorithm: AlgorithmConfig,
     pub dataset: DatasetConfig,
     pub optimizer: OptimizerConfig,
     pub loss_fn: LossFnConfig,

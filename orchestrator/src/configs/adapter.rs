@@ -43,10 +43,10 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if validation fails or any address cannot be resolved.
-    pub fn adapt_configs<A: ToSocketAddrs>(
+    pub fn adapt_configs(
         &self,
         model: ModelConfig,
-        training: TrainingConfig<A>,
+        training: TrainingConfig,
     ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
         Validator::new().validate(&model, &training)?;
 
@@ -76,10 +76,10 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any address cannot be resolved.
-    fn adapt_workers<A: ToSocketAddrs>(
+    fn adapt_workers(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig<A>,
+        training: &TrainingConfig,
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
@@ -126,10 +126,10 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any address cannot be resolved.
-    fn adapt_servers<A: ToSocketAddrs>(
+    fn adapt_servers(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig<A>,
+        training: &TrainingConfig,
     ) -> Result<(
         Vec<(SocketAddr, ServerSpec)>,
         Vec<SocketAddr>,
@@ -278,11 +278,7 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if the dataset config is invalid.
-    fn adapt_trainer<A: ToSocketAddrs>(
-        &self,
-        model: &ModelConfig,
-        training: &TrainingConfig<A>,
-    ) -> Result<TrainerSpec> {
+    fn adapt_trainer(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<TrainerSpec> {
         let (model_spec, _) = self.adapt_model_param_gen(model);
         let optimizer = self.adapt_optimizer(training.optimizer);
         let dataset = self.adapt_dataset(&training.dataset)?;

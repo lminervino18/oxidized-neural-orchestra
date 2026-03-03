@@ -21,19 +21,14 @@ fn main() {
     };
 
     let training_config = TrainingConfig {
-        worker_addrs: vec!["worker-0:50000"],
+        worker_addrs: vec!["worker-0:50000".to_string()],
         algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs: vec!["server-0:40000", "server-1:40001"],
+            server_addrs: vec!["server-0:40000".to_string(), "server-1:40001".to_string()],
             synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
             store: StoreConfig::Blocking,
         },
         dataset: DatasetConfig::Inline {
-            data: vec![
-                0.0, 0.0, 0.0, //
-                0.0, 1.0, 1.0, //
-                1.0, 0.0, 1.0, //
-                1.0, 1.0, 1.0, //
-            ],
+            data: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0],
             x_size: 2,
             y_size: 1,
         },
