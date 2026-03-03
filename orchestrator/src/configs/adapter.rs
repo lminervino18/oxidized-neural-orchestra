@@ -50,8 +50,10 @@ impl Adapter {
     ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
         Validator::new().validate(&model, &training)?;
 
-        let (servers, server_sizes, server_ordering) = self.adapt_servers(&model, &training)?;
-        let workers = self.adapt_workers(&model, &training, server_sizes, server_ordering)?;
+        let (servers, server_addrs, server_sizes, server_ordering) =
+            self.adapt_servers(&model, &training)?;
+        let workers =
+            self.adapt_workers(&model, &training, server_addrs, server_sizes, server_ordering)?;
         Ok((workers, servers))
     }
 
@@ -60,6 +62,7 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
+    /// * `server_addrs` - Already-resolved server socket addresses.
     /// * `server_sizes` - The amounts of parameters per server.
     /// * `server_ordering` - The ordering of the layer owners.
     ///
@@ -72,11 +75,12 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
+        server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
         let trainer = self.adapt_trainer(model, training)?;
-        let algorithm = self.adapt_algorithm(&training.algorithm, server_sizes, server_ordering)?;
+        let algorithm = self.adapt_algorithm(server_addrs, server_sizes, server_ordering);
 
         training
             .worker_addrs
@@ -113,7 +117,7 @@ impl Adapter {
     /// * `training` - The training configuration.
     ///
     /// # Returns
-    /// The server specifications, their sizes and ordering, or an error if occurred.
+    /// The server specifications, their resolved addresses, sizes and ordering.
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any address cannot be resolved.
@@ -121,7 +125,7 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> Result<(Vec<(SocketAddr, ServerSpec)>, Vec<usize>, Vec<usize>)> {
+    ) -> Result<(Vec<(SocketAddr, ServerSpec)>, Vec<SocketAddr>, Vec<usize>, Vec<usize>)> {
         let AlgorithmConfig::ParameterServer {
             server_addrs,
             synchronizer,
@@ -142,111 +146,85 @@ impl Adapter {
             .collect();
 
         let param_gen_bins = balanced_partitions(items, server_addrs.len());
-let mut server_ordering = vec![0; nlayers];
+        let mut server_ordering = vec![0; nlayers];
 
-for (server_i, bin) in param_gen_bins.iter().enumerate() {
-    for &(layer_i, _) in bin {
-        server_ordering[layer_i] = server_i;
+        for (server_i, bin) in param_gen_bins.iter().enumerate() {
+            for &(layer_i, _) in bin {
+                server_ordering[layer_i] = server_i;
+            }
+        }
+
+        let chained_param_gens = param_gen_bins.into_iter().map(|bin| {
+            let (specs, sizes): (Vec<_>, Vec<_>) = bin
+                .into_iter()
+                .map(|(_, spec)| {
+                    let size = spec.size();
+                    (spec, size)
+                })
+                .unzip();
+
+            let chained = ParamGenSpec::Chained { specs };
+            (chained, sizes.into_iter().sum::<usize>())
+        });
+
+        let mut resolved_addrs: Vec<SocketAddr> = Vec::with_capacity(server_addrs.len());
+        let mut servers: Vec<(SocketAddr, ServerSpec)> = Vec::with_capacity(server_addrs.len());
+        let mut server_sizes: Vec<usize> = Vec::with_capacity(server_addrs.len());
+
+        for (i, (addressable, (param_gen, size))) in
+            server_addrs.iter().zip(chained_param_gens).enumerate()
+        {
+            let addr = addressable
+                .to_socket_addrs()
+                .map_err(|e| OrchestratorError::ConnectionFailed {
+                    addr: format!("server[{i}]"),
+                    source: e,
+                })?
+                .next()
+                .ok_or_else(|| {
+                    OrchestratorError::InvalidConfig(format!(
+                        "server[{i}]: could not resolve address"
+                    ))
+                })?;
+
+            let spec = ServerSpec {
+                id: i,
+                nworkers: training.worker_addrs.len(),
+                param_gen,
+                optimizer: self.adapt_optimizer(training.optimizer),
+                synchronizer: self.adapt_synchronizer(synchronizer),
+                store: self.adapt_store(store),
+                seed: training.seed,
+            };
+
+            resolved_addrs.push(addr);
+            servers.push((addr, spec));
+            server_sizes.push(size);
+        }
+
+        Ok((servers, resolved_addrs, server_sizes, server_ordering))
     }
-}
 
-let chained_param_gens = param_gen_bins.into_iter().map(|bin| {
-    let (specs, sizes): (Vec<_>, Vec<_>) = bin
-        .into_iter()
-        .map(|(_, spec)| {
-            let size = spec.size();
-            (spec, size)
-        })
-        .unzip();
-
-    let chained = ParamGenSpec::Chained { specs };
-    (chained, sizes.into_iter().sum::<usize>())
-});
-
-        let (servers, server_sizes): (Vec<_>, Vec<_>) = server_addrs
-            .iter()
-            .zip(chained_param_gens)
-            .enumerate()
-            .map(|(i, (addressable, (param_gen, size)))| {
-                let addr = addressable
-                    .to_socket_addrs()
-                    .map_err(|e| OrchestratorError::ConnectionFailed {
-                        addr: format!("server[{i}]"),
-                        source: e,
-                    })?
-                    .next()
-                    .ok_or_else(|| {
-                        OrchestratorError::InvalidConfig(format!(
-                            "server[{i}]: could not resolve address"
-                        ))
-                    })?;
-
-                let spec = ServerSpec {
-                    id: i,
-                    nworkers: training.worker_addrs.len(),
-                    param_gen,
-                    optimizer: self.adapt_optimizer(training.optimizer),
-                    synchronizer: self.adapt_synchronizer(synchronizer),
-                    store: self.adapt_store(store),
-                    seed: training.seed,
-                };
-
-                Ok(((addr, spec), size))
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .unzip();
-
-        Ok((servers, server_sizes, server_ordering))
-    }
-
-    /// Resolves the server addresses for the algorithm spec.
+    /// Builds an `AlgorithmSpec` from already-resolved server addresses.
     ///
     /// # Args
-    /// * `algorithm` - The algorithm's configuration.
+    /// * `server_addrs` - Already-resolved server socket addresses.
     /// * `server_sizes` - The amount of parameters per server.
     /// * `server_ordering` - The ordering of the layer owners.
     ///
     /// # Returns
     /// The resolved `AlgorithmSpec`.
-    ///
-    /// # Errors
-    /// Returns an `OrchestratorError` if any address cannot be resolved.
-    fn adapt_algorithm<A: ToSocketAddrs>(
+    fn adapt_algorithm(
         &self,
-        algorithm: &AlgorithmConfig<A>,
+        server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-    ) -> Result<AlgorithmSpec> {
-        let spec = match algorithm {
-            AlgorithmConfig::ParameterServer { server_addrs, .. } => {
-                let server_addrs = server_addrs
-                    .iter()
-                    .enumerate()
-                    .map(|(i, addr)| {
-                        addr.to_socket_addrs()
-                            .map_err(|e| OrchestratorError::ConnectionFailed {
-                                addr: format!("server[{i}]"),
-                                source: e,
-                            })?
-                            .next()
-                            .ok_or_else(|| {
-                                OrchestratorError::InvalidConfig(format!(
-                                    "server[{i}]: could not resolve address"
-                                ))
-                            })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                AlgorithmSpec::ParameterServer {
-                    server_addrs,
-                    server_sizes,
-                    server_ordering,
-                }
-            }
-        };
-
-        Ok(spec)
+    ) -> AlgorithmSpec {
+        AlgorithmSpec::ParameterServer {
+            server_addrs,
+            server_sizes,
+            server_ordering,
+        }
     }
 
     /// Converts a `SynchronizerConfig` into a `SynchronizerSpec`.
@@ -273,11 +251,11 @@ let chained_param_gens = param_gen_bins.into_iter().map(|bin| {
     /// # Returns
     /// The resolved `StoreSpec`.
     fn adapt_store(&self, store: &StoreConfig) -> StoreSpec {
-    match *store {
-        StoreConfig::Blocking => StoreSpec::Blocking,
-        StoreConfig::Wild => StoreSpec::Wild,
+        match *store {
+            StoreConfig::Blocking => StoreSpec::Blocking,
+            StoreConfig::Wild => StoreSpec::Wild,
+        }
     }
-}
 
     /// Builds a `TrainerSpec` from the model and training configs.
     ///
