@@ -2,6 +2,8 @@ pub mod configs;
 pub mod error;
 mod session;
 
+use std::net::ToSocketAddrs;
+
 use configs::Adapter;
 use session::Session;
 
@@ -22,7 +24,10 @@ use crate::configs::{ModelConfig, TrainingConfig};
 /// # Errors
 /// Returns an `OrchestratorError` if config validation fails or connecting to
 /// any worker or server fails.
-pub fn train(model: ModelConfig, training: TrainingConfig) -> Result<Session, OrchestratorError> {
+pub fn train<A: ToSocketAddrs>(
+    model: ModelConfig,
+    training: TrainingConfig<A>,
+) -> Result<Session, OrchestratorError> {
     log::info!("adapting configs");
     let adapter = Adapter::new();
     let (workers, servers) = adapter.adapt_configs(model, training)?;
