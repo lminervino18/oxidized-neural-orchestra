@@ -240,8 +240,8 @@ impl Adapter {
     /// The store's specification or an io error if occurred.
     fn adapt_store(&self, store: &StoreConfig) -> StoreSpec {
         match *store {
-            StoreConfig::Blocking { shard_size } => StoreSpec::Blocking { shard_size },
-            StoreConfig::Wild { shard_size } => StoreSpec::Wild { shard_size },
+            StoreConfig::Blocking => StoreSpec::Blocking,
+            StoreConfig::Wild => StoreSpec::Wild,
         }
     }
 

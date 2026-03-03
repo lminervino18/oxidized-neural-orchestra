@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, num::NonZeroUsize, rc::Rc, thread};
 
 use comms::specs::{
     machine_learning::OptimizerSpec,
@@ -14,6 +14,12 @@ use crate::{
     storage::{BlockingStore, Store, StoreHandle, WildStore},
     synchronization::{BarrierSync, NoBlockingSync, Synchronizer},
 };
+
+/// The amount of cores to use if `std::thread::available_parallelism` fails.
+const DEFAULT_CORE_COUNT: NonZeroUsize = NonZeroUsize::new(8).unwrap();
+
+/// The factor to multiply the amount of cores to obtain the shard amount.
+const SHARD_AMOUNT_FACTOR: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 
 /// Makes `callback`'s return type generic, when trying to resolve a concrete `RandParamGen` it avoids boxing all
 /// parameter generators variants.
@@ -286,12 +292,19 @@ impl ServerBuilder {
         OF: FnMut(usize) -> O,
         S: Synchronizer + Send + Sync + 'static,
     {
+        // SAFETY: The argument is at least 1.
+        let nparams = unsafe { NonZeroUsize::new_unchecked(param_gen.size().max(1)) };
+        let cores = thread::available_parallelism().unwrap_or(DEFAULT_CORE_COUNT);
+        let max_shard_amount = cores.saturating_mul(SHARD_AMOUNT_FACTOR);
+        let shard_amount = nparams.min(max_shard_amount);
+        let shard_size = shard_amount.div_ceil(nparams);
+
         match spec.store {
-            StoreSpec::Blocking { shard_size } => {
+            StoreSpec::Blocking => {
                 let store = BlockingStore::new(shard_size, param_gen, optimizer_factory);
                 self.terminate_build(store, synchronizer)
             }
-            StoreSpec::Wild { shard_size } => {
+            StoreSpec::Wild => {
                 let store = WildStore::new(shard_size, param_gen, optimizer_factory);
                 self.terminate_build(store, synchronizer)
             }

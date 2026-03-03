@@ -26,6 +26,13 @@ impl ChainedParamGen {
 }
 
 impl ParamGen for ChainedParamGen {
+    fn size(&self) -> usize {
+        self.param_gens
+            .iter()
+            .map(|param_gen| param_gen.size())
+            .sum()
+    }
+
     fn sample(&mut self, n: usize) -> Option<Vec<f32>> {
         if self.curr == self.param_gens.len() {
             return None;
