@@ -148,14 +148,9 @@ fn parse_synchronizer(val: &serde_json::Value) -> Result<SynchronizerConfig, Str
 }
 
 fn parse_store(val: &serde_json::Value) -> Result<StoreConfig, String> {
-    let shard_size = val["shard_size"]
-        .as_u64()
-        .ok_or("missing field: shard_size")? as usize;
-    let shard_size = NonZeroUsize::new(shard_size).ok_or("shard_size must be greater than zero")?;
-
     match val["store"].as_str().ok_or("missing field: store")? {
-        "blocking" => Ok(StoreConfig::Blocking { shard_size }),
-        "wild" => Ok(StoreConfig::Wild { shard_size }),
+        "blocking" => Ok(StoreConfig::Blocking),
+        "wild" => Ok(StoreConfig::Wild),
         other => Err(format!("unknown store: {other}")),
     }
 }

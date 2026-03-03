@@ -1,7 +1,6 @@
 use std::{
     cmp::Reverse,
     collections::BinaryHeap,
-    io,
     net::{SocketAddr, ToSocketAddrs},
 };
 
@@ -48,7 +47,9 @@ impl Adapter {
         &self,
         model: ModelConfig,
         training: TrainingConfig<A>,
-    ) -> io::Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
+    ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
+        Validator::new().validate(&model, &training)?;
+
         let (servers, server_sizes, server_ordering) = self.adapt_servers(&model, &training)?;
         let workers = self.adapt_workers(&model, &training, server_sizes, server_ordering)?;
         Ok((workers, servers))
@@ -72,11 +73,10 @@ impl Adapter {
         model: &ModelConfig,
         training: &TrainingConfig<A>,
         server_sizes: Vec<usize>,
-        serveer_ordering: Vec<usize>,
-    ) -> io::Result<Vec<(SocketAddr, WorkerSpec)>> {
+        server_ordering: Vec<usize>,
+    ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
         let trainer = self.adapt_trainer(model, training)?;
-        let algorithm =
-            self.adapt_algorithm(&training.algorithm, server_sizes, serveer_ordering)?;
+        let algorithm = self.adapt_algorithm(&training.algorithm, server_sizes, server_ordering)?;
 
         training
             .worker_addrs
@@ -113,12 +113,15 @@ impl Adapter {
     /// * `training` - The training configuration.
     ///
     /// # Returns
-    /// The server's specification, their sizes and ordering or an io error if occurred
+    /// The server specifications, their sizes and ordering, or an error if occurred.
+    ///
+    /// # Errors
+    /// Returns an `OrchestratorError` if any address cannot be resolved.
     fn adapt_servers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> io::Result<(Vec<(SocketAddr, ServerSpec)>, Vec<usize>, Vec<usize>)> {
+    ) -> Result<(Vec<(SocketAddr, ServerSpec)>, Vec<usize>, Vec<usize>)> {
         let AlgorithmConfig::ParameterServer {
             server_addrs,
             synchronizer,
@@ -139,26 +142,26 @@ impl Adapter {
             .collect();
 
         let param_gen_bins = balanced_partitions(items, server_addrs.len());
-        let mut server_ordering = vec![0; nlayers];
+let mut server_ordering = vec![0; nlayers];
 
-        for (server_i, bin) in param_gen_bins.iter().enumerate() {
-            for &(layer_i, ..) in bin {
-                server_ordering[layer_i] = server_i;
-            }
-        }
+for (server_i, bin) in param_gen_bins.iter().enumerate() {
+    for &(layer_i, _) in bin {
+        server_ordering[layer_i] = server_i;
+    }
+}
 
-        let chained_param_gens = param_gen_bins.into_iter().map(|bin| {
-            let (specs, sizes): (Vec<_>, Vec<_>) = bin
-                .into_iter()
-                .map(|(_, spec)| {
-                    let size = spec.size();
-                    (spec, size)
-                })
-                .unzip();
+let chained_param_gens = param_gen_bins.into_iter().map(|bin| {
+    let (specs, sizes): (Vec<_>, Vec<_>) = bin
+        .into_iter()
+        .map(|(_, spec)| {
+            let size = spec.size();
+            (spec, size)
+        })
+        .unzip();
 
-            let chained = ParamGenSpec::Chained { specs };
-            (chained, sizes.into_iter().sum::<usize>())
-        });
+    let chained = ParamGenSpec::Chained { specs };
+    (chained, sizes.into_iter().sum::<usize>())
+});
 
         let (servers, server_sizes): (Vec<_>, Vec<_>) = server_addrs
             .iter()
@@ -188,16 +191,16 @@ impl Adapter {
                     seed: training.seed,
                 };
 
-                Ok(((addr, server), size))
+                Ok(((addr, spec), size))
             })
-            .collect::<io::Result<Vec<_>>>()?
+            .collect::<Result<Vec<_>>>()?
             .into_iter()
             .unzip();
 
         Ok((servers, server_sizes, server_ordering))
     }
 
-    /// Resolves the primary server address for the algorithm spec.
+    /// Resolves the server addresses for the algorithm spec.
     ///
     /// # Args
     /// * `algorithm` - The algorithm's configuration.
@@ -208,23 +211,32 @@ impl Adapter {
     /// The resolved `AlgorithmSpec`.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if the address cannot be resolved.
+    /// Returns an `OrchestratorError` if any address cannot be resolved.
     fn adapt_algorithm<A: ToSocketAddrs>(
         &self,
         algorithm: &AlgorithmConfig<A>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-    ) -> io::Result<AlgorithmSpec> {
+    ) -> Result<AlgorithmSpec> {
         let spec = match algorithm {
             AlgorithmConfig::ParameterServer { server_addrs, .. } => {
                 let server_addrs = server_addrs
                     .iter()
-                    .map(|addr| {
-                        addr.to_socket_addrs()?
+                    .enumerate()
+                    .map(|(i, addr)| {
+                        addr.to_socket_addrs()
+                            .map_err(|e| OrchestratorError::ConnectionFailed {
+                                addr: format!("server[{i}]"),
+                                source: e,
+                            })?
                             .next()
-                            .ok_or_else(|| io::Error::other("failed to resolve a server address"))
+                            .ok_or_else(|| {
+                                OrchestratorError::InvalidConfig(format!(
+                                    "server[{i}]: could not resolve address"
+                                ))
+                            })
                     })
-                    .collect::<io::Result<Vec<_>>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 AlgorithmSpec::ParameterServer {
                     server_addrs,
@@ -232,7 +244,9 @@ impl Adapter {
                     server_ordering,
                 }
             }
-        }
+        };
+
+        Ok(spec)
     }
 
     /// Converts a `SynchronizerConfig` into a `SynchronizerSpec`.
@@ -259,11 +273,11 @@ impl Adapter {
     /// # Returns
     /// The resolved `StoreSpec`.
     fn adapt_store(&self, store: &StoreConfig) -> StoreSpec {
-        match *store {
-            StoreConfig::Blocking => StoreSpec::Blocking,
-            StoreConfig::Wild => StoreSpec::Wild,
-        }
+    match *store {
+        StoreConfig::Blocking => StoreSpec::Blocking,
+        StoreConfig::Wild => StoreSpec::Wild,
     }
+}
 
     /// Builds a `TrainerSpec` from the model and training configs.
     ///
@@ -286,7 +300,7 @@ impl Adapter {
         let dataset = self.adapt_dataset(&training.dataset)?;
         let loss_fn = self.adapt_loss_fn(training.loss_fn);
 
-        let trainer = TrainerSpec {
+        Ok(TrainerSpec {
             model: model_spec,
             optimizer,
             dataset,
@@ -295,8 +309,7 @@ impl Adapter {
             max_epochs: training.max_epochs,
             batch_size: training.batch_size,
             seed: training.seed,
-        };
-        Ok(trainer)
+        })
     }
 
     /// Converts a `LossFnConfig` into a `LossFnSpec`.
@@ -363,24 +376,23 @@ impl Adapter {
         }
     }
 
-    /// Converts a `ModelConfig` into a `ModelSpec` and its associated `ParamGenSpec`.
+    /// Converts a `ModelConfig` into a `ModelSpec` and its associated per-layer `ParamGenSpec`s.
     ///
     /// # Args
     /// * `model` - The model architecture configuration.
     ///
     /// # Returns
-    /// The model's and parameter generator's specification or an io error if occurred.
+    /// A tuple of the resolved `ModelSpec` and a `ParamGenSpec` per layer.
     fn adapt_model_param_gen(&self, model: &ModelConfig) -> (ModelSpec, Vec<ParamGenSpec>) {
         match model {
             ModelConfig::Sequential { layers } => {
                 let (layer_specs, param_gen_specs): (Vec<_>, Vec<_>) =
                     layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
 
-                let model_spec = ModelSpec::Sequential {
-                    layers: layer_specs,
-                };
-
-                (model_spec, param_gen_specs)
+                (
+                    ModelSpec::Sequential { layers: layer_specs },
+                    param_gen_specs,
+                )
             }
         }
     }
