@@ -24,6 +24,8 @@ pub enum OptimizerConfig {
 pub enum DatasetConfig {
     Local {
         path: PathBuf,
+        x_size: usize,
+        y_size: usize,
     },
     Inline {
         data: Vec<f32>,

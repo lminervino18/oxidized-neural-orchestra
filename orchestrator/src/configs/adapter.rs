@@ -76,22 +76,24 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any address cannot be resolved.
-    fn adapt_workers<A: ToSocketAddrs>(
+    fn adapt_workers(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig<A>,
+        training: &TrainingConfig,
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
         let trainer = self.adapt_trainer(model, training)?;
         let algorithm = self.adapt_algorithm(server_addrs, server_sizes, server_ordering);
+        let datasets = self.adapt_dataset(training.dataset, training.worker_addrs.len())?;
 
         training
             .worker_addrs
             .iter()
             .enumerate()
-            .map(|(i, addressable)| {
+            .zip(datasets)
+            .map(|((i, addressable), dataset)| {
                 let addr = addressable
                     .to_socket_addrs()
                     .map_err(|e| OrchestratorError::ConnectionFailed {
@@ -108,6 +110,7 @@ impl Adapter {
                 let spec = WorkerSpec {
                     worker_id: i,
                     trainer: trainer.clone(),
+                    dataset,
                     algorithm: algorithm.clone(),
                 };
                 Ok((addr, spec))
@@ -285,13 +288,11 @@ impl Adapter {
     ) -> Result<TrainerSpec> {
         let (model_spec, _) = self.adapt_model_param_gen(model);
         let optimizer = self.adapt_optimizer(training.optimizer);
-        let dataset = self.adapt_dataset(&training.dataset)?;
         let loss_fn = self.adapt_loss_fn(training.loss_fn);
 
         Ok(TrainerSpec {
             model: model_spec,
             optimizer,
-            dataset,
             loss_fn,
             offline_epochs: training.offline_epochs,
             max_epochs: training.max_epochs,
@@ -313,32 +314,39 @@ impl Adapter {
         }
     }
 
-    /// Converts a `DatasetConfig` into a `DatasetSpec`.
+    /// Converts a `DatasetConfig` into `DatasetSpec`s.
     ///
     /// # Args
     /// * `dataset` - The dataset configuration.
     ///
     /// # Returns
-    /// The resolved `DatasetSpec`.
+    /// A list of resolved dataset specs.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if the dataset variant is not yet supported.
-    fn adapt_dataset(&self, dataset: &DatasetConfig) -> Result<DatasetSpec> {
-        match dataset {
-            DatasetConfig::Local { path } => Err(OrchestratorError::InvalidConfig(format!(
-                "local dataset loading not yet implemented: {}",
-                path.display()
-            ))),
-            DatasetConfig::Inline {
-                data,
+    /// Returns an `OrchestratorError` if the dataset cannot be resolved.
+    fn adapt_dataset(&self, dataset: DatasetConfig, partitions: usize) -> Result<Vec<DatasetSpec>> {
+        let datasets = match dataset {
+            DatasetConfig::Local {
+                path,
                 x_size,
                 y_size,
-            } => Ok(DatasetSpec {
-                data: data.to_vec(),
-                x_size: *x_size,
-                y_size: *y_size,
-            }),
-        }
+            } => {
+                let metadata = fs::metadata(path)?;
+                let size = metadata.size() / partitions;
+
+                (0..partitions).map(|| DatasetSpec {
+                    size,
+                    chunk: size,
+                    x_size,
+                    y_size,
+                })
+            }
+            DatasetConfig::Inline {
+                data: (),
+                x_size: (),
+                y_size: (),
+            } => todo!(),
+        };
     }
 
     /// Converts an `OptimizerConfig` into an `OptimizerSpec`.
