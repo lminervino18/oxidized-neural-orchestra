@@ -45,6 +45,8 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Span::styled("  │  ", Theme::muted()),
         Span::styled(format!("servers {}", state.servers_total), Theme::dim()),
         Span::styled("  │  ", Theme::muted()),
+        Span::styled(format!("avg loss {}", avg_loss_str(state)), Theme::dim()),
+        Span::styled("  │  ", Theme::muted()),
         Span::styled(format!("optimizer {}", state.optimizer_label), Theme::dim()),
         hint,
     ]);
@@ -57,4 +59,15 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         ),
         area,
     );
+}
+
+fn avg_loss_str(state: &TrainingState) -> String {
+    let losses: Vec<f32> = state.workers.iter().filter_map(|w| w.last_loss).collect();
+
+    if losses.is_empty() {
+        return "—".into();
+    }
+
+    let avg = losses.iter().sum::<f32>() / losses.len() as f32;
+    format!("{avg:.4}")
 }
