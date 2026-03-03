@@ -75,6 +75,7 @@ pub enum LogLevel {
 /// Full state for the training dashboard screen.
 pub struct TrainingState {
     pub workers_total: usize,
+    pub servers_total: usize,
     pub optimizer_label: String,
     pub max_epochs: usize,
     pub phase: Phase,
@@ -102,7 +103,13 @@ impl TrainingState {
     /// * `model` - The model architecture configuration.
     /// * `training` - The training configuration.
     /// * `workers_total` - The number of worker nodes expected.
-    pub fn new(model: ModelConfig, training: TrainingConfig<String>, workers_total: usize) -> Self {
+    /// * `servers_total` - The number of parameter servers expected.
+    pub fn new(
+        model: ModelConfig,
+        training: TrainingConfig<String>,
+        workers_total: usize,
+        servers_total: usize,
+    ) -> Self {
         let optimizer_label = format!("{:?}", training.optimizer)
             .split_whitespace()
             .next()
@@ -114,7 +121,13 @@ impl TrainingState {
         let session = match orchestrator::train(model, training) {
             Ok(s) => s,
             Err(e) => {
-                return Self::dead(workers_total, optimizer_label, max_epochs, e.to_string());
+                return Self::dead(
+                    workers_total,
+                    servers_total,
+                    optimizer_label,
+                    max_epochs,
+                    e.to_string(),
+                );
             }
         };
 
@@ -133,6 +146,7 @@ impl TrainingState {
 
         Self {
             workers_total,
+            servers_total,
             optimizer_label,
             max_epochs,
             phase: Phase::Connecting,
@@ -141,7 +155,7 @@ impl TrainingState {
             loss_series,
             logs: vec![(
                 LogLevel::Info,
-                "connecting to workers and parameter server...".into(),
+                format!("connecting to {workers_total} worker(s) and {servers_total} server(s)..."),
             )],
             final_params: None,
             error: None,
@@ -153,16 +167,17 @@ impl TrainingState {
     }
 
     /// Creates a dead state used when the session fails to start.
-    ///
-    /// # Args
-    /// * `workers_total` - Expected worker count.
-    /// * `optimizer_label` - Display label for the optimizer.
-    /// * `max_epochs` - Configured epoch limit.
-    /// * `err` - The error message to display.
-    fn dead(workers_total: usize, optimizer_label: String, max_epochs: usize, err: String) -> Self {
+    fn dead(
+        workers_total: usize,
+        servers_total: usize,
+        optimizer_label: String,
+        max_epochs: usize,
+        err: String,
+    ) -> Self {
         let (_, rx) = mpsc::channel(1);
         Self {
             workers_total,
+            servers_total,
             optimizer_label,
             max_epochs,
             phase: Phase::Error,
@@ -187,9 +202,6 @@ impl TrainingState {
     }
 
     /// Applies a single training event to the state.
-    ///
-    /// # Args
-    /// * `event` - The event received from the session.
     fn apply(&mut self, event: TrainingEvent) {
         match event {
             TrainingEvent::Loss { worker_id, losses } => {
@@ -241,10 +253,6 @@ impl TrainingState {
     }
 
     /// Appends a log entry, evicting the oldest if the buffer exceeds 200 entries.
-    ///
-    /// # Args
-    /// * `level` - Severity of the log entry.
-    /// * `msg` - The message to log.
     fn push_log(&mut self, level: LogLevel, msg: String) {
         self.logs.push((level, msg));
         if self.logs.len() > 200 {
@@ -269,9 +277,6 @@ impl TrainingState {
     }
 
     /// Computes the average loss series across all workers.
-    ///
-    /// # Returns
-    /// A vector of (epoch, avg_loss) pairs aligned by index.
     pub fn avg_loss_series(&self) -> Vec<(f64, f64)> {
         let max_len = self.loss_series.iter().map(|s| s.len()).max().unwrap_or(0);
         if max_len == 0 {
@@ -318,13 +323,6 @@ impl TrainingState {
 }
 
 /// Handles a key event for the training screen.
-///
-/// # Args
-/// * `state` - The current training screen state.
-/// * `key` - The key that was pressed.
-///
-/// # Returns
-/// An `Action` indicating what the application should do next.
 pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
     if state.startup_error.is_some() {
         return Some(Action::Transition(super::Screen::Menu(
@@ -364,10 +362,6 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
 }
 
 /// Draws the training dashboard screen.
-///
-/// # Args
-/// * `f` - The ratatui frame to draw into.
-/// * `state` - The current training screen state.
 pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     state.tick();
 
@@ -419,12 +413,6 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     }
 }
 
-/// Draws the full-screen startup error shown when the session fails to connect.
-///
-/// # Args
-/// * `f` - The ratatui frame to draw into.
-/// * `area` - The full terminal area.
-/// * `err` - The error message to display.
 fn draw_startup_error(f: &mut Frame, area: ratatui::layout::Rect, err: &str) {
     use ratatui::{
         layout::{Alignment, Constraint, Direction, Layout},
@@ -497,7 +485,7 @@ fn draw_startup_error(f: &mut Frame, area: ratatui::layout::Rect, err: &str) {
     f.render_widget(
         Paragraph::new(Span::styled(
             "Press any key to go back to the menu.",
-            Theme::dim(),
+            Theme::muted(),
         ))
         .alignment(Alignment::Center),
         chunks[5],

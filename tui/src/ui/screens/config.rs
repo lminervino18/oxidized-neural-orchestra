@@ -41,24 +41,31 @@ const EXAMPLE_MODEL: &str = concat!(
 
 const EXAMPLE_TRAINING: &str = concat!(
     "{\n",
-    "  \"worker_addrs\": [\"worker-0:50000\"],\n",
-    "  \"server_addrs\": [\"server-0:40000\"],\n",
+    "  \"worker_addrs\": [\"worker-0:50000\", \"worker-1:50001\"],\n",
+    "  \"server_addrs\": [\"server-0:40000\", \"server-1:40001\"],\n",
     "  \"synchronizer\": \"barrier\",\n",
     "  \"barrier_size\": 1,\n",
     "  \"store\": \"blocking\",\n",
-    "  \"shard_size\": 128,\n",
     "  \"max_epochs\": 100,\n",
     "  \"offline_epochs\": 0,\n",
     "  \"batch_size\": 32,\n",
     "  \"seed\": null,\n",
     "  \"optimizer\": \"gradient_descent\",\n",
-    "  \"lr\": 0.01\n",
+    "  \"lr\": 0.01,\n",
+    "  \"dataset\": {\n",
+    "    \"path\": \"data.csv\",\n",
+    "    \"x_size\": 2,\n",
+    "    \"y_size\": 1\n",
+    "  }\n",
     "}\n",
     "\n",
     "synchronizer: barrier, non_blocking\n",
     "store: blocking, wild\n",
     "optimizer: gradient_descent, adam,\n",
-    "  gradient_descent_with_momentum",
+    "  gradient_descent_with_momentum\n",
+    "server_addrs: one or more parameter servers\n",
+    "  parameters are distributed across servers\n",
+    "  via bin-packing",
 );
 
 #[derive(Debug, Clone, PartialEq)]
@@ -206,6 +213,7 @@ fn try_load(state: &mut ConfigState) -> Option<Action> {
             model_json.config,
             training_json.config,
             training_json.worker_count,
+            training_json.server_count,
         ),
     )))
 }

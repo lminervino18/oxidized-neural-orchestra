@@ -16,6 +16,7 @@ pub struct ModelJson {
 pub struct TrainingJson {
     pub config: TrainingConfig<String>,
     pub worker_count: usize,
+    pub server_count: usize,
 }
 
 /// Loads and parses a [`ModelConfig`] from a JSON file.
@@ -108,9 +109,11 @@ pub fn load_training(path: &str) -> Result<TrainingJson, String> {
     let optimizer = parse_optimizer(&val)?;
     let dataset = parse_dataset(&val["dataset"])?;
     let worker_count = worker_addrs.len();
+    let server_count = server_addrs.len();
 
     Ok(TrainingJson {
         worker_count,
+        server_count,
         config: TrainingConfig {
             worker_addrs,
             algorithm: AlgorithmConfig::ParameterServer {

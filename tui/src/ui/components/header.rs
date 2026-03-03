@@ -9,7 +9,7 @@ use ratatui::{
 use crate::ui::screens::training::{Phase, TrainingState};
 use crate::ui::theme::Theme;
 
-/// Draws the top header bar with session phase, elapsed time, worker count and optimizer.
+/// Draws the top header bar with session phase, elapsed time, worker/server counts and optimizer.
 ///
 /// # Args
 /// * `f` - The ratatui frame to draw into.
@@ -42,6 +42,8 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
             format!("workers {}/{}", workers_done, state.workers_total),
             Theme::dim(),
         ),
+        Span::styled("  │  ", Theme::muted()),
+        Span::styled(format!("servers {}", state.servers_total), Theme::dim()),
         Span::styled("  │  ", Theme::muted()),
         Span::styled(format!("optimizer {}", state.optimizer_label), Theme::dim()),
         hint,

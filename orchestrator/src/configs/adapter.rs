@@ -52,8 +52,13 @@ impl Adapter {
 
         let (servers, server_addrs, server_sizes, server_ordering) =
             self.adapt_servers(&model, &training)?;
-        let workers =
-            self.adapt_workers(&model, &training, server_addrs, server_sizes, server_ordering)?;
+        let workers = self.adapt_workers(
+            &model,
+            &training,
+            server_addrs,
+            server_sizes,
+            server_ordering,
+        )?;
         Ok((workers, servers))
     }
 
@@ -125,7 +130,12 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> Result<(Vec<(SocketAddr, ServerSpec)>, Vec<SocketAddr>, Vec<usize>, Vec<usize>)> {
+    ) -> Result<(
+        Vec<(SocketAddr, ServerSpec)>,
+        Vec<SocketAddr>,
+        Vec<usize>,
+        Vec<usize>,
+    )> {
         let AlgorithmConfig::ParameterServer {
             server_addrs,
             synchronizer,
@@ -319,7 +329,11 @@ impl Adapter {
                 "local dataset loading not yet implemented: {}",
                 path.display()
             ))),
-            DatasetConfig::Inline { data, x_size, y_size } => Ok(DatasetSpec {
+            DatasetConfig::Inline {
+                data,
+                x_size,
+                y_size,
+            } => Ok(DatasetSpec {
                 data: data.to_vec(),
                 x_size: *x_size,
                 y_size: *y_size,
@@ -368,7 +382,9 @@ impl Adapter {
                     layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
 
                 (
-                    ModelSpec::Sequential { layers: layer_specs },
+                    ModelSpec::Sequential {
+                        layers: layer_specs,
+                    },
                     param_gen_specs,
                 )
             }
@@ -441,7 +457,10 @@ impl Adapter {
             } => {
                 let act_fn = self.adapt_act_fn(act_fn.as_ref());
                 (
-                    LayerSpec::Dense { dim: (n, m), act_fn },
+                    LayerSpec::Dense {
+                        dim: (n, m),
+                        act_fn,
+                    },
                     self.adapt_param_gen(init, layer.sizes()),
                 )
             }
