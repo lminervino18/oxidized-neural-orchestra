@@ -329,7 +329,11 @@ impl Adapter {
                 "local dataset loading not yet implemented: {}",
                 path.display()
             ))),
-            DatasetConfig::Inline { data, x_size, y_size } => Ok(DatasetSpec {
+            DatasetConfig::Inline {
+                data,
+                x_size,
+                y_size,
+            } => Ok(DatasetSpec {
                 data: data.to_vec(),
                 x_size: *x_size,
                 y_size: *y_size,
@@ -378,7 +382,9 @@ impl Adapter {
                     layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
 
                 (
-                    ModelSpec::Sequential { layers: layer_specs },
+                    ModelSpec::Sequential {
+                        layers: layer_specs,
+                    },
                     param_gen_specs,
                 )
             }
@@ -444,10 +450,17 @@ impl Adapter {
     /// A tuple of the resolved `LayerSpec` and its `ParamGenSpec`.
     fn adapt_layer(&self, layer: &LayerConfig) -> (LayerSpec, ParamGenSpec) {
         match *layer {
-            LayerConfig::Dense { dim: (n, m), init, act_fn } => {
+            LayerConfig::Dense {
+                dim: (n, m),
+                init,
+                act_fn,
+            } => {
                 let act_fn = self.adapt_act_fn(act_fn.as_ref());
                 (
-                    LayerSpec::Dense { dim: (n, m), act_fn },
+                    LayerSpec::Dense {
+                        dim: (n, m),
+                        act_fn,
+                    },
                     self.adapt_param_gen(init, layer.sizes()),
                 )
             }

@@ -54,5 +54,9 @@ pub fn load_training(path: &str) -> Result<TrainingJson, String> {
         }
     };
 
-    Ok(TrainingJson { config, worker_count, server_count })
+    Ok(TrainingJson {
+        config,
+        worker_count,
+        server_count,
+    })
 }

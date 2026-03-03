@@ -90,16 +90,16 @@ impl Validator {
         }
 
         if let SynchronizerConfig::Barrier { barrier_size } = synchronizer {
-            if *barrier_size > training.worker_addrs.len() {
-                return Err(OrchestratorError::InvalidConfig(format!(
-                    "barrier_size ({barrier_size}) cannot exceed number of workers ({})",
-                    training.worker_addrs.len()
-                )));
-            }
             if *barrier_size == 0 {
                 return Err(OrchestratorError::InvalidConfig(
                     "barrier_size must be greater than 0".into(),
                 ));
+            }
+            if *barrier_size != training.worker_addrs.len() {
+                return Err(OrchestratorError::InvalidConfig(format!(
+                    "barrier_size ({barrier_size}) must equal number of workers ({})",
+                    training.worker_addrs.len()
+                )));
             }
         }
 
@@ -143,3 +143,4 @@ impl Validator {
         Ok(())
     }
 }
+

@@ -24,7 +24,7 @@ pub enum ActFnConfig {
 
 /// The `Layer` configuration.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum LayerConfig {
     Dense {
         dim: (usize, usize),
@@ -47,7 +47,7 @@ impl LayerConfig {
 
 /// The `Model` configuration.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum ModelConfig {
     Sequential { layers: Vec<LayerConfig> },
 }

@@ -11,7 +11,7 @@ pub enum LossFnConfig {
 
 /// The `Optimizer` configuration.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum OptimizerConfig {
     Adam { lr: f32, b1: f32, b2: f32, eps: f32 },
     GradientDescent { lr: f32 },
@@ -20,9 +20,11 @@ pub enum OptimizerConfig {
 
 /// The `Dataset` configuration.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum DatasetConfig {
-    Local { path: PathBuf },
+    Local {
+        path: PathBuf,
+    },
     Inline {
         data: Vec<f32>,
         x_size: usize,
@@ -32,7 +34,7 @@ pub enum DatasetConfig {
 
 /// The `Synchronizer` configuration.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum SynchronizerConfig {
     Barrier { barrier_size: usize },
     NonBlocking,
@@ -48,7 +50,10 @@ pub enum StoreConfig {
 
 /// The `Algorithm` configuration.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "type", bound = "A: Serialize + serde::de::DeserializeOwned")]
+#[serde(
+    rename_all = "snake_case",
+    bound = "A: Serialize + serde::de::DeserializeOwned"
+)]
 pub enum AlgorithmConfig<A: ToSocketAddrs> {
     ParameterServer {
         server_addrs: Vec<A>,
