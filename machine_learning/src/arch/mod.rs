@@ -1,4 +1,3 @@
-pub mod activations;
 pub mod layers;
 pub mod loss;
 mod model;
