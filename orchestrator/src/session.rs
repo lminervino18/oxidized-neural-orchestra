@@ -1,9 +1,11 @@
-use std::net::SocketAddr;
 use std::thread;
+use std::{net::SocketAddr, path::Path};
+use tokio::fs::File;
 
 use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
+    send_dataset::send_dataset,
     specs::{server::ServerSpec, worker::WorkerSpec},
 };
 use tokio::{
@@ -297,18 +299,29 @@ impl Session {
         workers: Vec<(SocketAddr, WorkerSpec)>,
     ) -> Result<Vec<(NetRx, NetTx)>, OrchestratorError> {
         let mut channels = Vec::with_capacity(workers.len());
+
         for (addr, spec) in workers {
             log::debug!("connecting to worker at {addr}");
+
             let (rx, mut tx) = Self::open_channel(addr).await.map_err(|e| {
                 OrchestratorError::ConnectionFailed {
                     addr: addr.to_string(),
                     source: e,
                 }
             })?;
+
             tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+
+            // TODO: o el path viene hasta acá que no me gusta o se resuelve
+            // esto antes y workers deja de ser un vec con address worker
+            // spec y es alguna metadata útil para acá mismo...
+            let dataset = File::open(path).await.unwrap();
+            send_dataset(&mut dataset, spec.dataset, &mut tx);
+
             log::info!("worker at {addr} ready");
             channels.push((rx, tx));
         }
+
         Ok(channels)
     }
 
