@@ -11,6 +11,7 @@
 
 # Environment files
 .env
+.venv
 
 # Added by cargo
 /target
