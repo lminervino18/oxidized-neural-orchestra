@@ -5,7 +5,7 @@ mod session;
 use std::net::ToSocketAddrs;
 
 use configs::Adapter;
-use session::Session;
+pub use session::Session;
 
 pub use error::OrchestratorError;
 pub use session::TrainingEvent;

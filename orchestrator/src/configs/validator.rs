@@ -104,7 +104,11 @@ impl Validator {
         }
 
         let dataset_samples = match &training.dataset {
-            DatasetConfig::Inline { data, x_size, y_size } => {
+            DatasetConfig::Inline {
+                data,
+                x_size,
+                y_size,
+            } => {
                 let row_size = x_size + y_size;
                 if row_size == 0 {
                     return Err(OrchestratorError::InvalidConfig(
@@ -143,4 +147,3 @@ impl Validator {
         Ok(())
     }
 }
-

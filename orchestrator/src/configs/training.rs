@@ -19,7 +19,7 @@ pub enum OptimizerConfig {
 }
 
 /// The `Dataset` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatasetConfig {
     Local {
@@ -49,7 +49,7 @@ pub enum StoreConfig {
 }
 
 /// The `Algorithm` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
     rename_all = "snake_case",
     bound = "A: Serialize + serde::de::DeserializeOwned"
@@ -63,7 +63,7 @@ pub enum AlgorithmConfig<A: ToSocketAddrs> {
 }
 
 /// The `Training` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "A: Serialize + serde::de::DeserializeOwned")]
 pub struct TrainingConfig<A: ToSocketAddrs> {
     pub worker_addrs: Vec<A>,
