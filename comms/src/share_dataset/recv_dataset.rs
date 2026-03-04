@@ -15,10 +15,12 @@ where
     W: AsyncWrite + Unpin,
     R: AsyncRead + Unpin,
 {
+    let mut buf = vec![0u32; spec.chunk];
+
     let mut received = 0;
 
     while received < spec.size {
-        let msg: Msg = receiver.recv().await?;
+        let msg: Msg = receiver.recv_into(&mut buf).await?;
 
         let chunk = match msg {
             Msg::Data(Payload::Datachunk(chunk)) => chunk,
