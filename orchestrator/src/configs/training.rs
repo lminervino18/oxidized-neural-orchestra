@@ -1,13 +1,17 @@
 use std::{net::ToSocketAddrs, num::NonZeroUsize, path::PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 /// The `LossFn` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LossFnConfig {
     Mse,
 }
 
 /// The `Optimizer` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OptimizerConfig {
     Adam { lr: f32, b1: f32, b2: f32, eps: f32 },
     GradientDescent { lr: f32 },
@@ -15,7 +19,8 @@ pub enum OptimizerConfig {
 }
 
 /// The `Dataset` configuration.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DatasetConfig {
     Local {
         path: PathBuf,
@@ -28,21 +33,27 @@ pub enum DatasetConfig {
 }
 
 /// The `Synchronizer` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SynchronizerConfig {
     Barrier { barrier_size: usize },
     NonBlocking,
 }
 
 /// The `Store` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum StoreConfig {
     Blocking,
     Wild,
 }
 
 /// The `Algorithm` configuration.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(
+    rename_all = "snake_case",
+    bound = "A: Serialize + serde::de::DeserializeOwned"
+)]
 pub enum AlgorithmConfig<A: ToSocketAddrs> {
     ParameterServer {
         server_addrs: Vec<A>,
@@ -52,7 +63,8 @@ pub enum AlgorithmConfig<A: ToSocketAddrs> {
 }
 
 /// The `Training` configuration.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(bound = "A: Serialize + serde::de::DeserializeOwned")]
 pub struct TrainingConfig<A: ToSocketAddrs> {
     pub worker_addrs: Vec<A>,
     pub algorithm: AlgorithmConfig<A>,

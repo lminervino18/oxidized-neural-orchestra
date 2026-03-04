@@ -1,5 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 /// The `ParamGen` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ParamGenConfig {
     Const { value: f32 },
     Uniform { low: f32, high: f32 },
@@ -13,13 +16,15 @@ pub enum ParamGenConfig {
 }
 
 /// The `ActFn` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ActFnConfig {
     Sigmoid { amp: f32 },
 }
 
 /// The `Layer` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LayerConfig {
     Dense {
         dim: (usize, usize),
@@ -41,7 +46,8 @@ impl LayerConfig {
 }
 
 /// The `Model` configuration.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ModelConfig {
     Sequential { layers: Vec<LayerConfig> },
 }
