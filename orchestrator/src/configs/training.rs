@@ -18,18 +18,21 @@ pub enum OptimizerConfig {
     GradientDescentWithMomentum { lr: f32, mu: f32 },
 }
 
+/// The dataset's data source.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DatasetSrc {
+    Local { path: PathBuf },
+    Inline { data: Vec<f32> },
+}
+
 /// The `Dataset` configuration.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DatasetConfig {
-    Local {
-        path: PathBuf,
-    },
-    Inline {
-        data: Vec<f32>,
-        x_size: usize,
-        y_size: usize,
-    },
+pub struct DatasetConfig {
+    pub src: DatasetSrc,
+    pub x_size: usize,
+    pub y_size: usize,
 }
 
 /// The `Synchronizer` configuration.
@@ -50,10 +53,7 @@ pub enum StoreConfig {
 
 /// The `Algorithm` configuration.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(
-    rename_all = "snake_case",
-    bound = "A: Serialize + serde::de::DeserializeOwned"
-)]
+#[serde(rename_all = "snake_case")]
 pub enum AlgorithmConfig<A: ToSocketAddrs> {
     ParameterServer {
         server_addrs: Vec<A>,
@@ -64,7 +64,6 @@ pub enum AlgorithmConfig<A: ToSocketAddrs> {
 
 /// The `Training` configuration.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(bound = "A: Serialize + serde::de::DeserializeOwned")]
 pub struct TrainingConfig<A: ToSocketAddrs> {
     pub worker_addrs: Vec<A>,
     pub algorithm: AlgorithmConfig<A>,

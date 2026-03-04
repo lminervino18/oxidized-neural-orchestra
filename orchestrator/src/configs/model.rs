@@ -27,22 +27,10 @@ pub enum ActFnConfig {
 #[serde(rename_all = "snake_case")]
 pub enum LayerConfig {
     Dense {
-        dim: (usize, usize),
+        output_size: usize,
         init: ParamGenConfig,
         act_fn: Option<ActFnConfig>,
     },
-}
-
-impl LayerConfig {
-    /// Obtains the fan_in, size and fan_out of the layer.
-    ///
-    /// # Returns
-    /// A tuple (fan_in, size, fan_out).
-    pub fn sizes(&self) -> (usize, usize, usize) {
-        match *self {
-            LayerConfig::Dense { dim: (n, m), .. } => (n, n * m + m, m),
-        }
-    }
 }
 
 /// The `Model` configuration.

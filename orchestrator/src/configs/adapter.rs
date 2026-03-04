@@ -16,7 +16,7 @@ use super::{ModelConfig, TrainingConfig};
 use crate::{
     configs::{
         ActFnConfig, AlgorithmConfig, DatasetConfig, LayerConfig, LossFnConfig, OptimizerConfig,
-        ParamGenConfig, StoreConfig, SynchronizerConfig,
+        ParamGenConfig, StoreConfig, SynchronizerConfig, training::DatasetSrc,
     },
     error::{OrchestratorError, Result},
 };
@@ -143,7 +143,7 @@ impl Adapter {
             ..
         } = &training.algorithm;
 
-        let (_, param_gens) = self.adapt_model_param_gen(model);
+        let (_, param_gens) = self.adapt_model_param_gen(model, training.dataset.x_size);
         let nlayers = param_gens.len();
 
         let items: Vec<_> = param_gens
@@ -283,7 +283,7 @@ impl Adapter {
         model: &ModelConfig,
         training: &TrainingConfig<A>,
     ) -> Result<TrainerSpec> {
-        let (model_spec, _) = self.adapt_model_param_gen(model);
+        let (model_spec, _) = self.adapt_model_param_gen(model, training.dataset.x_size);
         let optimizer = self.adapt_optimizer(training.optimizer);
         let dataset = self.adapt_dataset(&training.dataset)?;
         let loss_fn = self.adapt_loss_fn(training.loss_fn);
@@ -324,19 +324,17 @@ impl Adapter {
     /// # Errors
     /// Returns an `OrchestratorError` if the dataset variant is not yet supported.
     fn adapt_dataset(&self, dataset: &DatasetConfig) -> Result<DatasetSpec> {
-        match dataset {
-            DatasetConfig::Local { path } => Err(OrchestratorError::InvalidConfig(format!(
+        let (x_size, y_size) = (dataset.x_size, dataset.y_size);
+
+        match dataset.src {
+            DatasetSrc::Local { ref path } => Err(OrchestratorError::InvalidConfig(format!(
                 "local dataset loading not yet implemented: {}",
                 path.display()
             ))),
-            DatasetConfig::Inline {
-                data,
+            DatasetSrc::Inline { ref data } => Ok(DatasetSpec {
+                data: data.to_vec(),
                 x_size,
                 y_size,
-            } => Ok(DatasetSpec {
-                data: data.to_vec(),
-                x_size: *x_size,
-                y_size: *y_size,
             }),
         }
     }
@@ -372,14 +370,26 @@ impl Adapter {
     ///
     /// # Args
     /// * `model` - The model architecture configuration.
+    /// * `input_size` - The model's input size.
     ///
     /// # Returns
     /// A tuple of the resolved `ModelSpec` and a `ParamGenSpec` per layer.
-    fn adapt_model_param_gen(&self, model: &ModelConfig) -> (ModelSpec, Vec<ParamGenSpec>) {
+    fn adapt_model_param_gen(
+        &self,
+        model: &ModelConfig,
+        input_size: usize,
+    ) -> (ModelSpec, Vec<ParamGenSpec>) {
         match model {
             ModelConfig::Sequential { layers } => {
-                let (layer_specs, param_gen_specs): (Vec<_>, Vec<_>) =
-                    layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
+                let (layer_specs, param_gen_specs) = layers
+                    .iter()
+                    .scan(input_size, |input_size, config| {
+                        let (layer_spec, param_gen_spec, output_size) =
+                            self.adapt_layer(config, *input_size);
+                        *input_size = output_size;
+                        Some((layer_spec, param_gen_spec))
+                    })
+                    .unzip();
 
                 (
                     ModelSpec::Sequential {
@@ -445,23 +455,32 @@ impl Adapter {
     ///
     /// # Args
     /// * `layer` - The layer configuration.
+    /// * `input_size` - The input size to this layer.
     ///
     /// # Returns
-    /// A tuple of the resolved `LayerSpec` and its `ParamGenSpec`.
-    fn adapt_layer(&self, layer: &LayerConfig) -> (LayerSpec, ParamGenSpec) {
+    /// A tuple of the adapted `LayerSpec`, its `ParamGenSpec` and the layer's output size.
+    fn adapt_layer(
+        &self,
+        layer: &LayerConfig,
+        input_size: usize,
+    ) -> (LayerSpec, ParamGenSpec, usize) {
         match *layer {
             LayerConfig::Dense {
-                dim: (n, m),
+                output_size,
                 init,
                 act_fn,
             } => {
                 let act_fn = self.adapt_act_fn(act_fn.as_ref());
                 (
                     LayerSpec::Dense {
-                        dim: (n, m),
+                        dim: (input_size, output_size),
                         act_fn,
                     },
-                    self.adapt_param_gen(init, layer.sizes()),
+                    self.adapt_param_gen(
+                        init,
+                        (input_size, (input_size + 1) * output_size, output_size),
+                    ),
+                    output_size,
                 )
             }
         }

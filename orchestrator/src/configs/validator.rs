@@ -45,21 +45,6 @@ impl Validator {
                         "model must have at least one layer".into(),
                     ));
                 }
-
-                for i in 1..layers.len() {
-                    let prev_m = match layers[i - 1] {
-                        LayerConfig::Dense { dim: (_, m), .. } => m,
-                    };
-                    let curr_n = match layers[i] {
-                        LayerConfig::Dense { dim: (n, _), .. } => n,
-                    };
-                    if prev_m != curr_n {
-                        return Err(OrchestratorError::InvalidConfig(format!(
-                            "layer {i}: input size ({curr_n}) does not match \
-                             previous layer output size ({prev_m})"
-                        )));
-                    }
-                }
             }
         }
         Ok(())
@@ -103,8 +88,13 @@ impl Validator {
             }
         }
 
-        let dataset_samples = match &training.dataset {
-            DatasetConfig::Inline { data, x_size, y_size } => {
+        let dataset_samples = match &training.dataset.src {
+            // TODO: Me quede aca
+            DatasetConfig::Inline {
+                data,
+                x_size,
+                y_size,
+            } => {
                 let row_size = x_size + y_size;
                 if row_size == 0 {
                     return Err(OrchestratorError::InvalidConfig(
@@ -143,4 +133,3 @@ impl Validator {
         Ok(())
     }
 }
-
