@@ -85,7 +85,7 @@ def start_workers(root: str) -> list[subprocess.Popen]:
 
 
 def print_params(params: list[float], output_sizes: list[int], input_size: int) -> None:
-    print(f"\ntrained parameters ({len(params)} total):")
+    print(f"trained parameters ({len(params)} total):")
     offset = 0
     prev = input_size
     for layer_i, out in enumerate(output_sizes):
@@ -126,7 +126,7 @@ def main() -> None:
     tb = TrainingBuilder(WORKER_ADDRS, SERVER_ADDRS)
     tb.inline_dataset(DATA, x_size=1, y_size=1)
     tb.barrier_sync()
-    tb.max_epochs(100)
+    tb.max_epochs(500)
     tb.batch_size(4)
     tb.seed(42)
     training = tb.build()
@@ -140,6 +140,8 @@ def main() -> None:
         trained = session.wait()
         params = trained.weights()
         print_params(params, [8, 4, 1], input_size=1)
+        trained.save("weights.csv", output_sizes=[8, 4, 1], input_size=1)
+        print("\nweights saved to weights.csv")
     except RuntimeError as e:
         print(f"training failed: {e}", file=sys.stderr)
         sys.exit(1)
@@ -150,7 +152,7 @@ def main() -> None:
         for p in workers + servers:
             p.wait()
 
-    print("\ndone.")
+    print("done.")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::num::NonZeroUsize;
 
 use orchestrator::{
@@ -23,17 +24,65 @@ impl TrainedModel {
     pub fn weights(&self) -> Vec<f32> {
         self.params.clone()
     }
+
+    /// Saves the trained parameters to a CSV file.
+    ///
+    /// # Args
+    /// * `path` - Output file path.
+    /// * `output_sizes` - List of output sizes per layer, e.g. [8, 4, 1].
+    /// * `input_size` - Input size of the first layer.
+    ///
+    /// # Errors
+    /// Raises a `RuntimeError` if the file cannot be written.
+    pub fn save(
+        &self,
+        path: &str,
+        output_sizes: Vec<usize>,
+        input_size: usize,
+    ) -> PyResult<()> {
+        let mut csv = String::from("layer,type,index,value\n");
+        let mut offset = 0;
+        let mut prev = input_size;
+
+        for (layer_i, &out) in output_sizes.iter().enumerate() {
+            let w_count = prev * out;
+            let b_count = out;
+
+            for i in 0..w_count {
+                let v = self.params[offset + i];
+                csv.push_str(&format!("{layer_i},weight,{i},{v}\n"));
+            }
+            offset += w_count;
+
+            for i in 0..b_count {
+                let v = self.params[offset + i];
+                csv.push_str(&format!("{layer_i},bias,{i},{v}\n"));
+            }
+            offset += b_count;
+
+            prev = out;
+        }
+
+        let mut file = std::fs::File::create(path)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        file.write_all(csv.as_bytes())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 /// A handle to an ongoing training session.
 #[pyclass]
 pub struct Session {
     inner: Option<orchestrator::Session>,
+    max_epochs: usize,
+    worker_count: usize,
 }
 
 #[pymethods]
 impl Session {
-    /// Blocks until training completes and returns the trained model.
+    /// Blocks until training completes, showing a progress bar, and returns the trained model.
     ///
     /// # Errors
     /// Raises a `RuntimeError` if training fails.
@@ -43,13 +92,57 @@ impl Session {
             .take()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("session already consumed"))?;
 
+        let max_epochs = self.max_epochs;
+        let worker_count = self.worker_count;
+
         let params = py.allow_threads(|| {
             std::thread::spawn(move || {
                 let mut rx = session.event_listener();
+                let mut total_loss = 0.0f32;
+                let mut loss_count = 0usize;
+                let mut worker_epochs: Vec<usize> = vec![0; worker_count];
+                let bar_width = 40usize;
+
+                println!();
+                println!();
+
                 loop {
                     match rx.blocking_recv() {
-                        Some(TrainingEvent::Complete(params)) => return Ok(params),
+                        Some(TrainingEvent::Loss { worker_id, losses }) => {
+                            for loss in &losses {
+                                total_loss += loss;
+                                loss_count += 1;
+                                if worker_id < worker_epochs.len() {
+                                    worker_epochs[worker_id] += 1;
+                                }
+                            }
+                            let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
+                            let avg_loss = total_loss / loss_count as f32;
+                            let filled =
+                                ((current_epoch * bar_width) / max_epochs).min(bar_width);
+                            print!(
+                                "\x1b[2A\r  [{}{}] {}/{}\n  avg_loss={:.6}\n",
+                                "█".repeat(filled),
+                                "░".repeat(bar_width - filled),
+                                current_epoch,
+                                max_epochs,
+                                avg_loss,
+                            );
+                            let _ = std::io::stdout().flush();
+                        }
+                        Some(TrainingEvent::Complete(params)) => {
+                            print!(
+                                "\x1b[2A\r  [{}] {}/{}\n  avg_loss={:.6}\n\n",
+                                "█".repeat(bar_width),
+                                max_epochs,
+                                max_epochs,
+                                total_loss / loss_count.max(1) as f32,
+                            );
+                            let _ = std::io::stdout().flush();
+                            return Ok(params);
+                        }
                         Some(TrainingEvent::Error(e)) => {
+                            println!();
                             return Err(e.to_string());
                         }
                         Some(_) => continue,
@@ -242,6 +335,8 @@ impl TrainingBuilder {
                 offline_epochs: self.offline_epochs,
                 seed: self.seed,
             },
+            max_epochs: self.max_epochs,
+            worker_count: self.worker_addrs.len(),
         })
     }
 }
@@ -250,6 +345,8 @@ impl TrainingBuilder {
 #[pyclass]
 pub struct PyTrainingConfig {
     inner: TrainingConfig<String>,
+    max_epochs: usize,
+    worker_count: usize,
 }
 
 /// The main entry point for distributed training from Python.
@@ -274,6 +371,8 @@ impl Orchestrator {
         training: &PyTrainingConfig,
     ) -> PyResult<Session> {
         let model = model.inner.clone();
+        let max_epochs = training.max_epochs;
+        let worker_count = training.worker_count;
         let training = training.inner.clone();
 
         let session = py.allow_threads(|| {
@@ -283,7 +382,11 @@ impl Orchestrator {
         })
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
 
-        Ok(Session { inner: Some(session) })
+        Ok(Session {
+            inner: Some(session),
+            max_epochs,
+            worker_count,
+        })
     }
 }
 
