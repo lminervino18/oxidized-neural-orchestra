@@ -8,12 +8,12 @@ fn main() {
     let model_config = ModelConfig::Sequential {
         layers: vec![
             LayerConfig::Dense {
-                dim: (2, 2),
+                output_size: NonZeroUsize::new(2).unwrap(),
                 init: ParamGenConfig::Kaiming,
                 act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
             LayerConfig::Dense {
-                dim: (2, 1),
+                output_size: NonZeroUsize::new(1).unwrap(),
                 init: ParamGenConfig::Kaiming,
                 act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
@@ -21,16 +21,18 @@ fn main() {
     };
 
     let training_config = TrainingConfig {
-        worker_addrs: vec!["worker-0:50000".to_string()],
+        worker_addrs: vec!["worker-0:50000"],
         algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs: vec!["server-0:40000".to_string(), "server-1:40001".to_string()],
-            synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
+            server_addrs: vec!["server-0:40000", "server-1:40001"],
+            synchronizer: SynchronizerConfig::Barrier,
             store: StoreConfig::Blocking,
         },
-        dataset: DatasetConfig::Inline {
-            data: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-            x_size: 2,
-            y_size: 1,
+        dataset: DatasetConfig {
+            src: DatasetSrc::Inline {
+                data: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            },
+            x_size: NonZeroUsize::new(2).unwrap(),
+            y_size: NonZeroUsize::new(1).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
         loss_fn: LossFnConfig::Mse,
@@ -40,19 +42,19 @@ fn main() {
         seed: Some(42),
     };
 
-    log::info!("starting distributed training session");
+    let session = train(model_config, training_config).unwrap();
+    let mut rx = session.event_listener();
 
-    match train(model_config, training_config) {
-        Err(e) => log::error!("failed to start session: {e}"),
-        Ok(session) => {
-            log::info!("session started, waiting for completion");
-            match session.wait() {
-                Ok(params) => {
-                    log::info!("training complete");
-                    println!("trained params: {params:?}");
-                }
-                Err(e) => log::error!("training failed: {e}"),
+    loop {
+        match rx.blocking_recv() {
+            Some(orchestrator::TrainingEvent::Loss { losses, .. }) => {
+                println!("losses: {losses:?}")
             }
+            Some(orchestrator::TrainingEvent::Complete(params)) => {
+                println!("params: {params:?}");
+                break;
+            }
+            res => println!("result: {res:?}"),
         }
     }
 }

@@ -1,45 +1,43 @@
-use std::fmt;
+use std::{
+    error::Error,
+    fmt::{self, Display},
+    io,
+    net::SocketAddr,
+};
 
-/// All errors that can occur in the orchestrator.
+/// The orchestrator module's error type.
 #[derive(Debug)]
-pub enum OrchestratorError {
-    /// Invalid configuration — caught before connecting.
+pub enum OrchErr {
     InvalidConfig(String),
-    /// Failed to connect to a worker or server.
-    ConnectionFailed {
-        addr: String,
-        source: std::io::Error,
-    },
-    /// A worker produced an unrecoverable error during training.
+    ConnectionFailed { addr: SocketAddr, source: io::Error },
     WorkerError { worker_id: usize, msg: String },
-    /// The parameter server produced an unrecoverable error.
     ServerError(String),
-    /// An underlying I/O error not covered by the above variants.
-    Io(std::io::Error),
+    Io(io::Error),
 }
 
-/// Convenience alias to avoid repeating `OrchestratorError` as the error type
-/// throughout the module, mirroring the pattern used by `io::Result<T>`.
-pub type Result<T> = std::result::Result<T, OrchestratorError>;
+/// The orchestrator module's result type.
+pub type Result<T> = std::result::Result<T, OrchErr>;
 
-impl fmt::Display for OrchestratorError {
+impl Display for OrchErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidConfig(msg) => write!(f, "invalid config: {msg}"),
+        let s = match self {
+            Self::InvalidConfig(msg) => format!("invalid config: {msg}"),
             Self::ConnectionFailed { addr, source } => {
-                write!(f, "connection failed to {addr}: {source}")
+                format!("failed to reach to {addr}: {source}")
             }
             Self::WorkerError { worker_id, msg } => {
-                write!(f, "worker {worker_id} error: {msg}")
+                format!("worker {worker_id} error: {msg}")
             }
-            Self::ServerError(msg) => write!(f, "server error: {msg}"),
-            Self::Io(e) => write!(f, "io error: {e}"),
-        }
+            Self::ServerError(msg) => format!("server error: {msg}"),
+            Self::Io(e) => format!("io error: {e}"),
+        };
+
+        write!(f, "{s}")
     }
 }
 
-impl std::error::Error for OrchestratorError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl Error for OrchErr {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::ConnectionFailed { source, .. } => Some(source),
             Self::Io(e) => Some(e),
@@ -48,8 +46,8 @@ impl std::error::Error for OrchestratorError {
     }
 }
 
-impl From<std::io::Error> for OrchestratorError {
-    fn from(e: std::io::Error) -> Self {
+impl From<io::Error> for OrchErr {
+    fn from(e: io::Error) -> Self {
         Self::Io(e)
     }
 }
