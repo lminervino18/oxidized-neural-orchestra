@@ -12,6 +12,8 @@ use orchestrator::{
 };
 use pyo3::prelude::*;
 
+const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 /// The final trained model, holding the parameters received from all servers.
 #[pyclass]
 pub struct TrainedModel {
@@ -100,6 +102,7 @@ impl Session {
                 let mut rx = session.event_listener();
                 let mut worker_epochs: Vec<usize> = vec![0; worker_count];
                 let mut last_loss: Vec<Option<f32>> = vec![None; worker_count];
+                let mut spinner_i = 0usize;
                 let bar_width = 40usize;
 
                 println!();
@@ -120,11 +123,14 @@ impl Session {
                                 last_loss.iter().filter_map(|l| *l).collect();
                             let avg_loss =
                                 reported.iter().sum::<f32>() / reported.len() as f32;
-
                             let filled =
                                 ((current_epoch * bar_width) / max_epochs).min(bar_width);
+                            let spinner = SPINNER[spinner_i % SPINNER.len()];
+                            spinner_i += 1;
+
                             print!(
-                                "\x1b[2A\r  [{}{}] {}/{}\n  avg_loss={:.6}\n",
+                                "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={:.6}\n",
+                                spinner,
                                 "█".repeat(filled),
                                 "░".repeat(bar_width - filled),
                                 current_epoch,
@@ -142,7 +148,7 @@ impl Session {
                                 reported.iter().sum::<f32>() / reported.len() as f32
                             };
                             print!(
-                                "\x1b[2A\r  [{}] {}/{}\n  avg_loss={:.6}\n\n",
+                                "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={:.6}\n\n",
                                 "█".repeat(bar_width),
                                 max_epochs,
                                 max_epochs,
