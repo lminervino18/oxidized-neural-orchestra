@@ -25,3 +25,9 @@
 # Logs
 *.log
 temp/
+
+# Shell scripts
+*.sh
+
+# config examples files
+*.json
