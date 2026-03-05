@@ -126,9 +126,21 @@ impl Dense {
         &self,
         params: &'a [f32],
     ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
+        if params.len() != self.size {
+            return Err(MlErr::SizeMismatch {
+                what: "params",
+                got: params.len(),
+                expected: self.size,
+            });
+        }
+
         let w_size = self.size - self.dim.1;
+
+        // SAFETY: The if condition above checks that the size of the
+        //         parameters is exactly the size of the layer.
         let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
         let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
+
         Ok((weights, biases))
     }
 }

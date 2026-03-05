@@ -1,16 +1,20 @@
 use std::net::ToSocketAddrs;
 
-use super::{
-    AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, SynchronizerConfig, TrainingConfig,
+use super::{AlgorithmConfig, DatasetConfig, ModelConfig, TrainingConfig};
+use crate::{
+    configs::training::DatasetSrc,
+    error::{OrchErr, Result},
 };
-use crate::error::{OrchestratorError, Result};
 
 /// Validates orchestrator configs before adaptation, ensuring all invariants
-/// are met before any network connection is attempted.
+/// are met before the training commences.
 pub struct Validator;
 
 impl Validator {
     /// Creates a new `Validator` instance.
+    ///
+    /// # Returns
+    /// A new `Validator` instance.
     pub fn new() -> Self {
         Self
     }
@@ -18,11 +22,11 @@ impl Validator {
     /// Validates model and training configs.
     ///
     /// # Args
-    /// * `model` - The model architecture configuration.
+    /// * `model` - The model architecture and initialization configuration.
     /// * `training` - The training configuration.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if any invariant is violated.
+    /// An `OrchErr` if any invariant is unmet.
     pub fn validate<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
@@ -32,115 +36,90 @@ impl Validator {
         self.validate_training(training)
     }
 
-    /// Validates the model configuration.
+    /// Validates the model's configuration.
+    ///
+    /// # Args
+    /// * `model` - The model architecture and initialization configuration.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if the model has no layers or adjacent
-    /// layers have incompatible dimensions.
+    /// An `OrchErr` if any invariant is unmet.
     fn validate_model(&self, model: &ModelConfig) -> Result<()> {
         match model {
             ModelConfig::Sequential { layers } => {
                 if layers.is_empty() {
-                    return Err(OrchestratorError::InvalidConfig(
+                    return Err(OrchErr::InvalidConfig(
                         "model must have at least one layer".into(),
                     ));
                 }
-
-                for i in 1..layers.len() {
-                    let prev_m = match layers[i - 1] {
-                        LayerConfig::Dense { dim: (_, m), .. } => m,
-                    };
-                    let curr_n = match layers[i] {
-                        LayerConfig::Dense { dim: (n, _), .. } => n,
-                    };
-                    if prev_m != curr_n {
-                        return Err(OrchestratorError::InvalidConfig(format!(
-                            "layer {i}: input size ({curr_n}) does not match \
-                             previous layer output size ({prev_m})"
-                        )));
-                    }
-                }
             }
         }
+
         Ok(())
     }
 
-    /// Validates the training configuration.
+    /// Validates the training's configuration.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if worker or server address lists are empty,
-    /// the barrier size is invalid, or the dataset is inconsistent with the batch size.
+    /// An `OrchErr` if any training invariant is unmet.
     fn validate_training<A: ToSocketAddrs>(&self, training: &TrainingConfig<A>) -> Result<()> {
         if training.worker_addrs.is_empty() {
-            return Err(OrchestratorError::InvalidConfig(
+            return Err(OrchErr::InvalidConfig(
                 "at least one worker address is required".into(),
             ));
         }
 
         let AlgorithmConfig::ParameterServer {
-            server_addrs,
-            synchronizer,
-            ..
-        } = &training.algorithm;
+            ref server_addrs, ..
+        } = training.algorithm;
 
         if server_addrs.is_empty() {
-            return Err(OrchestratorError::InvalidConfig(
+            return Err(OrchErr::InvalidConfig(
                 "at least one server address is required".into(),
             ));
         }
 
-        if let SynchronizerConfig::Barrier { barrier_size } = synchronizer {
-            if *barrier_size == 0 {
-                return Err(OrchestratorError::InvalidConfig(
-                    "barrier_size must be greater than 0".into(),
-                ));
-            }
-            if *barrier_size != training.worker_addrs.len() {
-                return Err(OrchestratorError::InvalidConfig(format!(
-                    "barrier_size ({barrier_size}) must equal number of workers ({})",
-                    training.worker_addrs.len()
-                )));
-            }
-        }
+        let DatasetConfig {
+            ref src,
+            x_size,
+            y_size,
+        } = training.dataset;
 
-        let dataset_samples = match &training.dataset {
-            DatasetConfig::Inline { data, x_size, y_size } => {
-                let row_size = x_size + y_size;
-                if row_size == 0 {
-                    return Err(OrchestratorError::InvalidConfig(
-                        "x_size + y_size must be greater than 0".into(),
-                    ));
-                }
+        let Some(row_size) = x_size.checked_add(y_size.get()) else {
+            return Err(OrchErr::InvalidConfig(
+                "the row size for the dataset samples is larger than a usize".into(),
+            ));
+        };
+
+        let dataset_samples = match src {
+            DatasetSrc::Inline { data } => {
                 if data.len() % row_size != 0 {
-                    return Err(OrchestratorError::InvalidConfig(format!(
+                    return Err(OrchErr::InvalidConfig(format!(
                         "dataset length ({}) is not divisible by x_size + y_size ({row_size})",
                         data.len()
                     )));
                 }
+
+                // SAFETY: row_size is a positive integer.
                 data.len() / row_size
             }
-            DatasetConfig::Local { path } => {
-                return Err(OrchestratorError::InvalidConfig(format!(
-                    "local dataset loading not yet implemented: {}",
-                    path.display()
-                )));
+            DatasetSrc::Local { .. } => {
+                unimplemented!("dataset doesn't support local loading");
             }
         };
 
         if dataset_samples == 0 {
-            return Err(OrchestratorError::InvalidConfig(
+            return Err(OrchErr::InvalidConfig(
                 "dataset must have at least one sample".into(),
             ));
         }
 
-        if training.batch_size.get() > dataset_samples {
-            return Err(OrchestratorError::InvalidConfig(format!(
-                "batch_size ({}) exceeds dataset size ({dataset_samples} samples)",
-                training.batch_size
+        let batch_size = training.batch_size.get();
+        if batch_size > dataset_samples {
+            return Err(OrchErr::InvalidConfig(format!(
+                "batch_size ({batch_size}) exceeds dataset size ({dataset_samples} samples)"
             )));
         }
 
         Ok(())
     }
 }
-
