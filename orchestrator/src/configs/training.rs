@@ -13,9 +13,7 @@ pub enum LossFnConfig {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OptimizerConfig {
-    Adam { lr: f32, b1: f32, b2: f32, eps: f32 },
     GradientDescent { lr: f32 },
-    GradientDescentWithMomentum { lr: f32, mu: f32 },
 }
 
 /// The dataset's data source.
@@ -31,15 +29,15 @@ pub enum DatasetSrc {
 #[serde(rename_all = "snake_case")]
 pub struct DatasetConfig {
     pub src: DatasetSrc,
-    pub x_size: usize,
-    pub y_size: usize,
+    pub x_size: NonZeroUsize,
+    pub y_size: NonZeroUsize,
 }
 
 /// The `Synchronizer` configuration.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SynchronizerConfig {
-    Barrier { barrier_size: usize },
+    Barrier,
     NonBlocking,
 }
 

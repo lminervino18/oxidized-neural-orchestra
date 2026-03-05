@@ -131,7 +131,7 @@ impl TrainingState {
             }
         };
 
-        let events = session.take_events();
+        let events = session.event_listener();
 
         let workers = (0..workers_total)
             .map(|id| WorkerState {

@@ -19,14 +19,18 @@ impl Dataset {
     /// * `data` - A vector containing the raw data.
     /// * `x_size` - Per row sample size.
     /// * `y_size` - Per row Label size.
-    pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> Self {
-        let row_size = x_size + y_size;
+    ///
+    /// # Returns
+    /// A new `Dataset` instance.
+    pub fn new(data: Vec<f32>, x_size: NonZeroUsize, y_size: NonZeroUsize) -> Self {
+        let row_size = x_size.saturating_add(y_size.get());
 
         Self {
-            rows: data.len() / row_size,
+            // SAFETY: row_size is a positive integer.
+            rows: data.len() / row_size.get(),
             data,
-            x_size,
-            row_size,
+            x_size: x_size.get(),
+            row_size: row_size.get(),
         }
     }
 
@@ -111,8 +115,10 @@ mod tests {
     #[test]
     fn test_dataset_get_2rows() {
         let sums = [1.0, 2.0, 3.0, 3.0, 4.0, 7.0, 5.0, 6.0, 11.0];
+        let x_size = NonZeroUsize::new(2).unwrap();
+        let y_size = NonZeroUsize::new(1).unwrap();
 
-        let ds = Dataset::new(sums.into(), 2, 1);
+        let ds = Dataset::new(sums.into(), x_size, y_size);
 
         let expected_x = ArrayView2::from_shape((2, 2), &[1.0, 2.0, 3.0, 4.0]).unwrap();
         let expected_y = ArrayView2::from_shape((2, 1), &[3.0, 7.0]).unwrap();

@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use serde::{Deserialize, Serialize};
 
 /// The `ParamGen` configuration.
@@ -27,7 +29,7 @@ pub enum ActFnConfig {
 #[serde(rename_all = "snake_case")]
 pub enum LayerConfig {
     Dense {
-        output_size: usize,
+        output_size: NonZeroUsize,
         init: ParamGenConfig,
         act_fn: Option<ActFnConfig>,
     },
