@@ -98,9 +98,8 @@ impl Session {
         let params = py.allow_threads(|| {
             std::thread::spawn(move || {
                 let mut rx = session.event_listener();
-                let mut total_loss = 0.0f32;
-                let mut loss_count = 0usize;
                 let mut worker_epochs: Vec<usize> = vec![0; worker_count];
+                let mut last_loss: Vec<Option<f32>> = vec![None; worker_count];
                 let bar_width = 40usize;
 
                 println!();
@@ -110,14 +109,18 @@ impl Session {
                     match rx.blocking_recv() {
                         Some(TrainingEvent::Loss { worker_id, losses }) => {
                             for loss in &losses {
-                                total_loss += loss;
-                                loss_count += 1;
                                 if worker_id < worker_epochs.len() {
                                     worker_epochs[worker_id] += 1;
+                                    last_loss[worker_id] = Some(*loss);
                                 }
                             }
+
                             let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
-                            let avg_loss = total_loss / loss_count as f32;
+                            let reported: Vec<f32> =
+                                last_loss.iter().filter_map(|l| *l).collect();
+                            let avg_loss =
+                                reported.iter().sum::<f32>() / reported.len() as f32;
+
                             let filled =
                                 ((current_epoch * bar_width) / max_epochs).min(bar_width);
                             print!(
@@ -131,12 +134,19 @@ impl Session {
                             let _ = std::io::stdout().flush();
                         }
                         Some(TrainingEvent::Complete(params)) => {
+                            let reported: Vec<f32> =
+                                last_loss.iter().filter_map(|l| *l).collect();
+                            let avg_loss = if reported.is_empty() {
+                                0.0
+                            } else {
+                                reported.iter().sum::<f32>() / reported.len() as f32
+                            };
                             print!(
                                 "\x1b[2A\r  [{}] {}/{}\n  avg_loss={:.6}\n\n",
                                 "█".repeat(bar_width),
                                 max_epochs,
                                 max_epochs,
-                                total_loss / loss_count.max(1) as f32,
+                                avg_loss,
                             );
                             let _ = std::io::stdout().flush();
                             return Ok(params);
