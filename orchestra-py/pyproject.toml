@@ -1,0 +1,11 @@
+[build-system]
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
+
+[project]
+name = "orchestra"
+version = "0.1.0"
+
+[tool.maturin]
+python-source = "orchestra-py"
+module-name = "orchestra._orchestra"

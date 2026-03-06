@@ -3,7 +3,15 @@ import time
 import sys
 import os
 
-from orchestra import ModelBuilder, Orchestrator, TrainingBuilder
+import orchestra
+from orchestra import Sequential, orchestrate
+from orchestra.arch import Dense
+from orchestra.activations import Sigmoid
+from orchestra.initialization import Kaiming
+from orchestra.datasets import InlineDataset
+from orchestra.optimizers import GradientDescent
+from orchestra.sync import BarrierSync
+from orchestra.store import BlockingStore
 
 WORKER_ADDRS = ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"]
 SERVER_ADDRS = ["127.0.0.1:40000", "127.0.0.1:40001"]
@@ -59,7 +67,7 @@ def start_servers(root: str) -> list[subprocess.Popen]:
         )
         print(f"  server-{i} starting (port {port_str}, pid {p.pid})...")
         procs.append(p)
-    time.sleep(2)
+    time.sleep(4)
     print("  servers ready")
     return procs
 
@@ -116,24 +124,27 @@ def main() -> None:
     workers = start_workers(root)
 
     print("\nbuilding model...")
-    mb = ModelBuilder()
-    mb.dense(8, 1.0)
-    mb.dense(4, 1.0)
-    mb.dense(1)
-    model = mb.build()
+    model = Sequential([
+        Dense(8, Kaiming(), Sigmoid()),
+        Dense(4, Kaiming(), Sigmoid()),
+        Dense(1, Kaiming()),
+    ])
 
     print("building training config...")
-    tb = TrainingBuilder(WORKER_ADDRS, SERVER_ADDRS)
-    tb.inline_dataset(DATA, x_size=1, y_size=1)
-    tb.barrier_sync()
-    tb.max_epochs(500)
-    tb.batch_size(4)
-    tb.seed(42)
-    training = tb.build()
+    training = orchestra.parameter_server(
+        worker_addrs=WORKER_ADDRS,
+        server_addrs=SERVER_ADDRS,
+        dataset=InlineDataset(DATA, x_size=1, y_size=1),
+        optimizer=GradientDescent(lr=0.01),
+        sync=BarrierSync(),
+        store=BlockingStore(),
+        max_epochs=500,
+        batch_size=4,
+        seed=42,
+    )
 
     print("\nstarting training session...")
-    orch = Orchestrator()
-    session = orch.train(model, training)
+    session = orchestrate(model, training)
 
     print("waiting for training to complete...")
     try:
