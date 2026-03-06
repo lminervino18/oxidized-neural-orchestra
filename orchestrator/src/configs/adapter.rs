@@ -4,6 +4,7 @@ use std::{
     fs,
     net::{SocketAddr, ToSocketAddrs},
     num::NonZeroUsize,
+    path::PathBuf,
 };
 
 use comms::specs::{
@@ -298,6 +299,48 @@ impl Adapter {
         }
     }
 
+    fn adapt_local_dataset(
+        &self,
+        path: &PathBuf,
+        x_size: usize,
+        y_size: usize,
+        npartitions: usize,
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition>)> {
+        let size = fs::metadata(path)?.len();
+        let row_size = (x_size + y_size) as u64;
+        let nrows = (size / row_size) as usize;
+        let base_rows = (nrows / npartitions) as u64;
+        let remainder = nrows % npartitions;
+
+        let mut specs = vec![];
+        let mut partitions = vec![];
+        let mut offset = 0;
+
+        for i in 0..npartitions {
+            let size = if i < remainder {
+                base_rows + 1
+            } else {
+                base_rows
+            } * row_size;
+
+            specs.push(DatasetSpec {
+                size,
+                x_size,
+                y_size,
+            });
+            partitions.push(Partition {
+                // TODO: avoid cloning path
+                path: path.clone(),
+                offset,
+                size,
+            });
+
+            offset += size;
+        }
+
+        Ok((vec![], vec![]))
+    }
+
     /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
     ///
     /// # Args
@@ -322,46 +365,12 @@ impl Adapter {
 
         let (x_size, y_size) = (x_size.get(), y_size.get());
 
-        let (specs, partitions) = match src {
+        match src {
             DatasetSrc::Local { path } => {
-                let size = fs::metadata(path)?.len();
-                let row_size = (dataset.x_size.get() + dataset.y_size.get()) as u64;
-                let nrows = (size / row_size) as usize;
-                let base_rows = (nrows / npartitions) as u64;
-                let remainder = nrows % npartitions;
-
-                let mut specs = vec![];
-                let mut partitions = vec![];
-                let mut offset = 0;
-
-                for i in 0..npartitions {
-                    let size = if i < remainder {
-                        base_rows + 1
-                    } else {
-                        base_rows
-                    } * row_size;
-
-                    specs.push(DatasetSpec {
-                        size,
-                        x_size,
-                        y_size,
-                    });
-                    partitions.push(Partition {
-                        // TODO: avoid cloning path
-                        path: path.clone(),
-                        offset,
-                        size,
-                    });
-
-                    offset += size;
-                }
-
-                (vec![], vec![])
+                self.adapt_local_dataset(path, x_size, y_size, npartitions)
             }
             _ => unimplemented!(),
-        };
-
-        Ok((specs, partitions))
+        }
     }
 
     /// Adapts an `OptimizerConfig` into an `OptimizerSpec`.
