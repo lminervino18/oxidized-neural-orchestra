@@ -1,16 +1,8 @@
-use std::{io, thread};
-use std::{net::SocketAddr, path::Path};
-use tokio::fs::File;
-
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
-    send_dataset::send_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
-};
 use futures::future;
 use log::{debug, error, info, warn};
+use std::{io, net::SocketAddr, thread};
 use tokio::{
+    io::{AsyncReadExt, AsyncSeekExt},
     net::{
         TcpStream,
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -19,7 +11,14 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use crate::{OrchErr, Result};
+use comms::{
+    OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
+    send_dataset::send_dataset,
+    specs::{server::ServerSpec, worker::WorkerSpec},
+};
+
+use crate::{OrchErr, Result, configs::Partition};
 
 type NetRx = OnoReceiver<OwnedReadHalf>;
 type NetTx = OnoSender<OwnedWriteHalf>;
@@ -58,6 +57,7 @@ impl Session {
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
     pub fn new(
         workers: Vec<(SocketAddr, WorkerSpec)>,
+        partitions: Vec<Partition>,
         servers: Vec<(SocketAddr, ServerSpec)>,
     ) -> Result<Self> {
         let (nworkers, nservers) = (workers.len(), servers.len());
@@ -70,7 +70,7 @@ impl Session {
         let server_chans = runtime.block_on(Self::create_servers(servers))?;
         debug!("successfully created all servers");
 
-        let worker_chans = runtime.block_on(Self::create_workers(workers))?;
+        let worker_chans = runtime.block_on(Self::create_workers(workers, partitions))?;
         debug!("successfully created all workers");
 
         let session = Self {
@@ -221,38 +221,41 @@ impl Session {
         Ok(channels)
     }
 
-    /// Connects to all workers and sends each its bootstrap spec.
+    /// Connects to all workers and sends each its bootstrap spec along and
+    /// their partition of the dataset.
     ///
     /// # Args
     /// * `workers` - List of (address, spec) pairs for each worker.
+    /// * `partition` - List of partitions for each worker.
     ///
     /// # Returns
     /// A list of open (receiver, sender) channel pairs, one per worker.
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any connection or send fails.
-    async fn create_workers(workers: Vec<(SocketAddr, WorkerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
+    async fn create_workers(
+        workers: Vec<(SocketAddr, WorkerSpec)>,
+        partitions: Vec<Partition>,
+    ) -> Result<Vec<(NetRx, NetTx)>> {
+        const CHUNK: usize = 8192; // TODO: mover este 8kb o determinarlo
         let mut channels = Vec::with_capacity(workers.len());
 
-        for (addr, spec) in workers {
+        for ((addr, spec), partition) in workers.into_iter().zip(partitions) {
             log::debug!("connecting to worker at {addr}");
 
-            // TODO: o el path viene hasta acá que no me gusta o se resuelve
-            // esto antes y workers deja de ser un vec con address worker
-            // spec y es alguna metadata útil para acá mismo...
-            let path = Path::new("todo");
-            let mut dataset = File::open(path).await.unwrap();
-            let dataset_spec = spec.dataset;
-
-            log::info!("worker at {addr} ready");
             let (rx, mut tx) = Self::open_channel(addr)
                 .await
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
             tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-            send_dataset(&mut dataset, dataset_spec, &mut tx).await?;
+            let mut fd = tokio::fs::File::open(partition.path).await?;
+            fd.seek(io::SeekFrom::Start(partition.offset)).await?;
+            let mut fd = fd.take(partition.size);
 
+            send_dataset(&mut fd, CHUNK, &mut tx).await?;
+
+            log::info!("worker at {addr} ready");
             channels.push((rx, tx));
         }
 

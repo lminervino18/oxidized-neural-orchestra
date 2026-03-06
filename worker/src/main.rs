@@ -2,6 +2,7 @@ use std::{env, io};
 
 use comms::{
     msg::{Command, Msg},
+    recv_dataset::recv_dataset,
     specs::worker::AlgorithmSpec,
 };
 use log::{info, warn};

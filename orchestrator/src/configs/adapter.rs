@@ -4,7 +4,6 @@ use std::{
     fs,
     net::{SocketAddr, ToSocketAddrs},
     num::NonZeroUsize,
-    os::unix::fs::MetadataExt,
 };
 
 use comms::specs::{
@@ -15,7 +14,7 @@ use comms::specs::{
     worker::{AlgorithmSpec, WorkerSpec},
 };
 
-use super::{ModelConfig, TrainingConfig};
+use super::{ModelConfig, TrainingConfig, partition::Partition};
 use crate::{
     configs::{
         ActFnConfig, AlgorithmConfig, DatasetConfig, DatasetSrc, LayerConfig, LossFnConfig,
@@ -51,9 +50,16 @@ impl Adapter {
         &self,
         model: ModelConfig,
         training: TrainingConfig<A>,
-    ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
+    ) -> Result<(
+        Vec<(SocketAddr, WorkerSpec)>,
+        Vec<Partition>,
+        Vec<(SocketAddr, ServerSpec)>,
+    )> {
         let (servers, server_addrs, server_sizes, server_ordering) =
             self.adapt_servers(&model, &training)?;
+
+        let partitions =
+            self.get_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
 
         let workers = self.adapt_workers(
             &model,
@@ -63,7 +69,47 @@ impl Adapter {
             server_ordering,
         )?;
 
-        Ok((workers, servers))
+        Ok((workers, partitions, servers))
+    }
+
+    fn get_dataset_partitions(
+        &self,
+        dataset: &DatasetConfig,
+        workers: usize,
+    ) -> Result<Vec<Partition>> {
+        let path = match &dataset.src {
+            DatasetSrc::Local { path } => path,
+            _ => todo!(),
+        };
+        let row = (dataset.x_size.get() + dataset.y_size.get()) as u64;
+        let size = fs::metadata(&path)?.len();
+        let rows = (size / row as u64) as usize;
+        let base_rows = (rows / workers) as u64;
+        let remainder = rows % workers;
+
+        let mut last = 0;
+
+        let partitions = (0..workers)
+            .map(|i| {
+                let offset = last;
+                let size = if i < remainder {
+                    (base_rows + 1) * row
+                } else {
+                    base_rows * row
+                };
+
+                last += size;
+
+                // TODO: avoid cloning path
+                Partition {
+                    path: path.clone(),
+                    offset,
+                    size,
+                }
+            })
+            .collect();
+
+        Ok(partitions)
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -315,17 +361,13 @@ impl Adapter {
         let datasets = match src {
             DatasetSrc::Local { path } => {
                 let metadata = fs::metadata(path)?;
-                let size = metadata.size();
-                // TODO: arreglar usize-u64, `size` tiene que ser u64, chunk
-                // quisiera usize (no pasa nada hasta q probamos en 32 bits)
-                let chunk = (size / partitions as u64) as usize;
+                let size = metadata.len();
 
                 (0..partitions)
                     .map(|_| DatasetSpec {
                         size,
-                        chunk,
-                        x_size: (*x_size).into(),
-                        y_size: (*y_size).into(),
+                        x_size: x_size.get(),
+                        y_size: y_size.get(),
                     })
                     .collect()
             }

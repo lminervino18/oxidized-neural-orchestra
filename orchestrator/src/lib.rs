@@ -27,7 +27,7 @@ pub fn train<A: ToSocketAddrs>(model: ModelConfig, training: TrainingConfig<A>) 
     validator.validate(&model, &training)?;
 
     let adapter = Adapter::new();
-    let (workers, servers) = adapter.adapt_configs(model, training)?;
+    let (workers, partitions, servers) = adapter.adapt_configs(model, training)?;
 
-    Session::new(workers, servers)
+    Session::new(workers, partitions, servers)
 }
