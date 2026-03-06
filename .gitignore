@@ -26,8 +26,12 @@
 *.log
 temp/
 
-# Shell scripts
-*.sh
-
-# config examples files
-*.json
+# Python build artifacts
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+wheels/
+dist/
+build/
