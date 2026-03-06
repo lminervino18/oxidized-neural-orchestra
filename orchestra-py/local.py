@@ -3,29 +3,8 @@ import time
 import sys
 import os
 
-import orchestra
-from orchestra import Sequential, orchestrate
-from orchestra.arch import Dense
-from orchestra.activations import Sigmoid
-from orchestra.initialization import Kaiming
-from orchestra.datasets import InlineDataset
-from orchestra.optimizers import GradientDescent
-from orchestra.sync import BarrierSync
-from orchestra.store import BlockingStore
-
 WORKER_ADDRS = ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"]
 SERVER_ADDRS = ["127.0.0.1:40000", "127.0.0.1:40001"]
-
-DATA = [
-    1.0, 2.0,
-    2.0, 4.0,
-    3.0, 6.0,
-    4.0, 8.0,
-    5.0, 10.0,
-    6.0, 12.0,
-    7.0, 14.0,
-    8.0, 16.0,
-]
 
 
 def kill_ports(addrs: list[str]) -> None:
@@ -92,24 +71,8 @@ def start_workers(root: str) -> list[subprocess.Popen]:
     return procs
 
 
-def print_params(params: list[float], output_sizes: list[int], input_size: int) -> None:
-    print(f"trained parameters ({len(params)} total):")
-    offset = 0
-    prev = input_size
-    for layer_i, out in enumerate(output_sizes):
-        w_count = prev * out
-        b_count = out
-        weights = params[offset : offset + w_count]
-        biases = params[offset + w_count : offset + w_count + b_count]
-        print(f"\n  layer {layer_i}  ({prev}x{out})")
-        print(f"    weights: {[round(w, 4) for w in weights]}")
-        print(f"    biases:  {[round(b, 4) for b in biases]}")
-        offset += w_count + b_count
-        prev = out
-
-
 def main() -> None:
-    root = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     print("killing any leftover processes on training ports...")
     kill_ports(SERVER_ADDRS + WORKER_ADDRS)
@@ -123,38 +86,20 @@ def main() -> None:
     print("starting workers...")
     workers = start_workers(root)
 
-    print("\nbuilding model...")
-    model = Sequential([
-        Dense(8, Kaiming(), Sigmoid()),
-        Dense(4, Kaiming(), Sigmoid()),
-        Dense(1, Kaiming()),
-    ])
+    env = {
+        **os.environ,
+        "WORKER_ADDRS": ",".join(WORKER_ADDRS),
+        "SERVER_ADDRS": ",".join(SERVER_ADDRS),
+    }
 
-    print("building training config...")
-    training = orchestra.parameter_server(
-        worker_addrs=WORKER_ADDRS,
-        server_addrs=SERVER_ADDRS,
-        dataset=InlineDataset(DATA, x_size=1, y_size=1),
-        optimizer=GradientDescent(lr=0.01),
-        sync=BarrierSync(),
-        store=BlockingStore(),
-        max_epochs=500,
-        batch_size=4,
-        seed=42,
-    )
-
-    print("\nstarting training session...")
-    session = orchestrate(model, training)
-
-    print("waiting for training to complete...")
     try:
-        trained = session.wait()
-        params = trained.weights()
-        print_params(params, [8, 4, 1], input_size=1)
-        trained.save("weights.csv", output_sizes=[8, 4, 1], input_size=1)
-        print("\nweights saved to weights.csv")
-    except RuntimeError as e:
-        print(f"training failed: {e}", file=sys.stderr)
+        subprocess.run(
+            ["python3", os.path.join(os.path.dirname(os.path.abspath(__file__)), "train.py")],
+            cwd=root,
+            env=env,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
         sys.exit(1)
     finally:
         print("\nstopping workers and servers...")
@@ -162,8 +107,6 @@ def main() -> None:
             p.terminate()
         for p in workers + servers:
             p.wait()
-
-    print("done.")
 
 
 if __name__ == "__main__":
