@@ -3,7 +3,9 @@ ARG PKG=orchestrator
 ARG MODE
 
 # 1. Install cargo-chef.
-FROM rust:1.92 AS chef
+# 1. Install cargo-chef.
+FROM rust:1.92-slim AS chef
+RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef
 WORKDIR /app
 
@@ -21,12 +23,9 @@ ARG PKG
 RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
   cargo chef cook $FLAG --recipe-path recipe.json
 
-  # Base dependencies.
-  COPY Cargo.* .
-  COPY $PKG    ./$PKG
-
-  # Extra dependencies.
-  COPY comms            ./comms
+COPY Cargo.* .
+COPY $PKG    ./$PKG
+COPY comms   ./comms
 
 RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
   cargo build $FLAG --bin $PKG
@@ -35,5 +34,6 @@ RUN mv target/$MODE/$PKG /app/binary
 
 # 4. Execute the package.
 FROM debian:bookworm-slim
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/binary /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/binary"]

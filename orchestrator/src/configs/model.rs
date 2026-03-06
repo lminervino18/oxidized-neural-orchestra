@@ -36,7 +36,7 @@ pub enum LayerConfig {
 }
 
 /// The `Model` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelConfig {
     Sequential { layers: Vec<LayerConfig> },

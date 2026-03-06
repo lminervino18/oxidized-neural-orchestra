@@ -11,6 +11,7 @@
 
 # Environment files
 .env
+.venv
 
 # Added by cargo
 /target
@@ -24,3 +25,19 @@
 # Logs
 *.log
 temp/
+
+# Python build artifacts
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+wheels/
+dist/
+build/
+
+# Compiled Python extensions (maturin output)
+*.so
+
+# Generated compose files
+compose.yml

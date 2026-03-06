@@ -1,0 +1,21 @@
+{
+  "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+  "algorithm": {
+    "parameter_server": {
+      "server_addrs": ["127.0.0.1:40000", "127.0.0.1:40001"],
+      "synchronizer": "barrier",
+      "store": "blocking"
+    }
+  },
+  "dataset": {
+    "src": { "inline": { "data": [1.0,2.0, 2.0,4.0, 3.0,6.0, 4.0,8.0, 5.0,10.0, 6.0,12.0, 7.0,14.0, 8.0,16.0] } },
+    "x_size": 1,
+    "y_size": 1
+  },
+  "optimizer": { "gradient_descent": { "lr": 0.01 } },
+  "loss_fn": "mse",
+  "batch_size": 4,
+  "max_epochs": 500,
+  "offline_epochs": 0,
+  "seed": 42
+}
