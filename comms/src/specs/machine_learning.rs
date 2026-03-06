@@ -51,7 +51,6 @@ pub enum OptimizerSpec {
 // sería bueno mandar `chunk_size` como parte del `DatasetSpec`?
 pub struct DatasetSpec {
     pub size: u64,
-    pub chunk: usize,
     pub x_size: usize,
     pub y_size: usize,
 }

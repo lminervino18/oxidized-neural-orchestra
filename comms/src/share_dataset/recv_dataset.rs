@@ -1,4 +1,5 @@
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use std::io::{Error, ErrorKind, Result};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufWriter};
 
 use crate::{
     OnoReceiver,
@@ -10,12 +11,14 @@ pub async fn recv_dataset<W, R>(
     storage: &mut W,
     spec: DatasetSpec,
     receiver: &mut OnoReceiver<R>,
-) -> std::io::Result<()>
+) -> Result<()>
 where
     W: AsyncWrite + Unpin,
     R: AsyncRead + Unpin,
 {
-    let mut buf = vec![0u32; spec.chunk];
+    let mut buf = Vec::<u32>::new();
+    // TODO: ver si conviene configurar la capacity de writer
+    let mut writer = BufWriter::new(storage);
 
     let mut received = 0;
 
@@ -25,16 +28,18 @@ where
         let chunk = match msg {
             Msg::Data(Payload::Datachunk(chunk)) => chunk,
             _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
                     format!("expected Datachunk, got: {msg:?}"),
                 ));
             }
         };
 
-        storage.write_all(chunk).await?;
         received += chunk.len();
+        writer.write_all(chunk).await?;
     }
+
+    writer.flush().await?;
 
     Ok(())
 }
