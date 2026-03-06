@@ -646,6 +646,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "orchestui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossterm",
+ "env_logger",
+ "open",
+ "orchestrator",
+ "ratatui",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "parameter_server"
 version = "0.1.0"
 dependencies = [
@@ -1141,20 +1155,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tui"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crossterm",
- "env_logger",
- "open",
- "orchestrator",
- "ratatui",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
