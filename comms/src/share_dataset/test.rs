@@ -19,6 +19,7 @@ async fn test_share_dataset() {
     let (mut receiver, mut sender) = channel(rx, tx);
 
     let size = 127;
+    let chunk = 4;
     let dataset: Vec<u8> = (0..size).map(|_| rand::rng().random()).collect();
 
     let mut recvr_storage = vec![];
@@ -26,13 +27,12 @@ async fn test_share_dataset() {
 
     let spec = DatasetSpec {
         size,
+        chunk,
         x_size: 0,
         y_size: 0,
     };
 
-    let chunk: usize = 4;
-
-    let send = send_dataset(&mut sender_storage, chunk, &mut sender);
+    let send = send_dataset(&mut sender_storage, spec, &mut sender);
     let recv = recv_dataset(&mut recvr_storage, spec, &mut receiver);
 
     let (send_result, recv_result) = tokio::join!(send, recv);

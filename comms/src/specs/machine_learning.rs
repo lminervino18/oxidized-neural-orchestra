@@ -50,7 +50,7 @@ pub enum OptimizerSpec {
 #[serde(rename_all = "snake_case")]
 // sería bueno mandar `chunk_size` como parte del `DatasetSpec`?
 pub struct DatasetSpec {
-    pub size: usize,
+    pub size: u64,
     pub chunk: usize,
     pub x_size: usize,
     pub y_size: usize,

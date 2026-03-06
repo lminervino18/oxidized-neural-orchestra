@@ -251,7 +251,7 @@ impl Session {
 
             tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-            send_dataset(&mut dataset, dataset_spec, &mut tx);
+            send_dataset(&mut dataset, dataset_spec, &mut tx).await?;
 
             channels.push((rx, tx));
         }

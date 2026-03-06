@@ -1,8 +1,10 @@
 use std::{
     cmp::Reverse,
     collections::BinaryHeap,
+    fs,
     net::{SocketAddr, ToSocketAddrs},
     num::NonZeroUsize,
+    os::unix::fs::MetadataExt,
 };
 
 use comms::specs::{
@@ -81,12 +83,13 @@ impl Adapter {
     fn adapt_workers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig,
+        training: &TrainingConfig<A>,
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
+        let dataset_specs = self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
         let algorithm_spec = AlgorithmSpec::ParameterServer {
             server_addrs,
             server_sizes,
@@ -97,7 +100,8 @@ impl Adapter {
             .worker_addrs
             .iter()
             .enumerate()
-            .map(|(i, addressable)| {
+            .zip(dataset_specs)
+            .map(|((i, addressable), dataset)| {
                 let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
                     OrchErr::InvalidConfig(format!(
                         "failted to resolve {i}'th worker's network address"
@@ -107,6 +111,7 @@ impl Adapter {
                 let worker_spec = WorkerSpec {
                     worker_id: i,
                     trainer: trainer_spec.clone(),
+                    dataset,
                     algorithm: algorithm_spec.clone(),
                 };
 
@@ -260,13 +265,11 @@ impl Adapter {
     ) -> TrainerSpec {
         let (model_spec, _) = self.adapt_model_param_gen(model, training.dataset.x_size);
         let optimizer_spec = self.adapt_optimizer(training.optimizer);
-        let dataset_spec = self.adapt_dataset(&training.dataset);
         let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);
 
         TrainerSpec {
             model: model_spec,
             optimizer: optimizer_spec,
-            dataset: dataset_spec,
             loss_fn: loss_fn_spec,
             offline_epochs: training.offline_epochs,
             max_epochs: training.max_epochs,
@@ -297,30 +300,39 @@ impl Adapter {
     /// A list of resolved dataset specs.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if the dataset cannot be resolved.
-    fn adapt_dataset(&self, dataset: DatasetConfig, partitions: usize) -> Result<Vec<DatasetSpec>> {
-        let datasets = match dataset {
-            DatasetConfig::Local {
-                path,
-                x_size,
-                y_size,
-            } => {
-                let metadata = fs::metadata(path)?;
-                let size = metadata.size() / partitions;
+    /// Returns an `OrchErr` if the dataset cannot be resolved.
+    fn adapt_dataset(
+        &self,
+        dataset: &DatasetConfig,
+        partitions: usize,
+    ) -> Result<Vec<DatasetSpec>> {
+        let DatasetConfig {
+            src,
+            x_size,
+            y_size,
+        } = dataset;
 
-                (0..partitions).map(|| DatasetSpec {
-                    size,
-                    chunk: size,
-                    x_size,
-                    y_size,
-                })
+        let datasets = match src {
+            DatasetSrc::Local { path } => {
+                let metadata = fs::metadata(path)?;
+                let size = metadata.size();
+                // TODO: arreglar usize-u64, `size` tiene que ser u64, chunk
+                // quisiera usize (no pasa nada hasta q probamos en 32 bits)
+                let chunk = (size / partitions as u64) as usize;
+
+                (0..partitions)
+                    .map(|_| DatasetSpec {
+                        size,
+                        chunk,
+                        x_size: (*x_size).into(),
+                        y_size: (*y_size).into(),
+                    })
+                    .collect()
             }
-            DatasetConfig::Inline {
-                data: (),
-                x_size: (),
-                y_size: (),
-            } => todo!(),
+            _ => unimplemented!(),
         };
+
+        Ok(datasets)
     }
 
     /// Adapts an `OptimizerConfig` into an `OptimizerSpec`.

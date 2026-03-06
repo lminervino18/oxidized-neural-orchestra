@@ -19,7 +19,7 @@ where
 
     let mut received = 0;
 
-    while received < spec.size {
+    while (received as u64) < spec.size {
         let msg: Msg = receiver.recv_into(&mut buf).await?;
 
         let chunk = match msg {
