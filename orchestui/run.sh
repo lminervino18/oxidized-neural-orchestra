@@ -1,11 +1,12 @@
 #!/bin/bash
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ORCHESTUI_DIR="$ROOT/orchestui"
 
 # Kill any leftover processes by port
 ALL_PORTS=$(python3 -c "
 import json
-d = json.load(open('training.json'))
+d = json.load(open('$ORCHESTUI_DIR/training.json'))
 addrs = d['algorithm']['parameter_server']['server_addrs'] + d['worker_addrs']
 print(' '.join(a.split(':')[1] for a in addrs))
 ")
@@ -29,7 +30,7 @@ while IFS= read -r addr; do
   sleep 0.5
 done < <(python3 -c "
 import json
-d = json.load(open('training.json'))
+d = json.load(open('$ORCHESTUI_DIR/training.json'))
 print('\n'.join(d['algorithm']['parameter_server']['server_addrs']))
 ")
 
@@ -48,7 +49,7 @@ while IFS= read -r addr; do
   sleep 0.5
 done < <(python3 -c "
 import json
-d = json.load(open('training.json'))
+d = json.load(open('$ORCHESTUI_DIR/training.json'))
 print('\n'.join(d['worker_addrs']))
 ")
 
@@ -64,4 +65,10 @@ setsid gnome-terminal --title="orchestrator-log" -- bash -c "
 sleep 0.5
 
 # Run TUI in current terminal
-RUST_LOG=debug cargo run -p tui 2>/tmp/ono-orchestrator.log
+cd $ROOT
+RUST_LOG=debug cargo run -p orchestui 2>/tmp/ono-orchestrator.log
+```
+
+Los JSON van en `orchestui/` sin cambios. El commit:
+```
+refactor(orchestui): move run.sh, model.json and training.json into orchestui/

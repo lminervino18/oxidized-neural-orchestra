@@ -35,3 +35,9 @@ __pycache__/
 wheels/
 dist/
 build/
+
+# Compiled Python extensions (maturin output)
+*.so
+
+# Generated compose files
+compose.yml
