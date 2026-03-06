@@ -19,8 +19,6 @@
 *compose*.yml
 
 # Local dev scripts and configs
-*.sh
-*.json
 *.csv
 
 # Logs

@@ -2,6 +2,7 @@ use std::{
     cmp::Reverse,
     collections::BinaryHeap,
     net::{SocketAddr, ToSocketAddrs},
+    num::NonZeroUsize,
 };
 
 use comms::specs::{
@@ -15,43 +16,43 @@ use comms::specs::{
 use super::{ModelConfig, TrainingConfig};
 use crate::{
     configs::{
-        ActFnConfig, AlgorithmConfig, DatasetConfig, LayerConfig, LossFnConfig, OptimizerConfig,
-        ParamGenConfig, StoreConfig, SynchronizerConfig,
+        ActFnConfig, AlgorithmConfig, DatasetConfig, DatasetSrc, LayerConfig, LossFnConfig,
+        OptimizerConfig, ParamGenConfig, StoreConfig, SynchronizerConfig,
     },
-    error::{OrchestratorError, Result},
+    error::{OrchErr, Result},
 };
 
-use super::validator::Validator;
-
-/// Converts orchestrator configs into wire-level specs ready to be sent to workers and servers.
+/// Converts user model and training configurations into worker and server specifications.
 pub struct Adapter;
 
 impl Adapter {
-    /// Creates a new `Adapter` instance.
+    /// Creates a new `Adapter`.
+    ///
+    /// # Returns
+    /// A new `Adapter` instance.
     pub fn new() -> Self {
         Self
     }
 
-    /// Validates and adapts model and training configs into worker and server specs.
+    /// Adapts both `ModelConfig` and `TrainingConfig` into `WorkerSpec`, `ServerSpec` and their network addresses.
     ///
     /// # Args
-    /// * `model` - The model architecture configuration.
-    /// * `training` - The training configuration.
+    /// * `model` - The model's architecture and initialization configuration.
+    /// * `training` - The training's configuration.
     ///
     /// # Returns
-    /// A pair of worker spec lists and server spec lists with their resolved addresses.
+    /// The workers' and servers' specifications and network addresses.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if validation fails or any address cannot be resolved.
+    /// An `OrchErr` if the configs fail to be adapted.
     pub fn adapt_configs<A: ToSocketAddrs>(
         &self,
         model: ModelConfig,
         training: TrainingConfig<A>,
     ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
-        Validator::new().validate(&model, &training)?;
-
         let (servers, server_addrs, server_sizes, server_ordering) =
             self.adapt_servers(&model, &training)?;
+
         let workers = self.adapt_workers(
             &model,
             &training,
@@ -59,10 +60,11 @@ impl Adapter {
             server_sizes,
             server_ordering,
         )?;
+
         Ok((workers, servers))
     }
 
-    /// Adapts worker addresses and model/training configs into `WorkerSpec`s.
+    /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
     ///
     /// # Args
     /// * `model` - The model's configuration.
@@ -72,11 +74,11 @@ impl Adapter {
     /// * `server_ordering` - The ordering of the layer owners.
     ///
     /// # Returns
-    /// A list of resolved worker addresses paired with their specs.
+    /// Worker addresses and specifications.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if any address cannot be resolved.
-    fn adapt_workers(
+    /// Returns an `OrchErr` if any address cannot be resolved.
+    fn adapt_workers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
         training: &TrainingConfig,
@@ -84,51 +86,48 @@ impl Adapter {
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
-        let trainer = self.adapt_trainer(model, training)?;
-        let algorithm = self.adapt_algorithm(server_addrs, server_sizes, server_ordering);
-        let datasets = self.adapt_dataset(training.dataset, training.worker_addrs.len())?;
+        let trainer_spec = self.adapt_trainer(model, training);
+        let algorithm_spec = AlgorithmSpec::ParameterServer {
+            server_addrs,
+            server_sizes,
+            server_ordering,
+        };
 
-        training
+        let worker_specs = training
             .worker_addrs
             .iter()
             .enumerate()
-            .zip(datasets)
-            .map(|((i, addressable), dataset)| {
-                let addr = addressable
-                    .to_socket_addrs()
-                    .map_err(|e| OrchestratorError::ConnectionFailed {
-                        addr: format!("worker[{i}]"),
-                        source: e,
-                    })?
-                    .next()
-                    .ok_or_else(|| {
-                        OrchestratorError::InvalidConfig(format!(
-                            "worker[{i}]: could not resolve address"
-                        ))
-                    })?;
+            .map(|(i, addressable)| {
+                let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
+                    OrchErr::InvalidConfig(format!(
+                        "failted to resolve {i}'th worker's network address"
+                    ))
+                })?;
 
-                let spec = WorkerSpec {
+                let worker_spec = WorkerSpec {
                     worker_id: i,
-                    trainer: trainer.clone(),
-                    dataset,
-                    algorithm: algorithm.clone(),
+                    trainer: trainer_spec.clone(),
+                    algorithm: algorithm_spec.clone(),
                 };
-                Ok((addr, spec))
+
+                Ok((addr, worker_spec))
             })
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(worker_specs)
     }
 
-    /// Adapts server addresses and model/training configs into `ServerSpec`s.
+    /// Adapts both model's and trianing's configurations into a `ServerSpec`.
     ///
     /// # Args
-    /// * `model` - The model architecture configuration.
-    /// * `training` - The training configuration.
+    /// * `model` - The model's architecture and initialization configuration.
+    /// * `training` - The training's configuration.
     ///
     /// # Returns
-    /// The server specifications, their resolved addresses, sizes and ordering.
+    /// The servers' specifications, resolved addresses, sizes and layers' ordering.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if any address cannot be resolved.
+    /// Returns an `OrchErr` if any address cannot be resolved.
     fn adapt_servers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
@@ -146,7 +145,7 @@ impl Adapter {
             ..
         } = &training.algorithm;
 
-        let (_, param_gens) = self.adapt_model_param_gen(model);
+        let (_, param_gens) = self.adapt_model_param_gen(model, training.dataset.x_size);
         let nlayers = param_gens.len();
 
         let items: Vec<_> = param_gens
@@ -180,89 +179,65 @@ impl Adapter {
             (chained, sizes.into_iter().sum::<usize>())
         });
 
-        let mut resolved_addrs: Vec<SocketAddr> = Vec::with_capacity(server_addrs.len());
-        let mut servers: Vec<(SocketAddr, ServerSpec)> = Vec::with_capacity(server_addrs.len());
-        let mut server_sizes: Vec<usize> = Vec::with_capacity(server_addrs.len());
-
-        for (i, (addressable, (param_gen, size))) in
-            server_addrs.iter().zip(chained_param_gens).enumerate()
-        {
-            let addr = addressable
-                .to_socket_addrs()
-                .map_err(|e| OrchestratorError::ConnectionFailed {
-                    addr: format!("server[{i}]"),
-                    source: e,
-                })?
-                .next()
-                .ok_or_else(|| {
-                    OrchestratorError::InvalidConfig(format!(
-                        "server[{i}]: could not resolve address"
+        let nworkers = training.worker_addrs.len();
+        let (servers, server_sizes): (Vec<_>, Vec<_>) = server_addrs
+            .iter()
+            .zip(chained_param_gens)
+            .enumerate()
+            .map(|(i, (addressable, (param_gen_spec, size)))| {
+                let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
+                    OrchErr::InvalidConfig(format!(
+                        "failed to resolve {i}'th server's network address"
                     ))
                 })?;
 
-            let spec = ServerSpec {
-                id: i,
-                nworkers: training.worker_addrs.len(),
-                param_gen,
-                optimizer: self.adapt_optimizer(training.optimizer),
-                synchronizer: self.adapt_synchronizer(synchronizer),
-                store: self.adapt_store(store),
-                seed: training.seed,
-            };
+                let server_spec = ServerSpec {
+                    id: i,
+                    nworkers: training.worker_addrs.len(),
+                    param_gen: param_gen_spec,
+                    optimizer: self.adapt_optimizer(training.optimizer),
+                    synchronizer: self.adapt_synchronizer(synchronizer, nworkers),
+                    store: self.adapt_store(store),
+                    seed: training.seed,
+                };
 
-            resolved_addrs.push(addr);
-            servers.push((addr, spec));
-            server_sizes.push(size);
-        }
+                Ok(((addr, server_spec), size))
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .unzip();
 
-        Ok((servers, resolved_addrs, server_sizes, server_ordering))
+        let server_addrs = servers.iter().map(|&(addr, _)| addr).collect();
+        Ok((servers, server_addrs, server_sizes, server_ordering))
     }
 
-    /// Builds an `AlgorithmSpec` from already-resolved server addresses.
+    /// Adapts a `SynchronizerConfig` into a `SynchronizerSpec`.
     ///
     /// # Args
-    /// * `server_addrs` - Already-resolved server socket addresses.
-    /// * `server_sizes` - The amount of parameters per server.
-    /// * `server_ordering` - The ordering of the layer owners.
+    /// * `synchronizer` - A synchronizer's configuration.
     ///
     /// # Returns
-    /// The resolved `AlgorithmSpec`.
-    fn adapt_algorithm(
+    /// THe synchronizer's specification.
+    fn adapt_synchronizer(
         &self,
-        server_addrs: Vec<SocketAddr>,
-        server_sizes: Vec<usize>,
-        server_ordering: Vec<usize>,
-    ) -> AlgorithmSpec {
-        AlgorithmSpec::ParameterServer {
-            server_addrs,
-            server_sizes,
-            server_ordering,
-        }
-    }
-
-    /// Converts a `SynchronizerConfig` into a `SynchronizerSpec`.
-    ///
-    /// # Args
-    /// * `synchronizer` - The synchronizer configuration.
-    ///
-    /// # Returns
-    /// The resolved `SynchronizerSpec`.
-    fn adapt_synchronizer(&self, synchronizer: &SynchronizerConfig) -> SynchronizerSpec {
+        synchronizer: &SynchronizerConfig,
+        worker_amount: usize,
+    ) -> SynchronizerSpec {
         match *synchronizer {
-            SynchronizerConfig::Barrier { barrier_size } => {
-                SynchronizerSpec::Barrier { barrier_size }
-            }
+            SynchronizerConfig::Barrier => SynchronizerSpec::Barrier {
+                barrier_size: worker_amount,
+            },
             SynchronizerConfig::NonBlocking => SynchronizerSpec::NonBlocking,
         }
     }
 
-    /// Converts a `StoreConfig` into a `StoreSpec`.
+    /// Adapts a `StoreConfig` into a `StoreSpec`.
     ///
     /// # Args
-    /// * `store` - The store configuration.
+    /// * `store` - A store's configuration.
     ///
     /// # Returns
-    /// The resolved `StoreSpec`.
+    /// The store's specification.
     fn adapt_store(&self, store: &StoreConfig) -> StoreSpec {
         match *store {
             StoreConfig::Blocking => StoreSpec::Blocking,
@@ -270,44 +245,43 @@ impl Adapter {
         }
     }
 
-    /// Builds a `TrainerSpec` from the model and training configs.
+    /// Adapts a `ModelConfig` and a `TrainingConfig` into a `TrainerSpec`.
     ///
     /// # Args
-    /// * `model` - The model architecture configuration.
-    /// * `training` - The training configuration.
+    /// * `model` - A model architecture configuration.
+    /// * `training` - A training configuration.
     ///
     /// # Returns
-    /// The resolved `TrainerSpec`.
-    ///
-    /// # Errors
-    /// Returns an `OrchestratorError` if the dataset config is invalid.
+    /// The trainer's specification.
     fn adapt_trainer<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
-    ) -> Result<TrainerSpec> {
-        let (model_spec, _) = self.adapt_model_param_gen(model);
-        let optimizer = self.adapt_optimizer(training.optimizer);
-        let loss_fn = self.adapt_loss_fn(training.loss_fn);
+    ) -> TrainerSpec {
+        let (model_spec, _) = self.adapt_model_param_gen(model, training.dataset.x_size);
+        let optimizer_spec = self.adapt_optimizer(training.optimizer);
+        let dataset_spec = self.adapt_dataset(&training.dataset);
+        let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);
 
-        Ok(TrainerSpec {
+        TrainerSpec {
             model: model_spec,
-            optimizer,
-            loss_fn,
+            optimizer: optimizer_spec,
+            dataset: dataset_spec,
+            loss_fn: loss_fn_spec,
             offline_epochs: training.offline_epochs,
             max_epochs: training.max_epochs,
             batch_size: training.batch_size,
             seed: training.seed,
-        })
+        }
     }
 
-    /// Converts a `LossFnConfig` into a `LossFnSpec`.
+    /// Adapts a `LossFnConfig` into a `LossFnSpec`.
     ///
     /// # Args
-    /// * `loss_fn` - The loss function configuration.
+    /// * `loss_fn` - A loss function's configuration.
     ///
     /// # Returns
-    /// The resolved `LossFnSpec`.
+    /// The loss function's specification.
     fn adapt_loss_fn(&self, loss_fn: LossFnConfig) -> LossFnSpec {
         match loss_fn {
             LossFnConfig::Mse => LossFnSpec::Mse,
@@ -317,7 +291,7 @@ impl Adapter {
     /// Converts a `DatasetConfig` into `DatasetSpec`s.
     ///
     /// # Args
-    /// * `dataset` - The dataset configuration.
+    /// * `dataset` - A dataset's configuration.
     ///
     /// # Returns
     /// A list of resolved dataset specs.
@@ -349,64 +323,63 @@ impl Adapter {
         };
     }
 
-    /// Converts an `OptimizerConfig` into an `OptimizerSpec`.
+    /// Adapts an `OptimizerConfig` into an `OptimizerSpec`.
     ///
     /// # Args
-    /// * `optimizer` - The optimizer configuration.
+    /// * `optimizer` - A optimizer's configuration.
     ///
     /// # Returns
-    /// The resolved `OptimizerSpec`.
+    /// The optimizer specification.
     fn adapt_optimizer(&self, optimizer: OptimizerConfig) -> OptimizerSpec {
         match optimizer {
-            OptimizerConfig::Adam { lr, b1, b2, eps } => OptimizerSpec::Adam {
-                learning_rate: lr,
-                beta1: b1,
-                beta2: b2,
-                epsilon: eps,
-            },
             OptimizerConfig::GradientDescent { lr } => {
                 OptimizerSpec::GradientDescent { learning_rate: lr }
             }
-            OptimizerConfig::GradientDescentWithMomentum { lr, mu } => {
-                OptimizerSpec::GradientDescentWithMomentum {
-                    learning_rate: lr,
-                    momentum: mu,
-                }
-            }
         }
     }
 
-    /// Converts a `ModelConfig` into a `ModelSpec` and its associated per-layer `ParamGenSpec`s.
+    /// Adapts a `ModelConfig` into both `ModelSpec` and per layer `ParamGenSpec`s.
     ///
     /// # Args
-    /// * `model` - The model architecture configuration.
+    /// * `model` - A model's architecture and initialization configuration.
+    /// * `input_size` - The model's input size.
     ///
     /// # Returns
-    /// A tuple of the resolved `ModelSpec` and a `ParamGenSpec` per layer.
-    fn adapt_model_param_gen(&self, model: &ModelConfig) -> (ModelSpec, Vec<ParamGenSpec>) {
+    /// The model's specification and it's layers' parameter generators specifications.
+    fn adapt_model_param_gen(
+        &self,
+        model: &ModelConfig,
+        input_size: NonZeroUsize,
+    ) -> (ModelSpec, Vec<ParamGenSpec>) {
         match model {
             ModelConfig::Sequential { layers } => {
-                let (layer_specs, param_gen_specs): (Vec<_>, Vec<_>) =
-                    layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
+                let (layer_specs, param_gen_specs) = layers
+                    .iter()
+                    .scan(input_size, |input_size, config| {
+                        let (layer_spec, param_gen_spec, output_size) =
+                            self.adapt_layer(config, *input_size);
+                        *input_size = output_size;
+                        Some((layer_spec, param_gen_spec))
+                    })
+                    .unzip();
 
-                (
-                    ModelSpec::Sequential {
-                        layers: layer_specs,
-                    },
-                    param_gen_specs,
-                )
+                let model_spec = ModelSpec::Sequential {
+                    layers: layer_specs,
+                };
+
+                (model_spec, param_gen_specs)
             }
         }
     }
 
-    /// Converts a `ParamGenConfig` into a `ParamGenSpec` given the layer dimensions.
+    /// Adapts a `ParamGenConfig` into a `ParamGenSpec`.
     ///
     /// # Args
-    /// * `param_gen` - The parameter generator configuration.
-    /// * `(fan_in, limit, fan_out)` - Layer sizing info used by distribution-based generators.
+    /// * `param_gen` - A parameter generator configuration.
+    /// * `(fan_in, limit, fan_out)` - It's layer sizing information.
     ///
     /// # Returns
-    /// The resolved `ParamGenSpec`.
+    /// The parameter generator's specification.
     fn adapt_param_gen(
         &self,
         param_gen: ParamGenConfig,
@@ -449,46 +422,64 @@ impl Adapter {
         }
     }
 
-    /// Converts a `LayerConfig` into a `LayerSpec` and its associated `ParamGenSpec`.
+    /// Adapts a `LayerConfig` into both `LayerSpec` and `ParamGenSpec`.
     ///
     /// # Args
     /// * `layer` - The layer configuration.
+    /// * `input_size` - The input size to this layer.
     ///
     /// # Returns
-    /// A tuple of the resolved `LayerSpec` and its `ParamGenSpec`.
-    fn adapt_layer(&self, layer: &LayerConfig) -> (LayerSpec, ParamGenSpec) {
+    /// The layer's specification, it's parameter generator specifications and it's output size.
+    fn adapt_layer(
+        &self,
+        layer: &LayerConfig,
+        input_size: NonZeroUsize,
+    ) -> (LayerSpec, ParamGenSpec, NonZeroUsize) {
         match *layer {
             LayerConfig::Dense {
-                dim: (n, m),
+                output_size,
                 init,
                 act_fn,
             } => {
-                let act_fn = self.adapt_act_fn(act_fn.as_ref());
+                let act_fn_spec = act_fn.map(|act_fn| self.adapt_act_fn(act_fn));
+                let layer_size = input_size.saturating_add(1).saturating_mul(output_size);
+                let sizes = (input_size.get(), layer_size.get(), output_size.get());
+
                 (
                     LayerSpec::Dense {
-                        dim: (n, m),
-                        act_fn,
+                        dim: (sizes.0, sizes.2),
+                        act_fn: act_fn_spec,
                     },
-                    self.adapt_param_gen(init, layer.sizes()),
+                    self.adapt_param_gen(init, sizes),
+                    output_size,
                 )
             }
         }
     }
 
-    /// Converts an optional `ActFnConfig` reference into an optional `ActFnSpec`.
+    /// Adapts an `ActFnConfig` into an `ActFnSpec`.
     ///
     /// # Args
-    /// * `act_fn` - The optional activation function configuration.
+    /// * `act_fn` - An activation function configuration.
     ///
     /// # Returns
-    /// The resolved `ActFnSpec`, or `None` if no activation function is configured.
-    fn adapt_act_fn(&self, act_fn: Option<&ActFnConfig>) -> Option<ActFnSpec> {
-        Some(match *act_fn? {
+    /// The activation function's specification.
+    fn adapt_act_fn(&self, act_fn: ActFnConfig) -> ActFnSpec {
+        match act_fn {
             ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
-        })
+        }
     }
 }
 
+/// Approximates the balanced partitions problem.
+///
+/// # Args
+/// * `items` - The items to distribute in bins.
+/// * `k` - The amount of bins.
+///
+/// # Returns
+/// k vecs with an approximate distribution which minimizes the difference
+/// in size between the minimum and maximum sizes.
 fn balanced_partitions<T>(mut items: Vec<(T, usize)>, k: usize) -> Vec<Vec<T>> {
     let mut sizes: BinaryHeap<_> = (0..k).map(|i| Reverse((0, i))).collect();
     let mut bins: Vec<_> = (0..k).map(|_| Vec::new()).collect();
