@@ -2,7 +2,7 @@
 ARG MODE=debug
 
 # 1. Build Rust dependencies with cargo-chef.
-FROM rust:1.92 AS chef
+FROM rust:1.92-slim AS chef
 RUN cargo install cargo-chef
 WORKDIR /app
 
@@ -24,6 +24,8 @@ COPY comms          ./comms
 COPY orchestrator   ./orchestrator
 COPY orchestra-py   ./orchestra-py
 
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 RUN pip install maturin --break-system-packages || \
     (apt-get update && apt-get install -y python3-pip && pip install maturin --break-system-packages)
 
@@ -37,3 +39,4 @@ FROM builder
 COPY orchestra-py/train.py /app/train.py
 WORKDIR /app
 ENTRYPOINT ["python3", "train.py"]
+
