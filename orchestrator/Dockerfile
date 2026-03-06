@@ -3,7 +3,9 @@ ARG PKG=orchestrator
 ARG MODE
 
 # 1. Install cargo-chef.
+# 1. Install cargo-chef.
 FROM rust:1.92-slim AS chef
+RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef
 WORKDIR /app
 

@@ -29,13 +29,9 @@ case "$MODULE" in
         DOCKERFILE="orchestra-py/Dockerfile"
         IMAGE_NAME="orchestra-py"
         ;;
-    orchestui)
-        DOCKERFILE="orchestui/Dockerfile"
-        IMAGE_NAME="orchestui"
-        ;;
     *)
         echo "Unknown module: $MODULE"
-        echo "Usage: $0 [orchestrator|orchestra-py|orchestui]"
+        echo "Usage: $0 [orchestrator|orchestra-py]"
         exit 1
         ;;
 esac
