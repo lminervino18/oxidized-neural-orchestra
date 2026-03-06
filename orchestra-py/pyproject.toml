@@ -7,5 +7,5 @@ name = "orchestra"
 version = "0.1.0"
 
 [tool.maturin]
-python-source = "orchestra-py"
+python-packages = ["orchestra"]
 module-name = "orchestra._orchestra"

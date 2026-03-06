@@ -2,20 +2,56 @@
 
 set -e
 
-IMAGE_NAME="orchestrator"
+MODULE="${1:-orchestrator}"
 NETWORK_NAME="distributed-training_training-network"
-MODE="debug" # or "release"
+CONFIG_PATH="docker/config.json"
 
-echo "Building Orchestrator Image ($MODE)..."
+MODE=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print('release' if c['release'] else 'debug')")
+WORKERS=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print(c['workers'])")
+SERVERS=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print(c['servers'])")
+
+WORKER_ADDRS=$(python3 -c "
+n=$WORKERS
+print(','.join(f'worker-{i}:{50000+i}' for i in range(n)))
+")
+
+SERVER_ADDRS=$(python3 -c "
+n=$SERVERS
+print(','.join(f'server-{i}:{40000+i}' for i in range(n)))
+")
+
+case "$MODULE" in
+    orchestrator)
+        DOCKERFILE="orchestrator/Dockerfile"
+        IMAGE_NAME="orchestrator"
+        ;;
+    orchestra-py)
+        DOCKERFILE="orchestra-py/Dockerfile"
+        IMAGE_NAME="orchestra-py"
+        ;;
+    orchestui)
+        DOCKERFILE="orchestui/Dockerfile"
+        IMAGE_NAME="orchestui"
+        ;;
+    *)
+        echo "Unknown module: $MODULE"
+        echo "Usage: $0 [orchestrator|orchestra-py|orchestui]"
+        exit 1
+        ;;
+esac
+
+echo "Building $IMAGE_NAME image ($MODE)..."
 
 docker build               \
     --build-arg MODE=$MODE \
     -t $IMAGE_NAME         \
-    -f orchestrator/Dockerfile .
+    -f $DOCKERFILE .
 
-echo "Running Orchestrator Container..."
+echo "Running $IMAGE_NAME container..."
 
-docker run --rm             \
-    --name orchestrator     \
-    --network $NETWORK_NAME \
+docker run --rm                      \
+    --name $IMAGE_NAME               \
+    --network $NETWORK_NAME          \
+    -e WORKER_ADDRS="$WORKER_ADDRS"  \
+    -e SERVER_ADDRS="$SERVER_ADDRS"  \
     $IMAGE_NAME
