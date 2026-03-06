@@ -58,58 +58,19 @@ impl Adapter {
         let (servers, server_addrs, server_sizes, server_ordering) =
             self.adapt_servers(&model, &training)?;
 
-        let partitions =
-            self.get_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
+        let (dataset_specs, partitions) =
+            self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
 
         let workers = self.adapt_workers(
             &model,
             &training,
+            dataset_specs,
             server_addrs,
             server_sizes,
             server_ordering,
         )?;
 
         Ok((workers, partitions, servers))
-    }
-
-    fn get_dataset_partitions(
-        &self,
-        dataset: &DatasetConfig,
-        workers: usize,
-    ) -> Result<Vec<Partition>> {
-        let path = match &dataset.src {
-            DatasetSrc::Local { path } => path,
-            _ => todo!(),
-        };
-        let row = (dataset.x_size.get() + dataset.y_size.get()) as u64;
-        let size = fs::metadata(&path)?.len();
-        let rows = (size / row as u64) as usize;
-        let base_rows = (rows / workers) as u64;
-        let remainder = rows % workers;
-
-        let mut last = 0;
-
-        let partitions = (0..workers)
-            .map(|i| {
-                let offset = last;
-                let size = if i < remainder {
-                    (base_rows + 1) * row
-                } else {
-                    base_rows * row
-                };
-
-                last += size;
-
-                // TODO: avoid cloning path
-                Partition {
-                    path: path.clone(),
-                    offset,
-                    size,
-                }
-            })
-            .collect();
-
-        Ok(partitions)
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -130,12 +91,12 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
+        dataset_specs: Vec<DatasetSpec>,
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
-        let dataset_specs = self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
         let algorithm_spec = AlgorithmSpec::ParameterServer {
             server_addrs,
             server_sizes,
@@ -337,44 +298,70 @@ impl Adapter {
         }
     }
 
-    /// Converts a `DatasetConfig` into `DatasetSpec`s.
+    /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
     ///
     /// # Args
     /// * `dataset` - A dataset's configuration.
+    /// * `npartitions` - The amount of partitions.
     ///
     /// # Returns
-    /// A list of resolved dataset specs.
+    /// A list of resolved dataset specs and a list with partition metadata.
     ///
     /// # Errors
     /// Returns an `OrchErr` if the dataset cannot be resolved.
     fn adapt_dataset(
         &self,
         dataset: &DatasetConfig,
-        partitions: usize,
-    ) -> Result<Vec<DatasetSpec>> {
+        npartitions: usize,
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition>)> {
         let DatasetConfig {
             src,
             x_size,
             y_size,
         } = dataset;
 
-        let datasets = match src {
-            DatasetSrc::Local { path } => {
-                let metadata = fs::metadata(path)?;
-                let size = metadata.len();
+        let (x_size, y_size) = (x_size.get(), y_size.get());
 
-                (0..partitions)
-                    .map(|_| DatasetSpec {
+        let (specs, partitions) = match src {
+            DatasetSrc::Local { path } => {
+                let size = fs::metadata(path)?.len();
+                let row_size = (dataset.x_size.get() + dataset.y_size.get()) as u64;
+                let nrows = (size / row_size) as usize;
+                let base_rows = (nrows / npartitions) as u64;
+                let remainder = nrows % npartitions;
+
+                let mut specs = vec![];
+                let mut partitions = vec![];
+                let mut offset = 0;
+
+                for i in 0..npartitions {
+                    let size = if i < remainder {
+                        base_rows + 1
+                    } else {
+                        base_rows
+                    } * row_size;
+
+                    specs.push(DatasetSpec {
                         size,
-                        x_size: x_size.get(),
-                        y_size: y_size.get(),
-                    })
-                    .collect()
+                        x_size,
+                        y_size,
+                    });
+                    partitions.push(Partition {
+                        // TODO: avoid cloning path
+                        path: path.clone(),
+                        offset,
+                        size,
+                    });
+
+                    offset += size;
+                }
+
+                (vec![], vec![])
             }
             _ => unimplemented!(),
         };
 
-        Ok(datasets)
+        Ok((specs, partitions))
     }
 
     /// Adapts an `OptimizerConfig` into an `OptimizerSpec`.
