@@ -233,9 +233,9 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `OrchestratorError` if any connection or send fails.
-    async fn create_workers(
+    async fn create_workers<'a>(
         workers: Vec<(SocketAddr, WorkerSpec)>,
-        partitions: Vec<Partition>,
+        partitions: Vec<Partition<'a>>,
     ) -> Result<Vec<(NetRx, NetTx)>> {
         const CHUNK: usize = 8192; // TODO: mover este 8kb o determinarlo
         let mut channels = Vec::with_capacity(workers.len());
@@ -249,11 +249,21 @@ impl Session {
 
             tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-            let mut fd = tokio::fs::File::open(partition.path).await?;
-            fd.seek(io::SeekFrom::Start(partition.offset)).await?;
-            let mut fd = fd.take(partition.size);
+            match partition {
+                Partition::Local { path, offset, size } => {
+                    let mut fd = tokio::fs::File::open(path).await?;
+                    fd.seek(io::SeekFrom::Start(offset)).await?;
+                    let mut fd = fd.take(size);
 
-            send_dataset(&mut fd, CHUNK, &mut tx).await?;
+                    send_dataset(&mut fd, CHUNK, &mut tx).await?;
+                }
+                Partition::Inline { data } => {
+                    // TODO: acá hay quilombito y no quiero usar bytemuck
+                    let msg = Msg::Data(Payload::Datachunk(data));
+
+                    tx.send(&msg);
+                }
+            }
 
             log::info!("worker at {addr} ready");
             channels.push((rx, tx));

@@ -328,7 +328,7 @@ impl Adapter {
                 x_size,
                 y_size,
             });
-            partitions.push(Partition {
+            partitions.push(Partition::Local {
                 // TODO: avoid cloning path
                 path: path.clone(),
                 offset,
@@ -336,6 +336,45 @@ impl Adapter {
             });
 
             offset += size;
+        }
+
+        Ok((vec![], vec![]))
+    }
+
+    // TODO: merge this method with local variant
+    fn adapt_inline_dataset(
+        &self,
+        data: &[f32],
+        x_size: usize,
+        y_size: usize,
+        npartitions: usize,
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition>)> {
+        let size = data.len();
+        let row_size = x_size + y_size;
+        let nrows = size / row_size;
+        let base_rows = nrows / npartitions;
+        let remainder = nrows % npartitions;
+
+        let mut specs = vec![];
+        let mut partitions = vec![];
+        let mut rest = data;
+
+        for i in 0..npartitions {
+            let size = if i < remainder {
+                base_rows + 1
+            } else {
+                base_rows
+            } * row_size;
+
+            let curr;
+            (curr, rest) = rest.split_at(size);
+
+            specs.push(DatasetSpec {
+                size: size as u64,
+                x_size,
+                y_size,
+            });
+            partitions.push(Partition::Inline { data: curr });
         }
 
         Ok((vec![], vec![]))
@@ -369,7 +408,9 @@ impl Adapter {
             DatasetSrc::Local { path } => {
                 self.adapt_local_dataset(path, x_size, y_size, npartitions)
             }
-            _ => unimplemented!(),
+            DatasetSrc::Inline { data } => {
+                self.adapt_inline_dataset(data, x_size, y_size, npartitions)
+            }
         }
     }
 
