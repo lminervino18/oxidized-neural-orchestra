@@ -19,7 +19,7 @@ async fn test_share_dataset() {
     let (mut receiver, mut sender) = channel(rx, tx);
 
     let chunk = 4;
-    let size = 127;
+    let size = 127 * std::mem::size_of::<f32>() as u64;
     let dataset: Vec<u8> = (0..size).map(|_| rand::rng().random()).collect();
 
     let mut recvr_storage = vec![];

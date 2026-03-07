@@ -349,7 +349,7 @@ impl Adapter {
         y_size: usize,
         npartitions: usize,
     ) -> Result<(Vec<DatasetSpec>, Vec<Partition>)> {
-        let size = data.len();
+        let size = data.len() * 4;
         let row_size = x_size + y_size;
         let nrows = size / row_size;
         let base_rows = nrows / npartitions;

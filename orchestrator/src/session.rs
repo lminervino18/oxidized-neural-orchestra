@@ -249,6 +249,7 @@ impl Session {
 
             tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
+            // TODO: ver si esto no queda mejor en send_dataset con un match
             match partition {
                 Partition::Local { path, offset, size } => {
                     let mut fd = tokio::fs::File::open(path).await?;
@@ -258,10 +259,9 @@ impl Session {
                     send_dataset(&mut fd, CHUNK, &mut tx).await?;
                 }
                 Partition::Inline { data } => {
-                    // TODO: acá hay quilombito y no quiero usar bytemuck
                     let msg = Msg::Data(Payload::Datachunk(data));
 
-                    tx.send(&msg);
+                    tx.send(&msg).await?;
                 }
             }
 

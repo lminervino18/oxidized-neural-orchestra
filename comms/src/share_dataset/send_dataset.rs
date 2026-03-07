@@ -22,7 +22,9 @@ where
         let read = reader.read(&mut buf).await?;
 
         if read > 0 {
-            let msg = Msg::Data(Payload::Datachunk(&buf[..read]));
+            let nums = bytemuck::cast_slice(&buf);
+            let msg = Msg::Data(Payload::Datachunk(nums));
+
             sender.send(&msg).await?;
         }
 

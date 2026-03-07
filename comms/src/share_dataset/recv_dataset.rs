@@ -35,8 +35,10 @@ where
             }
         };
 
-        received += chunk.len();
-        writer.write_all(chunk).await?;
+        let bytes = bytemuck::cast_slice(chunk);
+
+        received += bytes.len();
+        writer.write_all(bytes).await?;
     }
 
     writer.flush().await?;
