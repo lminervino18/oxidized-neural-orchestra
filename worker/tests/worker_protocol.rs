@@ -101,7 +101,7 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
 
     const MAX_EPOCHS: usize = 100;
 
-    let model = Sequential::new([Layer::dense((1, 1), None)]);
+    let model = Sequential::new([Layer::dense((1, 1))]);
     let trainer = ModelTrainer::new(
         model,
         vec![GradientDescent::new(0.1)],

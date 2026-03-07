@@ -8,7 +8,6 @@ use rand::Rng;
 use crate::{
     arch::{
         Model, Sequential,
-        activations::ActFn,
         layers::Layer,
         loss::{LossFn, Mse},
     },
@@ -43,7 +42,7 @@ fn test_ml_lineal_convergence() {
         3.0, 4.0, // 8
     ];
 
-    let mut model = Sequential::new([Layer::dense((1, 1), None)]);
+    let mut model = Sequential::new([Layer::dense((1, 1))]);
     let nparams = model.size();
     let optimizer = GradientDescent::new(0.1);
     let dataset = Dataset::new(lineal.into(), 1, 1);
@@ -97,8 +96,10 @@ fn test_ml_and2_gate_convergence() {
     ];
 
     let mut model = Sequential::new([
-        Layer::dense((2, 2), ActFn::sigmoid(1.0)),
-        Layer::dense((2, 1), ActFn::sigmoid(1.0)),
+        Layer::dense((2, 2)),
+        Layer::sigmoid(1.0),
+        Layer::dense((2, 1)),
+        Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
     let optimizer = GradientDescent::new(1.0);
@@ -157,8 +158,10 @@ fn test_ml_and3_gate_convergence() {
     ];
 
     let mut model = Sequential::new([
-        Layer::dense((3, 2), ActFn::sigmoid(1.0)),
-        Layer::dense((2, 1), ActFn::sigmoid(1.0)),
+        Layer::dense((3, 2)),
+        Layer::sigmoid(1.0),
+        Layer::dense((2, 1)),
+        Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
     let optimizer = GradientDescent::new(1.0);
@@ -213,8 +216,10 @@ fn test_ml_xor2_gate_convergence() {
     ];
 
     let mut model = Sequential::new([
-        Layer::dense((2, 2), ActFn::sigmoid(1.0)),
-        Layer::dense((2, 1), ActFn::sigmoid(1.0)),
+        Layer::dense((2, 2)),
+        Layer::sigmoid(1.0),
+        Layer::dense((2, 1)),
+        Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
     let optimizer = GradientDescent::new(1.0);

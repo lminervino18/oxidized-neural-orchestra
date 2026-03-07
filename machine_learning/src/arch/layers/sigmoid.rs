@@ -1,7 +1,7 @@
-use ndarray::{Array2, ArrayView2, ArrayViewMut2};
+use ndarray::{Array2, ArrayView2, ArrayViewMut2, azip};
 use std::f32;
 
-use crate::Result;
+use crate::{Result, arch::layers::InplaceReshape};
 
 #[derive(Clone, Debug, Default)]
 pub struct Sigmoid {
@@ -21,39 +21,33 @@ impl Sigmoid {
         }
     }
 
-    fn sigmoid(&self, z: f32) -> f32 {
-        1.0 / (1.0 + (-z).exp())
-    }
-
-    fn sigmoid_prime(&self, z: f32) -> f32 {
-        let sigmoid = self.sigmoid(z);
-
-        sigmoid * (1.0 - sigmoid)
+    pub fn size(&self) -> usize {
+        0
     }
 
     pub fn forward(&mut self, x: ArrayView2<f32>) -> Result<ArrayView2<'_, f32>> {
-        let sigmoid = |z| self.sigmoid(z);
-        let amp = self.amp;
+        self.activations.reshape_inplace((x.nrows(), x.ncols()));
 
-        self.activations = x.mapv(|z| amp * sigmoid(z));
+        azip!((a in &mut self.activations, &x_in in &x) {
+            *a = self.amp / (1.0 + (-x_in).exp());
+        });
 
         Ok(self.activations.view())
     }
 
     pub fn backward<'a>(
-        &mut self,
+        &'a mut self,
         mut d: ArrayViewMut2<'a, f32>,
     ) -> Result<ArrayViewMut2<'a, f32>> {
-        let sigmoid_prime = |z| self.sigmoid_prime(z);
         let amp = self.amp;
 
-        d.mapv_inplace(|z| amp * sigmoid_prime(z));
+        azip!((d_in in &mut d, &a in &self.activations) {
+            let s = a / amp;
+            let local_grad = amp * s * (1.0 - s);
+            *d_in *= local_grad;
+        });
 
         Ok(d)
-    }
-
-    pub fn size(&self) -> usize {
-        0
     }
 }
 

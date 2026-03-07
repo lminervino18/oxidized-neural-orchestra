@@ -1,7 +1,7 @@
 use ndarray::{linalg, prelude::*};
 
 use super::InplaceReshape;
-use crate::{MlErr, Result, arch::activations::ActFn};
+use crate::{MlErr, Result};
 
 /// Optimizations:
 ///   1. Find a way to not copy `x` in each `Dense::forward` call.

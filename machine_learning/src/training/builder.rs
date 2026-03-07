@@ -7,7 +7,6 @@ use super::{ModelTrainer, Trainer};
 use crate::{
     arch::{
         Model, Sequential,
-        activations::ActFn,
         layers::Layer,
         loss::{LossFn, Mse},
     },
@@ -73,7 +72,12 @@ impl TrainerBuilder {
             ModelSpec::Sequential {
                 layers: layer_specs,
             } => {
-                let layers = layer_specs.iter().map(|ls| self.resolve_layer(*ls));
+                let layers: Vec<_> = layer_specs
+                    .iter()
+                    .map(|layer_spec| self.resolve_layer(*layer_spec))
+                    .flatten()
+                    .collect();
+
                 let model = Sequential::new(layers);
                 self.resolve_loss_fn(spec, optimizers, model)
             }
@@ -87,36 +91,33 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_layer(&self, spec: LayerSpec) -> Layer {
+    fn resolve_layer(&self, spec: LayerSpec) -> Vec<Layer> {
+        let mut layers = Vec::with_capacity(2);
+
         match spec {
             LayerSpec::Dense { dim, act_fn } => {
-                let factory = |act_fn| Layer::dense(dim, act_fn);
-                self.resolve_act_fn(act_fn, factory)
+                layers.push(Layer::dense(dim));
+
+                if let Some(spec) = act_fn {
+                    layers.push(self.resolve_act_fn(spec));
+                }
             }
         }
+
+        layers
     }
 
     /// Resolves the `ActFn` for a specific layer.
     ///
     /// # Arguments
     /// * `spec` - An optional specification for an `ActFn`.
-    /// * `layer_factory` - A layer factory given an optional activation function.
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_act_fn<F>(&self, spec: Option<ActFnSpec>, layer_factory: F) -> Layer
-    where
-        F: FnOnce(Option<ActFn>) -> Layer,
-    {
-        let Some(act_fn) = spec else {
-            return layer_factory(None);
-        };
-
-        let act_fn = match act_fn {
-            ActFnSpec::Sigmoid { amp } => Some(ActFn::sigmoid(amp)),
-        };
-
-        layer_factory(act_fn)
+    fn resolve_act_fn(&self, spec: ActFnSpec) -> Layer {
+        match spec {
+            ActFnSpec::Sigmoid { amp } => Layer::sigmoid(amp),
+        }
     }
 
     /// Resolves the `LossFn` for this trainer.
