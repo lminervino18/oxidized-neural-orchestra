@@ -1,10 +1,9 @@
 use ndarray::ArrayView2;
 
-use super::{Model, layers::Layer, loss::LossFn};
+use super::{layers::Layer, loss::LossFn};
 use crate::{MlErr, Result, optimization::Optimizer, param_manager::ParamManager};
 
-/// A sequential model: information flows forward when computing an output and backward when
-/// computing the *deltas* of its layers.
+/// A trainable model, this model's architecture is a sequence of trainable layers.
 #[derive(Clone)]
 pub struct Sequential {
     layers: Vec<Layer>,
@@ -27,6 +26,14 @@ impl Sequential {
         }
     }
 
+    /// Calculates the amount of parameters in the model.
+    ///
+    /// # Returns
+    /// The size of this model in the amount of parameters.
+    pub fn size(&self) -> usize {
+        self.layers.iter().map(|layer| layer.size()).sum()
+    }
+
     /// Makes a forward pass through the network.
     ///
     /// # Arguments
@@ -35,8 +42,8 @@ impl Sequential {
     ///
     /// # Returns
     /// The prediction for the given input or an error if occurred.
-    pub fn forward<'x, 'mw>(
-        &'x mut self,
+    pub fn forward<'x, 'a: 'x, 'mw>(
+        &'a mut self,
         param_manager: &mut ParamManager<'mw>,
         mut x: ArrayView2<'x, f32>,
     ) -> Result<ArrayView2<'x, f32>> {
@@ -56,19 +63,27 @@ impl Sequential {
 
         Ok(x)
     }
-}
 
-impl Model for Sequential {
-    fn size(&self) -> usize {
-        self.layers.iter().map(|layer| layer.size()).sum()
-    }
-
-    // NOTE: since getting the actual loss would require forwarding over all batches again at
-    // the end of the backprop iterations, we are approximating it by averaging the loss at
-    // each batch (this is a good approximation), another option would be to sum the weighted
-    // losses, that is, loss * batch_size and then diving by the also weighted sum of
-    // num_batches.
-    fn backprop<'a, 'mw, O, L, I>(
+    /// Computes the gradient of the loss function with respect to the parameters of the model over
+    /// the provided batches. **`params` gets updated** for each batch according to the
+    /// optimization algorithm.
+    ///
+    /// Since getting the actual loss would require forwarding over all batches again at
+    /// the end of the backprop iterations, we are approximating it by averaging the loss at
+    /// each batch (this is a good approximation), another option would be to sum the weighted
+    /// losses, that is, loss * batch_size and then diving by the also weighted sum of
+    /// num_batches.
+    ///
+    /// # Arguments
+    /// * `params` - The model's parameters.
+    /// * `grad` - A buffer for writing the computed gradient on each batch pass.
+    /// * `loss` - The loss function.
+    /// * `optimizer` - The optimizer that dictates how to update the weights on each gradient calculation.
+    /// * `batches` - The batches of data.
+    ///
+    /// # Returns
+    /// The epoch loss or an error if the model failed to advance with the training.
+    pub fn backprop<'a, 'mw, O, L, I>(
         &mut self,
         param_manager: &mut ParamManager<'mw>,
         optimizers: &mut [O],

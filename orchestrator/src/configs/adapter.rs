@@ -6,9 +6,7 @@ use std::{
 };
 
 use comms::specs::{
-    machine_learning::{
-        ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, ModelSpec, OptimizerSpec, TrainerSpec,
-    },
+    machine_learning::{ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec},
     server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
     worker::{AlgorithmSpec, WorkerSpec},
 };
@@ -115,7 +113,7 @@ impl Adapter {
             ..
         } = &training.algorithm;
 
-        let (_, param_gens) = self.adapt_model_param_gen(model);
+        let (_, param_gens) = self.adapt_layers(model);
         let nlayers = param_gens.len();
 
         let items: Vec<_> = param_gens
@@ -258,13 +256,13 @@ impl Adapter {
         model: &ModelConfig,
         training: &TrainingConfig<A>,
     ) -> io::Result<TrainerSpec> {
-        let (model_spec, _) = self.adapt_model_param_gen(model);
+        let (layers, _) = self.adapt_layers(model);
         let optimizer = self.adapt_optimizer(training.optimizer);
         let dataset = self.adapt_dataset(&training.dataset)?;
         let loss_fn = self.adapt_loss_fn(training.loss_fn);
 
         let trainer = TrainerSpec {
-            model: model_spec,
+            layers,
             optimizer,
             dataset,
             loss_fn,
@@ -348,19 +346,14 @@ impl Adapter {
     ///
     /// # Returns
     /// The model's and parameter generator's specification or an io error if occurred.
-    fn adapt_model_param_gen(&self, model: &ModelConfig) -> (ModelSpec, Vec<ParamGenSpec>) {
-        match model {
-            ModelConfig::Sequential { layers } => {
-                let (layer_specs, param_gen_specs): (Vec<_>, Vec<_>) =
-                    layers.iter().map(|layer| self.adapt_layer(layer)).unzip();
+    fn adapt_layers(&self, model: &ModelConfig) -> (Vec<LayerSpec>, Vec<ParamGenSpec>) {
+        let (layer_specs, param_gen_specs): (Vec<_>, Vec<_>) = model
+            .layers
+            .iter()
+            .map(|layer| self.adapt_layer(layer))
+            .unzip();
 
-                let model_spec = ModelSpec::Sequential {
-                    layers: layer_specs,
-                };
-
-                (model_spec, param_gen_specs)
-            }
-        }
+        (layer_specs, param_gen_specs)
     }
 
     /// Adapts the configuration to `ParamGenSpec`.

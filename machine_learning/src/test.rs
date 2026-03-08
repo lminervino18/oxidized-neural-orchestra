@@ -7,7 +7,7 @@ use rand::Rng;
 
 use crate::{
     arch::{
-        Model, Sequential,
+        Sequential,
         layers::Layer,
         loss::{LossFn, Mse},
     },

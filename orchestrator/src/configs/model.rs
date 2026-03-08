@@ -42,6 +42,6 @@ impl LayerConfig {
 
 /// The `Model` configuration.
 #[derive(Debug)]
-pub enum ModelConfig {
-    Sequential { layers: Vec<LayerConfig> },
+pub struct ModelConfig {
+    pub layers: Vec<LayerConfig>,
 }

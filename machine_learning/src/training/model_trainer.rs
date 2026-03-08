@@ -5,7 +5,7 @@ use rand::Rng;
 use super::{TrainResult, Trainer};
 use crate::{
     Result,
-    arch::{Model, loss::LossFn},
+    arch::{Sequential, loss::LossFn},
     dataset::Dataset,
     optimization::Optimizer,
     param_manager::ParamManager,
@@ -13,9 +13,8 @@ use crate::{
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
 /// including the model itself.
-pub struct ModelTrainer<M, O, L, R>
+pub struct ModelTrainer<O, L, R>
 where
-    M: Model,
     O: Optimizer,
     L: LossFn,
     R: Rng,
@@ -23,7 +22,7 @@ where
     optimizers: Vec<O>,
     dataset: Dataset,
     loss_fn: L,
-    model: M,
+    model: Sequential,
 
     epoch: usize,
     offline_epochs: usize,
@@ -34,9 +33,8 @@ where
     losses: Vec<f32>,
 }
 
-impl<M, O, L, R> ModelTrainer<M, O, L, R>
+impl<O, L, R> ModelTrainer<O, L, R>
 where
-    M: Model,
     O: Optimizer,
     L: LossFn,
     R: Rng,
@@ -44,7 +42,7 @@ where
     /// Returns a new `ModelTrainer`.
     ///
     /// # Arguments
-    /// * `model` - The model that will be trained.
+    /// * `model` - A trainable model.
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `dataset` - The dataset the model will be trained with.
     /// * `offline_epochs` - The amount of extra epochs to run per `train` call.
@@ -55,7 +53,7 @@ where
     /// # Returns
     /// A new `ModelTrainer` instance.
     pub fn new(
-        model: M,
+        model: Sequential,
         optimizers: Vec<O>,
         dataset: Dataset,
         offline_epochs: usize,
@@ -79,9 +77,8 @@ where
     }
 }
 
-impl<M, O, L, R> ModelTrainer<M, O, L, R>
+impl<O, L, R> ModelTrainer<O, L, R>
 where
-    M: Model,
     O: Optimizer + Send,
     L: LossFn,
     R: Rng,
@@ -119,9 +116,8 @@ where
     }
 }
 
-impl<M, O, L, R> Trainer for ModelTrainer<M, O, L, R>
+impl<O, L, R> Trainer for ModelTrainer<O, L, R>
 where
-    M: Model,
     O: Optimizer + Send,
     L: LossFn,
     R: Rng,

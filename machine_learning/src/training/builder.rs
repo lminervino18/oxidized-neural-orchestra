@@ -1,12 +1,12 @@
 use comms::specs::machine_learning::{
-    ActFnSpec, LayerSpec, LossFnSpec, ModelSpec, OptimizerSpec, TrainerSpec,
+    ActFnSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec,
 };
 use rand::{SeedableRng, rngs::StdRng};
 
 use super::{ModelTrainer, Trainer};
 use crate::{
     arch::{
-        Model, Sequential,
+        Sequential,
         layers::Layer,
         loss::{LossFn, Mse},
     },
@@ -51,40 +51,34 @@ impl TrainerBuilder {
                     .map(|_| GradientDescent::new(learning_rate))
                     .collect();
 
-                self.resolve_model(spec, optimizers)
+                self.resolve_layers(spec, optimizers)
             }
             _ => unimplemented!(),
         }
     }
 
-    /// Resolves the `Model` for this trainer.
+    /// Resolves the the `Layer`s for a `Sequential` model.
     ///
     /// # Arguments
     /// * `spec` - The specification of the trainer.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_model<O>(&self, spec: TrainerSpec, optimizers: Vec<O>) -> Box<dyn Trainer>
+    fn resolve_layers<O>(&self, spec: TrainerSpec, optimizers: Vec<O>) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
     {
-        match &spec.model {
-            ModelSpec::Sequential {
-                layers: layer_specs,
-            } => {
-                let layers: Vec<_> = layer_specs
-                    .iter()
-                    .map(|layer_spec| self.resolve_layer(*layer_spec))
-                    .flatten()
-                    .collect();
+        let layers: Vec<_> = spec
+            .layers
+            .iter()
+            .map(|layer_spec| self.resolve_layer(*layer_spec))
+            .flatten()
+            .collect();
 
-                let model = Sequential::new(layers);
-                self.resolve_loss_fn(spec, optimizers, model)
-            }
-        }
+        self.resolve_loss_fn(spec, optimizers, layers)
     }
 
-    /// Resolves the `Layer`s for a `Sequential` model.
+    /// Resolves a `Layer` for a `Sequential` model.
     ///
     /// # Arguments
     /// * `spec` - The specification of a certain layer.
@@ -124,25 +118,24 @@ impl TrainerBuilder {
     ///
     /// # Arguments
     /// * `spec` - The specification for this trainer.
-    /// * `optimizers` - A list of optimizers, one per server.
-    /// * `model` - A resolved model.
+    /// * `optimizers` - A list of resolved optimizers, one per server.
+    /// * `layers` - A list of resolved layers.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_loss_fn<O, M>(
+    fn resolve_loss_fn<O>(
         &self,
         spec: TrainerSpec,
         optimizers: Vec<O>,
-        model: M,
+        layers: Vec<Layer>,
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
-        M: Model + 'static,
     {
         match spec.loss_fn {
             LossFnSpec::Mse => {
                 let loss_fn = Mse::new();
-                self.terminate_build(spec, optimizers, model, loss_fn)
+                self.terminate_build(spec, optimizers, layers, loss_fn)
             }
         }
     }
@@ -152,23 +145,23 @@ impl TrainerBuilder {
     /// # Arguments
     /// * `spec` - The specification for this trainer.
     /// * `optimizers` - A list of optimizers, one per server.
-    /// * `model` - A resolved model.
+    /// * `layers` - A list of resolved layers.
     /// * `loss_fn` - A resolved loss function.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn terminate_build<O, M, L>(
+    fn terminate_build<O, L>(
         &self,
         spec: TrainerSpec,
         optimizers: Vec<O>,
-        model: M,
+        layers: Vec<Layer>,
         loss_fn: L,
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
-        M: Model + 'static,
         L: LossFn + 'static,
     {
+        let model = Sequential::new(layers);
         let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
         let trainer = ModelTrainer::new(
             model,
