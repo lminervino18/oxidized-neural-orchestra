@@ -7,15 +7,14 @@ use rand::Rng;
 
 use crate::{
     arch::{
-        Model, Sequential,
-        activations::ActFn,
+        Sequential,
         layers::Layer,
         loss::{LossFn, Mse},
     },
     dataset::{Dataset, DatasetSrc},
     optimization::GradientDescent,
     param_manager::{ParamManager, ServerParamsMetadata},
-    training::ModelTrainer,
+    training::{BackpropTrainer, Trainer},
 };
 
 fn gen_params_grads(server_sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> {
@@ -43,7 +42,7 @@ fn test_ml_lineal_convergence() {
         3.0, 4.0, // 8
     ];
 
-    let mut model = Sequential::new([Layer::dense((1, 1), None)]);
+    let mut model = Sequential::new(vec![Layer::dense((1, 1))]);
     let nparams = model.size();
 
     let x_size = NonZeroUsize::new(1).unwrap();
@@ -52,17 +51,17 @@ fn test_ml_lineal_convergence() {
     let max_epochs = NonZeroUsize::new(100).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(0.1);
-    let loss_fn = Mse::new();
+    let mut loss_fn = Mse::new();
     let rng = rand::rng();
 
-    let mut trainer = ModelTrainer::new(
+    let mut trainer = BackpropTrainer::new(
         model.clone(),
         vec![optimizer],
         dataset,
+        loss_fn.clone(),
         offline_epochs,
         max_epochs,
         batch_size,
-        loss_fn,
         rng,
     );
 
@@ -98,9 +97,11 @@ fn test_ml_and2_gate_convergence() {
         1.0, 1.0, 1.0, // 8
     ];
 
-    let mut model = Sequential::new([
-        Layer::dense((2, 2), ActFn::sigmoid(1.0)),
-        Layer::dense((2, 1), ActFn::sigmoid(1.0)),
+    let mut model = Sequential::new(vec![
+        Layer::dense((2, 2)),
+        Layer::sigmoid(1.0),
+        Layer::dense((2, 1)),
+        Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
 
@@ -111,17 +112,17 @@ fn test_ml_and2_gate_convergence() {
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
-    let loss_fn = Mse::new();
+    let mut loss_fn = Mse::new();
     let rng = rand::rng();
 
-    let mut trainer = ModelTrainer::new(
+    let mut trainer = BackpropTrainer::new(
         model.clone(),
         vec![optimizer],
         dataset,
+        loss_fn.clone(),
         offline_epochs,
         max_epochs,
         batch_size,
-        loss_fn,
         rng,
     );
 
@@ -161,9 +162,11 @@ fn test_ml_and3_gate_convergence() {
         1.0, 1.0, 1.0, 1.0, // 1
     ];
 
-    let mut model = Sequential::new([
-        Layer::dense((3, 2), ActFn::sigmoid(1.0)),
-        Layer::dense((2, 1), ActFn::sigmoid(1.0)),
+    let mut model = Sequential::new(vec![
+        Layer::dense((3, 2)),
+        Layer::sigmoid(1.0),
+        Layer::dense((2, 1)),
+        Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
 
@@ -174,17 +177,17 @@ fn test_ml_and3_gate_convergence() {
     let max_epochs = NonZeroUsize::new(2000).unwrap();
     let batch_size = NonZeroUsize::new(8).unwrap();
     let optimizer = GradientDescent::new(1.0);
-    let loss_fn = Mse::new();
+    let mut loss_fn = Mse::new();
     let rng = rand::rng();
 
-    let mut trainer = ModelTrainer::new(
+    let mut trainer = BackpropTrainer::new(
         model.clone(),
         vec![optimizer],
         dataset,
+        loss_fn.clone(),
         offline_epochs,
         max_epochs,
         batch_size,
-        loss_fn,
         rng,
     );
 
@@ -220,9 +223,11 @@ fn test_ml_xor2_gate_convergence() {
         1.0, 1.0, 0.0, // 8
     ];
 
-    let mut model = Sequential::new([
-        Layer::dense((2, 2), ActFn::sigmoid(1.0)),
-        Layer::dense((2, 1), ActFn::sigmoid(1.0)),
+    let mut model = Sequential::new(vec![
+        Layer::dense((2, 2)),
+        Layer::sigmoid(1.0),
+        Layer::dense((2, 1)),
+        Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
 
@@ -233,17 +238,17 @@ fn test_ml_xor2_gate_convergence() {
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
-    let loss_fn = Mse::new();
+    let mut loss_fn = Mse::new();
     let rng = rand::rng();
 
-    let mut trainer = ModelTrainer::new(
+    let mut trainer = BackpropTrainer::new(
         model.clone(),
         vec![optimizer],
         dataset,
+        loss_fn.clone(),
         offline_epochs,
         max_epochs,
         batch_size,
-        loss_fn,
         rng,
     );
 

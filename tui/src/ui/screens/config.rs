@@ -7,9 +7,9 @@ use ratatui::{
     Frame,
 };
 
-use crate::config::json;
-use crate::ui::theme::Theme;
 use crate::ui::utils::centered_rect;
+use crate::ui::{screens::training::TrainingState, theme::Theme};
+use crate::{config::json, ui::screens::menu::MenuState};
 
 use super::{Action, Screen};
 
@@ -18,24 +18,22 @@ const DEFAULT_TRAINING_PATH: &str = "training.json";
 
 const EXAMPLE_MODEL: &str = concat!(
     "{\n",
-    "  \"sequential\": {\n",
-    "    \"layers\": [\n",
-    "      {\n",
-    "        \"dense\": {\n",
-    "          \"dim\": [2, 4],\n",
-    "          \"init\": \"kaiming\",\n",
-    "          \"act_fn\": { \"sigmoid\": { \"amp\": 1.0 } }\n",
-    "        }\n",
-    "      },\n",
-    "      {\n",
-    "        \"dense\": {\n",
-    "          \"dim\": [4, 1],\n",
-    "          \"init\": { \"const\": { \"value\": 0.0 } },\n",
-    "          \"act_fn\": null\n",
-    "        }\n",
+    "  \"layers\": [\n",
+    "    {\n",
+    "      \"dense\": {\n",
+    "        \"dim\": [2, 4],\n",
+    "        \"init\": \"kaiming\",\n",
+    "        \"act_fn\": { \"sigmoid\": { \"amp\": 1.0 } }\n",
     "      }\n",
-    "    ]\n",
-    "  }\n",
+    "    },\n",
+    "    {\n",
+    "      \"dense\": {\n",
+    "        \"dim\": [4, 1],\n",
+    "        \"init\": { \"const\": { \"value\": 0.0 } },\n",
+    "        \"act_fn\": null\n",
+    "      }\n",
+    "    }\n",
+    "  ]\n",
     "}\n",
     "\n",
     "init values: const, uniform, uniform_inclusive,\n",
@@ -127,9 +125,9 @@ pub fn handle_key(state: &mut ConfigState, key: KeyCode) -> Option<Action> {
             None
         }
         Step::InvalidConfig { .. } => match key {
-            KeyCode::Char('q') | KeyCode::Esc => Some(Action::Transition(Screen::Menu(
-                crate::ui::screens::menu::MenuState::new(),
-            ))),
+            KeyCode::Char('q') | KeyCode::Esc => {
+                Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))))
+            }
             _ => {
                 state.step = Step::ModelPath;
                 None
@@ -156,9 +154,7 @@ fn handle_model_path(state: &mut ConfigState, key: KeyCode) -> Option<Action> {
             state.step = Step::TrainingPath;
             None
         }
-        KeyCode::Esc => Some(Action::Transition(Screen::Menu(
-            crate::ui::screens::menu::MenuState::new(),
-        ))),
+        KeyCode::Esc => Some(Action::Transition(Box::new(Screen::Menu(MenuState::new())))),
         _ => None,
     }
 }
@@ -219,14 +215,14 @@ fn try_load(state: &mut ConfigState) -> Option<Action> {
         }
     };
 
-    Some(Action::Transition(Screen::Training(
-        crate::ui::screens::training::TrainingState::new(
+    Some(Action::Transition(Box::new(Screen::Training(
+        TrainingState::new(
             model_json.config,
             training_json.config,
             training_json.worker_count,
             training_json.server_count,
         ),
-    )))
+    ))))
 }
 
 /// Draws the configuration screen.

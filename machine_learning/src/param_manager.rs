@@ -82,7 +82,7 @@ impl<'mw> ParamManager<'mw> {
 
         BackIter {
             servers: &mut self.servers,
-            server_ordering: &self.server_ordering,
+            server_ordering: self.server_ordering,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -105,7 +105,7 @@ impl<'mw> ParamManager<'mw> {
             .par_iter_mut()
             .zip(&mut self.servers)
             .try_for_each(|(optimizer, server)| {
-                optimizer.update_params(&server.grad, server.params)
+                optimizer.update_params(server.grad, server.params)
             })?;
 
         Ok(())
@@ -141,12 +141,21 @@ pub struct FrontIter<'pm, 'mw> {
 impl FrontIter<'_, '_> {
     /// Tries to yield the next layer's parameters and gradient.
     ///
+    /// If the requested size is `0`, then the iterator will yield two empty
+    /// buffers without advancing it's internal ordering pointer. This becomes
+    /// handy for when trying to request parameters for a stateless (in terms
+    /// of parameters) layer.
+    ///
     /// # Arguments
     /// * `n` - The amount of parameters to take from the inner storage of the next server.
     ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
     pub fn next(&mut self, n: usize) -> Option<&mut [f32]> {
+        if n == 0 {
+            return Some(&mut []);
+        }
+
         if self.curr == self.server_ordering.len() {
             return None;
         }
@@ -176,12 +185,21 @@ pub struct BackIter<'pm, 'mw> {
 impl BackIter<'_, '_> {
     /// Tries to yield the next layer's parameters and gradient.
     ///
+    /// If the requested size is `0`, then the iterator will yield two empty
+    /// buffers without advancing it's internal ordering pointer. This becomes
+    /// handy for when trying to request parameters for a stateless (in terms
+    /// of parameters) layer.
+    ///
     /// # Arguments
     /// * `n` - The amount of parameters to take from the inner storage of the next server.
     ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
     pub fn next(&mut self, n: usize) -> Option<(&mut [f32], &mut [f32])> {
+        if n == 0 {
+            return Some((&mut [], &mut []));
+        }
+
         if self.curr == self.server_ordering.len() {
             return None;
         }
@@ -293,5 +311,30 @@ mod tests {
             assert_eq!(grad[0], ORDERING[i] as f32);
             assert_eq!(grad.len(), LAYER_SIZES[i]);
         }
+    }
+
+    #[test]
+    fn zero_size() {
+        const NSERVERS: usize = 2;
+        const SERVER_SIZES: [usize; NSERVERS] = [1, 2];
+        const NLAYERS: usize = 3;
+        const ORDERING: [usize; NLAYERS] = [1, 0, 1];
+
+        let mut params_grads = gen_params_grads(&SERVER_SIZES);
+        let servers: Vec<_> = params_grads
+            .iter_mut()
+            .map(|(params, grad, acc_grad_buf)| {
+                ServerParamsMetadata::new(params, grad, acc_grad_buf)
+            })
+            .collect();
+
+        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut front = manager.front();
+
+        assert_eq!(front.next(1).unwrap(), &[1.0]);
+        assert!(front.next(0).unwrap().is_empty());
+        assert_eq!(front.next(1).unwrap(), &[0.0]);
+        assert!(front.next(0).unwrap().is_empty());
+        assert_eq!(front.next(1).unwrap(), &[1.0]);
     }
 }
