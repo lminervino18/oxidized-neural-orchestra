@@ -3,10 +3,6 @@ use ndarray::{linalg, prelude::*};
 use super::InplaceReshape;
 use crate::{MlErr, Result};
 
-/// Optimizations:
-///   1. Find a way to sum up the rows of `d` in `Dense::backward` in parallel to write them to `b`.
-///   2. Maybe make the a = f(z) computation parallel.
-///   3. Maybe make the d *= df(z) computation parallel.
 #[derive(Clone)]
 pub struct Dense {
     dim: (usize, usize),
