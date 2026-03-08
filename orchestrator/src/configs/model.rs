@@ -1,5 +1,10 @@
+use std::num::NonZeroUsize;
+
+use serde::{Deserialize, Serialize};
+
 /// The `ParamGen` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ParamGenConfig {
     Const { value: f32 },
     Uniform { low: f32, high: f32 },
@@ -13,35 +18,26 @@ pub enum ParamGenConfig {
 }
 
 /// The `ActFn` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ActFnConfig {
     Sigmoid { amp: f32 },
 }
 
 /// The `Layer` configuration.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LayerConfig {
     Dense {
-        dim: (usize, usize),
+        output_size: NonZeroUsize,
         init: ParamGenConfig,
         act_fn: Option<ActFnConfig>,
     },
 }
 
-impl LayerConfig {
-    /// Obtains the fan_in, size and fan_out of the layer.
-    ///
-    /// # Returns
-    /// A tuple (fan_in, size, fan_out).
-    pub fn sizes(&self) -> (usize, usize, usize) {
-        match *self {
-            LayerConfig::Dense { dim: (n, m), .. } => (n, (n + 1) * m, m),
-        }
-    }
-}
-
 /// The `Model` configuration.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ModelConfig {
     pub layers: Vec<LayerConfig>,
 }

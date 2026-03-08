@@ -24,6 +24,10 @@ impl ConstParamGen {
 }
 
 impl ParamGen for ConstParamGen {
+    fn size(&self) -> usize {
+        self.remaining
+    }
+
     fn sample(&mut self, mut n: usize) -> Option<Vec<f32>> {
         if self.remaining == 0 {
             return None;

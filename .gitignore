@@ -17,3 +17,10 @@
 
 # Docker compose files
 *compose*.yml
+
+# Local dev scripts and configs
+*.csv
+
+# Logs
+*.log
+temp/

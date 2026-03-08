@@ -10,7 +10,7 @@ use crate::{MlErr, Result};
 #[derive(Clone)]
 pub struct Dense {
     dim: (usize, usize),
-    nparams: usize,
+    size: usize,
 
     // Forward metadata
     input: Array2<f32>,
@@ -26,7 +26,7 @@ impl Dense {
 
         Self {
             dim,
-            nparams: (dim.0 + 1) * dim.1,
+            size: (dim.0 + 1) * dim.1,
             input: zeros.clone(),
             w_sums: zeros.clone(),
             delta: zeros,
@@ -34,7 +34,7 @@ impl Dense {
     }
 
     pub fn size(&self) -> usize {
-        self.nparams
+        self.size
     }
 
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> Result<ArrayView2<'_, f32>> {
@@ -80,15 +80,15 @@ impl Dense {
         &self,
         grad: &'a mut [f32],
     ) -> Result<(ArrayViewMut2<'a, f32>, ArrayViewMut1<'a, f32>)> {
-        if grad.len() != self.nparams {
+        if grad.len() != self.size {
             return Err(MlErr::SizeMismatch {
                 what: "grad",
                 got: grad.len(),
-                expected: self.nparams,
+                expected: self.size,
             });
         }
 
-        let w_size = self.nparams - self.dim.1;
+        let w_size = self.size - self.dim.1;
 
         // SAFETY: The if condition above checks that the size of the
         //         gradient is exactly the size of the layer.
@@ -111,15 +111,15 @@ impl Dense {
         &self,
         params: &'a [f32],
     ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
-        if params.len() != self.nparams {
+        if params.len() != self.size {
             return Err(MlErr::SizeMismatch {
                 what: "params",
                 got: params.len(),
-                expected: self.nparams,
+                expected: self.size,
             });
         }
 
-        let w_size = self.nparams - self.dim.1;
+        let w_size = self.size - self.dim.1;
 
         // SAFETY: The if condition above checks that the size of the
         //         parameters is exactly the size of the layer.

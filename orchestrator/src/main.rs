@@ -3,15 +3,17 @@ use std::num::NonZeroUsize;
 use orchestrator::{configs::*, train};
 
 fn main() {
-    let model_config = ModelConfig::Sequential {
+    env_logger::init();
+
+    let model_config = ModelConfig {
         layers: vec![
             LayerConfig::Dense {
-                dim: (2, 2),
+                output_size: NonZeroUsize::new(2).unwrap(),
                 init: ParamGenConfig::Kaiming,
                 act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
             LayerConfig::Dense {
-                dim: (2, 1),
+                output_size: NonZeroUsize::new(1).unwrap(),
                 init: ParamGenConfig::Kaiming,
                 act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
@@ -22,30 +24,37 @@ fn main() {
         worker_addrs: vec!["worker-0:50000"],
         algorithm: AlgorithmConfig::ParameterServer {
             server_addrs: vec!["server-0:40000", "server-1:40001"],
-            synchronizer: SynchronizerConfig::Barrier { barrier_size: 1 },
-            store: StoreConfig::Blocking {
-                shard_size: NonZeroUsize::new(2).unwrap(),
-            },
+            synchronizer: SynchronizerConfig::Barrier,
+            store: StoreConfig::Blocking,
         },
-        dataset: DatasetConfig::Inline {
-            data: vec![
-                0.0, 0.0, 0.0, //
-                0.0, 1.0, 1.0, //
-                1.0, 0.0, 1.0, //
-                1.0, 1.0, 1.0, //
-            ],
-            x_size: 2,
-            y_size: 1,
+        dataset: DatasetConfig {
+            src: DatasetSrc::Inline {
+                data: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            },
+            x_size: NonZeroUsize::new(2).unwrap(),
+            y_size: NonZeroUsize::new(1).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
-        seed: None,
+        seed: Some(42),
     };
 
     let session = train(model_config, training_config).unwrap();
-    let params = session.wait().unwrap();
-    println!("trained params: {params:?}");
+    let mut rx = session.event_listener();
+
+    loop {
+        match rx.blocking_recv() {
+            Some(orchestrator::TrainingEvent::Loss { losses, .. }) => {
+                println!("losses: {losses:?}")
+            }
+            Some(orchestrator::TrainingEvent::Complete(params)) => {
+                println!("params: {params:?}");
+                break;
+            }
+            res => println!("result: {res:?}"),
+        }
+    }
 }

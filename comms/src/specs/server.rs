@@ -1,5 +1,3 @@
-use std::num::NonZeroUsize;
-
 use serde::{Deserialize, Serialize};
 
 use super::machine_learning::OptimizerSpec;
@@ -57,8 +55,8 @@ pub enum SynchronizerSpec {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StoreSpec {
-    Blocking { shard_size: NonZeroUsize },
-    Wild { shard_size: NonZeroUsize },
+    Blocking,
+    Wild,
 }
 
 /// The specification for the `Server` trait.

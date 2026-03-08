@@ -43,8 +43,8 @@ pub enum OptimizerSpec {
 #[serde(rename_all = "snake_case")]
 pub struct DatasetSpec {
     pub data: Vec<f32>,
-    pub x_size: usize,
-    pub y_size: usize,
+    pub x_size: NonZeroUsize,
+    pub y_size: NonZeroUsize,
 }
 
 /// The specification for the `LossFn` enum.

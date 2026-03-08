@@ -44,11 +44,13 @@ fn test_ml_lineal_convergence() {
 
     let mut model = Sequential::new([Layer::dense((1, 1))]);
     let nparams = model.size();
-    let optimizer = GradientDescent::new(0.1);
-    let dataset = Dataset::new(lineal.into(), 1, 1);
+
+    let x_size = NonZeroUsize::new(1).unwrap();
+    let dataset = Dataset::new(lineal.into(), x_size, x_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(100).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
+    let optimizer = GradientDescent::new(0.1);
     let loss_fn = Mse::new();
     let rng = rand::rng();
 
@@ -102,11 +104,14 @@ fn test_ml_and2_gate_convergence() {
         Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
-    let optimizer = GradientDescent::new(1.0);
-    let dataset = Dataset::new(and2.into(), 2, 1);
+
+    let x_size = NonZeroUsize::new(2).unwrap();
+    let y_size = NonZeroUsize::new(1).unwrap();
+    let dataset = Dataset::new(and2.into(), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
+    let optimizer = GradientDescent::new(1.0);
     let loss_fn = Mse::new();
     let rng = rand::rng();
 
@@ -164,11 +169,14 @@ fn test_ml_and3_gate_convergence() {
         Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
-    let optimizer = GradientDescent::new(1.0);
-    let dataset = Dataset::new(and3.into(), 3, 1);
+
+    let x_size = NonZeroUsize::new(3).unwrap();
+    let y_size = NonZeroUsize::new(1).unwrap();
+    let dataset = Dataset::new(and3.into(), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(2000).unwrap();
     let batch_size = NonZeroUsize::new(8).unwrap();
+    let optimizer = GradientDescent::new(1.0);
     let loss_fn = Mse::new();
     let rng = rand::rng();
 
@@ -222,11 +230,14 @@ fn test_ml_xor2_gate_convergence() {
         Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
-    let optimizer = GradientDescent::new(1.0);
-    let dataset = Dataset::new(xor2.into(), 2, 1);
+
+    let x_size = NonZeroUsize::new(2).unwrap();
+    let y_size = NonZeroUsize::new(1).unwrap();
+    let dataset = Dataset::new(xor2.into(), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
+    let optimizer = GradientDescent::new(1.0);
     let loss_fn = Mse::new();
     let rng = rand::rng();
 
