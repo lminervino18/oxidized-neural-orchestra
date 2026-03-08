@@ -35,7 +35,7 @@ impl LayerConfig {
     /// A tuple (fan_in, size, fan_out).
     pub fn sizes(&self) -> (usize, usize, usize) {
         match *self {
-            LayerConfig::Dense { dim: (n, m), .. } => (n, n * m + m, m),
+            LayerConfig::Dense { dim: (n, m), .. } => (n, (n + 1) * m, m),
         }
     }
 }
