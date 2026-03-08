@@ -81,7 +81,7 @@ impl Dataset {
         } = self;
 
         let offset = row * row_size;
-        let raw_batch = src.raw_batch(offset..offset + row_size + n + 1);
+        let raw_batch = src.raw_batch(offset..offset + row_size * n);
 
         let batch = ArrayView2::from_shape((n, row_size), raw_batch).unwrap();
         batch.split_at(Axis(1), x_size)
