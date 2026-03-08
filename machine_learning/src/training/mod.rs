@@ -1,7 +1,7 @@
+mod backprop_trainer;
 mod builder;
-mod model_trainer;
 mod trainer;
 
+pub use backprop_trainer::BackpropTrainer;
 pub use builder::TrainerBuilder;
-pub use model_trainer::ModelTrainer;
 pub use trainer::{TrainResult, Trainer};

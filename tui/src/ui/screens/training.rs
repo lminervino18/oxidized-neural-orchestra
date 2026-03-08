@@ -13,13 +13,15 @@ use ratatui::{
 };
 use tokio::sync::mpsc;
 
-use crate::ui::components::{
-    confirm_quit::draw_confirm_quit, header::draw_header, log_panel::draw_log,
-    loss_chart::draw_charts, params_panel::draw_params, workers_table::draw_workers_table,
+use super::{Action, Screen};
+use crate::ui::{
+    components::{
+        confirm_quit::draw_confirm_quit, header::draw_header, log_panel::draw_log,
+        loss_chart::draw_charts, params_panel::draw_params, workers_table::draw_workers_table,
+    },
+    screens::menu::MenuState,
+    theme::Theme,
 };
-use crate::ui::theme::Theme;
-
-use super::Action;
 
 /// Per-worker colors for charts and table highlights.
 pub const WORKER_COLORS: &[Color] = &[
@@ -325,9 +327,7 @@ impl TrainingState {
 /// Handles a key event for the training screen.
 pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
     if state.startup_error.is_some() {
-        return Some(Action::Transition(super::Screen::Menu(
-            crate::ui::screens::menu::MenuState::new(),
-        )));
+        return Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))));
     }
 
     match (key, state.confirm_quit, state.is_active()) {
@@ -344,18 +344,14 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
             None
         }
         (KeyCode::Char('y') | KeyCode::Char('Y'), ConfirmQuit::Visible, _) => {
-            Some(Action::Transition(super::Screen::Menu(
-                crate::ui::screens::menu::MenuState::new(),
-            )))
+            Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))))
         }
         (KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc, ConfirmQuit::Visible, _) => {
             state.confirm_quit = ConfirmQuit::Hidden;
             None
         }
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => {
-            Some(Action::Transition(super::Screen::Menu(
-                crate::ui::screens::menu::MenuState::new(),
-            )))
+            Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))))
         }
         _ => None,
     }

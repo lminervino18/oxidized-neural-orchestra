@@ -8,9 +8,7 @@ use std::{
 };
 
 use comms::specs::{
-    machine_learning::{
-        ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, ModelSpec, OptimizerSpec, TrainerSpec,
-    },
+    machine_learning::{ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec},
     server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
     worker::{AlgorithmSpec, WorkerSpec},
 };
@@ -48,6 +46,7 @@ impl Adapter {
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
+    #[allow(clippy::type_complexity)]
     pub fn adapt_configs<'a, A: ToSocketAddrs>(
         &self,
         model: ModelConfig,
@@ -142,6 +141,7 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
+    #[allow(clippy::type_complexity)]
     fn adapt_servers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
@@ -159,7 +159,7 @@ impl Adapter {
             ..
         } = &training.algorithm;
 
-        let (_, param_gens) = self.adapt_model_param_gen(model, training.dataset.x_size);
+        let (_, param_gens) = self.adapt_layers(model, training.dataset.x_size);
         let nlayers = param_gens.len();
 
         let items: Vec<_> = param_gens
@@ -272,12 +272,12 @@ impl Adapter {
         model: &ModelConfig,
         training: &TrainingConfig<A>,
     ) -> TrainerSpec {
-        let (model_spec, _) = self.adapt_model_param_gen(model, training.dataset.x_size);
+        let (layers, _) = self.adapt_layers(model, training.dataset.x_size);
         let optimizer_spec = self.adapt_optimizer(training.optimizer);
         let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);
 
         TrainerSpec {
-            model: model_spec,
+            layers,
             optimizer: optimizer_spec,
             loss_fn: loss_fn_spec,
             offline_epochs: training.offline_epochs,
@@ -421,38 +421,32 @@ impl Adapter {
         }
     }
 
-    /// Adapts a `ModelConfig` into both `ModelSpec` and per layer `ParamGenSpec`s.
+    /// Adapts a `ModelConfig` into the model's layers and the per layer `ParamGenSpec`s.
     ///
     /// # Args
     /// * `model` - A model's architecture and initialization configuration.
     /// * `input_size` - The model's input size.
     ///
     /// # Returns
+    /// The layers' specifications and their parameter generators' specifications.
     /// The model's specification and it's layers' parameter generators specifications.
-    fn adapt_model_param_gen(
+    fn adapt_layers(
         &self,
         model: &ModelConfig,
         input_size: NonZeroUsize,
-    ) -> (ModelSpec, Vec<ParamGenSpec>) {
-        match model {
-            ModelConfig::Sequential { layers } => {
-                let (layer_specs, param_gen_specs) = layers
-                    .iter()
-                    .scan(input_size, |input_size, config| {
-                        let (layer_spec, param_gen_spec, output_size) =
-                            self.adapt_layer(config, *input_size);
-                        *input_size = output_size;
-                        Some((layer_spec, param_gen_spec))
-                    })
-                    .unzip();
+    ) -> (Vec<LayerSpec>, Vec<ParamGenSpec>) {
+        let (layer_specs, param_gen_specs) = model
+            .layers
+            .iter()
+            .scan(input_size, |input_size, config| {
+                let (layer_spec, param_gen_spec, output_size) =
+                    self.adapt_layer(config, *input_size);
+                *input_size = output_size;
+                Some((layer_spec, param_gen_spec))
+            })
+            .unzip();
 
-                let model_spec = ModelSpec::Sequential {
-                    layers: layer_specs,
-                };
-
-                (model_spec, param_gen_specs)
-            }
-        }
+        (layer_specs, param_gen_specs)
     }
 
     /// Adapts a `ParamGenConfig` into a `ParamGenSpec`.
@@ -478,7 +472,7 @@ impl Adapter {
                 distribution: DistributionSpec::UniformInclusive { low, high },
                 limit,
             },
-            ParamGenConfig::XavierUniform {} => ParamGenSpec::Rand {
+            ParamGenConfig::XavierUniform => ParamGenSpec::Rand {
                 distribution: DistributionSpec::XavierUniform { fan_in, fan_out },
                 limit,
             },

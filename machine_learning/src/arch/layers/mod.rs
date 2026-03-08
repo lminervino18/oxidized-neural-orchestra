@@ -1,18 +1,20 @@
 mod dense;
 mod layer;
+mod sigmoid;
 
 use std::mem;
 
-use ndarray::Array2;
+use ndarray::{Array, Dimension, IntoDimension};
 
 pub(super) use dense::Dense;
 pub use layer::Layer;
+pub(super) use sigmoid::Sigmoid;
 
 /// A trait whose sole purpose is to give the ndarray::ArrayX
 /// types a way to resize their inner memory regions inplace.
 ///
 /// Only owned `ndarray`s should implement this trait.
-trait InplaceReshape {
+pub trait InplaceReshape<D: Dimension> {
     /// Resizes the inner memory region for `Self` and returns a new instance.
     ///
     /// # Arguments
@@ -20,13 +22,22 @@ trait InplaceReshape {
     ///
     /// # Returns
     /// A new `Self` instance with a new inner memory size.
-    fn reshape_inplace(&mut self, shape: (usize, usize)) -> Self;
+    fn reshape_inplace<I>(&mut self, shape: I)
+    where
+        I: IntoDimension<Dim = D>;
 }
 
-impl<T: Clone + Default> InplaceReshape for Array2<T> {
-    fn reshape_inplace(&mut self, shape: (usize, usize)) -> Self {
-        let arr = mem::take(self);
+impl<T: Clone + Default, D: Dimension> InplaceReshape<D> for Array<T, D> {
+    fn reshape_inplace<I>(&mut self, shape: I)
+    where
+        I: IntoDimension<Dim = D>,
+    {
+        let dim = shape.into_dimension();
+        if self.raw_dim() == dim {
+            return;
+        }
 
+        let arr = mem::take(self);
         let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {
             // SAFETY: This implementation assumes 'self' is a standard,
             // uniquely owned, contiguous array.
@@ -39,14 +50,16 @@ impl<T: Clone + Default> InplaceReshape for Array2<T> {
             // Since our architecture ensures layers own their parameters and
             // we do not pass slices into this internal utility, the offset
             // is guaranteed to be 0 and the storage uniquely owned.
-            unreachable!("By how we're utilizing the arrays, we should never reach this point");
+            unreachable!("Owned array had non-zero offset during inplace reshaping");
         };
 
-        let size = shape.0 * shape.1;
+        let size = dim.size();
         if size > v.len() {
             v.resize(size, T::default());
         }
 
-        Array2::from_shape_vec(shape, v).unwrap()
+        // SAFETY: v was previously resized to
+        //         accomodate the new dimension.
+        *self = Array::from_shape_vec(dim, v).unwrap();
     }
 }

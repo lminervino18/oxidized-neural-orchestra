@@ -8,6 +8,7 @@ use crate::{
 
 /// Validates orchestrator configs before adaptation, ensuring all invariants
 /// are met before the training commences.
+#[derive(Default)]
 pub struct Validator;
 
 impl Validator {
@@ -33,7 +34,8 @@ impl Validator {
         training: &TrainingConfig<A>,
     ) -> Result<()> {
         self.validate_model(model)?;
-        self.validate_training(training)
+        self.validate_training(training)?;
+        Ok(())
     }
 
     /// Validates the model's configuration.
@@ -44,14 +46,10 @@ impl Validator {
     /// # Errors
     /// An `OrchErr` if any invariant is unmet.
     fn validate_model(&self, model: &ModelConfig) -> Result<()> {
-        match model {
-            ModelConfig::Sequential { layers } => {
-                if layers.is_empty() {
-                    return Err(OrchErr::InvalidConfig(
-                        "model must have at least one layer".into(),
-                    ));
-                }
-            }
+        if model.layers.is_empty() {
+            return Err(OrchErr::InvalidConfig(
+                "model must have at least one layer".into(),
+            ));
         }
 
         Ok(())
@@ -63,9 +61,8 @@ impl Validator {
     /// An `OrchErr` if any training invariant is unmet.
     fn validate_training<A: ToSocketAddrs>(&self, training: &TrainingConfig<A>) -> Result<()> {
         if training.worker_addrs.is_empty() {
-            return Err(OrchErr::InvalidConfig(
-                "at least one worker address is required".into(),
-            ));
+            let text = "at least one worker address is required".into();
+            return Err(OrchErr::InvalidConfig(text));
         }
 
         let AlgorithmConfig::ParameterServer {
@@ -73,9 +70,8 @@ impl Validator {
         } = training.algorithm;
 
         if server_addrs.is_empty() {
-            return Err(OrchErr::InvalidConfig(
-                "at least one server address is required".into(),
-            ));
+            let text = "at least one server address is required".into();
+            return Err(OrchErr::InvalidConfig(text));
         }
 
         let DatasetConfig {
@@ -85,39 +81,41 @@ impl Validator {
         } = training.dataset;
 
         let Some(row_size) = x_size.checked_add(y_size.get()) else {
-            return Err(OrchErr::InvalidConfig(
-                "the row size for the dataset samples is larger than a usize".into(),
-            ));
+            let text = "the row size for the dataset samples is larger than a usize".into();
+            return Err(OrchErr::InvalidConfig(text));
         };
 
-        let dataset_samples = match src {
+        let samples = match src {
             DatasetSrc::Inline { data } => {
-                if data.len() % row_size != 0 {
-                    return Err(OrchErr::InvalidConfig(format!(
-                        "dataset length ({}) is not divisible by x_size + y_size ({row_size})",
-                        data.len()
-                    )));
+                let len = data.len();
+
+                if len % row_size != 0 {
+                    let text = format!(
+                        "dataset length ({len}) is not divisible by x_size + y_size ({row_size})"
+                    );
+
+                    return Err(OrchErr::InvalidConfig(text));
                 }
 
                 // SAFETY: row_size is a positive integer.
-                data.len() / row_size
+                len / row_size.get()
             }
             DatasetSrc::Local { .. } => {
                 unimplemented!("dataset doesn't support local loading");
             }
         };
 
-        if dataset_samples == 0 {
-            return Err(OrchErr::InvalidConfig(
-                "dataset must have at least one sample".into(),
-            ));
+        if samples == 0 {
+            let text = "dataset must have at least one sample".into();
+            return Err(OrchErr::InvalidConfig(text));
         }
 
         let batch_size = training.batch_size.get();
-        if batch_size > dataset_samples {
-            return Err(OrchErr::InvalidConfig(format!(
-                "batch_size ({batch_size}) exceeds dataset size ({dataset_samples} samples)"
-            )));
+        if batch_size > samples {
+            let text =
+                format!("batch_size ({batch_size}) exceeds dataset size ({samples} samples)");
+
+            return Err(OrchErr::InvalidConfig(text));
         }
 
         Ok(())
