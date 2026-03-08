@@ -6,7 +6,7 @@ pub enum Partition<'a> {
         data: &'a [f32],
     },
     Local {
-        path: PathBuf,
+        path: &'a PathBuf,
         offset: u64,
         size: u64,
     },

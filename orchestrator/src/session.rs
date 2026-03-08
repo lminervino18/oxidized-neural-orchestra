@@ -241,7 +241,7 @@ impl Session {
         let mut channels = Vec::with_capacity(workers.len());
 
         for ((addr, spec), partition) in workers.into_iter().zip(partitions) {
-            log::debug!("connecting to worker at {addr}");
+            debug!("connecting to worker at {addr}");
 
             let (rx, mut tx) = Self::open_channel(addr)
                 .await
@@ -265,7 +265,7 @@ impl Session {
                 }
             }
 
-            log::info!("worker at {addr} ready");
+            info!("worker at {addr} ready");
             channels.push((rx, tx));
         }
 

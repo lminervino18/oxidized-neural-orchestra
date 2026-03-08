@@ -47,13 +47,13 @@ impl Adapter {
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
-    pub fn adapt_configs<A: ToSocketAddrs>(
+    pub fn adapt_configs<'a, A: ToSocketAddrs>(
         &self,
         model: ModelConfig,
-        training: TrainingConfig<A>,
+        training: &'a TrainingConfig<A>,
     ) -> Result<(
         Vec<(SocketAddr, WorkerSpec)>,
-        Vec<Partition>,
+        Vec<Partition<'a>>,
         Vec<(SocketAddr, ServerSpec)>,
     )> {
         let (servers, server_addrs, server_sizes, server_ordering) =
@@ -299,13 +299,13 @@ impl Adapter {
         }
     }
 
-    fn adapt_local_dataset(
+    fn adapt_local_dataset<'a>(
         &self,
-        path: &PathBuf,
+        path: &'a PathBuf,
         x_size: usize,
         y_size: usize,
         npartitions: usize,
-    ) -> Result<(Vec<DatasetSpec>, Vec<Partition>)> {
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
         let size = fs::metadata(path)?.len();
         let row_size = (x_size + y_size) as u64;
         let nrows = (size / row_size) as usize;
@@ -330,7 +330,7 @@ impl Adapter {
             });
             partitions.push(Partition::Local {
                 // TODO: avoid cloning path
-                path: path.clone(),
+                path,
                 offset,
                 size,
             });
@@ -338,17 +338,17 @@ impl Adapter {
             offset += size;
         }
 
-        Ok((vec![], vec![]))
+        Ok((specs, partitions))
     }
 
     // TODO: merge this method with local variant
-    fn adapt_inline_dataset(
+    fn adapt_inline_dataset<'a>(
         &self,
-        data: &[f32],
+        data: &'a [f32],
         x_size: usize,
         y_size: usize,
         npartitions: usize,
-    ) -> Result<(Vec<DatasetSpec>, Vec<Partition>)> {
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
         let size = data.len() * 4;
         let row_size = x_size + y_size;
         let nrows = size / row_size;
@@ -367,7 +367,7 @@ impl Adapter {
             } * row_size;
 
             let curr;
-            (curr, rest) = rest.split_at(size);
+            (curr, rest) = rest.split_at(size / 4);
 
             specs.push(DatasetSpec {
                 size: size as u64,
@@ -377,7 +377,7 @@ impl Adapter {
             partitions.push(Partition::Inline { data: curr });
         }
 
-        Ok((vec![], vec![]))
+        Ok((specs, partitions))
     }
 
     /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
@@ -391,11 +391,11 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if the dataset cannot be resolved.
-    fn adapt_dataset(
+    fn adapt_dataset<'a>(
         &self,
-        dataset: &DatasetConfig,
+        dataset: &'a DatasetConfig,
         npartitions: usize,
-    ) -> Result<(Vec<DatasetSpec>, Vec<Partition>)> {
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
         let DatasetConfig {
             src,
             x_size,
@@ -406,10 +406,10 @@ impl Adapter {
 
         match src {
             DatasetSrc::Local { path } => {
-                self.adapt_local_dataset(path, x_size, y_size, npartitions)
+                self.adapt_local_dataset(&path, x_size, y_size, npartitions)
             }
             DatasetSrc::Inline { data } => {
-                self.adapt_inline_dataset(data, x_size, y_size, npartitions)
+                self.adapt_inline_dataset(&data, x_size, y_size, npartitions)
             }
         }
     }
