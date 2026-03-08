@@ -1,6 +1,5 @@
 use super::inline_src::InlineSrc;
 use rand::Rng;
-use std::ops::Range;
 
 /// The source of a dataset.
 pub enum DatasetSrc {
@@ -13,8 +12,8 @@ impl DatasetSrc {
     ///
     /// # Arguments
     /// * `data` - The buffer containing the dataset's raw data.
-    pub fn inline(data: Vec<f32>) -> Self {
-        DatasetSrc::Inline(InlineSrc::new(data))
+    pub fn inline(samples: Vec<f32>, labels: Vec<f32>) -> Self {
+        DatasetSrc::Inline(InlineSrc::new(samples, labels))
     }
 }
 
@@ -31,9 +30,9 @@ impl DatasetSrc {
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
-    pub fn shuffle<Rn: Rng>(&mut self, rows: usize, row_size: usize, rng: &mut Rn) {
+    pub fn shuffle<Rn: Rng>(&mut self, rows: usize, x_size: usize, y_size: usize, rng: &mut Rn) {
         match self {
-            DatasetSrc::Inline(src) => src.shuffle(rows, row_size, rng),
+            DatasetSrc::Inline(src) => src.shuffle(rows, x_size, y_size, rng),
             // DatasetSrc::Stream(_src) => todo!(),
         }
     }
@@ -45,9 +44,15 @@ impl DatasetSrc {
     ///
     /// # Returns
     /// A reference `&[f32]` to the raw data batch within the range.
-    pub fn raw_batch(&self, range: Range<usize>) -> &[f32] {
+    pub fn raw_batch(
+        &self,
+        row: usize,
+        n: usize,
+        x_size: usize,
+        y_size: usize,
+    ) -> (&[f32], &[f32]) {
         match self {
-            DatasetSrc::Inline(src) => src.raw_batch(range),
+            DatasetSrc::Inline(src) => src.raw_batch(row, n, x_size, y_size),
             // DatasetSrc::Stream(_src) => todo!(),
         }
     }

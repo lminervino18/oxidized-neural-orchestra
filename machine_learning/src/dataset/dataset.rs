@@ -1,7 +1,7 @@
 use std::num::NonZeroUsize;
 
 use super::dataset_src::DatasetSrc;
-use ndarray::{ArrayView2, Axis};
+use ndarray::ArrayView2;
 use rand::Rng;
 
 /// A container for the *raw* dataset and its meta data. The raw data is expected to be structured
@@ -10,7 +10,7 @@ pub struct Dataset {
     src: DatasetSrc,
     rows: usize,
     x_size: usize,
-    row_size: usize,
+    y_size: usize,
 }
 
 impl Dataset {
@@ -31,7 +31,7 @@ impl Dataset {
             rows: src.len() / row_size.get(),
             src,
             x_size: x_size.get(),
-            row_size: row_size.get(),
+            y_size: y_size.get(),
         }
     }
 
@@ -40,7 +40,7 @@ impl Dataset {
     /// # Arguments
     /// * `rng` - A random number generator.
     pub fn shuffle<Rn: Rng>(&mut self, rng: &mut Rn) {
-        self.src.shuffle(self.rows, self.row_size, rng);
+        self.src.shuffle(self.rows, self.x_size, self.y_size, rng);
     }
 
     /// Retrieves the dataset in batches of size `batch_size`.
@@ -75,16 +75,17 @@ impl Dataset {
     ) -> (ArrayView2<'a, f32>, ArrayView2<'a, f32>) {
         let &Self {
             x_size,
-            row_size,
+            y_size,
             ref src,
             ..
         } = self;
 
-        let offset = row * row_size;
-        let raw_batch = src.raw_batch(offset..offset + row_size * n);
+        let (x_raw, y_raw) = src.raw_batch(row, n, x_size, y_size);
 
-        let batch = ArrayView2::from_shape((n, row_size), raw_batch).unwrap();
-        batch.split_at(Axis(1), x_size)
+        let x_batch = ArrayView2::from_shape((n, x_size), x_raw).unwrap();
+        let y_batch = ArrayView2::from_shape((n, y_size), y_raw).unwrap();
+
+        (x_batch, y_batch)
     }
 }
 
@@ -94,10 +95,11 @@ mod tests {
 
     #[test]
     fn test_dataset_inline_src_get_2rows() {
-        let sums = [1.0, 2.0, 3.0, 3.0, 4.0, 7.0, 5.0, 6.0, 11.0];
+        let x_sums = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let y_sums = [3.0, 7.0, 11.0];
         let x_size = NonZeroUsize::new(2).unwrap();
         let y_size = NonZeroUsize::new(1).unwrap();
-        let src = DatasetSrc::inline(sums.into());
+        let src = DatasetSrc::inline(x_sums.into(), y_sums.into());
 
         let ds = Dataset::new(src, x_size, y_size);
 
