@@ -39,9 +39,10 @@ impl Sigmoid {
         &'a mut self,
         mut d: ArrayViewMut2<'a, f32>,
     ) -> Result<ArrayViewMut2<'a, f32>> {
+        let one_over_amp = 1.0 / self.amp;
+
         azip!((d_in in &mut d, &a in &self.activations) {
-            let s = a / self.amp;
-            *d_in *= a * (1.0 - s);
+            *d_in *= a * (1.0 - a * one_over_amp);
         });
 
         Ok(d)
