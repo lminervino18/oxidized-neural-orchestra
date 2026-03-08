@@ -5,7 +5,7 @@ use orchestrator::{configs::*, train};
 fn main() {
     env_logger::init();
 
-    let model_config = ModelConfig::Sequential {
+    let model_config = ModelConfig {
         layers: vec![
             LayerConfig::Dense {
                 output_size: NonZeroUsize::new(2).unwrap(),

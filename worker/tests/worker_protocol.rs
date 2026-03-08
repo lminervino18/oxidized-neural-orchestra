@@ -5,7 +5,7 @@ use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
     dataset::Dataset,
     optimization::{GradientDescent, Optimizer},
-    training::ModelTrainer,
+    training::BackpropTrainer,
 };
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
@@ -57,13 +57,14 @@ async fn mock_server<R, W>(
     mut rx: OnoReceiver<R>,
     mut tx: OnoSender<W>,
     mut orch_tx: OnoSender<W>,
+    learning_rate: f32,
     nparams: usize,
 ) -> io::Result<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut optimizer = GradientDescent::new(1.0);
+    let mut optimizer = GradientDescent::new(learning_rate);
     let mut params = vec![0.5; nparams];
     let mut rx_buf = vec![0; 128];
 
@@ -101,16 +102,16 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
 
     const MAX_EPOCHS: usize = 100;
 
-    let model = Sequential::new([Layer::dense((1, 1), None)]);
+    let model = Sequential::new(vec![Layer::dense((1, 1))]);
     let x_size = NonZeroUsize::new(1).unwrap();
-    let trainer = ModelTrainer::new(
+    let trainer = BackpropTrainer::new(
         model,
         vec![GradientDescent::new(0.1)],
         Dataset::new(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0], x_size, x_size),
+        Mse::new(),
         0,
         NonZeroUsize::new(MAX_EPOCHS).unwrap(),
         NonZeroUsize::new(4).unwrap(),
-        Mse::new(),
         rand::rng(),
     );
 
@@ -119,7 +120,7 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     middleware.spawn(wk_rx, wk_tx, 2);
 
     let worker_fut = worker.run(wk_orch_rx, wk_orch_tx, middleware);
-    let server_fut = mock_server(sv_rx, sv_tx, sv_orch_tx, 2);
+    let server_fut = mock_server(sv_rx, sv_tx, sv_orch_tx, 0.1, 2);
     let orch_fut = mock_orch(orch_wk_rx, orch_sv_rx);
     let (_, _, params) = tokio::try_join!(worker_fut, server_fut, orch_fut)?;
     println!("params: {params:?}");

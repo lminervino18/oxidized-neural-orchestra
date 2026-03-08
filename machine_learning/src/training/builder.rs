@@ -1,13 +1,12 @@
 use comms::specs::machine_learning::{
-    ActFnSpec, LayerSpec, LossFnSpec, ModelSpec, OptimizerSpec, TrainerSpec,
+    ActFnSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec,
 };
 use rand::{SeedableRng, rngs::StdRng};
 
-use super::{ModelTrainer, Trainer};
+use super::{BackpropTrainer, Trainer};
 use crate::{
     arch::{
-        Model, Sequential,
-        activations::ActFn,
+        Sequential,
         layers::Layer,
         loss::{LossFn, Mse},
     },
@@ -16,6 +15,7 @@ use crate::{
 };
 
 /// Builds `Trainer`s given a specification.
+#[derive(Default)]
 pub struct TrainerBuilder;
 
 impl TrainerBuilder {
@@ -52,96 +52,90 @@ impl TrainerBuilder {
                     .map(|_| GradientDescent::new(learning_rate))
                     .collect();
 
-                self.resolve_model(spec, optimizers)
+                self.resolve_layers(spec, optimizers)
             }
             _ => unimplemented!(),
         }
     }
 
-    /// Resolves the `Model` for this trainer.
+    /// Resolves the the `Layer`s for a `Sequential` model.
     ///
     /// # Arguments
     /// * `spec` - The specification of the trainer.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_model<O>(&self, spec: TrainerSpec, optimizers: Vec<O>) -> Box<dyn Trainer>
+    fn resolve_layers<O>(&self, spec: TrainerSpec, optimizers: Vec<O>) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
     {
-        match &spec.model {
-            ModelSpec::Sequential {
-                layers: layer_specs,
-            } => {
-                let layers = layer_specs.iter().map(|ls| self.resolve_layer(*ls));
-                let model = Sequential::new(layers);
-                self.resolve_loss_fn(spec, optimizers, model)
-            }
-        }
+        let layers: Vec<_> = spec
+            .layers
+            .iter()
+            .flat_map(|layer_spec| self.resolve_layer(*layer_spec))
+            .collect();
+
+        self.resolve_loss_fn(spec, optimizers, layers)
     }
 
-    /// Resolves the `Layer`s for a `Sequential` model.
+    /// Resolves a `Layer` for a `Sequential` model.
     ///
     /// # Arguments
     /// * `spec` - The specification of a certain layer.
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_layer(&self, spec: LayerSpec) -> Layer {
+    fn resolve_layer(&self, spec: LayerSpec) -> Vec<Layer> {
+        let mut layers = Vec::with_capacity(2);
+
         match spec {
             LayerSpec::Dense { dim, act_fn } => {
-                let factory = |act_fn| Layer::dense(dim, act_fn);
-                self.resolve_act_fn(act_fn, factory)
+                layers.push(Layer::dense(dim));
+
+                if let Some(spec) = act_fn {
+                    layers.push(self.resolve_act_fn(spec));
+                }
             }
         }
+
+        layers
     }
 
     /// Resolves the `ActFn` for a specific layer.
     ///
     /// # Arguments
     /// * `spec` - An optional specification for an `ActFn`.
-    /// * `layer_factory` - A layer factory given an optional activation function.
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_act_fn<F>(&self, spec: Option<ActFnSpec>, layer_factory: F) -> Layer
-    where
-        F: FnOnce(Option<ActFn>) -> Layer,
-    {
-        let Some(act_fn) = spec else {
-            return layer_factory(None);
-        };
-
-        let act_fn = match act_fn {
-            ActFnSpec::Sigmoid { amp } => Some(ActFn::sigmoid(amp)),
-        };
-
-        layer_factory(act_fn)
+    fn resolve_act_fn(&self, spec: ActFnSpec) -> Layer {
+        match spec {
+            ActFnSpec::Sigmoid { amp } => Layer::sigmoid(amp),
+        }
     }
 
     /// Resolves the `LossFn` for this trainer.
     ///
     /// # Arguments
     /// * `spec` - The specification for this trainer.
-    /// * `optimizers` - A list of optimizers, one per server.
-    /// * `model` - A resolved model.
+    /// * `optimizers` - A list of resolved optimizers, one per server.
+    /// * `layers` - A list of resolved layers.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_loss_fn<O, M>(
+    fn resolve_loss_fn<O>(
         &self,
         spec: TrainerSpec,
         optimizers: Vec<O>,
-        model: M,
+        layers: Vec<Layer>,
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
-        M: Model + 'static,
     {
         match spec.loss_fn {
             LossFnSpec::Mse => {
                 let loss_fn = Mse::new();
-                self.terminate_build(spec, optimizers, model, loss_fn)
+                self.terminate_build(spec, optimizers, layers, loss_fn)
             }
         }
     }
@@ -151,32 +145,32 @@ impl TrainerBuilder {
     /// # Arguments
     /// * `spec` - The specification for this trainer.
     /// * `optimizers` - A list of optimizers, one per server.
-    /// * `model` - A resolved model.
+    /// * `layers` - A list of resolved layers.
     /// * `loss_fn` - A resolved loss function.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn terminate_build<O, M, L>(
+    fn terminate_build<O, L>(
         &self,
         spec: TrainerSpec,
         optimizers: Vec<O>,
-        model: M,
+        layers: Vec<Layer>,
         loss_fn: L,
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
-        M: Model + 'static,
         L: LossFn + 'static,
     {
+        let model = Sequential::new(layers);
         let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
-        let trainer = ModelTrainer::new(
+        let trainer = BackpropTrainer::new(
             model,
             optimizers,
             dataset,
+            loss_fn,
             spec.offline_epochs,
             spec.max_epochs,
             spec.batch_size,
-            loss_fn,
             self.generate_rng(spec.seed),
         );
 
