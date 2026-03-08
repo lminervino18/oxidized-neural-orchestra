@@ -1,12 +1,13 @@
 use std::num::NonZeroUsize;
 
+use super::dataset_src::DatasetSrc;
 use ndarray::{ArrayView2, Axis};
 use rand::Rng;
 
 /// A container for the *raw* dataset and its meta data. The raw data is expected to be structured
 /// as rows, each with an x and it's expected output y.
 pub struct Dataset {
-    data: Vec<f32>,
+    src: DatasetSrc,
     rows: usize,
     x_size: usize,
     row_size: usize,
@@ -22,13 +23,13 @@ impl Dataset {
     ///
     /// # Returns
     /// A new `Dataset` instance.
-    pub fn new(data: Vec<f32>, x_size: NonZeroUsize, y_size: NonZeroUsize) -> Self {
+    pub fn new(src: DatasetSrc, x_size: NonZeroUsize, y_size: NonZeroUsize) -> Self {
         let row_size = x_size.saturating_add(y_size.get());
 
         Self {
             // SAFETY: row_size is a positive integer.
-            rows: data.len() / row_size.get(),
-            data,
+            rows: src.len() / row_size.get(),
+            src,
             x_size: x_size.get(),
             row_size: row_size.get(),
         }
@@ -38,29 +39,8 @@ impl Dataset {
     ///
     /// # Arguments
     /// * `rng` - A random number generator.
-    pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
-        let Self {
-            rows,
-            row_size,
-            ref mut data,
-            ..
-        } = *self;
-
-        for i in 0..rows {
-            let j = rng.random_range(i..rows);
-            if i == j {
-                continue;
-            }
-
-            let (i, j) = (i.min(j), i.max(j));
-            let i_data = i * row_size;
-            let j_data = j * row_size;
-
-            let (left, right) = data.split_at_mut(j_data);
-            let row = &mut left[i_data..i_data + row_size];
-            let other = &mut right[..row_size];
-            row.swap_with_slice(other);
-        }
+    pub fn shuffle<Rn: Rng>(&mut self, rng: &mut Rn) {
+        self.src.shuffle(self.rows, self.row_size, rng);
     }
 
     /// Retrieves the dataset in batches of size `batch_size`.
@@ -96,12 +76,12 @@ impl Dataset {
         let &Self {
             x_size,
             row_size,
-            ref data,
+            ref src,
             ..
         } = self;
 
         let offset = row * row_size;
-        let raw_batch = &data[offset..offset + row_size * n];
+        let raw_batch = src.raw_batch(offset..offset + row_size * n);
 
         let batch = ArrayView2::from_shape((n, row_size), raw_batch).unwrap();
         batch.split_at(Axis(1), x_size)
@@ -113,12 +93,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_dataset_get_2rows() {
+    fn test_dataset_inline_src_get_2rows() {
         let sums = [1.0, 2.0, 3.0, 3.0, 4.0, 7.0, 5.0, 6.0, 11.0];
         let x_size = NonZeroUsize::new(2).unwrap();
         let y_size = NonZeroUsize::new(1).unwrap();
+        let src = DatasetSrc::inline(sums.into());
 
-        let ds = Dataset::new(sums.into(), x_size, y_size);
+        let ds = Dataset::new(src, x_size, y_size);
 
         let expected_x = ArrayView2::from_shape((2, 2), &[1.0, 2.0, 3.0, 4.0]).unwrap();
         let expected_y = ArrayView2::from_shape((2, 1), &[3.0, 7.0]).unwrap();

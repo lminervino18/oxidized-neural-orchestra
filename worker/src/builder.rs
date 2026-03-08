@@ -1,7 +1,7 @@
 use comms::specs::worker::WorkerSpec;
 
 use super::worker::Worker;
-use machine_learning::training::TrainerBuilder;
+use machine_learning::{dataset::Dataset, training::TrainerBuilder};
 
 pub struct WorkerBuilder;
 
@@ -21,9 +21,9 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    pub fn build(&self, spec: WorkerSpec, server_sizes: &[usize]) -> Worker {
+    pub fn build(&self, spec: WorkerSpec, server_sizes: &[usize], dataset: Dataset) -> Worker {
         let trainer_builder = TrainerBuilder::new();
-        let trainer = trainer_builder.build(spec.trainer, server_sizes);
+        let trainer = trainer_builder.build(spec.trainer, server_sizes, dataset);
         Worker::new(trainer)
     }
 }

@@ -98,9 +98,9 @@ checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
 name = "bytemuck"
-version = "1.24.0"
+version = "1.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fbdf580320f38b612e485521afda1ee26d10cc9884efaaa750d383e13e3c5f4"
+checksum = "c8efb64bd706a16a1bdde310ae86b351e4d21550d98d056f22f8a7f7a2183fec"
 
 [[package]]
 name = "bytes"
@@ -140,6 +140,7 @@ name = "comms"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
@@ -479,6 +480,7 @@ dependencies = [
 name = "machine_learning"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "comms",
  "futures",
  "ndarray",
@@ -609,6 +611,7 @@ dependencies = [
 name = "orchestrator"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "comms",
  "env_logger",
  "futures",
@@ -1298,6 +1301,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 name = "worker"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "comms",
  "env_logger",
  "futures",

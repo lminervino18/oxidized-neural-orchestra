@@ -1,8 +1,10 @@
 use std::{
     cmp::Reverse,
     collections::BinaryHeap,
+    fs,
     net::{SocketAddr, ToSocketAddrs},
     num::NonZeroUsize,
+    path::PathBuf,
 };
 
 use comms::specs::{
@@ -13,7 +15,7 @@ use comms::specs::{
     worker::{AlgorithmSpec, WorkerSpec},
 };
 
-use super::{ModelConfig, TrainingConfig};
+use super::{ModelConfig, TrainingConfig, partition::Partition};
 use crate::{
     configs::{
         ActFnConfig, AlgorithmConfig, DatasetConfig, DatasetSrc, LayerConfig, LossFnConfig,
@@ -23,6 +25,7 @@ use crate::{
 };
 
 /// Converts user model and training configurations into worker and server specifications.
+#[derive(Default)]
 pub struct Adapter;
 
 impl Adapter {
@@ -45,23 +48,31 @@ impl Adapter {
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
-    pub fn adapt_configs<A: ToSocketAddrs>(
+    pub fn adapt_configs<'a, A: ToSocketAddrs>(
         &self,
         model: ModelConfig,
-        training: TrainingConfig<A>,
-    ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
+        training: &'a TrainingConfig<A>,
+    ) -> Result<(
+        Vec<(SocketAddr, WorkerSpec)>,
+        Vec<Partition<'a>>,
+        Vec<(SocketAddr, ServerSpec)>,
+    )> {
         let (servers, server_addrs, server_sizes, server_ordering) =
             self.adapt_servers(&model, &training)?;
+
+        let (dataset_specs, partitions) =
+            self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
 
         let workers = self.adapt_workers(
             &model,
             &training,
+            dataset_specs,
             server_addrs,
             server_sizes,
             server_ordering,
         )?;
 
-        Ok((workers, servers))
+        Ok((workers, partitions, servers))
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -82,6 +93,7 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig<A>,
+        dataset_specs: Vec<DatasetSpec>,
         server_addrs: Vec<SocketAddr>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
@@ -97,7 +109,8 @@ impl Adapter {
             .worker_addrs
             .iter()
             .enumerate()
-            .map(|(i, addressable)| {
+            .zip(dataset_specs)
+            .map(|((i, addressable), dataset)| {
                 let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
                     OrchErr::InvalidConfig(format!(
                         "failted to resolve {i}'th worker's network address"
@@ -107,6 +120,7 @@ impl Adapter {
                 let worker_spec = WorkerSpec {
                     worker_id: i,
                     trainer: trainer_spec.clone(),
+                    dataset,
                     algorithm: algorithm_spec.clone(),
                 };
 
@@ -260,13 +274,11 @@ impl Adapter {
     ) -> TrainerSpec {
         let (model_spec, _) = self.adapt_model_param_gen(model, training.dataset.x_size);
         let optimizer_spec = self.adapt_optimizer(training.optimizer);
-        let dataset_spec = self.adapt_dataset(&training.dataset);
         let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);
 
         TrainerSpec {
             model: model_spec,
             optimizer: optimizer_spec,
-            dataset: dataset_spec,
             loss_fn: loss_fn_spec,
             offline_epochs: training.offline_epochs,
             max_epochs: training.max_epochs,
@@ -288,27 +300,112 @@ impl Adapter {
         }
     }
 
-    /// Adapts a `DatasetConfig` into a `DatasetSpec`.
+    fn adapt_local_dataset<'a>(
+        &self,
+        path: &'a PathBuf,
+        x_size: usize,
+        y_size: usize,
+        npartitions: usize,
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
+        let size = fs::metadata(path)?.len();
+        let row_size = (x_size + y_size) as u64;
+        let nrows = (size / row_size) as usize;
+        let base_rows = (nrows / npartitions) as u64;
+        let remainder = nrows % npartitions;
+
+        let mut specs = vec![];
+        let mut partitions = vec![];
+        let mut offset = 0;
+
+        for i in 0..npartitions {
+            let size = if i < remainder {
+                base_rows + 1
+            } else {
+                base_rows
+            } * row_size;
+
+            specs.push(DatasetSpec {
+                size,
+                x_size,
+                y_size,
+            });
+            partitions.push(Partition::Local { path, offset, size });
+
+            offset += size;
+        }
+
+        Ok((specs, partitions))
+    }
+
+    fn adapt_inline_dataset<'a>(
+        &self,
+        data: &'a [f32],
+        x_size: usize,
+        y_size: usize,
+        npartitions: usize,
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
+        let size = data.len() * 4;
+        let row_size = x_size + y_size;
+        let nrows = size / row_size;
+        let base_rows = nrows / npartitions;
+        let remainder = nrows % npartitions;
+
+        let mut specs = vec![];
+        let mut partitions = vec![];
+        let mut rest = data;
+
+        for i in 0..npartitions {
+            let size = if i < remainder {
+                base_rows + 1
+            } else {
+                base_rows
+            } * row_size;
+
+            let curr;
+            (curr, rest) = rest.split_at(size / 4);
+
+            specs.push(DatasetSpec {
+                size: size as u64,
+                x_size,
+                y_size,
+            });
+            partitions.push(Partition::Inline { data: curr });
+        }
+
+        Ok((specs, partitions))
+    }
+
+    /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
     ///
     /// # Args
     /// * `dataset` - A dataset's configuration.
+    /// * `npartitions` - The amount of partitions.
     ///
     /// # Returns
-    /// The dataset's specification.
-    fn adapt_dataset(&self, dataset: &DatasetConfig) -> DatasetSpec {
+    /// A list of resolved dataset specs and a list with partition metadata.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if the dataset cannot be resolved.
+    fn adapt_dataset<'a>(
+        &self,
+        dataset: &'a DatasetConfig,
+        npartitions: usize,
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
         let DatasetConfig {
-            ref src,
+            src,
             x_size,
             y_size,
-        } = *dataset;
+        } = dataset;
+
+        let (x_size, y_size) = (x_size.get(), y_size.get());
 
         match src {
-            DatasetSrc::Local { .. } => unimplemented!("local dataset is not supported"),
-            DatasetSrc::Inline { data } => DatasetSpec {
-                data: data.clone(),
-                x_size,
-                y_size,
-            },
+            DatasetSrc::Local { path } => {
+                self.adapt_local_dataset(path, x_size, y_size, npartitions)
+            }
+            DatasetSrc::Inline { data } => {
+                self.adapt_inline_dataset(data, x_size, y_size, npartitions)
+            }
         }
     }
 

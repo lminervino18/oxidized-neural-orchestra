@@ -46,12 +46,13 @@ pub enum OptimizerSpec {
 }
 
 /// The specification for the `Dataset`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetSpec {
-    pub data: Vec<f32>,
-    pub x_size: NonZeroUsize,
-    pub y_size: NonZeroUsize,
+    /// The size of the dataset in bytes.
+    pub size: u64,
+    pub x_size: usize,
+    pub y_size: usize,
 }
 
 /// The specification for the `LossFn` enum.
@@ -66,7 +67,6 @@ pub enum LossFnSpec {
 pub struct TrainerSpec {
     pub model: ModelSpec,
     pub optimizer: OptimizerSpec,
-    pub dataset: DatasetSpec,
     pub loss_fn: LossFnSpec,
     pub offline_epochs: usize,
     pub max_epochs: NonZeroUsize,
