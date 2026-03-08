@@ -16,6 +16,7 @@ use crate::{
 };
 
 /// Builds `Trainer`s given a specification.
+#[derive(Default)]
 pub struct TrainerBuilder;
 
 impl TrainerBuilder {
@@ -46,6 +47,7 @@ impl TrainerBuilder {
     /// # Arguments
     /// * `spec` - The specification of the trainer.
     /// * `server_sizes` - The amount of parameters per server.
+    /// * `dataset` - A resolved dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
@@ -72,6 +74,7 @@ impl TrainerBuilder {
     ///
     /// # Arguments
     /// * `spec` - The specification of the trainer.
+    /// * `dataset` - The dataset for the model to be trained on.
     ///
     /// # Returns
     /// A new `Trainer`.
@@ -140,6 +143,7 @@ impl TrainerBuilder {
     /// * `spec` - The specification for this trainer.
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `model` - A resolved model.
+    /// * `dataset` - A resolved dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
@@ -169,6 +173,7 @@ impl TrainerBuilder {
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `model` - A resolved model.
     /// * `loss_fn` - A resolved loss function.
+    /// * `dataset` - A resolved dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
