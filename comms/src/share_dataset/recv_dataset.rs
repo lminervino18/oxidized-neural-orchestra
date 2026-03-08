@@ -4,12 +4,11 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufWriter};
 use crate::{
     OnoReceiver,
     msg::{Msg, Payload},
-    specs::machine_learning::DatasetSpec,
 };
 
 pub async fn recv_dataset<W, R>(
     storage: &mut W,
-    spec: DatasetSpec,
+    size: u64,
     receiver: &mut OnoReceiver<R>,
 ) -> Result<()>
 where
@@ -22,7 +21,7 @@ where
 
     let mut received = 0;
 
-    while (received as u64) < spec.size {
+    while (received as u64) < size {
         let msg: Msg = receiver.recv_into(&mut buf).await?;
 
         let chunk = match msg {

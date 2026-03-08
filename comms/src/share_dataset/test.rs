@@ -3,10 +3,7 @@
 use rand::Rng;
 use tokio::io::{self, duplex};
 
-use crate::{
-    channel, recv_dataset::recv_dataset, send_dataset::send_dataset,
-    specs::machine_learning::DatasetSpec,
-};
+use crate::{channel, recv_dataset::recv_dataset, send_dataset::send_dataset};
 
 #[tokio::test]
 async fn test_share_dataset() {
@@ -25,14 +22,8 @@ async fn test_share_dataset() {
     let mut recvr_storage = vec![];
     let mut sender_storage: &[u8] = &dataset;
 
-    let spec = DatasetSpec {
-        size,
-        x_size: 0,
-        y_size: 0,
-    };
-
     let send = send_dataset(&mut sender_storage, chunk, &mut sender);
-    let recv = recv_dataset(&mut recvr_storage, spec, &mut receiver);
+    let recv = recv_dataset(&mut recvr_storage, size, &mut receiver);
 
     let (send_result, recv_result) = tokio::join!(send, recv);
     send_result.unwrap();

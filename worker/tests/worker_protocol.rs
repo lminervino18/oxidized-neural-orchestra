@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use comms::{OnoReceiver, OnoSender};
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
-    dataset::Dataset,
+    dataset::{Dataset, DatasetSrc},
     optimization::{GradientDescent, Optimizer},
     training::ModelTrainer,
 };
@@ -106,7 +106,11 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let trainer = ModelTrainer::new(
         model,
         vec![GradientDescent::new(0.1)],
-        Dataset::new(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0], x_size, x_size),
+        Dataset::new(
+            DatasetSrc::inline(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0]),
+            x_size,
+            x_size,
+        ),
         0,
         NonZeroUsize::new(MAX_EPOCHS).unwrap(),
         NonZeroUsize::new(4).unwrap(),

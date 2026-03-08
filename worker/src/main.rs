@@ -1,9 +1,13 @@
-use std::{env, io};
+use std::{
+    env,
+    io::{self, Cursor},
+    num::NonZeroUsize,
+};
 
 use comms::{
     msg::{Command, Msg},
     recv_dataset::recv_dataset,
-    specs::worker::AlgorithmSpec,
+    specs::{machine_learning::DatasetSpec, worker::AlgorithmSpec},
 };
 use log::{info, warn};
 use tokio::{
@@ -11,6 +15,7 @@ use tokio::{
     signal,
 };
 
+use machine_learning::dataset::{Dataset, DatasetSrc};
 use worker::{builder::WorkerBuilder, middleware::Middleware};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
@@ -42,6 +47,23 @@ async fn main() -> io::Result<()> {
         }
     };
 
+    let DatasetSpec {
+        size,
+        x_size,
+        y_size,
+    } = spec.dataset;
+
+    let mut dataset_raw = vec![];
+    let dataset_bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut dataset_raw);
+    recv_dataset(&mut Cursor::new(dataset_bytes), size, &mut rx).await?;
+
+    let dataset_src = DatasetSrc::inline(dataset_raw);
+    let dataset = Dataset::new(
+        dataset_src,
+        NonZeroUsize::new(x_size).unwrap(),
+        NonZeroUsize::new(y_size).unwrap(),
+    );
+
     let AlgorithmSpec::ParameterServer {
         server_addrs,
         server_sizes,
@@ -49,7 +71,7 @@ async fn main() -> io::Result<()> {
     } = spec.algorithm.clone();
 
     let worker_builder = WorkerBuilder::new();
-    let worker = worker_builder.build(spec, &server_sizes);
+    let worker = worker_builder.build(spec, &server_sizes, dataset);
     let mut middleware = Middleware::new(server_ordering);
 
     for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
