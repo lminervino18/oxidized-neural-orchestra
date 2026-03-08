@@ -58,14 +58,14 @@ impl Adapter {
         Vec<(SocketAddr, ServerSpec)>,
     )> {
         let (servers, server_addrs, server_sizes, server_ordering) =
-            self.adapt_servers(&model, &training)?;
+            self.adapt_servers(&model, training)?;
 
         let (dataset_specs, partitions) =
             self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
 
         let workers = self.adapt_workers(
             &model,
-            &training,
+            training,
             dataset_specs,
             server_addrs,
             server_sizes,
@@ -300,79 +300,54 @@ impl Adapter {
         }
     }
 
-    fn adapt_local_dataset<'a>(
-        &self,
-        path: &'a PathBuf,
-        x_size: usize,
-        y_size: usize,
-        npartitions: usize,
-    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
-        let size = fs::metadata(path)?.len();
-        let row_size = (x_size + y_size) as u64;
-        let nrows = (size / row_size) as usize;
-        let base_rows = (nrows / npartitions) as u64;
-        let remainder = nrows % npartitions;
-
-        let mut specs = vec![];
-        let mut partitions = vec![];
-        let mut offset = 0;
-
-        for i in 0..npartitions {
-            let size = if i < remainder {
-                base_rows + 1
-            } else {
-                base_rows
-            } * row_size;
-
-            specs.push(DatasetSpec {
-                size,
-                x_size,
-                y_size,
-            });
-            partitions.push(Partition::Local { path, offset, size });
-
-            offset += size;
-        }
-
-        Ok((specs, partitions))
-    }
-
-    fn adapt_inline_dataset<'a>(
+    /// Helper method for `adapt_dataset`.
+    fn adapt_inline_dataset<'a, T: Iterator<Item = u64>>(
         &self,
         data: &'a [f32],
+        partition_sizes: T,
         x_size: usize,
         y_size: usize,
-        npartitions: usize,
-    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
-        let size = data.len() * 4;
-        let row_size = x_size + y_size;
-        let nrows = size / row_size;
-        let base_rows = nrows / npartitions;
-        let remainder = nrows % npartitions;
-
-        let mut specs = vec![];
-        let mut partitions = vec![];
+    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
         let mut rest = data;
+        partition_sizes
+            .map(|size| {
+                let curr;
+                (curr, rest) = rest.split_at((size / 4) as usize);
+                let spec = DatasetSpec {
+                    size,
+                    x_size,
+                    y_size,
+                };
+                let partition = Partition::Inline { data: curr };
 
-        for i in 0..npartitions {
-            let size = if i < remainder {
-                base_rows + 1
-            } else {
-                base_rows
-            } * row_size;
+                (spec, partition)
+            })
+            .collect()
+    }
 
-            let curr;
-            (curr, rest) = rest.split_at(size / 4);
+    /// Helper method for `adapt_dataset`.
+    fn adapt_local_dataset<'a, T: Iterator<Item = u64>>(
+        &self,
+        path: &'a PathBuf,
+        partition_sizes: T,
+        x_size: usize,
+        y_size: usize,
+    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
+        let mut offset = 0;
+        partition_sizes
+            .map(|size| {
+                let spec = DatasetSpec {
+                    size,
+                    x_size,
+                    y_size,
+                };
+                let partition = Partition::Local { path, offset, size };
 
-            specs.push(DatasetSpec {
-                size: size as u64,
-                x_size,
-                y_size,
-            });
-            partitions.push(Partition::Inline { data: curr });
-        }
+                offset += size;
 
-        Ok((specs, partitions))
+                (spec, partition)
+            })
+            .collect()
     }
 
     /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
@@ -398,15 +373,37 @@ impl Adapter {
         } = dataset;
 
         let (x_size, y_size) = (x_size.get(), y_size.get());
+        let size = match src {
+            DatasetSrc::Local { path } => fs::metadata(path)?.len(),
+            DatasetSrc::Inline { data } => (data.len() * size_of::<f32>()) as u64,
+        };
 
-        match src {
-            DatasetSrc::Local { path } => {
-                self.adapt_local_dataset(path, x_size, y_size, npartitions)
-            }
+        let npartitions = npartitions as u64;
+        let row_size = (x_size + y_size) as u64;
+        let nrows = size / row_size;
+        let base_rows = nrows / npartitions;
+        let remainder = nrows % npartitions;
+
+        let partition_sizes = (0..npartitions).map(|i| {
+            let rows = if i < remainder {
+                base_rows + 1
+            } else {
+                base_rows
+            };
+
+            rows * row_size
+        });
+
+        let (specs, partitions) = match src {
             DatasetSrc::Inline { data } => {
-                self.adapt_inline_dataset(data, x_size, y_size, npartitions)
+                self.adapt_inline_dataset(data, partition_sizes, x_size, y_size)
             }
-        }
+            DatasetSrc::Local { path } => {
+                self.adapt_local_dataset(path, partition_sizes, x_size, y_size)
+            }
+        };
+
+        Ok((specs, partitions))
     }
 
     /// Adapts an `OptimizerConfig` into an `OptimizerSpec`.
