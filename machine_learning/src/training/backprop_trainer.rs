@@ -13,16 +13,16 @@ use crate::{
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
 /// including the model itself.
-pub struct ModelTrainer<O, L, R>
+pub struct BackpropTrainer<O, L, R>
 where
     O: Optimizer,
     L: LossFn,
     R: Rng,
 {
+    model: Sequential,
     optimizers: Vec<O>,
     dataset: Dataset,
     loss_fn: L,
-    model: Sequential,
 
     epoch: usize,
     offline_epochs: usize,
@@ -33,75 +33,80 @@ where
     losses: Vec<f32>,
 }
 
-impl<O, L, R> ModelTrainer<O, L, R>
+impl<O, L, R> BackpropTrainer<O, L, R>
 where
     O: Optimizer,
     L: LossFn,
     R: Rng,
 {
-    /// Returns a new `ModelTrainer`.
+    /// Returns a new `BackpropTrainer` model trainer.
     ///
     /// # Arguments
     /// * `model` - A trainable model.
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `dataset` - The dataset the model will be trained with.
+    /// * `loss_fn` - The loss function used to measure the difference between a model's output and the expected one.
     /// * `offline_epochs` - The amount of extra epochs to run per `train` call.
     /// * `max_epochs` - The maximum amount of epochs to train.
-    /// * `loss` - The loss function used to measure the difference between a model's output and the expected one.
+    /// * `batch_size` - The size of the mini batch.
     /// * `rng` - A random number generator.
     ///
     /// # Returns
-    /// A new `ModelTrainer` instance.
+    /// A new `BackpropTrainer` instance.
     pub fn new(
         model: Sequential,
         optimizers: Vec<O>,
         dataset: Dataset,
+        loss_fn: L,
         offline_epochs: usize,
         max_epochs: NonZeroUsize,
         batch_size: NonZeroUsize,
-        loss_fn: L,
         rng: R,
     ) -> Self {
         Self {
             model,
-            dataset,
             optimizers,
+            dataset,
+            loss_fn,
             epoch: 0,
             offline_epochs,
             max_epochs,
             batch_size,
-            loss_fn,
             rng,
             losses: Vec::with_capacity(1 + offline_epochs),
         }
     }
 }
 
-impl<O, L, R> ModelTrainer<O, L, R>
+impl<O, L, R> Trainer for BackpropTrainer<O, L, R>
 where
     O: Optimizer + Send,
     L: LossFn,
     R: Rng,
 {
-    /// Performs
+    /// Performs a training cycle.
     ///
     /// # Arguments
     /// * `param_manager` - The manager of parameters for this training.
     ///
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
-    pub fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<TrainResult<'_>> {
+    fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<TrainResult<'_>> {
         let remaining = self.max_epochs.get() - self.epoch;
         let epochs = remaining.min(self.offline_epochs + 1);
+
         self.losses.clear();
 
         for _ in 0..epochs {
             self.dataset.shuffle(&mut self.rng);
             let batches = self.dataset.batches(self.batch_size);
 
-            let loss =
-                self.model
-                    .backprop(param_manager, &mut self.optimizers, &self.loss_fn, batches)?;
+            let loss = self.model.backprop(
+                param_manager,
+                &mut self.optimizers,
+                &mut self.loss_fn,
+                batches,
+            )?;
 
             self.losses.push(loss);
         }
@@ -113,16 +118,5 @@ where
         };
 
         Ok(res)
-    }
-}
-
-impl<O, L, R> Trainer for ModelTrainer<O, L, R>
-where
-    O: Optimizer + Send,
-    L: LossFn,
-    R: Rng,
-{
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult<'_>> {
-        self.train(param_manager)
     }
 }

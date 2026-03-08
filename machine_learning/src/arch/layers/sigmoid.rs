@@ -26,7 +26,7 @@ impl Sigmoid {
     }
 
     pub fn forward(&mut self, x: ArrayView2<f32>) -> Result<ArrayView2<'_, f32>> {
-        self.activations.reshape_inplace((x.nrows(), x.ncols()));
+        self.activations.reshape_inplace(x.raw_dim());
 
         azip!((a in &mut self.activations, &x_in in &x) {
             *a = self.amp / (1.0 + (-x_in).exp());

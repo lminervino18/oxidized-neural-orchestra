@@ -14,7 +14,7 @@ pub(super) use sigmoid::Sigmoid;
 /// types a way to resize their inner memory regions inplace.
 ///
 /// Only owned `ndarray`s should implement this trait.
-trait InplaceReshape<D: Dimension> {
+pub trait InplaceReshape<D: Dimension> {
     /// Resizes the inner memory region for `Self` and returns a new instance.
     ///
     /// # Arguments

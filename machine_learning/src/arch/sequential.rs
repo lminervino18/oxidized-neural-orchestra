@@ -1,4 +1,4 @@
-use ndarray::ArrayView2;
+use ndarray::{ArrayView2, ArrayViewMut2};
 
 use super::{layers::Layer, loss::LossFn};
 use crate::{MlErr, Result, optimization::Optimizer, param_manager::ParamManager};
@@ -13,17 +13,12 @@ impl Sequential {
     /// Creates a new `Sequential`.
     ///
     /// # Arguments
-    /// * `layers` - The layers the sequential is composed of.
+    /// * `layers` - A list of layers.
     ///
     /// # Returns
     /// A new `Sequential` instance.
-    pub fn new<I>(layers: I) -> Self
-    where
-        I: IntoIterator<Item = Layer>,
-    {
-        Self {
-            layers: layers.into_iter().collect(),
-        }
+    pub fn new(layers: Vec<Layer>) -> Self {
+        Self { layers }
     }
 
     /// Calculates the amount of parameters in the model.
@@ -40,28 +35,64 @@ impl Sequential {
     /// * `param_manager` - The manager of parameters.
     /// * `x` - The input data.
     ///
+    /// # Errors
+    /// An error if there's a size mismatch between the layers' sizes and the parameter manager
+    ///
     /// # Returns
     /// The prediction for the given input or an error if occurred.
-    pub fn forward<'x, 'a: 'x, 'mw>(
-        &'a mut self,
+    pub fn forward<'x, 'mw>(
+        &'x mut self,
         param_manager: &mut ParamManager<'mw>,
         mut x: ArrayView2<'x, f32>,
     ) -> Result<ArrayView2<'x, f32>> {
         let mut front = param_manager.front();
-        let nlayers = self.layers.len();
+        let n = self.layers.len();
 
         for (i, layer) in self.layers.iter_mut().enumerate() {
-            let size = layer.size();
-            let params = front.next(size).ok_or_else(|| MlErr::SizeMismatch {
-                what: "layers",
-                got: i,
-                expected: nlayers,
-            })?;
+            let params = front
+                .next(layer.size())
+                .ok_or_else(|| MlErr::SizeMismatch {
+                    what: "layers",
+                    got: i,
+                    expected: n,
+                })?;
 
             x = layer.forward(params, x)?;
         }
 
         Ok(x)
+    }
+
+    /// Makes a backward pass through the network.
+    ///
+    /// # Arguments
+    /// * `param_manager` - The manager of parameters.
+    /// * `d` - The starting delta, the loss prime.
+    ///
+    /// # Errors
+    /// An error if there's a size mismatch between the layers' sizes and the parameter manager
+    ///
+    /// # Returns
+    /// An error if occurred.
+    pub fn backward<'d, 'mw>(
+        &'d mut self,
+        param_manager: &mut ParamManager<'mw>,
+        mut d: ArrayViewMut2<'d, f32>,
+    ) -> Result<()> {
+        let mut back = param_manager.back();
+        let n = self.layers.len();
+
+        for (i, layer) in self.layers.iter_mut().rev().enumerate() {
+            let (params, grad) = back.next(layer.size()).ok_or_else(|| MlErr::SizeMismatch {
+                what: "layers",
+                got: i,
+                expected: n,
+            })?;
+
+            d = layer.backward(params, grad, d)?;
+        }
+
+        Ok(())
     }
 
     /// Computes the gradient of the loss function with respect to the parameters of the model over
@@ -81,13 +112,16 @@ impl Sequential {
     /// * `optimizer` - The optimizer that dictates how to update the weights on each gradient calculation.
     /// * `batches` - The batches of data.
     ///
+    /// # Errors
+    /// An error if there's a size mismatch between the layers' sizes and the parameter manager
+    ///
     /// # Returns
-    /// The epoch loss or an error if the model failed to advance with the training.
+    /// The epoch loss or an error if the model failed to run a backpropagation epoch.
     pub fn backprop<'a, 'mw, O, L, I>(
         &mut self,
         param_manager: &mut ParamManager<'mw>,
         optimizers: &mut [O],
-        loss_fn: &L,
+        loss_fn: &mut L,
         batches: I,
     ) -> Result<f32>
     where
@@ -95,29 +129,17 @@ impl Sequential {
         O: Optimizer + Send,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
-        let nlayers = self.layers.len();
         let mut total_loss = 0.0;
         let mut num_batches = 0;
 
         for (x, y) in batches {
             let y_pred = self.forward(param_manager, x)?;
-            total_loss += loss_fn.loss(y_pred, y);
+            let (loss, mut d) = loss_fn.loss_prime(y_pred, y);
+
+            total_loss += loss;
             num_batches += 1;
 
-            let mut back = param_manager.back();
-            let mut d_last = loss_fn.loss_prime(y_pred, y);
-            let mut d = d_last.view_mut();
-
-            for (i, layer) in self.layers.iter_mut().rev().enumerate() {
-                let size = layer.size();
-                let (params, grad) = back.next(size).ok_or_else(|| MlErr::SizeMismatch {
-                    what: "layers",
-                    got: i,
-                    expected: nlayers,
-                })?;
-
-                d = layer.backward(params, grad, d)?;
-            }
+            self.backward(param_manager, d.view_mut())?;
 
             param_manager.optimize(optimizers)?;
             param_manager.acc_grad();

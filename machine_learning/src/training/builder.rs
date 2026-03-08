@@ -3,7 +3,7 @@ use comms::specs::machine_learning::{
 };
 use rand::{SeedableRng, rngs::StdRng};
 
-use super::{ModelTrainer, Trainer};
+use super::{BackpropTrainer, Trainer};
 use crate::{
     arch::{
         Sequential,
@@ -163,14 +163,14 @@ impl TrainerBuilder {
     {
         let model = Sequential::new(layers);
         let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
-        let trainer = ModelTrainer::new(
+        let trainer = BackpropTrainer::new(
             model,
             optimizers,
             dataset,
+            loss_fn,
             spec.offline_epochs,
             spec.max_epochs,
             spec.batch_size,
-            loss_fn,
             self.generate_rng(spec.seed),
         );
 
