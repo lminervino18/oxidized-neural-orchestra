@@ -4,10 +4,9 @@ use super::InplaceReshape;
 use crate::{MlErr, Result};
 
 /// Optimizations:
-///   1. Find a way to not copy `x` in each `Dense::forward` call.
-///   2. Find a way to sum up the rows of `d` in `Dense::backward` in parallel to write them to `b`.
-///   3. Maybe make the a = f(z) computation parallel.
-///   4. Maybe make the d *= df(z) computation parallel.
+///   1. Find a way to sum up the rows of `d` in `Dense::backward` in parallel to write them to `b`.
+///   2. Maybe make the a = f(z) computation parallel.
+///   3. Maybe make the d *= df(z) computation parallel.
 #[derive(Clone)]
 pub struct Dense {
     dim: (usize, usize),
@@ -39,16 +38,15 @@ impl Dense {
     }
 
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> Result<ArrayView2<'_, f32>> {
+        self.input.reshape_inplace(x.raw_dim());
+        self.input.assign(&x);
+
         let (w, b) = self.view_params(params)?;
-        let shape = (x.nrows(), self.dim.1);
+        let outer_shape = (x.nrows(), self.dim.1);
 
-        self.w_sums.reshape_inplace(shape);
-
+        self.w_sums.reshape_inplace(outer_shape);
         linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.w_sums);
         self.w_sums += &b;
-
-        // TODO: See if this `to_owned` call can be removed.
-        self.input = x.to_owned();
 
         Ok(self.w_sums.view())
     }
@@ -61,7 +59,7 @@ impl Dense {
     ) -> Result<ArrayViewMut2<'_, f32>> {
         let (mut dw, mut db) = self.view_grad(grad)?;
         linalg::general_mat_mul(1.0, &self.input.t(), &d, 0.0, &mut dw);
-        db.view_mut().assign(&d.sum_axis(Axis(0)));
+        db.assign(&d.sum_axis(Axis(0)));
 
         let (w, _) = self.view_params(params)?;
         self.delta.reshape_inplace((d.nrows(), w.nrows()));
@@ -113,9 +111,21 @@ impl Dense {
         &self,
         params: &'a [f32],
     ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
+        if params.len() != self.nparams {
+            return Err(MlErr::SizeMismatch {
+                what: "params",
+                got: params.len(),
+                expected: self.nparams,
+            });
+        }
+
         let w_size = self.nparams - self.dim.1;
+
+        // SAFETY: The if condition above checks that the size of the
+        //         parameters is exactly the size of the layer.
         let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
         let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
+
         Ok((weights, biases))
     }
 }
