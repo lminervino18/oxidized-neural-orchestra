@@ -22,7 +22,7 @@ async fn main() -> io::Result<()> {
     let addr = format!(
         "{}:{}",
         env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
-        env::var("PORT").map_err(|e| io::Error::other(e))?,
+        env::var("PORT").map_err(io::Error::other)?,
     );
 
     let list = TcpListener::bind(&addr).await?;
@@ -44,9 +44,7 @@ async fn main() -> io::Result<()> {
     };
 
     let nworkers = spec.nworkers;
-    let mut pserver = ServerBuilder::new()
-        .build(spec)
-        .map_err(|e| io::Error::other(e))?;
+    let mut pserver = ServerBuilder::new().build(spec).map_err(io::Error::other)?;
 
     for i in 0..nworkers {
         let (stream, addr) = list.accept().await?;

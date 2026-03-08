@@ -14,7 +14,7 @@ pub enum Action {
     /// The application should exit.
     Quit,
     /// The application should transition to a new screen.
-    Transition(Screen),
+    Transition(Box<Screen>),
 }
 
 /// The active screen of the TUI application.

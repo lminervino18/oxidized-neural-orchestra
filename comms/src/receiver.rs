@@ -21,8 +21,7 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     /// Waits to receive a new message from the inner receiver.
     ///
     /// # Arguments
-    /// * `buf` - The buffer to use for deserialization, the returned
-    ///           `T`'s lifetimes will be tied to this buffer.
+    /// * `buf` - The buffer to use for deserialization, the returned `T`'s lifetimes will be tied to this buffer.
     ///
     /// # Returns
     /// A result object that returns `T` on success or `io::Error` on failure.

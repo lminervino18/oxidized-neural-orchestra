@@ -82,7 +82,7 @@ impl<'mw> ParamManager<'mw> {
 
         BackIter {
             servers: &mut self.servers,
-            server_ordering: &self.server_ordering,
+            server_ordering: self.server_ordering,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -105,7 +105,7 @@ impl<'mw> ParamManager<'mw> {
             .par_iter_mut()
             .zip(&mut self.servers)
             .try_for_each(|(optimizer, server)| {
-                optimizer.update_params(&server.grad, server.params)
+                optimizer.update_params(server.grad, server.params)
             })?;
 
         Ok(())

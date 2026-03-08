@@ -58,7 +58,7 @@ pub fn run() -> Result<()> {
                 if let Some(action) = screen.handle_key(k.code) {
                     match action {
                         Action::Quit => break,
-                        Action::Transition(next) => screen = next,
+                        Action::Transition(next) => screen = *next,
                     }
                 }
             }

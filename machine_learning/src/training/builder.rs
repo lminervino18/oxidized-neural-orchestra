@@ -15,6 +15,7 @@ use crate::{
 };
 
 /// Builds `Trainer`s given a specification.
+#[derive(Default)]
 pub struct TrainerBuilder;
 
 impl TrainerBuilder {
@@ -71,8 +72,7 @@ impl TrainerBuilder {
         let layers: Vec<_> = spec
             .layers
             .iter()
-            .map(|layer_spec| self.resolve_layer(*layer_spec))
-            .flatten()
+            .flat_map(|layer_spec| self.resolve_layer(*layer_spec))
             .collect();
 
         self.resolve_loss_fn(spec, optimizers, layers)

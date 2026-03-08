@@ -7,8 +7,8 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::theme::Theme;
 use crate::ui::utils::centered_rect;
+use crate::ui::{screens::config::ConfigState, theme::Theme};
 
 use super::{Action, Screen};
 
@@ -62,9 +62,9 @@ pub fn handle_key(state: &mut MenuState, key: KeyCode) -> Option<Action> {
             None
         }
         KeyCode::Enter => match state.selected {
-            0 => Some(Action::Transition(Screen::Config(
-                super::config::ConfigState::new(),
-            ))),
+            0 => Some(Action::Transition(Box::new(Screen::Config(
+                ConfigState::new(),
+            )))),
             1 => {
                 let _ = open::that(REPO_URL);
                 None

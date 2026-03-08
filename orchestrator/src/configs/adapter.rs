@@ -21,6 +21,7 @@ use crate::{
 };
 
 /// Converts user model and training configurations into worker and server specifications.
+#[derive(Default)]
 pub struct Adapter;
 
 impl Adapter {
@@ -43,6 +44,7 @@ impl Adapter {
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
+    #[allow(clippy::type_complexity)]
     pub fn adapt_configs<A: ToSocketAddrs>(
         &self,
         model: ModelConfig,
@@ -126,6 +128,7 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
+    #[allow(clippy::type_complexity)]
     fn adapt_servers<A: ToSocketAddrs>(
         &self,
         model: &ModelConfig,
@@ -376,7 +379,7 @@ impl Adapter {
                 distribution: DistributionSpec::UniformInclusive { low, high },
                 limit,
             },
-            ParamGenConfig::XavierUniform {} => ParamGenSpec::Rand {
+            ParamGenConfig::XavierUniform => ParamGenSpec::Rand {
                 distribution: DistributionSpec::XavierUniform { fan_in, fan_out },
                 limit,
             },

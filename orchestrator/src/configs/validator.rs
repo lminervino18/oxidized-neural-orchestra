@@ -8,6 +8,7 @@ use crate::{
 
 /// Validates orchestrator configs before adaptation, ensuring all invariants
 /// are met before the training commences.
+#[derive(Default)]
 pub struct Validator;
 
 impl Validator {

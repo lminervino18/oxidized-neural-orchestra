@@ -53,6 +53,7 @@ where
     ///
     /// # Returns
     /// A new `BackpropTrainer` instance.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         model: Sequential,
         optimizers: Vec<O>,
