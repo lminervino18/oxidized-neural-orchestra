@@ -53,7 +53,7 @@ async fn main() -> io::Result<()> {
         y_size,
     } = spec.dataset;
 
-    let mut dataset_raw = vec![];
+    let mut dataset_raw = vec![0f32; (size / 4) as usize];
     let dataset_bytes: &mut [u8] = bytemuck::cast_slice_mut(&mut dataset_raw);
     recv_dataset(&mut Cursor::new(dataset_bytes), size, &mut rx).await?;
 
