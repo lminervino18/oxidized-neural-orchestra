@@ -6,6 +6,12 @@ use crate::{
     msg::{Msg, Payload},
 };
 
+/// Receives chunks of the dataset and writes them into a storage.
+///
+/// # Arguments
+/// * `storage` - The storage for writing the chunks.
+/// * `size` - The total size of the dataset in bytes.
+/// * `receiver` - An `OnoReceiver` for receiving the chunks.
 pub async fn recv_dataset<W, R>(
     storage: &mut W,
     size: u64,

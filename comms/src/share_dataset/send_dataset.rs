@@ -6,6 +6,12 @@ use crate::{
     msg::{Msg, Payload},
 };
 
+/// Sends chunks of the dataset with `chunk` size.
+///
+/// # Arguments
+/// * `dataset` - The dataset's source.
+/// * `chunk` - The size of each chunk.
+/// * `sender` - An `OnoSender` for sending the chunks.
 pub async fn send_dataset<R, W>(
     dataset: &mut R,
     chunk: usize,

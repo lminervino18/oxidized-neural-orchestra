@@ -25,6 +25,7 @@ use crate::{
 };
 
 /// Converts user model and training configurations into worker and server specifications.
+#[derive(Default)]
 pub struct Adapter;
 
 impl Adapter {
@@ -328,12 +329,7 @@ impl Adapter {
                 x_size,
                 y_size,
             });
-            partitions.push(Partition::Local {
-                // TODO: avoid cloning path
-                path,
-                offset,
-                size,
-            });
+            partitions.push(Partition::Local { path, offset, size });
 
             offset += size;
         }
@@ -341,7 +337,6 @@ impl Adapter {
         Ok((specs, partitions))
     }
 
-    // TODO: merge this method with local variant
     fn adapt_inline_dataset<'a>(
         &self,
         data: &'a [f32],
@@ -406,10 +401,10 @@ impl Adapter {
 
         match src {
             DatasetSrc::Local { path } => {
-                self.adapt_local_dataset(&path, x_size, y_size, npartitions)
+                self.adapt_local_dataset(path, x_size, y_size, npartitions)
             }
             DatasetSrc::Inline { data } => {
-                self.adapt_inline_dataset(&data, x_size, y_size, npartitions)
+                self.adapt_inline_dataset(data, x_size, y_size, npartitions)
             }
         }
     }
