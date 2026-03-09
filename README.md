@@ -25,11 +25,15 @@ The system exposes three interfaces:
 ---
 
 ## Architecture
+
 ```
-┌─────────────┐     specs      ┌──────────────┐     params     ┌──────────────────┐
-│ Orchestrator│ ─────────────► │    Worker    │ ◄────────────► │ Parameter Server │
-│  (any mode) │                │  (N nodes)   │                │    (M nodes)     │
-└─────────────┘                └──────────────┘                └──────────────────┘
+         Orchestrator
+              |
+       +------+------+
+       |             |
+       v             v
+    Worker  <---->  Server
+   (N nodes)       (M nodes)
 ```
 
 - The **orchestrator** connects to all workers and servers, sends each node its configuration spec, and waits for training to complete.
@@ -117,13 +121,11 @@ Worker and server addresses are generated automatically from this config — no 
 ### `model.json`
 ```json
 {
-  "sequential": {
-    "layers": [
-      { "dense": { "output_size": 8, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
-      { "dense": { "output_size": 4, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
-      { "dense": { "output_size": 1, "init": "kaiming", "act_fn": null } }
-    ]
-  }
+  "layers": [
+    { "dense": { "output_size": 8, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
+    { "dense": { "output_size": 4, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
+    { "dense": { "output_size": 1, "init": "kaiming" } }
+  ]
 }
 ```
 
@@ -147,13 +149,13 @@ Worker and server addresses are generated automatically from this config — no 
   "loss_fn": "mse",
   "batch_size": 4,
   "max_epochs": 500,
-  "offline_epochs": 0,
-  "seed": 42
+  "offline_epochs": 0
 }
 ```
 
 Synchronizer options: `"barrier"` | `"non_blocking"`  
-Store options: `"blocking"` | `"wild"`
+Store options: `"blocking"` | `"wild"`  
+`seed` and `act_fn` are optional — omit them to use defaults.
 
 ---
 
@@ -184,7 +186,6 @@ training = orchestra.parameter_server(
     store=BlockingStore(),
     max_epochs=500,
     batch_size=4,
-    seed=42,
 )
 
 session = orchestrate(model, training)
