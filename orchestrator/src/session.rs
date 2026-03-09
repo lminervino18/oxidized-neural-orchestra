@@ -238,7 +238,7 @@ impl Session {
         workers: Vec<(SocketAddr, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
     ) -> Result<Vec<(NetRx, NetTx)>> {
-        const CHUNK: usize = 8192; // TODO: mover este 8kb o determinarlo
+        const CHUNK_SIZE: usize = 8192; // TODO: mover este 8kb o determinarlo
         let mut channels = Vec::with_capacity(workers.len());
 
         for ((addr, spec), partition) in workers.into_iter().zip(partitions) {
@@ -257,7 +257,7 @@ impl Session {
                     fd.seek(io::SeekFrom::Start(offset)).await?;
                     let mut fd = fd.take(size);
 
-                    send_dataset(&mut fd, CHUNK, &mut tx).await?;
+                    send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
                 }
                 Partition::Inline { data } => {
                     let msg = Msg::Data(Payload::Datachunk(data));

@@ -1,21 +1,28 @@
 use super::{Dataset, DatasetSrc};
 use comms::specs::machine_learning::DatasetSpec;
-use std::num::NonZeroUsize;
 
 #[derive(Default)]
 pub struct DatasetBuilder;
 
 impl DatasetBuilder {
+    /// Creates a new `DatasetBuilder`.
+    ///
+    /// # Returns
+    /// A new `DatasetBuilder` instance.
     pub fn new() -> Self {
         Self
     }
 
-    pub fn build_inline(&self, spec: DatasetSpec, dataset_raw: Vec<f32>) -> Dataset {
-        let dataset_src = DatasetSrc::inline(dataset_raw);
-        Dataset::new(
-            dataset_src,
-            NonZeroUsize::new(spec.x_size).unwrap(),
-            NonZeroUsize::new(spec.y_size).unwrap(),
-        )
+    /// Builds a `Dataset` from a vector with its raw data and a `DatasetSpec`.
+    ///
+    /// # Arguments
+    /// * `spec` - The specification for the dataset.
+    /// * `dataset_raw` - The dataset's raw data.
+    ///
+    /// # Returns
+    /// A fully initialized `Dataset` instance.
+    pub fn build_inmem(&self, spec: DatasetSpec, dataset_raw: Vec<f32>) -> Dataset {
+        let dataset_src = DatasetSrc::inmem(dataset_raw);
+        Dataset::new(dataset_src, spec.x_size, spec.y_size)
     }
 }

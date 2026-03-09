@@ -305,8 +305,8 @@ impl Adapter {
         &self,
         data: &'a [f32],
         partition_sizes: T,
-        x_size: usize,
-        y_size: usize,
+        x_size: NonZeroUsize,
+        y_size: NonZeroUsize,
     ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
         let mut rest = data;
         partition_sizes
@@ -330,8 +330,8 @@ impl Adapter {
         &self,
         path: &'a PathBuf,
         partition_sizes: T,
-        x_size: usize,
-        y_size: usize,
+        x_size: NonZeroUsize,
+        y_size: NonZeroUsize,
     ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
         let mut offset = 0;
         partition_sizes
@@ -372,14 +372,13 @@ impl Adapter {
             y_size,
         } = dataset;
 
-        let (x_size, y_size) = (x_size.get(), y_size.get());
         let size = match src {
             DatasetSrc::Local { path } => fs::metadata(path)?.len(),
             DatasetSrc::Inline { data } => (data.len() * size_of::<f32>()) as u64,
         };
 
         let npartitions = npartitions as u64;
-        let row_size = (x_size + y_size) as u64;
+        let row_size = (x_size.get() + y_size.get()) as u64;
         let nrows = size / row_size;
         let base_rows = nrows / npartitions;
         let remainder = nrows % npartitions;
@@ -396,10 +395,10 @@ impl Adapter {
 
         let (specs, partitions) = match src {
             DatasetSrc::Inline { data } => {
-                self.adapt_inline_dataset(data, partition_sizes, x_size, y_size)
+                self.adapt_inline_dataset(data, partition_sizes, *x_size, *y_size)
             }
             DatasetSrc::Local { path } => {
-                self.adapt_local_dataset(path, partition_sizes, x_size, y_size)
+                self.adapt_local_dataset(path, partition_sizes, *x_size, *y_size)
             }
         };
 

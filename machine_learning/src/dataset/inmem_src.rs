@@ -1,13 +1,13 @@
 use rand::Rng;
 use std::ops::Range;
 
-pub struct InlineSrc {
+pub struct InMemSrc {
     data: Vec<f32>,
 }
 
-impl InlineSrc {
+impl InMemSrc {
     pub fn new(data: Vec<f32>) -> Self {
-        InlineSrc { data }
+        InMemSrc { data }
     }
 
     pub fn len(&self) -> usize {

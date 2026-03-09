@@ -44,8 +44,8 @@ pub enum OptimizerSpec {
 pub struct DatasetSpec {
     /// The size of the dataset in bytes.
     pub size: u64,
-    pub x_size: usize,
-    pub y_size: usize,
+    pub x_size: NonZeroUsize,
+    pub y_size: NonZeroUsize,
 }
 
 /// The specification for the `LossFn` enum.

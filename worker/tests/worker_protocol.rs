@@ -109,7 +109,7 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
         model,
         vec![GradientDescent::new(0.1)],
         Dataset::new(
-            DatasetSrc::inline(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0]),
+            DatasetSrc::inmem(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0]),
             x_size,
             x_size,
         ),

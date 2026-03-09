@@ -97,7 +97,7 @@ mod tests {
         let sums = [1.0, 2.0, 3.0, 3.0, 4.0, 7.0, 5.0, 6.0, 11.0];
         let x_size = NonZeroUsize::new(2).unwrap();
         let y_size = NonZeroUsize::new(1).unwrap();
-        let src = DatasetSrc::inline(sums.into());
+        let src = DatasetSrc::inmem(sums.into());
 
         let ds = Dataset::new(src, x_size, y_size);
 

@@ -11,18 +11,21 @@ use crate::{
 /// # Arguments
 /// * `dataset` - The dataset's source.
 /// * `chunk` - The size of each chunk.
-/// * `sender` - An `OnoSender` for sending the chunks.
+/// * `tx` - An `OnoSender` for sending the chunks.
+///
+/// # Errors
+/// Returns an `io::Error` if the connection or reading from the storage fail.
 pub async fn send_dataset<R, W>(
-    dataset: &mut R,
-    chunk: usize,
-    sender: &mut OnoSender<W>,
+    storage: &mut R,
+    chunk_size: usize,
+    tx: &mut OnoSender<W>,
 ) -> Result<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut buf = vec![0; chunk];
-    let mut reader = BufReader::new(dataset);
+    let mut buf = vec![0; chunk_size];
+    let mut reader = BufReader::new(storage);
 
     loop {
         let read = reader.read(&mut buf).await?;
@@ -31,7 +34,7 @@ where
             let nums = bytemuck::cast_slice(&buf);
             let msg = Msg::Data(Payload::Datachunk(nums));
 
-            sender.send(&msg).await?;
+            tx.send(&msg).await?;
         }
 
         if read == 0 {

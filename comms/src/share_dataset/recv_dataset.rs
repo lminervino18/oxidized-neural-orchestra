@@ -6,7 +6,7 @@ use crate::{
     msg::{Msg, Payload},
 };
 
-/// Helper funciton for wrapping the dataset's source buffer in a writeable bytes cursor.
+/// Helper function for wrapping the dataset's source buffer in a writeable bytes cursor.
 ///
 /// # Arguments
 /// * `dataset_raw`: The `f32` dataset buffer.
@@ -22,12 +22,11 @@ pub fn get_dataset_cursor(dataset_raw: &mut [f32]) -> Cursor<&mut [u8]> {
 /// # Arguments
 /// * `storage` - The storage for writing the chunks.
 /// * `size` - The total size of the dataset in bytes.
-/// * `receiver` - An `OnoReceiver` for receiving the chunks.
-pub async fn recv_dataset<W, R>(
-    storage: &mut W,
-    size: u64,
-    receiver: &mut OnoReceiver<R>,
-) -> Result<()>
+/// * `rx` - An `OnoReceiver` for receiving the chunks.
+///
+/// # Errors
+/// Returns an `io::Error` if the connection or writting to the storage fail.
+pub async fn recv_dataset<W, R>(storage: &mut W, size: u64, rx: &mut OnoReceiver<R>) -> Result<()>
 where
     W: AsyncWrite + Unpin,
     R: AsyncRead + Unpin,
@@ -39,7 +38,7 @@ where
     let mut received = 0;
 
     while (received as u64) < size {
-        let msg: Msg = receiver.recv_into(&mut buf).await?;
+        let msg: Msg = rx.recv_into(&mut buf).await?;
 
         let Msg::Data(Payload::Datachunk(chunk)) = msg else {
             return Err(Error::new(
