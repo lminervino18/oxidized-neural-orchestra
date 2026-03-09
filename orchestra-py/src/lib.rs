@@ -2,13 +2,12 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 
 use orchestrator::{
-    TrainingEvent,
     configs::{
         ActFnConfig, AlgorithmConfig, DatasetConfig, DatasetSrc, LayerConfig, LossFnConfig,
         ModelConfig, OptimizerConfig, ParamGenConfig, StoreConfig, SynchronizerConfig,
         TrainingConfig,
     },
-    train,
+    train, TrainingEvent,
 };
 use pyo3::prelude::*;
 
@@ -122,7 +121,11 @@ impl Dense {
             }
         };
 
-        Ok(Self { output_size, init, act_fn })
+        Ok(Self {
+            output_size,
+            init,
+            act_fn,
+        })
     }
 }
 
@@ -135,7 +138,11 @@ impl Dense {
         let act_fn = self.act_fn.as_ref().map(|a| match a {
             PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
         });
-        LayerConfig::Dense { output_size: self.output_size, init, act_fn }
+        LayerConfig::Dense {
+            output_size: self.output_size,
+            init,
+            act_fn,
+        }
     }
 }
 
@@ -158,7 +165,11 @@ impl Sequential {
             ));
         }
         let layer_configs = layers.iter().map(|l| l.to_layer_config()).collect();
-        Ok(Self { inner: ModelConfig::Sequential { layers: layer_configs } })
+        Ok(Self {
+            inner: ModelConfig {
+                layers: layer_configs,
+            },
+        })
     }
 }
 
@@ -184,7 +195,11 @@ impl InlineDataset {
         let y_size = NonZeroUsize::new(y_size).ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("y_size must be greater than 0")
         })?;
-        Ok(Self { data, x_size, y_size })
+        Ok(Self {
+            data,
+            x_size,
+            y_size,
+        })
     }
 }
 
@@ -295,77 +310,77 @@ impl Session {
         let max_epochs = self.max_epochs;
         let worker_count = self.worker_count;
 
-        let params = py.allow_threads(|| {
-            std::thread::spawn(move || {
-                let mut rx = session.event_listener();
-                let mut worker_epochs: Vec<usize> = vec![0; worker_count];
-                let mut last_loss: Vec<Option<f32>> = vec![None; worker_count];
-                let mut spinner_i = 0usize;
-                let bar_width = 40usize;
+        let params = py
+            .allow_threads(|| {
+                std::thread::spawn(move || {
+                    let mut rx = session.event_listener();
+                    let mut worker_epochs: Vec<usize> = vec![0; worker_count];
+                    let mut last_loss: Vec<Option<f32>> = vec![None; worker_count];
+                    let mut spinner_i = 0usize;
+                    let bar_width = 40usize;
 
-                println!();
-                println!();
+                    println!();
+                    println!();
 
-                loop {
-                    match rx.blocking_recv() {
-                        Some(TrainingEvent::Loss { worker_id, losses }) => {
-                            for loss in &losses {
-                                if worker_id < worker_epochs.len() {
-                                    worker_epochs[worker_id] += 1;
-                                    last_loss[worker_id] = Some(*loss);
+                    loop {
+                        match rx.blocking_recv() {
+                            Some(TrainingEvent::Loss { worker_id, losses }) => {
+                                for loss in &losses {
+                                    if worker_id < worker_epochs.len() {
+                                        worker_epochs[worker_id] += 1;
+                                        last_loss[worker_id] = Some(*loss);
+                                    }
                                 }
+                                let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
+                                let reported: Vec<f32> =
+                                    last_loss.iter().filter_map(|l| *l).collect();
+                                let avg_loss = reported.iter().sum::<f32>() / reported.len() as f32;
+                                let filled =
+                                    ((current_epoch * bar_width) / max_epochs).min(bar_width);
+                                let spinner = SPINNER[spinner_i % SPINNER.len()];
+                                spinner_i += 1;
+                                print!(
+                                    "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={:.6}\n",
+                                    spinner,
+                                    "█".repeat(filled),
+                                    "░".repeat(bar_width - filled),
+                                    current_epoch,
+                                    max_epochs,
+                                    avg_loss,
+                                );
+                                let _ = std::io::stdout().flush();
                             }
-                            let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
-                            let reported: Vec<f32> =
-                                last_loss.iter().filter_map(|l| *l).collect();
-                            let avg_loss =
-                                reported.iter().sum::<f32>() / reported.len() as f32;
-                            let filled =
-                                ((current_epoch * bar_width) / max_epochs).min(bar_width);
-                            let spinner = SPINNER[spinner_i % SPINNER.len()];
-                            spinner_i += 1;
-                            print!(
-                                "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={:.6}\n",
-                                spinner,
-                                "█".repeat(filled),
-                                "░".repeat(bar_width - filled),
-                                current_epoch,
-                                max_epochs,
-                                avg_loss,
-                            );
-                            let _ = std::io::stdout().flush();
+                            Some(TrainingEvent::Complete(params)) => {
+                                let reported: Vec<f32> =
+                                    last_loss.iter().filter_map(|l| *l).collect();
+                                let avg_loss = if reported.is_empty() {
+                                    0.0
+                                } else {
+                                    reported.iter().sum::<f32>() / reported.len() as f32
+                                };
+                                print!(
+                                    "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={:.6}\n\n",
+                                    "█".repeat(bar_width),
+                                    max_epochs,
+                                    max_epochs,
+                                    avg_loss,
+                                );
+                                let _ = std::io::stdout().flush();
+                                return Ok(params);
+                            }
+                            Some(TrainingEvent::Error(e)) => {
+                                println!();
+                                return Err(e.to_string());
+                            }
+                            Some(_) => continue,
+                            None => return Err("session channel closed unexpectedly".into()),
                         }
-                        Some(TrainingEvent::Complete(params)) => {
-                            let reported: Vec<f32> =
-                                last_loss.iter().filter_map(|l| *l).collect();
-                            let avg_loss = if reported.is_empty() {
-                                0.0
-                            } else {
-                                reported.iter().sum::<f32>() / reported.len() as f32
-                            };
-                            print!(
-                                "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={:.6}\n\n",
-                                "█".repeat(bar_width),
-                                max_epochs,
-                                max_epochs,
-                                avg_loss,
-                            );
-                            let _ = std::io::stdout().flush();
-                            return Ok(params);
-                        }
-                        Some(TrainingEvent::Error(e)) => {
-                            println!();
-                            return Err(e.to_string());
-                        }
-                        Some(_) => continue,
-                        None => return Err("session channel closed unexpectedly".into()),
                     }
-                }
+                })
+                .join()
+                .map_err(|_| "session thread panicked".to_string())?
             })
-            .join()
-            .map_err(|_| "session thread panicked".to_string())?
-        })
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
 
         Ok(TrainedModel { params })
     }
@@ -386,12 +401,7 @@ impl TrainedModel {
         self.params.clone()
     }
 
-    pub fn save(
-        &self,
-        path: &str,
-        output_sizes: Vec<usize>,
-        input_size: usize,
-    ) -> PyResult<()> {
+    pub fn save(&self, path: &str, output_sizes: Vec<usize>, input_size: usize) -> PyResult<()> {
         let mut csv = String::from("layer,type,index,value\n");
         let mut offset = 0;
         let mut prev = input_size;
@@ -400,7 +410,10 @@ impl TrainedModel {
             let w_count = prev * out;
             let b_count = out;
             for i in 0..w_count {
-                csv.push_str(&format!("{layer_i},weight,{i},{}\n", self.params[offset + i]));
+                csv.push_str(&format!(
+                    "{layer_i},weight,{i},{}\n",
+                    self.params[offset + i]
+                ));
             }
             offset += w_count;
             for i in 0..b_count {
@@ -486,7 +499,9 @@ pub fn parameter_server(
                 store: store_cfg,
             },
             dataset: DatasetConfig {
-                src: DatasetSrc::Inline { data: dataset.data.clone() },
+                src: DatasetSrc::Inline {
+                    data: dataset.data.clone(),
+                },
                 x_size: dataset.x_size,
                 y_size: dataset.y_size,
             },
@@ -513,12 +528,13 @@ pub fn orchestrate(
     let worker_count = training.worker_count;
     let training = training.inner.clone();
 
-    let session = py.allow_threads(|| {
-        std::thread::spawn(move || train(model, training).map_err(|e| e.to_string()))
-            .join()
-            .map_err(|_| "thread panicked".to_string())?
-    })
-    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+    let session = py
+        .allow_threads(|| {
+            std::thread::spawn(move || train(model, training).map_err(|e| e.to_string()))
+                .join()
+                .map_err(|_| "thread panicked".to_string())?
+        })
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
 
     Ok(Session {
         inner: Some(session),

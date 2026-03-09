@@ -1,27 +1,25 @@
 {
-  "sequential": {
-    "layers": [
-      {
-        "dense": {
-          "output_size": 8,
-          "init": "kaiming",
-          "act_fn": { "sigmoid": { "amp": 1.0 } }
-        }
-      },
-      {
-        "dense": {
-          "output_size": 4,
-          "init": "kaiming",
-          "act_fn": { "sigmoid": { "amp": 1.0 } }
-        }
-      },
-      {
-        "dense": {
-          "output_size": 1,
-          "init": "kaiming",
-          "act_fn": null
-        }
+  "layers": [
+    {
+      "dense": {
+        "output_size": 8,
+        "init": "kaiming",
+        "act_fn": { "sigmoid": { "amp": 1.0 } }
       }
-    ]
-  }
+    },
+    {
+      "dense": {
+        "output_size": 4,
+        "init": "kaiming",
+        "act_fn": { "sigmoid": { "amp": 1.0 } }
+      }
+    },
+    {
+      "dense": {
+        "output_size": 1,
+        "init": "kaiming",
+        "act_fn": null
+      }
+    }
+  ]
 }
