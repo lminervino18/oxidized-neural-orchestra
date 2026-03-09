@@ -50,6 +50,54 @@ impl Kaiming {
 
 #[pyclass]
 #[derive(Clone)]
+pub struct Xavier;
+
+#[pymethods]
+impl Xavier {
+    #[new]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct Lecun;
+
+#[pymethods]
+impl Lecun {
+    #[new]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct XavierUniform;
+
+#[pymethods]
+impl XavierUniform {
+    #[new]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct LecunUniform;
+
+#[pymethods]
+impl LecunUniform {
+    #[new]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
 pub struct Const {
     value: f32,
 }
@@ -62,6 +110,51 @@ impl Const {
     }
 }
 
+#[pyclass]
+#[derive(Clone)]
+pub struct Uniform {
+    low: f32,
+    high: f32,
+}
+
+#[pymethods]
+impl Uniform {
+    #[new]
+    pub fn new(low: f32, high: f32) -> Self {
+        Self { low, high }
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct UniformInclusive {
+    low: f32,
+    high: f32,
+}
+
+#[pymethods]
+impl UniformInclusive {
+    #[new]
+    pub fn new(low: f32, high: f32) -> Self {
+        Self { low, high }
+    }
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct Normal {
+    mean: f32,
+    std_dev: f32,
+}
+
+#[pymethods]
+impl Normal {
+    #[new]
+    pub fn new(mean: f32, std_dev: f32) -> Self {
+        Self { mean, std_dev }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Layers
 // ---------------------------------------------------------------------------
@@ -69,7 +162,14 @@ impl Const {
 #[derive(Clone)]
 enum PyInit {
     Kaiming,
+    Xavier,
+    Lecun,
+    XavierUniform,
+    LecunUniform,
     Const(f32),
+    Uniform(f32, f32),
+    UniformInclusive(f32, f32),
+    Normal(f32, f32),
 }
 
 #[derive(Clone)]
@@ -100,11 +200,25 @@ impl Dense {
 
         let init = if init.is_instance_of::<Kaiming>() {
             PyInit::Kaiming
+        } else if init.is_instance_of::<Xavier>() {
+            PyInit::Xavier
+        } else if init.is_instance_of::<Lecun>() {
+            PyInit::Lecun
+        } else if init.is_instance_of::<XavierUniform>() {
+            PyInit::XavierUniform
+        } else if init.is_instance_of::<LecunUniform>() {
+            PyInit::LecunUniform
         } else if let Ok(c) = init.extract::<PyRef<Const>>() {
             PyInit::Const(c.value)
+        } else if let Ok(u) = init.extract::<PyRef<Uniform>>() {
+            PyInit::Uniform(u.low, u.high)
+        } else if let Ok(u) = init.extract::<PyRef<UniformInclusive>>() {
+            PyInit::UniformInclusive(u.low, u.high)
+        } else if let Ok(n) = init.extract::<PyRef<Normal>>() {
+            PyInit::Normal(n.mean, n.std_dev)
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be Kaiming() or Const(value)",
+                "init must be one of: Kaiming, Xavier, Lecun, XavierUniform, LecunUniform, Const, Uniform, UniformInclusive, Normal",
             ));
         };
 
@@ -121,11 +235,7 @@ impl Dense {
             }
         };
 
-        Ok(Self {
-            output_size,
-            init,
-            act_fn,
-        })
+        Ok(Self { output_size, init, act_fn })
     }
 }
 
@@ -133,16 +243,19 @@ impl Dense {
     fn to_layer_config(&self) -> LayerConfig {
         let init = match self.init {
             PyInit::Kaiming => ParamGenConfig::Kaiming,
+            PyInit::Xavier => ParamGenConfig::Xavier,
+            PyInit::Lecun => ParamGenConfig::Lecun,
+            PyInit::XavierUniform => ParamGenConfig::XavierUniform,
+            PyInit::LecunUniform => ParamGenConfig::LecunUniform,
             PyInit::Const(v) => ParamGenConfig::Const { value: v },
+            PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low, high },
+            PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low, high },
+            PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean, std_dev },
         };
         let act_fn = self.act_fn.as_ref().map(|a| match a {
             PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
         });
-        LayerConfig::Dense {
-            output_size: self.output_size,
-            init,
-            act_fn,
-        }
+        LayerConfig::Dense { output_size: self.output_size, init, act_fn }
     }
 }
 
@@ -165,11 +278,7 @@ impl Sequential {
             ));
         }
         let layer_configs = layers.iter().map(|l| l.to_layer_config()).collect();
-        Ok(Self {
-            inner: ModelConfig {
-                layers: layer_configs,
-            },
-        })
+        Ok(Self { inner: ModelConfig { layers: layer_configs } })
     }
 }
 
@@ -195,11 +304,7 @@ impl InlineDataset {
         let y_size = NonZeroUsize::new(y_size).ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("y_size must be greater than 0")
         })?;
-        Ok(Self {
-            data,
-            x_size,
-            y_size,
-        })
+        Ok(Self { data, x_size, y_size })
     }
 }
 
@@ -334,7 +439,8 @@ impl Session {
                                 let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
                                 let reported: Vec<f32> =
                                     last_loss.iter().filter_map(|l| *l).collect();
-                                let avg_loss = reported.iter().sum::<f32>() / reported.len() as f32;
+                                let avg_loss =
+                                    reported.iter().sum::<f32>() / reported.len() as f32;
                                 let filled =
                                     ((current_epoch * bar_width) / max_epochs).min(bar_width);
                                 let spinner = SPINNER[spinner_i % SPINNER.len()];
@@ -410,10 +516,7 @@ impl TrainedModel {
             let w_count = prev * out;
             let b_count = out;
             for i in 0..w_count {
-                csv.push_str(&format!(
-                    "{layer_i},weight,{i},{}\n",
-                    self.params[offset + i]
-                ));
+                csv.push_str(&format!("{layer_i},weight,{i},{}\n", self.params[offset + i]));
             }
             offset += w_count;
             for i in 0..b_count {
@@ -499,9 +602,7 @@ pub fn parameter_server(
                 store: store_cfg,
             },
             dataset: DatasetConfig {
-                src: DatasetSrc::Inline {
-                    data: dataset.data.clone(),
-                },
+                src: DatasetSrc::Inline { data: dataset.data.clone() },
                 x_size: dataset.x_size,
                 y_size: dataset.y_size,
             },
@@ -552,7 +653,14 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Dense>()?;
     m.add_class::<Sigmoid>()?;
     m.add_class::<Kaiming>()?;
+    m.add_class::<Xavier>()?;
+    m.add_class::<Lecun>()?;
+    m.add_class::<XavierUniform>()?;
+    m.add_class::<LecunUniform>()?;
     m.add_class::<Const>()?;
+    m.add_class::<Uniform>()?;
+    m.add_class::<UniformInclusive>()?;
+    m.add_class::<Normal>()?;
     m.add_class::<InlineDataset>()?;
     m.add_class::<GradientDescent>()?;
     m.add_class::<BarrierSync>()?;
