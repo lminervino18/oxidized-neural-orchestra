@@ -28,7 +28,7 @@ impl Dataset {
 
         Self {
             // SAFETY: row_size is a positive integer.
-            rows: src.len() / row_size.get(),
+            rows: src.size() / row_size.get(),
             src,
             x_size: x_size.get(),
             row_size: row_size.get(),

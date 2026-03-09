@@ -1,10 +1,21 @@
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Cursor, Error, ErrorKind, Result};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufWriter};
 
 use crate::{
     OnoReceiver,
     msg::{Msg, Payload},
 };
+
+/// Helper funciton for wrapping the dataset's source buffer in a writeable bytes cursor.
+///
+/// # Arguments
+/// * `dataset_raw`: The `f32` dataset buffer.
+///
+/// # Returns a `Cursor<&mut [u8]>` wrapping the buffer.
+pub fn get_dataset_cursor(dataset_raw: &mut [f32]) -> Cursor<&mut [u8]> {
+    let dataset_bytes: &mut [u8] = bytemuck::cast_slice_mut(dataset_raw);
+    Cursor::new(dataset_bytes)
+}
 
 /// Receives chunks of the dataset and writes them into a storage.
 ///

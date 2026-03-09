@@ -20,10 +20,9 @@ impl DatasetSrc {
 
 impl DatasetSrc {
     /// Returns the amount of values within the dataset source.
-    pub fn len(&self) -> usize {
+    pub fn size(&self) -> usize {
         match self {
             DatasetSrc::Inline(src) => src.len(),
-            // DatasetSrc::Stream(_src) => todo!(),
         }
     }
 
@@ -34,7 +33,6 @@ impl DatasetSrc {
     pub fn shuffle<Rn: Rng>(&mut self, rows: usize, row_size: usize, rng: &mut Rn) {
         match self {
             DatasetSrc::Inline(src) => src.shuffle(rows, row_size, rng),
-            // DatasetSrc::Stream(_src) => todo!(),
         }
     }
 
@@ -48,7 +46,6 @@ impl DatasetSrc {
     pub fn raw_batch(&self, range: Range<usize>) -> &[f32] {
         match self {
             DatasetSrc::Inline(src) => src.raw_batch(range),
-            // DatasetSrc::Stream(_src) => todo!(),
         }
     }
 }

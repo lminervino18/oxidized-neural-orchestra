@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bytemuck = "1.25.0"
 comms = { path = "../comms" }
 env_logger = "0.11.8"
 futures = "0.3.32"
