@@ -71,5 +71,6 @@ pub struct TrainingConfig<A: ToSocketAddrs> {
     pub batch_size: NonZeroUsize,
     pub max_epochs: NonZeroUsize,
     pub offline_epochs: usize,
+    #[serde(default)]
     pub seed: Option<u64>,
 }

@@ -16,6 +16,5 @@
   "loss_fn": "mse",
   "batch_size": 4,
   "max_epochs": 500,
-  "offline_epochs": 0,
-  "seed": 42
+  "offline_epochs": 0
 }
