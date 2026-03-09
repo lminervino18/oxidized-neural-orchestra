@@ -3,6 +3,7 @@ use comms::specs::worker::WorkerSpec;
 use super::worker::Worker;
 use machine_learning::training::TrainerBuilder;
 
+#[derive(Default)]
 pub struct WorkerBuilder;
 
 impl WorkerBuilder {

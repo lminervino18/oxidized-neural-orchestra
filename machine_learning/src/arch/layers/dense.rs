@@ -1,40 +1,31 @@
 use ndarray::{linalg, prelude::*};
 
 use super::InplaceReshape;
-use crate::{MlErr, Result, arch::activations::ActFn};
+use crate::{MlErr, Result};
 
-/// Optimizations:
-///   1. Find a way to not copy `x` in each `Dense::forward` call.
-///   2. Find a way to sum up the rows of `d` in `Dense::backward` in parallel to write them to `b`.
-///   3. Maybe make the a = f(z) computation parallel.
-///   4. Maybe make the d *= df(z) computation parallel.
 #[derive(Clone)]
 pub struct Dense {
     dim: (usize, usize),
-    act_fn: Option<ActFn>,
     size: usize,
 
     // Forward metadata
-    x: Array2<f32>,
-    z: Array2<f32>,
-    a: Array2<f32>,
+    input: Array2<f32>,
+    w_sums: Array2<f32>,
 
     // Backward metadata
-    d: Array2<f32>,
+    delta: Array2<f32>,
 }
 
 impl Dense {
-    pub fn new(dim: (usize, usize), act_fn: Option<ActFn>) -> Self {
+    pub fn new(dim: (usize, usize)) -> Self {
         let zeros = Array2::zeros((1, 1));
 
         Self {
             dim,
             size: (dim.0 + 1) * dim.1,
-            act_fn,
-            x: zeros.clone(),
-            z: zeros.clone(),
-            a: zeros.clone(),
-            d: zeros,
+            input: zeros.clone(),
+            w_sums: zeros.clone(),
+            delta: zeros,
         }
     }
 
@@ -43,44 +34,34 @@ impl Dense {
     }
 
     pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> Result<ArrayView2<'_, f32>> {
+        self.input.reshape_inplace(x.raw_dim());
+        self.input.assign(&x);
+
         let (w, b) = self.view_params(params)?;
-        let shape = (x.nrows(), self.dim.1);
+        let outer_shape = (x.nrows(), self.dim.1);
 
-        self.z = self.z.reshape_inplace(shape);
-        linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.z);
-        self.z += &b;
+        self.w_sums.reshape_inplace(outer_shape);
+        linalg::general_mat_mul(1.0, &x, &w, 0.0, &mut self.w_sums);
+        self.w_sums += &b;
 
-        // TODO: See if this `to_owned` call can be removed.
-        self.x = x.to_owned();
-
-        let Some(ref act_fn) = self.act_fn else {
-            return Ok(self.z.view());
-        };
-
-        self.a = self.a.reshape_inplace(shape);
-        self.a.zip_mut_with(&self.z, |a, &z| *a = act_fn.f(z));
-        Ok(self.a.view())
+        Ok(self.w_sums.view())
     }
 
     pub fn backward(
         &mut self,
         params: &[f32],
         grad: &mut [f32],
-        mut d: ArrayViewMut2<f32>,
+        d: ArrayViewMut2<f32>,
     ) -> Result<ArrayViewMut2<'_, f32>> {
-        if let Some(act_fn) = &self.act_fn {
-            d.zip_mut_with(&self.z, |d, &z| *d *= act_fn.df(z));
-        }
-
         let (mut dw, mut db) = self.view_grad(grad)?;
-        linalg::general_mat_mul(1.0, &self.x.t(), &d, 0.0, &mut dw);
-        db.view_mut().assign(&d.sum_axis(Axis(0)));
+        linalg::general_mat_mul(1.0, &self.input.t(), &d, 0.0, &mut dw);
+        db.assign(&d.sum_axis(Axis(0)));
 
         let (w, _) = self.view_params(params)?;
-        self.d = self.d.reshape_inplace((d.nrows(), w.nrows()));
-        linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.d);
+        self.delta.reshape_inplace((d.nrows(), w.nrows()));
+        linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.delta);
 
-        Ok(self.d.view_mut())
+        Ok(self.delta.view_mut())
     }
 
     /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
@@ -142,5 +123,84 @@ impl Dense {
         let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
 
         Ok((weights, biases))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dense_3by2_forward() {
+        let mut dense = Dense::new((3, 2));
+        /*      [1 2
+         *  W =  3 4 , B = [7 8]
+         *       5 6]
+         ***/
+        let params = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+
+        /* x =  [9 10 11]
+         ***/
+        let x = ArrayView2::from_shape((1, 3), &[9.0, 10.0, 11.0]).unwrap();
+
+        /* x * W + b
+         ***/
+        let expected = ArrayView2::from_shape(
+            (1, 2),
+            &[
+                1. * 9. + 3. * 10. + 11. * 5. + 7.,
+                2. * 9. + 4. * 10. + 11. * 6. + 8.,
+            ],
+        )
+        .unwrap();
+
+        let y_pred = dense.forward(&params, x).unwrap();
+
+        assert_eq!(y_pred, expected);
+    }
+
+    #[test]
+    fn test_dense_3by2_backward() {
+        use std::f32;
+        unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+        let sigmoid = |z: f32| 1.0 / (1.0 + (-z).exp());
+        let sigmoid_prime = |z: f32| sigmoid(z) * (1.0 - sigmoid(z));
+
+        let mut dense = Dense::new((3, 2));
+        /*      [.1 .2
+         *  W =  .3 .4 , B = [.7 .8]
+         *       .5 .6]
+         ***/
+        let params = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+        let mut grad = vec![0.0; params.len()];
+
+        /* x =  [.9 .10 .11]
+         ***/
+        let x =
+            ArrayView2::from_shape((1, 3), &[0.9, 0.10, 0.11]).expect("failed building x test var");
+        let y_pred = dense.forward(&params, x).expect("dense failed to forward");
+
+        /* d = sigmoid'(y_pred) ~= [.208 .189]
+         ***/
+        let mut d = y_pred.mapv(sigmoid_prime);
+        dbg!(&d);
+
+        let (w, _) = dense.view_params(&params).expect("failed at view_params");
+
+        let expected_bp = d.dot(&w.t());
+        let expected_db = d.sum_axis(Axis(0));
+        let expected_dw = x.t().dot(&d);
+
+        let mut dense2 = dense.clone();
+
+        let bp = dense2
+            .backward(&params, &mut grad, d.view_mut())
+            .expect("dense failed to backward");
+        let (dw, db) = dense.view_params(&grad).unwrap();
+
+        assert_eq!(bp, expected_bp);
+        assert_eq!(db, expected_db);
+        assert_eq!(dw, expected_dw);
     }
 }

@@ -19,13 +19,6 @@ pub enum LayerSpec {
     },
 }
 
-/// The specification for the `Model` trait.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ModelSpec {
-    Sequential { layers: Vec<LayerSpec> },
-}
-
 /// The specification for the `Optimizer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -64,7 +57,7 @@ pub enum LossFnSpec {
 /// The specification for the `Trainer` struct.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainerSpec {
-    pub model: ModelSpec,
+    pub layers: Vec<LayerSpec>,
     pub optimizer: OptimizerSpec,
     pub dataset: DatasetSpec,
     pub loss_fn: LossFnSpec,

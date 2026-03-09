@@ -43,8 +43,7 @@ where
     /// Creates a new `Middleware`.
     ///
     /// # Arguments
-    /// * `server_ordering`: The ordering of the servers to know which layer's
-    ///                      parameters correspond to which server.
+    /// * `server_ordering`: The ordering of the servers to know which layer's parameters correspond to which server.
     ///
     /// # Returns
     /// A new `Middleware` instance.

@@ -1,26 +1,46 @@
 use ndarray::prelude::*;
 
-use super::Dense;
-use crate::{Result, arch::activations::ActFn};
+use super::{Dense, Sigmoid};
+use crate::Result;
 
-/// A type of model layer.
-#[derive(Clone)]
-pub enum Layer {
-    Dense(Dense),
+mod private {
+    use super::*;
+
+    /// An indirection layer to prevent leaking the
+    /// inner enum representation to the upper mods.
+    #[derive(Clone)]
+    pub(super) enum Inner {
+        Dense(Dense),
+        Sigmoid(Sigmoid),
+    }
 }
-use Layer::*;
+use private::Inner::{self, *};
+
+/// Represents the different types of layers in a model.
+#[derive(Clone)]
+pub struct Layer(Inner);
 
 impl Layer {
-    /// Returns a new `Layer::Dense` layer.
+    /// Creates a new `Layer::Dense` layer.
     ///
     /// # Arguments
     /// * `dim` - The dimension of the layer: (input dimension, and output dimension)
-    /// * `act_fn` - The layer's activation function, can be `None` if the output is supposed to be the layer's weighted sums z.
     ///
     /// # Returns
     /// A new `Layer` instance.
-    pub fn dense<A: Into<Option<ActFn>>>(dim: (usize, usize), act_fn: A) -> Self {
-        Self::Dense(Dense::new(dim, act_fn.into()))
+    pub fn dense(dim: (usize, usize)) -> Self {
+        Self(Inner::Dense(Dense::new(dim)))
+    }
+
+    /// Creates a new `Layer::Sigmoid` layer.
+    ///
+    /// # Arguments
+    /// * `amp` - The amlitude of the sigmoid.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
+    pub fn sigmoid(amp: f32) -> Self {
+        Self(Inner::Sigmoid(Sigmoid::new(amp)))
     }
 
     /// The size of the layer.
@@ -28,8 +48,9 @@ impl Layer {
     /// # Returns
     /// The amount of parameters the layer holds.
     pub fn size(&self) -> usize {
-        match self {
+        match &self.0 {
             Dense(layer) => layer.size(),
+            Sigmoid(layer) => layer.size(),
         }
     }
 
@@ -46,8 +67,9 @@ impl Layer {
         params: &[f32],
         x: ArrayView2<f32>,
     ) -> Result<ArrayView2<'a, f32>> {
-        match self {
+        match &mut self.0 {
             Dense(layer) => layer.forward(params, x),
+            Sigmoid(layer) => layer.forward(x),
         }
     }
 
@@ -65,10 +87,11 @@ impl Layer {
         &'a mut self,
         params: &[f32],
         grad: &mut [f32],
-        d: ArrayViewMut2<f32>,
+        d: ArrayViewMut2<'a, f32>,
     ) -> Result<ArrayViewMut2<'a, f32>> {
-        match self {
+        match &mut self.0 {
             Dense(layer) => layer.backward(params, grad, d),
+            Sigmoid(layer) => layer.backward(d),
         }
     }
 }
