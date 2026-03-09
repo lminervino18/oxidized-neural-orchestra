@@ -2,6 +2,7 @@ use futures::future;
 use log::{debug, error, info, warn};
 use std::{io, net::SocketAddr, thread};
 use tokio::{
+    fs::File,
     io::{AsyncReadExt, AsyncSeekExt},
     net::{
         TcpStream,
@@ -252,7 +253,7 @@ impl Session {
             // TODO: ver si esto no queda mejor en send_dataset con un match
             match partition {
                 Partition::Local { path, offset, size } => {
-                    let mut fd = tokio::fs::File::open(path).await?;
+                    let mut fd = File::open(path).await?;
                     fd.seek(io::SeekFrom::Start(offset)).await?;
                     let mut fd = fd.take(size);
 

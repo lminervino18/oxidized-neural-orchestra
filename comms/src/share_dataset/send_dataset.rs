@@ -21,7 +21,7 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut buf = vec![0u8; chunk];
+    let mut buf = vec![0; chunk];
     let mut reader = BufReader::new(dataset);
 
     loop {

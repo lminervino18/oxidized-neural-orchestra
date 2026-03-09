@@ -30,14 +30,11 @@ where
     while (received as u64) < size {
         let msg: Msg = receiver.recv_into(&mut buf).await?;
 
-        let chunk = match msg {
-            Msg::Data(Payload::Datachunk(chunk)) => chunk,
-            _ => {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!("expected Datachunk, got: {msg:?}"),
-                ));
-            }
+        let Msg::Data(Payload::Datachunk(chunk)) = msg else {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("expected Datachunk, got: {msg:?}"),
+            ));
         };
 
         let bytes = bytemuck::cast_slice(chunk);
