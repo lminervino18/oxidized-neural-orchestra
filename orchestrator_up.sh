@@ -10,16 +10,6 @@ MODE=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print('releas
 WORKERS=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print(c['workers'])")
 SERVERS=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print(c['servers'])")
 
-WORKER_ADDRS=$(python3 -c "
-n=$WORKERS
-print(','.join(f'worker-{i}:{50000+i}' for i in range(n)))
-")
-
-SERVER_ADDRS=$(python3 -c "
-n=$SERVERS
-print(','.join(f'server-{i}:{40000+i}' for i in range(n)))
-")
-
 case "$MODULE" in
     orchestrator)
         DOCKERFILE="orchestrator/Dockerfile"
@@ -45,9 +35,9 @@ docker build               \
 
 echo "Running $IMAGE_NAME container..."
 
-docker run --rm                      \
-    --name $IMAGE_NAME               \
-    --network $NETWORK_NAME          \
-    -e WORKER_ADDRS="$WORKER_ADDRS"  \
-    -e SERVER_ADDRS="$SERVER_ADDRS"  \
+docker run --rm                  \
+    --name $IMAGE_NAME           \
+    --network $NETWORK_NAME      \
+    -e WORKERS="$WORKERS"        \
+    -e SERVERS="$SERVERS"        \
     $IMAGE_NAME

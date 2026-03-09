@@ -11,15 +11,28 @@ from orchestra.optimizers import GradientDescent
 from orchestra.sync import BarrierSync
 from orchestra.store import BlockingStore
 
+
+def _make_addrs(n: int, base_port: int, host: str = "worker") -> list[str]:
+    return [f"{host}-{i}:{base_port + i}" for i in range(n)]
+
+
+_workers = int(os.environ.get("WORKERS", "3"))
+_servers = int(os.environ.get("SERVERS", "2"))
+
 WORKER_ADDRS = os.environ.get(
     "WORKER_ADDRS",
-    "127.0.0.1:50000,127.0.0.1:50001,127.0.0.1:50002",
+    ",".join(_make_addrs(_workers, 50000, "127.0.0.1")),
 ).split(",")
 
 SERVER_ADDRS = os.environ.get(
     "SERVER_ADDRS",
-    "127.0.0.1:40000,127.0.0.1:40001",
+    ",".join(_make_addrs(_servers, 40000, "127.0.0.1")),
 ).split(",")
+
+# In Docker, use container hostnames instead of localhost
+if os.environ.get("WORKERS"):
+    WORKER_ADDRS = _make_addrs(_workers, 50000, "worker")
+    SERVER_ADDRS = _make_addrs(_servers, 40000, "server")
 
 DATA = [
     1.0, 2.0,
