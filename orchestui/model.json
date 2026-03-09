@@ -17,8 +17,7 @@
     {
       "dense": {
         "output_size": 1,
-        "init": "kaiming",
-        "act_fn": null
+        "init": "kaiming"
       }
     }
   ]

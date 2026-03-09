@@ -31,6 +31,7 @@ pub enum LayerConfig {
     Dense {
         output_size: NonZeroUsize,
         init: ParamGenConfig,
+        #[serde(default)]
         act_fn: Option<ActFnConfig>,
     },
 }
