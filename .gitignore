@@ -41,3 +41,6 @@ build/
 
 # Generated compose files
 compose.yml
+
+# Model dumps
+*.safetensors

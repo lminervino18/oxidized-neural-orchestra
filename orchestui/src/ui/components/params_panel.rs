@@ -16,7 +16,8 @@ use crate::ui::theme::Theme;
 /// * `area` - The area to render into.
 /// * `state` - The current training screen state.
 pub fn draw_params(f: &mut Frame, area: Rect, state: &TrainingState) {
-    let params = state.final_params.as_ref().unwrap();
+    let trained = state.final_trained.as_ref().unwrap();
+    let params = trained.params();
 
     let preview: String = params
         .iter()
@@ -42,7 +43,7 @@ pub fn draw_params(f: &mut Frame, area: Rect, state: &TrainingState) {
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Theme::accent_magenta())
-                    .title(" Final Parameters ")
+                    .title(" Final Parameters — [s] save ")
                     .title_style(Theme::accent_magenta().add_modifier(Modifier::BOLD)),
             )
             .wrap(Wrap { trim: true }),
