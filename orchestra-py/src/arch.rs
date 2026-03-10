@@ -75,7 +75,7 @@ impl Dense {
             PyInit::Normal(n.mean, n.std_dev)
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be one of: Kaiming, Xavier, Lecun, XavierUniform, LecunUniform, Const, Uniform, UniformInclusive, Normal",
+                "init must be a parameter initializer",
             ));
         };
 
@@ -86,7 +86,7 @@ impl Dense {
                     Some(PyActFn::Sigmoid(s.amp))
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "act_fn must be Sigmoid(amp) or None",
+                        "act_fn must be an activation function or None",
                     ));
                 }
             }

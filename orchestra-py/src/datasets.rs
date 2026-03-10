@@ -1,5 +1,6 @@
 use std::num::NonZeroUsize;
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 /// An inline dataset defined directly in Python.
@@ -20,12 +21,10 @@ pub struct InlineDataset {
 impl InlineDataset {
     #[new]
     pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> PyResult<Self> {
-        let x_size = NonZeroUsize::new(x_size).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("x_size must be greater than 0")
-        })?;
-        let y_size = NonZeroUsize::new(y_size).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("y_size must be greater than 0")
-        })?;
+        let x_size = NonZeroUsize::new(x_size)
+            .ok_or_else(|| PyValueError::new_err("x_size must be greater than 0"))?;
+        let y_size = NonZeroUsize::new(y_size)
+            .ok_or_else(|| PyValueError::new_err("y_size must be greater than 0"))?;
         Ok(Self { data, x_size, y_size })
     }
 }
