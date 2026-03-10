@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use rand::Rng;
 use tokio::io::{self, duplex};
 
 use crate::{channel, recv_dataset::recv_dataset, send_dataset::send_dataset};
@@ -16,8 +15,8 @@ async fn test_share_dataset() {
     let (mut receiver, mut sender) = channel(rx, tx);
 
     let chunk = 4;
-    let size = 127 * std::mem::size_of::<f32>() as u64;
-    let dataset: Vec<u8> = (0..size).map(|_| rand::rng().random()).collect();
+    let size = 127 * size_of::<f32>() as u64;
+    let dataset: Vec<u8> = (0..size).map(|i| i as u8).collect();
 
     let mut recvr_storage = vec![];
     let mut sender_storage: &[u8] = &dataset;
