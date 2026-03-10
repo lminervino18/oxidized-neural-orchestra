@@ -297,7 +297,7 @@ impl ServerBuilder {
         let cores = thread::available_parallelism().unwrap_or(DEFAULT_CORE_COUNT);
         let max_shard_amount = cores.saturating_mul(SHARD_AMOUNT_FACTOR);
         let shard_amount = nparams.min(max_shard_amount);
-        let shard_size = shard_amount.div_ceil(nparams);
+        let shard_size = NonZeroUsize::new(shard_amount.get().div_ceil(nparams.get())).unwrap();
 
         match spec.store {
             StoreSpec::Blocking => {

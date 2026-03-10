@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use comms::{OnoReceiver, OnoSender};
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
-    dataset::Dataset,
+    dataset::{Dataset, DatasetSrc},
     optimization::{GradientDescent, Optimizer},
     training::BackpropTrainer,
 };
@@ -12,6 +12,7 @@ use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 use comms::msg::{Command, Msg, Payload};
 use worker::{middleware::Middleware, worker::Worker};
 
+#[allow(clippy::type_complexity)]
 fn channel_pair() -> (
     (
         OnoReceiver<ReadHalf<DuplexStream>>,
@@ -107,7 +108,11 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let trainer = BackpropTrainer::new(
         model,
         vec![GradientDescent::new(0.1)],
-        Dataset::new(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0], x_size, x_size),
+        Dataset::new(
+            DatasetSrc::inmem(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0]),
+            x_size,
+            x_size,
+        ),
         Mse::new(),
         0,
         NonZeroUsize::new(MAX_EPOCHS).unwrap(),
