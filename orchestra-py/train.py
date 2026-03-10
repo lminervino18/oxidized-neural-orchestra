@@ -95,7 +95,9 @@ def main() -> None:
         params = trained.weights()
         print_params(params, [8, 4, 1], input_size=1)
         trained.save("weights.csv", output_sizes=[8, 4, 1], input_size=1)
-        print("\nweights saved to weights.csv")
+        print("weights saved to weights.csv")
+        trained.save_safetensors("model.safetensors")
+        print("model saved to model.safetensors")
     except RuntimeError as e:
         print(f"training failed: {e}", file=sys.stderr)
         sys.exit(1)
