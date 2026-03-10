@@ -1,4 +1,4 @@
-use futures::future;
+use futures::future::{self, join_all};
 use log::{debug, error, info, warn};
 use std::{io, net::SocketAddr, thread};
 use tokio::{
@@ -239,36 +239,40 @@ impl Session {
         partitions: Vec<Partition<'a>>,
     ) -> Result<Vec<(NetRx, NetTx)>> {
         const CHUNK_SIZE: usize = 8192; // TODO: mover este 8kb o determinarlo
-        let mut channels = Vec::with_capacity(workers.len());
 
-        for ((addr, spec), partition) in workers.into_iter().zip(partitions) {
-            debug!("connecting to worker at {addr}");
+        let creations = workers
+            .into_iter()
+            .zip(partitions)
+            .map(|((addr, spec), partition)| {
+                debug!("connecting to worker at {addr}");
+                async move {
+                    let (rx, mut tx) = Self::open_channel(addr)
+                        .await
+                        .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
-            let (rx, mut tx) = Self::open_channel(addr)
-                .await
-                .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+                    tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-            tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+                    match partition {
+                        Partition::Local { path, offset, size } => {
+                            let mut fd = File::open(path).await?;
+                            fd.seek(io::SeekFrom::Start(offset)).await?;
+                            let mut fd = fd.take(size);
 
-            // TODO: ver si esto no queda mejor en send_dataset con un match
-            match partition {
-                Partition::Local { path, offset, size } => {
-                    let mut fd = File::open(path).await?;
-                    fd.seek(io::SeekFrom::Start(offset)).await?;
-                    let mut fd = fd.take(size);
+                            send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
+                        }
+                        Partition::Inline { data } => {
+                            let msg = Msg::Data(Payload::Datachunk(data));
 
-                    send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
+                            tx.send(&msg).await?;
+                        }
+                    }
+
+                    info!("worker at {addr} ready");
+                    Ok::<_, OrchErr>((rx, tx))
                 }
-                Partition::Inline { data } => {
-                    let msg = Msg::Data(Payload::Datachunk(data));
+            });
 
-                    tx.send(&msg).await?;
-                }
-            }
-
-            info!("worker at {addr} ready");
-            channels.push((rx, tx));
-        }
+        let channels = future::try_join_all(creations).await?;
 
         Ok(channels)
     }

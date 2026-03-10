@@ -18,5 +18,4 @@ echo "Running Orchestrator Container..."
 docker run --rm             \
     --name orchestrator     \
     --network $NETWORK_NAME \
-    -e RUST_LOG=$MODE \
     $IMAGE_NAME
