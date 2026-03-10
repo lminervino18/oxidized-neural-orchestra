@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use serde::{Deserialize, Serialize};
 
-use super::machine_learning::TrainerSpec;
+use super::machine_learning::{DatasetSpec, TrainerSpec};
 
 /// Distributed training algorithm selection.
 ///
@@ -22,5 +22,6 @@ pub enum AlgorithmSpec {
 pub struct WorkerSpec {
     pub worker_id: usize,
     pub trainer: TrainerSpec,
+    pub dataset: DatasetSpec,
     pub algorithm: AlgorithmSpec,
 }
