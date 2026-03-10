@@ -240,12 +240,12 @@ impl Session {
     ) -> Result<Vec<(NetRx, NetTx)>> {
         const CHUNK_SIZE: usize = 8192; // TODO: mover este 8kb o determinarlo
 
-        let creations = workers
-            .into_iter()
-            .zip(partitions)
-            .map(|((addr, spec), partition)| {
-                debug!("connecting to worker at {addr}");
-                async move {
+        let futs =
+            workers
+                .into_iter()
+                .zip(partitions)
+                .map(|((addr, spec), partition)| async move {
+                    debug!("connecting to worker at {addr}");
                     let (rx, mut tx) = Self::open_channel(addr)
                         .await
                         .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
@@ -269,10 +269,9 @@ impl Session {
 
                     info!("worker at {addr} ready");
                     Ok::<_, OrchErr>((rx, tx))
-                }
-            });
+                });
 
-        let channels = future::try_join_all(creations).await?;
+        let channels = future::try_join_all(futs).await?;
 
         Ok(channels)
     }
