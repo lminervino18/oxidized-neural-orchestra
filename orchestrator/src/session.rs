@@ -7,7 +7,6 @@ use comms::{
 };
 use futures::future;
 use log::{debug, error, info, warn};
-use safetensors::tensor::SafeTensors;
 use tokio::{
     net::{
         TcpStream,
@@ -58,59 +57,59 @@ impl TrainedModel {
     /// # Errors
     /// Returns an `OrchErr` if the file cannot be written or the parameter
     /// buffer does not match the model architecture.
-    pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
-        use safetensors::tensor::TensorView;
-        use safetensors::Dtype;
+   pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
+    use safetensors::Dtype;
+    use safetensors::tensor::TensorView;
 
-        let mut tensors: Vec<(String, TensorView)> = Vec::new();
-        let mut offset = 0;
-        let mut prev = self.input_size;
+    let mut tensors: Vec<(String, TensorView)> = Vec::new();
+    let mut offset = 0;
+    let mut prev = self.input_size;
 
-        // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
-        // alignment is valid, and the slice is live for the duration of this function.
-        let params_bytes = unsafe {
-            std::slice::from_raw_parts(
-                self.params.as_ptr() as *const u8,
-                self.params.len() * 4,
-            )
-        };
+    // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
+    // alignment is valid, and the slice is live for the duration of this function.
+    let params_bytes = unsafe {
+        std::slice::from_raw_parts(
+            self.params.as_ptr() as *const u8,
+            self.params.len() * 4,
+        )
+    };
 
-        for (i, layer) in self.model.layers.iter().enumerate() {
-            let LayerConfig::Dense { output_size, .. } = layer;
-            let out = output_size.get();
-            let w_count = prev * out;
-            let b_count = out;
+    for (i, layer) in self.model.layers.iter().enumerate() {
+        let LayerConfig::Dense { output_size, .. } = layer;
+        let out = output_size.get();
+        let w_count = prev * out;
+        let b_count = out;
 
-            let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];
-            tensors.push((
-                format!("layer_{i}.weight"),
-                TensorView::new(Dtype::F32, vec![prev, out], w_bytes)
-                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
-            ));
-            offset += w_count;
+        let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];
+        tensors.push((
+            format!("layer_{i}.weight"),
+            TensorView::new(Dtype::F32, vec![prev, out], w_bytes)
+                .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
+        ));
+        offset += w_count;
 
-            let b_bytes = &params_bytes[offset * 4..(offset + b_count) * 4];
-            tensors.push((
-                format!("layer_{i}.bias"),
-                TensorView::new(Dtype::F32, vec![out], b_bytes)
-                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
-            ));
-            offset += b_count;
+        let b_bytes = &params_bytes[offset * 4..(offset + b_count) * 4];
+        tensors.push((
+            format!("layer_{i}.bias"),
+            TensorView::new(Dtype::F32, vec![out], b_bytes)
+                .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
+        ));
+        offset += b_count;
 
-            prev = out;
-        }
-
-        let tensor_map: Vec<(&str, TensorView)> =
-            tensors.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
-
-        safetensors::tensor::serialize_to_file(&tensor_map, &None, path.as_ref())
-            .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?;
-
-        info!("model saved to {}", path.as_ref().display());
-        Ok(())
+        prev = out;
     }
-}
 
+    safetensors::tensor::serialize_to_file(
+        tensors.iter().map(|(k, v)| (k.as_str(), v.clone())),
+        &None,
+        path.as_ref(),
+    )
+    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?;
+
+    info!("model saved to {}", path.as_ref().display());
+    Ok(())
+}
+}
 /// An event produced during a training session.
 #[derive(Debug)]
 pub enum TrainingEvent {
