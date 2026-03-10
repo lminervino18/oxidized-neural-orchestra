@@ -25,6 +25,10 @@ impl InlineDataset {
             .ok_or_else(|| PyValueError::new_err("x_size must be greater than 0"))?;
         let y_size = NonZeroUsize::new(y_size)
             .ok_or_else(|| PyValueError::new_err("y_size must be greater than 0"))?;
-        Ok(Self { data, x_size, y_size })
+        Ok(Self {
+            data,
+            x_size,
+            y_size,
+        })
     }
 }

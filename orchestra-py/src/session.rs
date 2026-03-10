@@ -36,7 +36,10 @@ impl TrainedModel {
             let w_count = prev * out;
             let b_count = out;
             for i in 0..w_count {
-                csv.push_str(&format!("{layer_i},weight,{i},{}\n", self.params[offset + i]));
+                csv.push_str(&format!(
+                    "{layer_i},weight,{i},{}\n",
+                    self.params[offset + i]
+                ));
             }
             offset += w_count;
             for i in 0..b_count {
@@ -102,8 +105,7 @@ impl Session {
                                 let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
                                 let reported: Vec<f32> =
                                     last_loss.iter().filter_map(|l| *l).collect();
-                                let avg_loss =
-                                    reported.iter().sum::<f32>() / reported.len() as f32;
+                                let avg_loss = reported.iter().sum::<f32>() / reported.len() as f32;
                                 let filled =
                                     ((current_epoch * bar_width) / max_epochs).min(bar_width);
                                 let spinner = SPINNER[spinner_i % SPINNER.len()];

@@ -105,7 +105,9 @@ pub fn parameter_server(
                 store: store_cfg,
             },
             dataset: DatasetConfig {
-                src: DatasetSrc::Inline { data: dataset.data.clone() },
+                src: DatasetSrc::Inline {
+                    data: dataset.data.clone(),
+                },
                 x_size: dataset.x_size,
                 y_size: dataset.y_size,
             },
