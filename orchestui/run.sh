@@ -42,7 +42,7 @@ while IFS= read -r addr; do
   PORT=$(echo "$addr" | cut -d: -f2)
   setsid gnome-terminal --title="worker-$i" -- bash -c "
     cd $ROOT
-    PORT=$PORT RUST_LOG=debug cargo run -p worker
+    PORT=$PORT RUST_BACKTRACE=1 RUST_LOG=debug cargo run -p worker
     exec bash
   " &
   i=$((i + 1))

@@ -47,6 +47,6 @@ compose.yml
 model.json
 training.json
 
-# Dataset binary
-data/dataset
-
+# Data directory contents (datasets, downloads, generated files)
+data/*
+!data/.gitkeep
