@@ -2,20 +2,44 @@
 
 set -e
 
-IMAGE_NAME="orchestrator"
+MODULE="${1:-orchestrator}"
 NETWORK_NAME="distributed-training_training-network"
-MODE="debug" # or "release"
+CONFIG_PATH="docker/config.json"
 
-echo "Building Orchestrator Image ($MODE)..."
+MODE=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print('release' if c['release'] else 'debug')")
+WORKERS=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print(c['workers'])")
+SERVERS=$(python3 -c "import json; c=json.load(open('$CONFIG_PATH')); print(c['servers'])")
+
+case "$MODULE" in
+    orchestrator)
+        DOCKERFILE="orchestrator/Dockerfile"
+        IMAGE_NAME="orchestrator"
+        ;;
+    orchestra-py)
+        DOCKERFILE="orchestra-py/Dockerfile"
+        IMAGE_NAME="orchestra-py"
+        ;;
+    *)
+        echo "Unknown module: $MODULE"
+        echo "Usage: $0 [orchestrator|orchestra-py]"
+        exit 1
+        ;;
+esac
+
+echo "Building $IMAGE_NAME image ($MODE)..."
 
 docker build               \
     --build-arg MODE=$MODE \
     -t $IMAGE_NAME         \
-    -f orchestrator/Dockerfile .
+    -f $DOCKERFILE .
 
-echo "Running Orchestrator Container..."
+echo "Running $IMAGE_NAME container..."
 
-docker run --rm             \
-    --name orchestrator     \
-    --network $NETWORK_NAME \
+docker run --rm                       \
+    --name $IMAGE_NAME                \
+    --network $NETWORK_NAME           \
+    -e WORKERS="$WORKERS"             \
+    -e SERVERS="$SERVERS"             \
+    -e DATASET_PATH="/dataset"        \
+    -v "$(pwd)/data/dataset:/dataset:ro"   \
     $IMAGE_NAME

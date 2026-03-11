@@ -79,6 +79,7 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
+    /// * `dataset_specs` - Already-resolved dataset specs per worker.
     /// * `server_addrs` - Already-resolved server socket addresses.
     /// * `server_sizes` - The amounts of parameters per server.
     /// * `server_ordering` - The ordering of the layer owners.
@@ -130,7 +131,7 @@ impl Adapter {
         Ok(worker_specs)
     }
 
-    /// Adapts both model's and trianing's configurations into a `ServerSpec`.
+    /// Adapts both model's and training's configurations into a `ServerSpec`.
     ///
     /// # Args
     /// * `model` - The model's architecture and initialization configuration.
@@ -229,9 +230,10 @@ impl Adapter {
     ///
     /// # Args
     /// * `synchronizer` - A synchronizer's configuration.
+    /// * `worker_amount` - The total number of workers.
     ///
     /// # Returns
-    /// THe synchronizer's specification.
+    /// The synchronizer's specification.
     fn adapt_synchronizer(
         &self,
         synchronizer: &SynchronizerConfig,
@@ -300,7 +302,16 @@ impl Adapter {
         }
     }
 
-    /// Helper method for `adapt_dataset`.
+    /// Helper method for `adapt_dataset` — partitions an inline dataset slice.
+    ///
+    /// # Args
+    /// * `data` - The full inline dataset as a slice of `f32`.
+    /// * `partition_sizes` - An iterator of partition sizes in **bytes**.
+    /// * `x_size` - The number of input features per sample.
+    /// * `y_size` - The number of output values per sample.
+    ///
+    /// # Returns
+    /// Paired lists of `DatasetSpec`s and `Partition::Inline` variants.
     fn adapt_inline_dataset<'a, T: Iterator<Item = u64>>(
         &self,
         data: &'a [f32],
@@ -312,7 +323,7 @@ impl Adapter {
         partition_sizes
             .map(|size| {
                 let curr;
-                (curr, rest) = rest.split_at((size / 4) as usize);
+                (curr, rest) = rest.split_at((size / size_of::<f32>() as u64) as usize);
                 let spec = DatasetSpec {
                     size,
                     x_size,
@@ -325,7 +336,16 @@ impl Adapter {
             .collect()
     }
 
-    /// Helper method for `adapt_dataset`.
+    /// Helper method for `adapt_dataset` — partitions a local dataset file.
+    ///
+    /// # Args
+    /// * `path` - Path to the local dataset file.
+    /// * `partition_sizes` - An iterator of partition sizes in **bytes**.
+    /// * `x_size` - The number of input features per sample.
+    /// * `y_size` - The number of output values per sample.
+    ///
+    /// # Returns
+    /// Paired lists of `DatasetSpec`s and `Partition::Local` variants.
     fn adapt_local_dataset<'a, T: Iterator<Item = u64>>(
         &self,
         path: &'a PathBuf,
@@ -351,6 +371,11 @@ impl Adapter {
     }
 
     /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
+    ///
+    /// Partition sizes are computed in **bytes** so that they align correctly
+    /// with what `send_dataset` reads off the wire. Previously `row_size` was
+    /// expressed in number-of-f32s while `size` was in bytes, causing each
+    /// partition to be 4× larger than intended.
     ///
     /// # Args
     /// * `dataset` - A dataset's configuration.
@@ -378,8 +403,12 @@ impl Adapter {
         };
 
         let npartitions = npartitions as u64;
-        let row_size = (x_size.get() + y_size.get()) as u64;
-        let nrows = size / row_size;
+
+        // row_size and all partition sizes are expressed in bytes so they stay
+        // consistent with the raw byte counts returned by fs::metadata and used
+        // by send_dataset / recv_dataset.
+        let row_size_bytes = (x_size.get() + y_size.get()) as u64 * size_of::<f32>() as u64;
+        let nrows = size / row_size_bytes;
         let base_rows = nrows / npartitions;
         let remainder = nrows % npartitions;
 
@@ -390,7 +419,7 @@ impl Adapter {
                 base_rows
             };
 
-            rows * row_size
+            rows * row_size_bytes
         });
 
         let (specs, partitions) = match src {
@@ -428,7 +457,6 @@ impl Adapter {
     ///
     /// # Returns
     /// The layers' specifications and their parameter generators' specifications.
-    /// The model's specification and it's layers' parameter generators specifications.
     fn adapt_layers(
         &self,
         model: &ModelConfig,

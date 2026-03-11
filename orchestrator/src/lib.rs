@@ -6,7 +6,7 @@ use std::net::ToSocketAddrs;
 
 use configs::Adapter;
 use error::{OrchErr, Result};
-use session::Session;
+pub use session::Session;
 pub use session::TrainingEvent;
 
 use crate::configs::{ModelConfig, TrainingConfig, Validator};

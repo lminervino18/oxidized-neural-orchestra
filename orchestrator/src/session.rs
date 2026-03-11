@@ -49,6 +49,7 @@ impl Session {
     ///
     /// # Args
     /// * `workers` - List of (address, spec) pairs for each worker.
+    /// * `partitions` - List of dataset partitions for each worker.
     /// * `servers` - List of (address, spec) pairs for each parameter server.
     ///
     /// # Returns
@@ -62,7 +63,7 @@ impl Session {
         servers: Vec<(SocketAddr, ServerSpec)>,
     ) -> Result<Self> {
         let (nworkers, nservers) = (workers.len(), servers.len());
-        info!("connecting to {nworkers} workers and {nservers} servers",);
+        info!("connecting to {nworkers} workers and {nservers} servers");
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -74,13 +75,11 @@ impl Session {
         let worker_chans = runtime.block_on(Self::create_workers(workers, partitions))?;
         debug!("successfully created all workers");
 
-        let session = Self {
+        Ok(Self {
             runtime,
             servers: server_chans,
             workers: worker_chans,
-        };
-
-        Ok(session)
+        })
     }
 
     async fn worker_listener(id: usize, mut rx: NetRx, _tx: NetTx, tx: Sender<TrainingEvent>) {
@@ -90,47 +89,37 @@ impl Session {
             match rx.recv_into(&mut rx_buf).await {
                 Ok(Msg::Control(Command::ReportLoss { losses })) => {
                     debug!("worker {id} reported {} losses", losses.len());
-
                     let event = TrainingEvent::Loss {
                         worker_id: id,
                         losses: losses.into_owned(),
                     };
-
                     let _ = tx.send(event).await;
                 }
                 Ok(Msg::Control(Command::Disconnect)) => {
                     info!("worker {id} disconnected");
-
-                    let event = TrainingEvent::WorkerDone(id);
-                    let _ = tx.send(event).await;
+                    let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
                     return;
                 }
                 Ok(msg) => {
                     warn!("worker {id}: unexpected message {msg:?}");
-
                     let event = TrainingEvent::Error(OrchErr::WorkerError {
                         worker_id: id,
                         msg: format!("unexpected message {msg:?}"),
                     });
-
                     let _ = tx.send(event).await;
                     return;
                 }
                 Err(e) if is_eof(&e) => {
                     info!("worker {id} closed connection");
-
-                    let event = TrainingEvent::WorkerDone(id);
-                    let _ = tx.send(event).await;
+                    let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
                     return;
                 }
                 Err(e) => {
                     error!("worker {id} error: {e}");
-
                     let event = TrainingEvent::Error(OrchErr::WorkerError {
                         worker_id: id,
                         msg: e.to_string(),
                     });
-
                     let _ = tx.send(event).await;
                     return;
                 }
@@ -151,43 +140,39 @@ impl Session {
         thread::spawn(move || {
             self.runtime.block_on(async move {
                 let futs = self.workers.into_iter().enumerate().map(|(i, (wrx, wtx))| {
-                    let list = Self::worker_listener(i, wrx, wtx, tx.clone());
-                    tokio::spawn(list)
+                    tokio::spawn(Self::worker_listener(i, wrx, wtx, tx.clone()))
                 });
 
                 future::join_all(futs).await;
 
-                // TODO: Instead of using logs, it'd be nice to use events
                 debug!("all workers done, reading final params from all servers");
 
-                let server_rxs = self.servers.into_iter().map(|(rx, _)| rx);
                 let mut model_params: Vec<f32> = Vec::new();
                 let mut rx_buf = vec![0; 1024];
 
-                for (i, mut srx) in server_rxs.into_iter().enumerate() {
+                for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
                     match srx.recv_into(&mut rx_buf).await {
                         Ok(Msg::Data(Payload::Params(params))) => {
                             model_params.extend_from_slice(params);
                         }
                         Ok(msg) => {
-                            let text = format!("unexpected message from server {i}: {msg:?}");
-                            let err = OrchErr::ServerError(text);
-                            let event = TrainingEvent::Error(err);
-                            let _ = tx.send(event).await;
+                            let err = OrchErr::ServerError(format!(
+                                "unexpected message from server {i}: {msg:?}"
+                            ));
+                            let _ = tx.send(TrainingEvent::Error(err)).await;
                             return;
                         }
                         Err(e) => {
-                            let text = format!("unexpected error from server {i}: {e}");
-                            let err = OrchErr::ServerError(text);
-                            let event = TrainingEvent::Error(err);
-                            let _ = tx.send(event).await;
+                            let err = OrchErr::ServerError(format!(
+                                "unexpected error from server {i}: {e}"
+                            ));
+                            let _ = tx.send(TrainingEvent::Error(err)).await;
                             return;
                         }
                     }
                 }
 
-                let model_size = model_params.len();
-                info!("received {model_size} total parameters");
+                info!("received {} total parameters", model_params.len());
 
                 let event = TrainingEvent::Complete(model_params);
                 let _ = tx.send(event).await;
@@ -209,70 +194,63 @@ impl Session {
     /// Returns an `OrchErr` if any connection or send fails.
     async fn create_servers(servers: Vec<(SocketAddr, ServerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
         let mut channels = Vec::with_capacity(servers.len());
-
         for (addr, spec) in servers {
             let (rx, mut tx) = Self::open_channel(addr)
                 .await
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
-
             tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
             channels.push((rx, tx));
         }
-
         Ok(channels)
     }
 
-    /// Connects to all workers and sends each its bootstrap spec along and
-    /// their partition of the dataset.
+    /// Connects to all workers, sends each its bootstrap spec and dataset partition.
     ///
     /// # Args
     /// * `workers` - List of (address, spec) pairs for each worker.
-    /// * `partition` - List of partitions for each worker.
+    /// * `partitions` - List of dataset partitions for each worker.
     ///
     /// # Returns
     /// A list of open (receiver, sender) channel pairs, one per worker.
     ///
     /// # Errors
-    /// Returns an `OrchestratorError` if any connection or send fails.
+    /// Returns an `OrchErr` if any connection or send fails.
     async fn create_workers<'a>(
         workers: Vec<(SocketAddr, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
     ) -> Result<Vec<(NetRx, NetTx)>> {
-        const CHUNK_SIZE: usize = 8192; // TODO: mover este 8kb o determinarlo
+        const CHUNK_SIZE: usize = 8192;
 
-        let futs =
-            workers
-                .into_iter()
-                .zip(partitions)
-                .map(|((addr, spec), partition)| async move {
-                    debug!("connecting to worker at {addr}");
-                    let (rx, mut tx) = Self::open_channel(addr)
-                        .await
-                        .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+        let futs = workers
+            .into_iter()
+            .zip(partitions)
+            .map(|((addr, spec), partition)| async move {
+                debug!("connecting to worker at {addr}");
+                let (rx, mut tx) = Self::open_channel(addr)
+                    .await
+                    .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
-                    tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+                tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-                    match partition {
-                        Partition::Local { path, offset, size } => {
-                            let mut fd = File::open(path).await?;
-                            fd.seek(io::SeekFrom::Start(offset)).await?;
-                            let mut fd = fd.take(size);
-
-                            send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
-                        }
-                        Partition::Inline { data } => {
-                            let msg = Msg::Data(Payload::Datachunk(data));
-
-                            tx.send(&msg).await?;
-                        }
+                match partition {
+                    Partition::Local { path, offset, size } => {
+                        let mut fd = File::open(path).await?;
+                        fd.seek(io::SeekFrom::Start(offset)).await?;
+                        let mut fd = fd.take(size);
+                        send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
                     }
+                    Partition::Inline { data } => {
+                        let bytes: &[u8] = bytemuck::cast_slice(data);
+                        let mut cursor = std::io::Cursor::new(bytes);
+                        send_dataset(&mut cursor, CHUNK_SIZE, &mut tx).await?;
+                    }
+                }
 
-                    info!("worker at {addr} ready");
-                    Ok::<_, OrchErr>((rx, tx))
-                });
+                info!("worker at {addr} ready");
+                Ok::<_, OrchErr>((rx, tx))
+            });
 
         let channels = future::try_join_all(futs).await?;
-
         Ok(channels)
     }
 

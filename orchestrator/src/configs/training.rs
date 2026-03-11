@@ -17,7 +17,7 @@ pub enum OptimizerConfig {
 }
 
 /// The dataset's data source.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatasetSrc {
     Local { path: PathBuf },
@@ -25,7 +25,7 @@ pub enum DatasetSrc {
 }
 
 /// The `Dataset` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetConfig {
     pub src: DatasetSrc,
@@ -50,7 +50,7 @@ pub enum StoreConfig {
 }
 
 /// The `Algorithm` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmConfig<A: ToSocketAddrs> {
     ParameterServer {
@@ -61,7 +61,7 @@ pub enum AlgorithmConfig<A: ToSocketAddrs> {
 }
 
 /// The `Training` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingConfig<A: ToSocketAddrs> {
     pub worker_addrs: Vec<A>,
     pub algorithm: AlgorithmConfig<A>,
@@ -71,5 +71,6 @@ pub struct TrainingConfig<A: ToSocketAddrs> {
     pub batch_size: NonZeroUsize,
     pub max_epochs: NonZeroUsize,
     pub offline_epochs: usize,
+    #[serde(default)]
     pub seed: Option<u64>,
 }
