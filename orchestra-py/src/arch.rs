@@ -1,8 +1,6 @@
 use std::num::NonZeroUsize;
 
-use orchestrator::configs::{
-    ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig,
-};
+use orchestrator::configs::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
 use pyo3::prelude::*;
 
 use crate::activations::Sigmoid;
@@ -75,7 +73,7 @@ impl Dense {
             PyInit::Normal(n.mean, n.std_dev)
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be one of: Kaiming, Xavier, Lecun, XavierUniform, LecunUniform, Const, Uniform, UniformInclusive, Normal",
+                "init must be a parameter initializer",
             ));
         };
 
@@ -86,13 +84,17 @@ impl Dense {
                     Some(PyActFn::Sigmoid(s.amp))
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "act_fn must be Sigmoid(amp) or None",
+                        "act_fn must be an activation function or None",
                     ));
                 }
             }
         };
 
-        Ok(Self { output_size, init, act_fn })
+        Ok(Self {
+            output_size,
+            init,
+            act_fn,
+        })
     }
 }
 
@@ -112,7 +114,11 @@ impl Dense {
         let act_fn = self.act_fn.as_ref().map(|a| match a {
             PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
         });
-        LayerConfig::Dense { output_size: self.output_size, init, act_fn }
+        LayerConfig::Dense {
+            output_size: self.output_size,
+            init,
+            act_fn,
+        }
     }
 }
 
@@ -135,6 +141,10 @@ impl Sequential {
             ));
         }
         let layer_configs = layers.iter().map(|l| l.to_layer_config()).collect();
-        Ok(Self { inner: ModelConfig { layers: layer_configs } })
+        Ok(Self {
+            inner: ModelConfig {
+                layers: layer_configs,
+            },
+        })
     }
 }

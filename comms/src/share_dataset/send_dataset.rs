@@ -31,7 +31,7 @@ where
         let read = reader.read(&mut buf).await?;
 
         if read > 0 {
-            let nums = bytemuck::cast_slice(&buf);
+            let nums = bytemuck::cast_slice(&buf[..read]);
             let msg = Msg::Data(Payload::Datachunk(nums));
 
             tx.send(&msg).await?;

@@ -8,13 +8,14 @@
     }
   },
   "dataset": {
-    "src": { "inline": { "data": [1.0,2.0, 2.0,4.0, 3.0,6.0, 4.0,8.0, 5.0,10.0, 6.0,12.0, 7.0,14.0, 8.0,16.0] } },
-    "x_size": 1,
+    "src": { "local": { "path": "data/dataset" } },
+    "x_size": 2,
     "y_size": 1
   },
   "optimizer": { "gradient_descent": { "lr": 0.01 } },
   "loss_fn": "mse",
   "batch_size": 4,
   "max_epochs": 500,
-  "offline_epochs": 0
+  "offline_epochs": 0,
+  "seed": 42
 }

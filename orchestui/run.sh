@@ -67,8 +67,3 @@ sleep 0.5
 # Run TUI in current terminal
 cd $ROOT
 RUST_LOG=debug cargo run -p orchestui 2>/tmp/ono-orchestrator.log
-```
-
-Los JSON van en `orchestui/` sin cambios. El commit:
-```
-refactor(orchestui): move run.sh, model.json and training.json into orchestui/

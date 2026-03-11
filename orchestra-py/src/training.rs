@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 
 use crate::{
     arch::Sequential,
-    datasets::InlineDataset,
+    datasets::{InlineDataset, LocalDataset},
     optimizers::GradientDescent,
     session::Session,
     store::{BlockingStore, WildStore},
@@ -31,7 +31,7 @@ pub struct PyTrainingConfig {
 /// # Args
 /// * `worker_addrs` - List of worker addresses (e.g. `["127.0.0.1:50000"]`).
 /// * `server_addrs` - List of parameter server addresses.
-/// * `dataset` - The dataset to train on.
+/// * `dataset` - The dataset to train on. Accepts either an `InlineDataset` or a `LocalDataset`.
 /// * `optimizer` - The optimizer to use.
 /// * `sync` - Synchronization strategy (`BarrierSync()` or `NonBlockingSync()`).
 /// * `store` - Parameter store strategy (`BlockingStore()` or `WildStore()`).
@@ -42,6 +42,7 @@ pub struct PyTrainingConfig {
 ///
 /// # Errors
 /// Raises a `ValueError` if required fields are invalid.
+/// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
@@ -58,7 +59,7 @@ pub struct PyTrainingConfig {
 pub fn parameter_server(
     worker_addrs: Vec<String>,
     server_addrs: Vec<String>,
-    dataset: PyRef<InlineDataset>,
+    dataset: &Bound<'_, PyAny>,
     optimizer: PyRef<GradientDescent>,
     sync: &Bound<'_, PyAny>,
     store: &Bound<'_, PyAny>,
@@ -94,6 +95,29 @@ pub fn parameter_server(
         ));
     };
 
+    // Resolve dataset config from either InlineDataset or LocalDataset.
+    let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
+        DatasetConfig {
+            src: DatasetSrc::Inline {
+                data: d.data.clone(),
+            },
+            x_size: d.x_size,
+            y_size: d.y_size,
+        }
+    } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
+        DatasetConfig {
+            src: DatasetSrc::Local {
+                path: d.path.clone(),
+            },
+            x_size: d.x_size,
+            y_size: d.y_size,
+        }
+    } else {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "dataset must be an InlineDataset or LocalDataset",
+        ));
+    };
+
     let worker_count = worker_addrs.len();
 
     Ok(PyTrainingConfig {
@@ -104,11 +128,7 @@ pub fn parameter_server(
                 synchronizer,
                 store: store_cfg,
             },
-            dataset: DatasetConfig {
-                src: DatasetSrc::Inline { data: dataset.data.clone() },
-                x_size: dataset.x_size,
-                y_size: dataset.y_size,
-            },
+            dataset: dataset_config,
             optimizer: OptimizerConfig::GradientDescent { lr: optimizer.lr },
             loss_fn: LossFnConfig::Mse,
             batch_size: batch_size_nz,

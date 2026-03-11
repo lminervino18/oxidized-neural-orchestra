@@ -48,4 +48,5 @@ model.json
 training.json
 
 # Dataset binary
-data/
+data/dataset
+
