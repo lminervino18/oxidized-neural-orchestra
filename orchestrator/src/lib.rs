@@ -28,8 +28,7 @@ pub fn train<A: ToSocketAddrs>(model: ModelConfig, training: TrainingConfig<A>) 
     let input_size = training.dataset.x_size.get();
 
     let adapter = Adapter::new();
-    let (workers, servers) = adapter.adapt_configs(model.clone(), training)?;
+    let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
-    Session::new(workers, servers, model, input_size)
+    Session::new(workers, partitions, servers, model, input_size)
 }
-

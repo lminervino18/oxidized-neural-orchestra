@@ -1,13 +1,9 @@
-use std::{io, net::SocketAddr, path::Path, thread};
-
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
-    specs::{server::ServerSpec, worker::WorkerSpec},
-};
 use futures::future;
 use log::{debug, error, info, warn};
+use std::{io, net::SocketAddr, path::Path, thread};
 use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncSeekExt},
     net::{
         TcpStream,
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -16,9 +12,16 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
+use comms::{
+    OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
+    send_dataset::send_dataset,
+    specs::{server::ServerSpec, worker::WorkerSpec},
+};
+
 use crate::{
     OrchErr, Result,
-    configs::{LayerConfig, ModelConfig},
+    configs::{LayerConfig, ModelConfig, Partition},
 };
 
 type NetRx = OnoReceiver<OwnedReadHalf>;
@@ -57,59 +60,60 @@ impl TrainedModel {
     /// # Errors
     /// Returns an `OrchErr` if the file cannot be written or the parameter
     /// buffer does not match the model architecture.
-   pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
-    use safetensors::Dtype;
-    use safetensors::tensor::TensorView;
+    pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
+        use safetensors::Dtype;
+        use safetensors::tensor::TensorView;
 
-    let mut tensors: Vec<(String, TensorView)> = Vec::new();
-    let mut offset = 0;
-    let mut prev = self.input_size;
+        let mut tensors: Vec<(String, TensorView)> = Vec::new();
+        let mut offset = 0;
+        let mut prev = self.input_size;
 
-    // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
-    // alignment is valid, and the slice is live for the duration of this function.
-    let params_bytes = unsafe {
-        std::slice::from_raw_parts(
-            self.params.as_ptr() as *const u8,
-            self.params.len() * 4,
+        // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
+        // alignment is valid, and the slice is live for the duration of this function.
+        let params_bytes = unsafe {
+            std::slice::from_raw_parts(
+                self.params.as_ptr() as *const u8,
+                self.params.len() * 4,
+            )
+        };
+
+        for (i, layer) in self.model.layers.iter().enumerate() {
+            let LayerConfig::Dense { output_size, .. } = layer;
+            let out = output_size.get();
+            let w_count = prev * out;
+            let b_count = out;
+
+            let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];
+            tensors.push((
+                format!("layer_{i}.weight"),
+                TensorView::new(Dtype::F32, vec![prev, out], w_bytes)
+                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
+            ));
+            offset += w_count;
+
+            let b_bytes = &params_bytes[offset * 4..(offset + b_count) * 4];
+            tensors.push((
+                format!("layer_{i}.bias"),
+                TensorView::new(Dtype::F32, vec![out], b_bytes)
+                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
+            ));
+            offset += b_count;
+
+            prev = out;
+        }
+
+        safetensors::tensor::serialize_to_file(
+            tensors.iter().map(|(k, v)| (k.as_str(), v.clone())),
+            &None,
+            path.as_ref(),
         )
-    };
+        .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?;
 
-    for (i, layer) in self.model.layers.iter().enumerate() {
-        let LayerConfig::Dense { output_size, .. } = layer;
-        let out = output_size.get();
-        let w_count = prev * out;
-        let b_count = out;
-
-        let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];
-        tensors.push((
-            format!("layer_{i}.weight"),
-            TensorView::new(Dtype::F32, vec![prev, out], w_bytes)
-                .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
-        ));
-        offset += w_count;
-
-        let b_bytes = &params_bytes[offset * 4..(offset + b_count) * 4];
-        tensors.push((
-            format!("layer_{i}.bias"),
-            TensorView::new(Dtype::F32, vec![out], b_bytes)
-                .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
-        ));
-        offset += b_count;
-
-        prev = out;
+        info!("model saved to {}", path.as_ref().display());
+        Ok(())
     }
-
-    safetensors::tensor::serialize_to_file(
-        tensors.iter().map(|(k, v)| (k.as_str(), v.clone())),
-        &None,
-        path.as_ref(),
-    )
-    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?;
-
-    info!("model saved to {}", path.as_ref().display());
-    Ok(())
 }
-}
+
 /// An event produced during a training session.
 #[derive(Debug)]
 pub enum TrainingEvent {
@@ -137,6 +141,7 @@ impl Session {
     ///
     /// # Args
     /// * `workers` - List of (address, spec) pairs for each worker.
+    /// * `partitions` - List of dataset partitions for each worker.
     /// * `servers` - List of (address, spec) pairs for each parameter server.
     /// * `model` - The model architecture, kept for post-training serialization.
     /// * `input_size` - The input size of the first layer, derived from the dataset.
@@ -148,6 +153,7 @@ impl Session {
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
     pub fn new(
         workers: Vec<(SocketAddr, WorkerSpec)>,
+        partitions: Vec<Partition>,
         servers: Vec<(SocketAddr, ServerSpec)>,
         model: ModelConfig,
         input_size: usize,
@@ -162,7 +168,7 @@ impl Session {
         let server_chans = runtime.block_on(Self::create_servers(servers))?;
         debug!("successfully created all servers");
 
-        let worker_chans = runtime.block_on(Self::create_workers(workers))?;
+        let worker_chans = runtime.block_on(Self::create_workers(workers, partitions))?;
         debug!("successfully created all workers");
 
         Ok(Self {
@@ -281,6 +287,16 @@ impl Session {
         rx
     }
 
+    /// Connects to all parameter servers and sends each its bootstrap spec.
+    ///
+    /// # Args
+    /// * `servers` - List of (address, spec) pairs for each parameter server.
+    ///
+    /// # Returns
+    /// A list of open (receiver, sender) channel pairs, one per server.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if any connection or send fails.
     async fn create_servers(servers: Vec<(SocketAddr, ServerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
         let mut channels = Vec::with_capacity(servers.len());
         for (addr, spec) in servers {
@@ -293,18 +309,66 @@ impl Session {
         Ok(channels)
     }
 
-    async fn create_workers(workers: Vec<(SocketAddr, WorkerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
-        let mut channels = Vec::with_capacity(workers.len());
-        for (addr, spec) in workers {
-            let (rx, mut tx) = Self::open_channel(addr)
-                .await
-                .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
-            tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
-            channels.push((rx, tx));
-        }
+    /// Connects to all workers, sends each its bootstrap spec and dataset partition.
+    ///
+    /// # Args
+    /// * `workers` - List of (address, spec) pairs for each worker.
+    /// * `partitions` - List of dataset partitions for each worker.
+    ///
+    /// # Returns
+    /// A list of open (receiver, sender) channel pairs, one per worker.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if any connection or send fails.
+    async fn create_workers<'a>(
+        workers: Vec<(SocketAddr, WorkerSpec)>,
+        partitions: Vec<Partition<'a>>,
+    ) -> Result<Vec<(NetRx, NetTx)>> {
+        const CHUNK_SIZE: usize = 8192;
+
+        let futs = workers
+            .into_iter()
+            .zip(partitions)
+            .map(|((addr, spec), partition)| async move {
+                debug!("connecting to worker at {addr}");
+                let (rx, mut tx) = Self::open_channel(addr)
+                    .await
+                    .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+
+                tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+
+                match partition {
+                    Partition::Local { path, offset, size } => {
+                        let mut fd = File::open(path).await?;
+                        fd.seek(io::SeekFrom::Start(offset)).await?;
+                        let mut fd = fd.take(size);
+                        send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
+                    }
+                    Partition::Inline { data } => {
+                        let bytes: &[u8] = bytemuck::cast_slice(data);
+                        let mut cursor = std::io::Cursor::new(bytes);
+                        send_dataset(&mut cursor, CHUNK_SIZE, &mut tx).await?;
+                    }
+                }
+
+                info!("worker at {addr} ready");
+                Ok::<_, OrchErr>((rx, tx))
+            });
+
+        let channels = future::try_join_all(futs).await?;
         Ok(channels)
     }
 
+    /// Opens a TCP channel to the given address.
+    ///
+    /// # Args
+    /// * `addr` - The socket address to connect to.
+    ///
+    /// # Returns
+    /// A (receiver, sender) channel pair.
+    ///
+    /// # Errors
+    /// Returns an `io::Error` if the connection fails.
     async fn open_channel(addr: SocketAddr) -> io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
