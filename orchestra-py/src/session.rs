@@ -5,6 +5,18 @@ use pyo3::prelude::*;
 
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+/// Formats a loss value with adaptive precision.
+///
+/// Uses scientific notation for values smaller than `1e-4` to avoid
+/// displaying them as `0.00000000` at fixed precision.
+fn fmt_loss(loss: f32) -> String {
+    if loss.abs() < 1e-4 {
+        format!("{loss:.3e}")
+    } else {
+        format!("{loss:.8}")
+    }
+}
+
 /// The final trained model returned after a session completes.
 #[pyclass]
 pub struct TrainedModel {
@@ -126,13 +138,13 @@ impl Session {
                                 let spinner = SPINNER[spinner_i % SPINNER.len()];
                                 spinner_i += 1;
                                 print!(
-                                    "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={:.6}\n",
+                                    "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={}\n",
                                     spinner,
                                     "█".repeat(filled),
                                     "░".repeat(bar_width - filled),
                                     current_epoch,
                                     max_epochs,
-                                    avg_loss,
+                                    fmt_loss(avg_loss),
                                 );
                                 let _ = std::io::stdout().flush();
                             }
@@ -145,11 +157,11 @@ impl Session {
                                     reported.iter().sum::<f32>() / reported.len() as f32
                                 };
                                 print!(
-                                    "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={:.6}\n\n",
+                                    "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={}\n\n",
                                     "█".repeat(bar_width),
                                     max_epochs,
                                     max_epochs,
-                                    avg_loss,
+                                    fmt_loss(avg_loss),
                                 );
                                 let _ = std::io::stdout().flush();
                                 return Ok(trained);
