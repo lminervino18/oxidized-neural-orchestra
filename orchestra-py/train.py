@@ -34,7 +34,7 @@ if os.environ.get("WORKERS"):
     WORKER_ADDRS = _make_addrs(_workers, 50000, "worker")
     SERVER_ADDRS = _make_addrs(_servers, 40000, "server")
 
-# Inline fallback dataset for local testing.
+# Inline fallback dataset for environments without a local file.
 _INLINE_DATA = [
     1.0, 2.0,
     2.0, 4.0,
@@ -51,10 +51,14 @@ def _build_dataset():
     """
     Returns a dataset instance.
 
-    Uses a `LocalDataset` when the `DATASET_PATH` environment variable is set,
-    otherwise falls back to a small inline dataset for local testing.
+    Resolution order:
+    1. DATASET_PATH env var — used in Docker via volume mount.
+    2. data/dataset relative to cwd — used for local development.
+    3. Inline fallback — used when no file is available at all.
     """
     dataset_path = os.environ.get("DATASET_PATH")
+    if not dataset_path and os.path.exists("data/dataset"):
+        dataset_path = "data/dataset"
     if dataset_path:
         return LocalDataset(dataset_path, x_size=2, y_size=1)
     return InlineDataset(_INLINE_DATA, x_size=1, y_size=1)

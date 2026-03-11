@@ -8,8 +8,8 @@
     }
   },
   "dataset": {
-    "src": { "local": { "path": "orchestui/data.bin" } },
-    "x_size": 1,
+    "src": { "local": { "path": "data/dataset" } },
+    "x_size": 2,
     "y_size": 1
   },
   "optimizer": { "gradient_descent": { "lr": 0.01 } },

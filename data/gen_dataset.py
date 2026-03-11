@@ -1,3 +1,4 @@
+import os
 import struct
 
 data = [
@@ -11,7 +12,9 @@ data = [
     8.0, 16.0,
 ]
 
-with open("orchestui/data.bin", "wb") as f:
+os.makedirs("data", exist_ok=True)
+
+with open("data/dataset", "wb") as f:
     f.write(struct.pack(f"{len(data)}f", *data))
 
-print(f"wrote {len(data)} floats to orchestui/data.bin")
+print(f"wrote {len(data)} floats to data/dataset")

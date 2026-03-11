@@ -41,5 +41,5 @@ docker run --rm                       \
     -e WORKERS="$WORKERS"             \
     -e SERVERS="$SERVERS"             \
     -e DATASET_PATH="/dataset"        \
-    -v "$(pwd)/dataset:/dataset:ro"   \
+    -v "$(pwd)/data/dataset:/dataset:ro"   \
     $IMAGE_NAME
