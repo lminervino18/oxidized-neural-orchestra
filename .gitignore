@@ -50,3 +50,4 @@ training.json
 # Data directory contents (datasets, downloads, generated files)
 data/*
 !data/.gitkeep
+**/data/
