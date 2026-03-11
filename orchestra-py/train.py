@@ -80,6 +80,26 @@ def print_params(params: list[float], output_sizes: list[int], input_size: int) 
         prev = out
 
 
+def _verify_safetensors(path: str) -> None:
+    """
+    Verifies that a safetensors file was written successfully.
+
+    Checks that the file exists and is non-empty.
+
+    # Args
+    * `path` - Path to the safetensors file.
+
+    # Raises
+    * `RuntimeError` if the file is missing or empty.
+    """
+    if not os.path.exists(path):
+        raise RuntimeError(f"{path} not found after save")
+    size = os.path.getsize(path)
+    if size == 0:
+        raise RuntimeError(f"{path} is empty after save")
+    print(f"model saved to {path} ({size} bytes)")
+
+
 def main() -> None:
     print(f"worker addrs: {WORKER_ADDRS}")
     print(f"server addrs: {SERVER_ADDRS}")
@@ -115,10 +135,12 @@ def main() -> None:
         trained = session.wait()
         params = trained.weights()
         print_params(params, [8, 4, 1], input_size=1)
+
         trained.save("weights.csv", output_sizes=[8, 4, 1], input_size=1)
         print("weights saved to weights.csv")
+
         trained.save_safetensors("model.safetensors")
-        print("model saved to model.safetensors")
+        _verify_safetensors("model.safetensors")
     except RuntimeError as e:
         print(f"training failed: {e}", file=sys.stderr)
         sys.exit(1)

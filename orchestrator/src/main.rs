@@ -90,8 +90,20 @@ fn main() {
             Some(orchestrator::TrainingEvent::Loss { losses, .. }) => {
                 println!("losses: {losses:?}")
             }
-            Some(orchestrator::TrainingEvent::Complete(params)) => {
-                println!("params: {params:?}");
+            Some(orchestrator::TrainingEvent::Complete(trained)) => {
+                println!("params: {:?}", trained.params());
+
+                let out_path = "model.safetensors";
+                trained
+                    .save_safetensors(out_path)
+                    .expect("failed to save model");
+
+                let size = std::fs::metadata(out_path)
+                    .expect("model.safetensors not found after save")
+                    .len();
+                assert!(size > 0, "model.safetensors is empty after save");
+                println!("model saved to {out_path} ({size} bytes)");
+
                 break;
             }
             res => println!("result: {res:?}"),
