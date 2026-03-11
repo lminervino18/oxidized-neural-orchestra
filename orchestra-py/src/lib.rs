@@ -32,6 +32,7 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // datasets
     m.add_class::<datasets::InlineDataset>()?;
+    m.add_class::<datasets::LocalDataset>()?;
 
     // optimizers
     m.add_class::<optimizers::GradientDescent>()?;

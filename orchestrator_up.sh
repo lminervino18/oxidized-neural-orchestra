@@ -35,10 +35,11 @@ docker build               \
 
 echo "Running $IMAGE_NAME container..."
 
-docker run --rm                  \
-    --name $IMAGE_NAME           \
-    --network $NETWORK_NAME      \
-    -e WORKERS="$WORKERS"        \
-    -e SERVERS="$SERVERS"        \
-    -v "$(pwd)/dataset:/dataset:ro" \
+docker run --rm                       \
+    --name $IMAGE_NAME                \
+    --network $NETWORK_NAME           \
+    -e WORKERS="$WORKERS"             \
+    -e SERVERS="$SERVERS"             \
+    -e DATASET_PATH="/dataset"        \
+    -v "$(pwd)/dataset:/dataset:ro"   \
     $IMAGE_NAME

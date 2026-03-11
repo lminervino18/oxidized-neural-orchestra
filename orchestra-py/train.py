@@ -6,7 +6,7 @@ from orchestra import Sequential, orchestrate
 from orchestra.arch import Dense
 from orchestra.activations import Sigmoid
 from orchestra.initialization import Kaiming
-from orchestra.datasets import InlineDataset
+from orchestra.datasets import InlineDataset, LocalDataset
 from orchestra.optimizers import GradientDescent
 from orchestra.sync import BarrierSync
 from orchestra.store import BlockingStore
@@ -29,12 +29,13 @@ SERVER_ADDRS = os.environ.get(
     ",".join(_make_addrs(_servers, 40000, "127.0.0.1")),
 ).split(",")
 
-# In Docker, use container hostnames instead of localhost
+# In Docker, use container hostnames instead of localhost.
 if os.environ.get("WORKERS"):
     WORKER_ADDRS = _make_addrs(_workers, 50000, "worker")
     SERVER_ADDRS = _make_addrs(_servers, 40000, "server")
 
-DATA = [
+# Inline fallback dataset for local testing.
+_INLINE_DATA = [
     1.0, 2.0,
     2.0, 4.0,
     3.0, 6.0,
@@ -44,6 +45,19 @@ DATA = [
     7.0, 14.0,
     8.0, 16.0,
 ]
+
+
+def _build_dataset():
+    """
+    Returns a dataset instance.
+
+    Uses a `LocalDataset` when the `DATASET_PATH` environment variable is set,
+    otherwise falls back to a small inline dataset for local testing.
+    """
+    dataset_path = os.environ.get("DATASET_PATH")
+    if dataset_path:
+        return LocalDataset(dataset_path, x_size=2, y_size=1)
+    return InlineDataset(_INLINE_DATA, x_size=1, y_size=1)
 
 
 def print_params(params: list[float], output_sizes: list[int], input_size: int) -> None:
@@ -66,6 +80,9 @@ def main() -> None:
     print(f"worker addrs: {WORKER_ADDRS}")
     print(f"server addrs: {SERVER_ADDRS}")
 
+    dataset = _build_dataset()
+    print(f"dataset: {dataset.__class__.__name__}")
+
     print("\nbuilding model...")
     model = Sequential([
         Dense(8, Kaiming(), Sigmoid()),
@@ -77,7 +94,7 @@ def main() -> None:
     training = orchestra.parameter_server(
         worker_addrs=WORKER_ADDRS,
         server_addrs=SERVER_ADDRS,
-        dataset=InlineDataset(DATA, x_size=1, y_size=1),
+        dataset=dataset,
         optimizer=GradientDescent(lr=0.01),
         sync=BarrierSync(),
         store=BlockingStore(),

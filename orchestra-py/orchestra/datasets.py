@@ -1,3 +1,3 @@
-from orchestra._orchestra import InlineDataset
+from orchestra._orchestra import InlineDataset, LocalDataset
 
-__all__ = ["InlineDataset"]
+__all__ = ["InlineDataset", "LocalDataset"]
