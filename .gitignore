@@ -32,6 +32,7 @@ temp/
 *.pyc
 *.pyd
 *.pyo
+*.pyi
 wheels/
 dist/
 build/
@@ -42,5 +43,9 @@ build/
 # Generated compose files
 compose.yml
 
-# Model dumps
-*.safetensors
+# orchestui local config (copy from *.example.json to create)
+model.json
+training.json
+
+# Dataset binary
+data/
