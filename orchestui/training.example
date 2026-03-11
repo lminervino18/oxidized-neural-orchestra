@@ -1,5 +1,5 @@
 {
-  "worker_addrs": ["127.0.0.1:50009", "127.0.0.1:50001", "127.0.0.1:50002"],
+  "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
   "algorithm": {
     "parameter_server": {
       "server_addrs": ["127.0.0.1:40000", "127.0.0.1:40001"],
@@ -15,6 +15,7 @@
   "optimizer": { "gradient_descent": { "lr": 0.01 } },
   "loss_fn": "mse",
   "batch_size": 4,
-  "max_epochs": 100,
-  "offline_epochs": 0
+  "max_epochs": 500,
+  "offline_epochs": 0,
+  "seed": 42
 }

@@ -42,3 +42,10 @@ build/
 
 # Generated compose files
 compose.yml
+
+# orchestui local config (copy from *.example.json to create)
+model.json
+training.json
+
+# Dataset binary
+data/dataset
