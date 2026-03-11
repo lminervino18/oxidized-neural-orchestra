@@ -24,6 +24,14 @@ use crate::ui::{
     theme::Theme,
 };
 
+fn fmt_loss(loss: f32) -> String {
+    if loss.abs() < 1e-4 {
+        format!("{loss:.3e}")
+    } else {
+        format!("{loss:.8}")
+    }
+}
+
 /// Per-worker colors for charts and table highlights.
 pub const WORKER_COLORS: &[Color] = &[
     Color::Rgb(57, 255, 20),
@@ -238,7 +246,7 @@ impl TrainingState {
                     let last = losses.last().copied().unwrap_or(0.0);
                     self.push_log(
                         LogLevel::Info,
-                        format!("worker {worker_id}  epoch {epochs_done}  loss={last:.4}"),
+                        format!("worker {worker_id}  epoch {epochs_done}  loss={}", fmt_loss(last)),
                     );
                 }
             }

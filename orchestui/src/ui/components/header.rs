@@ -9,6 +9,18 @@ use ratatui::{
 use crate::ui::screens::training::{Phase, TrainingState};
 use crate::ui::theme::Theme;
 
+/// Formats a loss value with adaptive precision.
+///
+/// Uses scientific notation for values smaller than `1e-4` to avoid
+/// displaying them as `0.00000000` at fixed precision.
+fn fmt_loss(loss: f32) -> String {
+    if loss.abs() < 1e-4 {
+        format!("{loss:.3e}")
+    } else {
+        format!("{loss:.8}")
+    }
+}
+
 /// Draws the top header bar with session phase, elapsed time, worker/server counts and optimizer.
 ///
 /// # Args
@@ -23,7 +35,9 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Phase::Error => Span::styled("ERROR", Theme::error()),
     };
 
-    let hint = if state.is_active() {
+    let hint = if state.final_trained.is_some() {
+        Span::styled("  [q] menu  [←/→] worker  [s] save", Theme::muted())
+    } else if state.is_active() {
         Span::styled("  [q] leave  [←/→] worker", Theme::muted())
     } else {
         Span::styled("  [q] menu  [←/→] worker", Theme::muted())
@@ -69,5 +83,5 @@ fn avg_loss_str(state: &TrainingState) -> String {
     }
 
     let avg = losses.iter().sum::<f32>() / losses.len() as f32;
-    format!("{avg:.4}")
+    fmt_loss(avg)
 }
