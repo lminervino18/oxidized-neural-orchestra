@@ -15,6 +15,6 @@
   "optimizer": { "gradient_descent": { "lr": 0.01 } },
   "loss_fn": "mse",
   "batch_size": 4,
-  "max_epochs": 500,
+  "max_epochs": 100,
   "offline_epochs": 0
 }
