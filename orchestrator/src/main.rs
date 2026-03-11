@@ -1,4 +1,4 @@
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, path::PathBuf};
 
 use orchestrator::{configs::*, train};
 
@@ -20,6 +20,7 @@ fn main() {
         ],
     };
 
+    let path = PathBuf::from("dataset");
     let training_config = TrainingConfig {
         worker_addrs: vec!["worker-0:50000"],
         algorithm: AlgorithmConfig::ParameterServer {
@@ -28,9 +29,7 @@ fn main() {
             store: StoreConfig::Blocking,
         },
         dataset: DatasetConfig {
-            src: DatasetSrc::Inline {
-                data: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-            },
+            src: DatasetSrc::Local { path },
             x_size: NonZeroUsize::new(2).unwrap(),
             y_size: NonZeroUsize::new(1).unwrap(),
         },

@@ -40,4 +40,5 @@ docker run --rm                  \
     --network $NETWORK_NAME      \
     -e WORKERS="$WORKERS"        \
     -e SERVERS="$SERVERS"        \
+    -v "$(pwd)/dataset:/dataset:ro" \
     $IMAGE_NAME
