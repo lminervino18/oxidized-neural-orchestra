@@ -71,10 +71,7 @@ impl TrainedModel {
         // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
         // alignment is valid, and the slice is live for the duration of this function.
         let params_bytes = unsafe {
-            std::slice::from_raw_parts(
-                self.params.as_ptr() as *const u8,
-                self.params.len() * 4,
-            )
+            std::slice::from_raw_parts(self.params.as_ptr() as *const u8, self.params.len() * 4)
         };
 
         for (i, layer) in self.model.layers.iter().enumerate() {
@@ -326,34 +323,35 @@ impl Session {
     ) -> Result<Vec<(NetRx, NetTx)>> {
         const CHUNK_SIZE: usize = 8192;
 
-        let futs = workers
-            .into_iter()
-            .zip(partitions)
-            .map(|((addr, spec), partition)| async move {
-                debug!("connecting to worker at {addr}");
-                let (rx, mut tx) = Self::open_channel(addr)
-                    .await
-                    .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+        let futs =
+            workers
+                .into_iter()
+                .zip(partitions)
+                .map(|((addr, spec), partition)| async move {
+                    debug!("connecting to worker at {addr}");
+                    let (rx, mut tx) = Self::open_channel(addr)
+                        .await
+                        .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
-                tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+                    tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
-                match partition {
-                    Partition::Local { path, offset, size } => {
-                        let mut fd = File::open(path).await?;
-                        fd.seek(io::SeekFrom::Start(offset)).await?;
-                        let mut fd = fd.take(size);
-                        send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
+                    match partition {
+                        Partition::Local { path, offset, size } => {
+                            let mut fd = File::open(path).await?;
+                            fd.seek(io::SeekFrom::Start(offset)).await?;
+                            let mut fd = fd.take(size);
+                            send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
+                        }
+                        Partition::Inline { data } => {
+                            let bytes: &[u8] = bytemuck::cast_slice(data);
+                            let mut cursor = std::io::Cursor::new(bytes);
+                            send_dataset(&mut cursor, CHUNK_SIZE, &mut tx).await?;
+                        }
                     }
-                    Partition::Inline { data } => {
-                        let bytes: &[u8] = bytemuck::cast_slice(data);
-                        let mut cursor = std::io::Cursor::new(bytes);
-                        send_dataset(&mut cursor, CHUNK_SIZE, &mut tx).await?;
-                    }
-                }
 
-                info!("worker at {addr} ready");
-                Ok::<_, OrchErr>((rx, tx))
-            });
+                    info!("worker at {addr} ready");
+                    Ok::<_, OrchErr>((rx, tx))
+                });
 
         let channels = future::try_join_all(futs).await?;
         Ok(channels)

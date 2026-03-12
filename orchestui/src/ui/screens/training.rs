@@ -2,8 +2,8 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    TrainedModel, TrainingEvent,
     configs::{ModelConfig, TrainingConfig},
+    TrainedModel, TrainingEvent,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -17,8 +17,8 @@ use super::{Action, Screen};
 use crate::ui::{
     components::{
         confirm_quit::draw_confirm_quit, header::draw_header, log_panel::draw_log,
-        loss_chart::draw_charts, params_panel::draw_params,
-        save_popup::draw_save_popup, workers_table::draw_workers_table,
+        loss_chart::draw_charts, params_panel::draw_params, save_popup::draw_save_popup,
+        workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
     theme::Theme,
@@ -239,7 +239,10 @@ impl TrainingState {
                     let last = losses.last().copied().unwrap_or(0.0);
                     self.push_log(
                         LogLevel::Info,
-                        format!("worker {worker_id}  epoch {epochs_done}  loss={}", fmt_loss(last)),
+                        format!(
+                            "worker {worker_id}  epoch {epochs_done}  loss={}",
+                            fmt_loss(last)
+                        ),
                     );
                 }
             }
@@ -372,14 +375,10 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
                 state.save_popup = SavePopup::Hidden;
                 if let Some(trained) = &state.final_trained {
                     match trained.save_safetensors(&resolved) {
-                        Ok(()) => state.push_log(
-                            LogLevel::Info,
-                            format!("model saved to {resolved}"),
-                        ),
-                        Err(e) => state.push_log(
-                            LogLevel::Error,
-                            format!("failed to save: {e}"),
-                        ),
+                        Ok(()) => {
+                            state.push_log(LogLevel::Info, format!("model saved to {resolved}"))
+                        }
+                        Err(e) => state.push_log(LogLevel::Error, format!("failed to save: {e}")),
                     }
                 }
                 return None;

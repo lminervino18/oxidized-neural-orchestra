@@ -97,8 +97,7 @@ impl Session {
                                 let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
                                 let reported: Vec<f32> =
                                     last_loss.iter().filter_map(|l| *l).collect();
-                                let avg_loss =
-                                    reported.iter().sum::<f32>() / reported.len() as f32;
+                                let avg_loss = reported.iter().sum::<f32>() / reported.len() as f32;
                                 let filled =
                                     ((current_epoch * bar_width) / max_epochs).min(bar_width);
                                 let spinner = SPINNER[spinner_i % SPINNER.len()];

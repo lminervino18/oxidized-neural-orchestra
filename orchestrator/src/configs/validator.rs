@@ -101,22 +101,22 @@ impl Validator {
                 len / row_size.get()
             }
             DatasetSrc::Local { path } => {
-    let metadata = std::fs::metadata(path).map_err(|e| {
-        OrchErr::InvalidConfig(format!("cannot read dataset file: {e}"))
-    })?;
-    let len_bytes = metadata.len() as usize;
-    let len = len_bytes / size_of::<f32>();
+                let metadata = std::fs::metadata(path).map_err(|e| {
+                    OrchErr::InvalidConfig(format!("cannot read dataset file: {e}"))
+                })?;
+                let len_bytes = metadata.len() as usize;
+                let len = len_bytes / size_of::<f32>();
 
-    if len % row_size != 0 {
-        let text = format!(
-            "dataset length ({len}) is not divisible by x_size + y_size ({row_size})"
-        );
-        return Err(OrchErr::InvalidConfig(text));
-    }
+                if len % row_size != 0 {
+                    let text = format!(
+                        "dataset length ({len}) is not divisible by x_size + y_size ({row_size})"
+                    );
+                    return Err(OrchErr::InvalidConfig(text));
+                }
 
-    // SAFETY: row_size is a positive integer.
-    len / row_size.get()
-}
+                // SAFETY: row_size is a positive integer.
+                len / row_size.get()
+            }
         };
 
         if samples == 0 {

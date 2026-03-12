@@ -48,11 +48,7 @@ fn draw_progress_bar(f: &mut Frame, area: Rect, state: &TrainingState) {
     };
     let empty = BAR_WIDTH - filled;
 
-    let pct = if max > 0 {
-        current * 100 / max
-    } else {
-        0
-    };
+    let pct = if max > 0 { current * 100 / max } else { 0 };
 
     let bar_style = if state.phase == crate::ui::screens::training::Phase::Finished {
         Theme::accent_magenta()
@@ -63,10 +59,7 @@ fn draw_progress_bar(f: &mut Frame, area: Rect, state: &TrainingState) {
     let line = Line::from(vec![
         Span::styled("█".repeat(filled), bar_style),
         Span::styled("░".repeat(empty), Theme::muted()),
-        Span::styled(
-            format!("  {current}/{max}  ({pct}%)"),
-            Theme::dim(),
-        ),
+        Span::styled(format!("  {current}/{max}  ({pct}%)"), Theme::dim()),
     ]);
 
     f.render_widget(
@@ -116,8 +109,7 @@ fn draw_table(f: &mut Frame, area: Rect, state: &TrainingState) {
 
             Row::new(vec![
                 Cell::from(format!("{}", w.id)).style(id_style),
-                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs))
-                    .style(Theme::text()),
+                Cell::from(format!("{}/{}", w.epochs_done, state.max_epochs)).style(Theme::text()),
                 Cell::from(loss_str).style(Theme::text()),
                 status_cell,
             ])
