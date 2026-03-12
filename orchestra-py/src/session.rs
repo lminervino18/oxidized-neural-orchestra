@@ -45,46 +45,12 @@ impl TrainedModel {
             .save_safetensors(path)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
-
-    /// Saves the trained parameters to a CSV file.
-    ///
-    /// # Args
-    /// * `path` - Output file path.
-    /// * `output_sizes` - List of output sizes per layer, e.g. `[8, 4, 1]`.
-    /// * `input_size` - Input size of the first layer.
-    ///
-    /// # Errors
-    /// Raises a `RuntimeError` if the file cannot be written.
-    pub fn save(&self, path: &str, output_sizes: Vec<usize>, input_size: usize) -> PyResult<()> {
-        let params = self.inner.params();
-        let mut csv = String::from("layer,type,index,value\n");
-        let mut offset = 0;
-        let mut prev = input_size;
-
-        for (layer_i, &out) in output_sizes.iter().enumerate() {
-            let w_count = prev * out;
-            let b_count = out;
-            for i in 0..w_count {
-                csv.push_str(&format!("{layer_i},weight,{i},{}\n", params[offset + i]));
-            }
-            offset += w_count;
-            for i in 0..b_count {
-                csv.push_str(&format!("{layer_i},bias,{i},{}\n", params[offset + i]));
-            }
-            offset += b_count;
-            prev = out;
-        }
-
-        let mut file = std::fs::File::create(path)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        file.write_all(csv.as_bytes())
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        Ok(())
-    }
 }
 
 /// A handle to an ongoing training session.
+///
+/// Wraps `orchestrator::Session` with additional metadata (`max_epochs`,
+/// `worker_count`) used to render the progress bar during training.
 #[pyclass]
 pub struct Session {
     pub inner: Option<orchestrator::Session>,

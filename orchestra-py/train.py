@@ -136,9 +136,6 @@ def main() -> None:
         params = trained.weights()
         print_params(params, [8, 4, 1], input_size=1)
 
-        trained.save("weights.csv", output_sizes=[8, 4, 1], input_size=1)
-        print("weights saved to weights.csv")
-
         trained.save_safetensors("model.safetensors")
         _verify_safetensors("model.safetensors")
     except RuntimeError as e:
