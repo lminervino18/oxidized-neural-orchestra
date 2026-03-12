@@ -8,18 +8,7 @@ use ratatui::{
 
 use crate::ui::screens::training::{Phase, TrainingState};
 use crate::ui::theme::Theme;
-
-/// Formats a loss value with adaptive precision.
-///
-/// Uses scientific notation for values smaller than `1e-4` to avoid
-/// displaying them as `0.00000000` at fixed precision.
-fn fmt_loss(loss: f32) -> String {
-    if loss.abs() < 1e-4 {
-        format!("{loss:.3e}")
-    } else {
-        format!("{loss:.8}")
-    }
-}
+use crate::ui::utils::fmt_loss;
 
 /// Draws the top header bar with session phase, elapsed time, worker/server counts and optimizer.
 ///

@@ -22,15 +22,8 @@ use crate::ui::{
     },
     screens::menu::MenuState,
     theme::Theme,
+    utils::fmt_loss,
 };
-
-fn fmt_loss(loss: f32) -> String {
-    if loss.abs() < 1e-4 {
-        format!("{loss:.3e}")
-    } else {
-        format!("{loss:.8}")
-    }
-}
 
 /// Per-worker colors for charts and table highlights.
 pub const WORKER_COLORS: &[Color] = &[
