@@ -6,8 +6,7 @@ use std::net::ToSocketAddrs;
 
 use configs::Adapter;
 use error::{OrchErr, Result};
-pub use session::Session;
-pub use session::TrainingEvent;
+pub use session::{Session, TrainedModel, TrainingEvent};
 
 use crate::configs::{ModelConfig, TrainingConfig, Validator};
 
@@ -26,8 +25,10 @@ pub fn train<A: ToSocketAddrs>(model: ModelConfig, training: TrainingConfig<A>) 
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 
-    let adapter = Adapter::new();
-    let (workers, partitions, servers) = adapter.adapt_configs(model, &training)?;
+    let input_size = training.dataset.x_size.get();
 
-    Session::new(workers, partitions, servers)
+    let adapter = Adapter::new();
+    let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
+
+    Session::new(workers, partitions, servers, model, input_size)
 }

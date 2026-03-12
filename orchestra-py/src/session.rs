@@ -5,60 +5,52 @@ use pyo3::prelude::*;
 
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+/// Formats a loss value with adaptive precision.
+///
+/// Uses scientific notation for values smaller than `1e-4` to avoid
+/// displaying them as `0.00000000` at fixed precision.
+fn fmt_loss(loss: f32) -> String {
+    if loss.abs() < 1e-4 {
+        format!("{loss:.3e}")
+    } else {
+        format!("{loss:.8}")
+    }
+}
+
 /// The final trained model returned after a session completes.
 #[pyclass]
 pub struct TrainedModel {
-    pub params: Vec<f32>,
+    pub inner: orchestrator::TrainedModel,
 }
 
 #[pymethods]
 impl TrainedModel {
-    /// Returns the trained model parameters as a Python list.
+    /// Returns the trained model parameters as a flat Python list.
     pub fn weights(&self) -> Vec<f32> {
-        self.params.clone()
+        self.inner.params().to_vec()
     }
 
-    /// Saves the trained parameters to a CSV file.
+    /// Saves the trained parameters to a `.safetensors` file.
+    ///
+    /// Each dense layer produces two tensors: `layer_N.weight` and `layer_N.bias`,
+    /// following the PyTorch `state_dict` convention.
     ///
     /// # Args
-    /// * `path` - Output file path.
-    /// * `output_sizes` - List of output sizes per layer, e.g. `[8, 4, 1]`.
-    /// * `input_size` - Input size of the first layer.
+    /// * `path` - Output file path (e.g. `"model.safetensors"`).
     ///
     /// # Errors
     /// Raises a `RuntimeError` if the file cannot be written.
-    pub fn save(&self, path: &str, output_sizes: Vec<usize>, input_size: usize) -> PyResult<()> {
-        let mut csv = String::from("layer,type,index,value\n");
-        let mut offset = 0;
-        let mut prev = input_size;
-
-        for (layer_i, &out) in output_sizes.iter().enumerate() {
-            let w_count = prev * out;
-            let b_count = out;
-            for i in 0..w_count {
-                csv.push_str(&format!(
-                    "{layer_i},weight,{i},{}\n",
-                    self.params[offset + i]
-                ));
-            }
-            offset += w_count;
-            for i in 0..b_count {
-                csv.push_str(&format!("{layer_i},bias,{i},{}\n", self.params[offset + i]));
-            }
-            offset += b_count;
-            prev = out;
-        }
-
-        let mut file = std::fs::File::create(path)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-        file.write_all(csv.as_bytes())
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-
-        Ok(())
+    pub fn save_safetensors(&self, path: &str) -> PyResult<()> {
+        self.inner
+            .save_safetensors(path)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 }
 
 /// A handle to an ongoing training session.
+///
+/// Wraps `orchestrator::Session` with additional metadata (`max_epochs`,
+/// `worker_count`) used to render the progress bar during training.
 #[pyclass]
 pub struct Session {
     pub inner: Option<orchestrator::Session>,
@@ -81,7 +73,7 @@ impl Session {
         let max_epochs = self.max_epochs;
         let worker_count = self.worker_count;
 
-        let params = py
+        let trained = py
             .allow_threads(|| {
                 std::thread::spawn(move || {
                     let mut rx = session.event_listener();
@@ -111,17 +103,17 @@ impl Session {
                                 let spinner = SPINNER[spinner_i % SPINNER.len()];
                                 spinner_i += 1;
                                 print!(
-                                    "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={:.6}\n",
+                                    "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={}\n",
                                     spinner,
                                     "█".repeat(filled),
                                     "░".repeat(bar_width - filled),
                                     current_epoch,
                                     max_epochs,
-                                    avg_loss,
+                                    fmt_loss(avg_loss),
                                 );
                                 let _ = std::io::stdout().flush();
                             }
-                            Some(TrainingEvent::Complete(params)) => {
+                            Some(TrainingEvent::Complete(trained)) => {
                                 let reported: Vec<f32> =
                                     last_loss.iter().filter_map(|l| *l).collect();
                                 let avg_loss = if reported.is_empty() {
@@ -130,14 +122,14 @@ impl Session {
                                     reported.iter().sum::<f32>() / reported.len() as f32
                                 };
                                 print!(
-                                    "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={:.6}\n\n",
+                                    "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={}\n\n",
                                     "█".repeat(bar_width),
                                     max_epochs,
                                     max_epochs,
-                                    avg_loss,
+                                    fmt_loss(avg_loss),
                                 );
                                 let _ = std::io::stdout().flush();
-                                return Ok(params);
+                                return Ok(trained);
                             }
                             Some(TrainingEvent::Error(e)) => {
                                 println!();
@@ -153,6 +145,6 @@ impl Session {
             })
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
 
-        Ok(TrainedModel { params })
+        Ok(TrainedModel { inner: trained })
     }
 }

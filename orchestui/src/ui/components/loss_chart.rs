@@ -9,6 +9,7 @@ use ratatui::{
 
 use crate::ui::screens::training::{TrainingState, WORKER_COLORS};
 use crate::ui::theme::Theme;
+use crate::ui::utils::fmt_axis_loss;
 
 /// Draws the average loss chart and the selected worker loss chart stacked vertically.
 ///
@@ -80,7 +81,7 @@ fn draw_avg_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
                 .bounds([0.0, max_loss * 1.1])
                 .labels(vec![
                     Span::styled("0", Theme::muted()),
-                    Span::styled(format!("{max_loss:.2}"), Theme::muted()),
+                    Span::styled(fmt_axis_loss(max_loss), Theme::muted()),
                 ]),
         );
 
@@ -157,7 +158,7 @@ fn draw_selected_worker_chart(f: &mut Frame, area: Rect, state: &TrainingState) 
                 .bounds([0.0, max_loss * 1.1])
                 .labels(vec![
                     Span::styled("0", Theme::muted()),
-                    Span::styled(format!("{max_loss:.2}"), Theme::muted()),
+                    Span::styled(fmt_axis_loss(max_loss), Theme::muted()),
                 ]),
         );
 

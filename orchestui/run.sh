@@ -23,7 +23,7 @@ while IFS= read -r addr; do
   PORT=$(echo "$addr" | cut -d: -f2)
   setsid gnome-terminal --title="server-$i" -- bash -c "
     cd $ROOT
-    PORT=$PORT RUST_LOG=debug cargo run -p parameter_server
+    PORT=$PORT RUST_LOG=info cargo run --release -p parameter_server
     exec bash
   " &
   i=$((i + 1))
@@ -42,7 +42,7 @@ while IFS= read -r addr; do
   PORT=$(echo "$addr" | cut -d: -f2)
   setsid gnome-terminal --title="worker-$i" -- bash -c "
     cd $ROOT
-    PORT=$PORT RUST_LOG=debug cargo run -p worker
+    PORT=$PORT RUST_LOG=info cargo run --release -p worker
     exec bash
   " &
   i=$((i + 1))
@@ -66,4 +66,4 @@ sleep 0.5
 
 # Run TUI in current terminal
 cd $ROOT
-RUST_LOG=debug cargo run -p orchestui 2>/tmp/ono-orchestrator.log
+RUST_LOG=info cargo run --release -p orchestui 2>/tmp/ono-orchestrator.log

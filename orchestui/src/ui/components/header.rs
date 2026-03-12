@@ -8,6 +8,7 @@ use ratatui::{
 
 use crate::ui::screens::training::{Phase, TrainingState};
 use crate::ui::theme::Theme;
+use crate::ui::utils::fmt_loss;
 
 /// Draws the top header bar with session phase, elapsed time, worker/server counts and optimizer.
 ///
@@ -23,7 +24,9 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Phase::Error => Span::styled("ERROR", Theme::error()),
     };
 
-    let hint = if state.is_active() {
+    let hint = if state.final_trained.is_some() {
+        Span::styled("  [q] menu  [←/→] worker  [s] save", Theme::muted())
+    } else if state.is_active() {
         Span::styled("  [q] leave  [←/→] worker", Theme::muted())
     } else {
         Span::styled("  [q] menu  [←/→] worker", Theme::muted())
@@ -69,5 +72,5 @@ fn avg_loss_str(state: &TrainingState) -> String {
     }
 
     let avg = losses.iter().sum::<f32>() / losses.len() as f32;
-    format!("{avg:.4}")
+    fmt_loss(avg)
 }

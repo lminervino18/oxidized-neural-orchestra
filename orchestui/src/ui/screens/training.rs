@@ -3,7 +3,7 @@ use std::time::Instant;
 use crossterm::event::KeyCode;
 use orchestrator::{
     configs::{ModelConfig, TrainingConfig},
-    TrainingEvent,
+    TrainedModel, TrainingEvent,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -17,10 +17,12 @@ use super::{Action, Screen};
 use crate::ui::{
     components::{
         confirm_quit::draw_confirm_quit, header::draw_header, log_panel::draw_log,
-        loss_chart::draw_charts, params_panel::draw_params, workers_table::draw_workers_table,
+        loss_chart::draw_charts, params_panel::draw_params, save_popup::draw_save_popup,
+        workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
     theme::Theme,
+    utils::fmt_loss,
 };
 
 /// Per-worker colors for charts and table highlights.
@@ -50,6 +52,15 @@ pub enum Phase {
 pub enum ConfirmQuit {
     Hidden,
     Visible,
+}
+
+/// Whether the save-path popup is shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SavePopup {
+    /// Popup is not visible.
+    Hidden,
+    /// Popup is visible, holding the current path input.
+    Visible(String),
 }
 
 /// Live state for a single worker node.
@@ -86,10 +97,12 @@ pub struct TrainingState {
     /// Per-worker loss time series as (epoch, loss) pairs.
     pub loss_series: Vec<Vec<(f64, f64)>>,
     pub logs: Vec<(LogLevel, String)>,
-    pub final_params: Option<Vec<f32>>,
+    /// The trained model received on completion, including architecture and params.
+    pub final_trained: Option<TrainedModel>,
     pub error: Option<String>,
     pub events: mpsc::Receiver<TrainingEvent>,
     pub confirm_quit: ConfirmQuit,
+    pub save_popup: SavePopup,
     pub selected_worker: usize,
     /// Set when the session fails to start — shown as a full-screen error.
     pub startup_error: Option<String>,
@@ -159,10 +172,11 @@ impl TrainingState {
                 LogLevel::Info,
                 format!("connecting to {workers_total} worker(s) and {servers_total} server(s)..."),
             )],
-            final_params: None,
+            final_trained: None,
             error: None,
             events,
             confirm_quit: ConfirmQuit::Hidden,
+            save_popup: SavePopup::Hidden,
             selected_worker: 0,
             startup_error: None,
         }
@@ -187,10 +201,11 @@ impl TrainingState {
             workers: Vec::new(),
             loss_series: Vec::new(),
             logs: Vec::new(),
-            final_params: None,
+            final_trained: None,
             error: Some(err.clone()),
             events: rx,
             confirm_quit: ConfirmQuit::Hidden,
+            save_popup: SavePopup::Hidden,
             selected_worker: 0,
             startup_error: Some(err),
         }
@@ -224,7 +239,10 @@ impl TrainingState {
                     let last = losses.last().copied().unwrap_or(0.0);
                     self.push_log(
                         LogLevel::Info,
-                        format!("worker {worker_id}  epoch {epochs_done}  loss={last:.4}"),
+                        format!(
+                            "worker {worker_id}  epoch {epochs_done}  loss={}",
+                            fmt_loss(last)
+                        ),
                     );
                 }
             }
@@ -236,13 +254,16 @@ impl TrainingState {
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
 
-            TrainingEvent::Complete(params) => {
+            TrainingEvent::Complete(trained) => {
                 self.phase = Phase::Finished;
                 self.push_log(
                     LogLevel::Info,
-                    format!("training complete — {} parameters received", params.len()),
+                    format!(
+                        "training complete — {} parameters received",
+                        trained.params().len()
+                    ),
                 );
-                self.final_params = Some(params);
+                self.final_trained = Some(trained);
             }
 
             TrainingEvent::Error(e) => {
@@ -330,6 +351,42 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
         return Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))));
     }
 
+    // Save popup takes priority over everything else.
+    if let SavePopup::Visible(ref mut path) = state.save_popup {
+        match key {
+            KeyCode::Char(c) => {
+                path.push(c);
+                return None;
+            }
+            KeyCode::Backspace => {
+                path.pop();
+                return None;
+            }
+            KeyCode::Esc => {
+                state.save_popup = SavePopup::Hidden;
+                return None;
+            }
+            KeyCode::Enter => {
+                let resolved = if path.trim().is_empty() {
+                    "model.safetensors".to_string()
+                } else {
+                    path.trim().to_string()
+                };
+                state.save_popup = SavePopup::Hidden;
+                if let Some(trained) = &state.final_trained {
+                    match trained.save_safetensors(&resolved) {
+                        Ok(()) => {
+                            state.push_log(LogLevel::Info, format!("model saved to {resolved}"))
+                        }
+                        Err(e) => state.push_log(LogLevel::Error, format!("failed to save: {e}")),
+                    }
+                }
+                return None;
+            }
+            _ => return None,
+        }
+    }
+
     match (key, state.confirm_quit, state.is_active()) {
         (KeyCode::Left, ConfirmQuit::Hidden, _) => {
             state.prev_worker();
@@ -337,6 +394,10 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
         }
         (KeyCode::Right, ConfirmQuit::Hidden, _) => {
             state.next_worker();
+            None
+        }
+        (KeyCode::Char('s'), ConfirmQuit::Hidden, false) if state.final_trained.is_some() => {
+            state.save_popup = SavePopup::Visible(String::new());
             None
         }
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, true) => {
@@ -389,7 +450,7 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     let right = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(if state.final_params.is_some() {
+        .constraints(if state.final_trained.is_some() {
             vec![Constraint::Min(4), Constraint::Length(5)]
         } else {
             vec![Constraint::Min(4)]
@@ -398,7 +459,7 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     draw_workers_table(f, right[0], state);
 
-    if state.final_params.is_some() {
+    if state.final_trained.is_some() {
         draw_params(f, right[1], state);
     }
 
@@ -406,6 +467,10 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     if state.confirm_quit == ConfirmQuit::Visible {
         draw_confirm_quit(f, area);
+    }
+
+    if let SavePopup::Visible(ref path) = state.save_popup {
+        draw_save_popup(f, path);
     }
 }
 

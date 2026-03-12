@@ -77,7 +77,7 @@ impl<O: Optimizer> Store for WildStore<O> {
     /// # Returns
     /// A `SizeMismatchErr` if the length of `grad` and the size of the storage mismatch.
     fn accumulate(&self, grad: &[f32]) -> Result<()> {
-        if self.nparams == grad.len() {
+        if self.nparams != grad.len() {
             return Err(SizeMismatchErr);
         }
 
@@ -96,7 +96,7 @@ impl<O: Optimizer> Store for WildStore<O> {
     fn update_params(&self) {}
 
     fn pull_params(&self, out: &mut [f32]) -> Result<()> {
-        if self.nparams == out.len() {
+        if self.nparams != out.len() {
             return Err(SizeMismatchErr);
         }
 
