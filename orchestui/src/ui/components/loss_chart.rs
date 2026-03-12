@@ -9,15 +9,7 @@ use ratatui::{
 
 use crate::ui::screens::training::{TrainingState, WORKER_COLORS};
 use crate::ui::theme::Theme;
-
-/// Formats a loss value for chart axis labels with adaptive precision.
-fn fmt_axis_loss(loss: f64) -> String {
-    if loss.abs() < 1e-4 {
-        format!("{loss:.2e}")
-    } else {
-        format!("{loss:.4}")
-    }
-}
+use crate::ui::utils::fmt_axis_loss;
 
 /// Draws the average loss chart and the selected worker loss chart stacked vertically.
 ///

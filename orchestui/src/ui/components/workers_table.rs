@@ -8,20 +8,9 @@ use ratatui::{
 
 use crate::ui::screens::training::{TrainingState, WORKER_COLORS};
 use crate::ui::theme::Theme;
+use crate::ui::utils::fmt_loss;
 
 const BAR_WIDTH: usize = 30;
-
-/// Formats a loss value with adaptive precision.
-///
-/// Uses scientific notation for values smaller than `1e-4` to avoid
-/// displaying them as `0.00000000` at fixed precision.
-fn fmt_loss(loss: f32) -> String {
-    if loss.abs() < 1e-4 {
-        format!("{loss:.3e}")
-    } else {
-        format!("{loss:.8}")
-    }
-}
 
 /// Draws the global training progress bar followed by the workers status table.
 ///

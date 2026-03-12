@@ -46,3 +46,22 @@ pub fn fmt_loss(loss: f32) -> String {
         format!("{loss:.8}")
     }
 }
+
+/// Formats a loss value for chart axis labels with adaptive precision.
+///
+/// Uses scientific notation for values smaller than `1e-4`. Intended for
+/// chart axis labels where space is limited, so precision is lower than
+/// `fmt_loss`.
+///
+/// # Args
+/// * `loss` - The loss value to format.
+///
+/// # Returns
+/// A formatted string representation of the loss.
+pub fn fmt_axis_loss(loss: f64) -> String {
+    if loss.abs() < 1e-4 {
+        format!("{loss:.2e}")
+    } else {
+        format!("{loss:.4}")
+    }
+}
