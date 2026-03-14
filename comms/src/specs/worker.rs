@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use serde::{Deserialize, Serialize};
 
 use super::machine_learning::{DatasetSpec, TrainerSpec};
@@ -11,7 +9,7 @@ use super::machine_learning::{DatasetSpec, TrainerSpec};
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmSpec {
     ParameterServer {
-        server_addrs: Vec<SocketAddr>,
+        server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     },

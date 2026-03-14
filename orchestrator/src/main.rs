@@ -1,50 +1,69 @@
-use std::{env, num::NonZeroUsize, path::PathBuf};
-
 use orchestrator::{configs::*, train};
+use std::{
+    env, io,
+    num::NonZeroUsize,
+    process::{Command, ExitStatus},
+};
 
-/// Reads a required environment variable, panicking with a clear message if absent.
+const MODEL_OUTPUT_PATH: &str = "model.safetensors";
+const SERVER_BASE_PORT: usize = 40_000;
+const WORKER_BASE_PORT: usize = 50_000;
+
+// The file path for the compose up script file.
+const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/compose_up.py");
+
+/// Set ups the docker containers for simulated execution of the system.
 ///
 /// # Arguments
-/// * `key` - The name of the environment variable.
+/// * `workers` - The amount of workers to use.
+/// * `servers` - The amount of servers to use.
+/// * `release` - The compilation mode for the rust compiler.
 ///
 /// # Returns
-/// The value of the environment variable as a `String`.
-///
-/// # Panics
-/// Panics if the variable is not set.
-fn require_env(key: &str) -> String {
-    env::var(key).unwrap_or_else(|_| panic!("required env var {key} is not set"))
+/// The exit status of the compose script.
+fn setup_docker(workers: usize, servers: usize, release: bool) -> io::Result<ExitStatus> {
+    let mut cmd = Command::new("python3");
+
+    cmd.arg(COMPOSE_FILE_PATH)
+        .arg("--workers")
+        .arg(workers.to_string())
+        .arg("--servers")
+        .arg(servers.to_string());
+
+    if release {
+        cmd.arg("--release");
+    }
+
+    cmd.spawn()?.wait()
 }
 
-/// Parses a required environment variable as a `usize`, panicking if absent or unparseable.
+/// Builds the addresses for both workers and servers.
 ///
 /// # Arguments
-/// * `key` - The name of the environment variable.
+/// * `workers` - The amount of workers to use.
+/// * `servers` - The amount of servers to use.
 ///
 /// # Returns
-/// The parsed `usize` value.
-///
-/// # Panics
-/// Panics if the variable is not set or cannot be parsed as `usize`.
-fn require_env_usize(key: &str) -> usize {
-    require_env(key)
-        .parse::<usize>()
-        .unwrap_or_else(|_| panic!("env var {key} must be a valid usize"))
+/// A tuple of lists of addresses.
+fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>) {
+    let worker_addrs = (0..workers)
+        .map(|i| format!("worker-{i}:{}", WORKER_BASE_PORT + i))
+        .collect();
+
+    let server_addrs = (0..servers)
+        .map(|i| format!("server-{i}:{}", SERVER_BASE_PORT + i))
+        .collect();
+
+    (worker_addrs, server_addrs)
 }
 
-fn main() {
-    env_logger::init();
+fn main() -> io::Result<()> {
+    let workers = 3;
+    let servers = 2;
+    let release = false;
 
-    let nworkers = require_env_usize("WORKERS");
-    let nservers = require_env_usize("SERVERS");
-
-    let worker_addrs: Vec<String> = (0..nworkers)
-        .map(|i| format!("worker-{i}:{}", 50_000 + i))
-        .collect();
-
-    let server_addrs: Vec<String> = (0..nservers)
-        .map(|i| format!("server-{i}:{}", 40_000 + i))
-        .collect();
+    setup_docker(workers, servers, release)?;
+    let (worker_addrs, server_addrs) = build_addresses(workers, servers);
 
     let model_config = ModelConfig {
         layers: vec![
@@ -61,7 +80,6 @@ fn main() {
         ],
     };
 
-    let path = PathBuf::from("/dataset");
     let training_config = TrainingConfig {
         worker_addrs,
         algorithm: AlgorithmConfig::ParameterServer {
@@ -70,14 +88,21 @@ fn main() {
             store: StoreConfig::Blocking,
         },
         dataset: DatasetConfig {
-            src: DatasetSrc::Local { path },
+            src: DatasetSrc::Inline {
+                data: vec![
+                    0.0, 0.0, 0.0, //
+                    0.0, 1.0, 1.0, //
+                    1.0, 0.0, 1.0, //
+                    1.0, 1.0, 0.0,
+                ],
+            },
             x_size: NonZeroUsize::new(2).unwrap(),
             y_size: NonZeroUsize::new(1).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(100).unwrap(),
+        max_epochs: NonZeroUsize::new(500).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
     };
@@ -93,20 +118,16 @@ fn main() {
             Some(orchestrator::TrainingEvent::Complete(trained)) => {
                 println!("params: {:?}", trained.params());
 
-                let out_path = "model.safetensors";
                 trained
-                    .save_safetensors(out_path)
+                    .save_safetensors(MODEL_OUTPUT_PATH)
                     .expect("failed to save model");
 
-                let size = std::fs::metadata(out_path)
-                    .expect("model.safetensors not found after save")
-                    .len();
-                assert!(size > 0, "model.safetensors is empty after save");
-                println!("model saved to {out_path} ({size} bytes)");
-
+                println!("saved model to {MODEL_OUTPUT_PATH}");
                 break;
             }
             res => println!("result: {res:?}"),
         }
     }
+
+    Ok(())
 }

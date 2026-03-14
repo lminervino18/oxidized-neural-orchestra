@@ -9,7 +9,7 @@ pub struct ModelJson {
 /// Parsed training configuration from `training.json`.
 #[derive(Debug)]
 pub struct TrainingJson {
-    pub config: TrainingConfig<String>,
+    pub config: TrainingConfig,
     pub worker_count: usize,
     pub server_count: usize,
 }
@@ -45,7 +45,7 @@ pub fn load_model(path: &str) -> Result<ModelJson, String> {
 pub fn load_training(path: &str) -> Result<TrainingJson, String> {
     let content =
         std::fs::read_to_string(path).map_err(|e| format!("cannot read '{path}': {e}"))?;
-    let config: TrainingConfig<String> =
+    let config: TrainingConfig =
         serde_json::from_str(&content).map_err(|e| format!("invalid training config: {e}"))?;
 
     let (worker_count, server_count) = match &config.algorithm {

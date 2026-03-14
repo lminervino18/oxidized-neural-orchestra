@@ -17,7 +17,7 @@
 /target
 
 # Docker compose files
-*compose*.yml
+*compose*.yaml
 
 # Local dev scripts and configs
 *.csv

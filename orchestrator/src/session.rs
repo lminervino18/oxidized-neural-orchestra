@@ -1,6 +1,10 @@
 use futures::future;
 use log::{debug, error, info, warn};
-use std::{io, net::SocketAddr, path::Path, thread};
+use std::{
+    io::{self, Cursor},
+    path::Path,
+    slice, thread,
+};
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt},
@@ -71,7 +75,7 @@ impl TrainedModel {
         // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
         // alignment is valid, and the slice is live for the duration of this function.
         let params_bytes = unsafe {
-            std::slice::from_raw_parts(self.params.as_ptr() as *const u8, self.params.len() * 4)
+            slice::from_raw_parts(self.params.as_ptr() as *const u8, self.params.len() * 4)
         };
 
         for (i, layer) in self.model.layers.iter().enumerate() {
@@ -149,9 +153,9 @@ impl Session {
     /// # Errors
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
     pub fn new(
-        workers: Vec<(SocketAddr, WorkerSpec)>,
+        workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition>,
-        servers: Vec<(SocketAddr, ServerSpec)>,
+        servers: Vec<(String, ServerSpec)>,
         model: ModelConfig,
         input_size: usize,
     ) -> Result<Self> {
@@ -294,15 +298,18 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any connection or send fails.
-    async fn create_servers(servers: Vec<(SocketAddr, ServerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
+    async fn create_servers(servers: Vec<(String, ServerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
         let mut channels = Vec::with_capacity(servers.len());
+
         for (addr, spec) in servers {
-            let (rx, mut tx) = Self::open_channel(addr)
+            let (rx, mut tx) = Self::open_channel(&addr)
                 .await
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+
             tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
             channels.push((rx, tx));
         }
+
         Ok(channels)
     }
 
@@ -318,7 +325,7 @@ impl Session {
     /// # Errors
     /// Returns an `OrchErr` if any connection or send fails.
     async fn create_workers<'a>(
-        workers: Vec<(SocketAddr, WorkerSpec)>,
+        workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
     ) -> Result<Vec<(NetRx, NetTx)>> {
         const CHUNK_SIZE: usize = 8192;
@@ -329,7 +336,8 @@ impl Session {
                 .zip(partitions)
                 .map(|((addr, spec), partition)| async move {
                     debug!("connecting to worker at {addr}");
-                    let (rx, mut tx) = Self::open_channel(addr)
+
+                    let (rx, mut tx) = Self::open_channel(&addr)
                         .await
                         .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
@@ -344,12 +352,11 @@ impl Session {
                         }
                         Partition::Inline { data } => {
                             let bytes: &[u8] = bytemuck::cast_slice(data);
-                            let mut cursor = std::io::Cursor::new(bytes);
+                            let mut cursor = Cursor::new(bytes);
                             send_dataset(&mut cursor, CHUNK_SIZE, &mut tx).await?;
                         }
                     }
 
-                    info!("worker at {addr} ready");
                     Ok::<_, OrchErr>((rx, tx))
                 });
 
@@ -367,7 +374,7 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `io::Error` if the connection fails.
-    async fn open_channel(addr: SocketAddr) -> io::Result<(NetRx, NetTx)> {
+    async fn open_channel(addr: &str) -> io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
         Ok(comms::channel(rx, tx))
