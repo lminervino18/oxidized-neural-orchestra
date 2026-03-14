@@ -1,5 +1,3 @@
-use std::net::ToSocketAddrs;
-
 use super::{AlgorithmConfig, DatasetConfig, ModelConfig, TrainingConfig};
 use crate::{
     configs::training::DatasetSrc,
@@ -28,11 +26,7 @@ impl Validator {
     ///
     /// # Errors
     /// An `OrchErr` if any invariant is unmet.
-    pub fn validate<A: ToSocketAddrs>(
-        &self,
-        model: &ModelConfig,
-        training: &TrainingConfig<A>,
-    ) -> Result<()> {
+    pub fn validate(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<()> {
         self.validate_model(model)?;
         self.validate_training(training)?;
         Ok(())
@@ -59,7 +53,7 @@ impl Validator {
     ///
     /// # Errors
     /// An `OrchErr` if any training invariant is unmet.
-    fn validate_training<A: ToSocketAddrs>(&self, training: &TrainingConfig<A>) -> Result<()> {
+    fn validate_training(&self, training: &TrainingConfig) -> Result<()> {
         if training.worker_addrs.is_empty() {
             let text = "at least one worker address is required".into();
             return Err(OrchErr::InvalidConfig(text));

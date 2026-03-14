@@ -1,10 +1,5 @@
 use std::{
-    cmp::Reverse,
-    collections::BinaryHeap,
-    fs,
-    net::{SocketAddr, ToSocketAddrs},
-    num::NonZeroUsize,
-    path::PathBuf,
+    cmp::Reverse, collections::BinaryHeap, fs, net::ToSocketAddrs, num::NonZeroUsize, path::PathBuf,
 };
 
 use comms::specs::{
@@ -47,14 +42,14 @@ impl Adapter {
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
     #[allow(clippy::type_complexity)]
-    pub fn adapt_configs<'a, A: ToSocketAddrs>(
+    pub fn adapt_configs<'a>(
         &self,
         model: ModelConfig,
-        training: &'a TrainingConfig<A>,
+        training: &'a TrainingConfig,
     ) -> Result<(
-        Vec<(SocketAddr, WorkerSpec)>,
+        Vec<(String, WorkerSpec)>,
         Vec<Partition<'a>>,
-        Vec<(SocketAddr, ServerSpec)>,
+        Vec<(String, ServerSpec)>,
     )> {
         let (servers, server_addrs, server_sizes, server_ordering) =
             self.adapt_servers(&model, training)?;
@@ -89,15 +84,15 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
-    fn adapt_workers<A: ToSocketAddrs>(
+    fn adapt_workers(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig<A>,
+        training: &TrainingConfig,
         dataset_specs: Vec<DatasetSpec>,
-        server_addrs: Vec<SocketAddr>,
+        server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-    ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
+    ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
         let algorithm_spec = AlgorithmSpec::ParameterServer {
             server_addrs,
@@ -110,12 +105,11 @@ impl Adapter {
             .iter()
             .enumerate()
             .zip(dataset_specs)
-            .map(|((i, addressable), dataset)| {
-                let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
-                    OrchErr::InvalidConfig(format!(
-                        "failted to resolve {i}'th worker's network address"
-                    ))
-                })?;
+            .map(|((i, addr), dataset)| {
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th worker's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
 
                 let worker_spec = WorkerSpec {
                     worker_id: i,
@@ -124,7 +118,7 @@ impl Adapter {
                     algorithm: algorithm_spec.clone(),
                 };
 
-                Ok((addr, worker_spec))
+                Ok((addr.clone(), worker_spec))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -143,13 +137,13 @@ impl Adapter {
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
     #[allow(clippy::type_complexity)]
-    fn adapt_servers<A: ToSocketAddrs>(
+    fn adapt_servers(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig<A>,
+        training: &TrainingConfig,
     ) -> Result<(
-        Vec<(SocketAddr, ServerSpec)>,
-        Vec<SocketAddr>,
+        Vec<(String, ServerSpec)>,
+        Vec<String>,
         Vec<usize>,
         Vec<usize>,
     )> {
@@ -176,7 +170,7 @@ impl Adapter {
         let mut server_ordering = vec![0; nlayers];
 
         for (server_i, bin) in param_gen_bins.iter().enumerate() {
-            for &(layer_i, _) in bin {
+            for &(layer_i, ..) in bin {
                 server_ordering[layer_i] = server_i;
             }
         }
@@ -199,12 +193,11 @@ impl Adapter {
             .iter()
             .zip(chained_param_gens)
             .enumerate()
-            .map(|(i, (addressable, (param_gen_spec, size)))| {
-                let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
-                    OrchErr::InvalidConfig(format!(
-                        "failed to resolve {i}'th server's network address"
-                    ))
-                })?;
+            .map(|(i, (addr, (param_gen_spec, size)))| {
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th server's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
 
                 let server_spec = ServerSpec {
                     id: i,
@@ -216,13 +209,13 @@ impl Adapter {
                     seed: training.seed,
                 };
 
-                Ok(((addr, server_spec), size))
+                Ok(((addr.clone(), server_spec), size))
             })
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .unzip();
 
-        let server_addrs = servers.iter().map(|&(addr, _)| addr).collect();
+        let server_addrs = servers.iter().map(|(addr, _)| addr.clone()).collect();
         Ok((servers, server_addrs, server_sizes, server_ordering))
     }
 
@@ -269,11 +262,7 @@ impl Adapter {
     ///
     /// # Returns
     /// The trainer's specification.
-    fn adapt_trainer<A: ToSocketAddrs>(
-        &self,
-        model: &ModelConfig,
-        training: &TrainingConfig<A>,
-    ) -> TrainerSpec {
+    fn adapt_trainer(&self, model: &ModelConfig, training: &TrainingConfig) -> TrainerSpec {
         let (layers, _) = self.adapt_layers(model, training.dataset.x_size);
         let optimizer_spec = self.adapt_optimizer(training.optimizer);
         let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);

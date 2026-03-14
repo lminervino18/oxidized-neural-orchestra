@@ -2,14 +2,13 @@ use std::{
     error::Error,
     fmt::{self, Display},
     io,
-    net::SocketAddr,
 };
 
 /// The orchestrator module's error type.
 #[derive(Debug)]
 pub enum OrchErr {
     InvalidConfig(String),
-    ConnectionFailed { addr: SocketAddr, source: io::Error },
+    ConnectionFailed { addr: String, source: io::Error },
     WorkerError { worker_id: usize, msg: String },
     ServerError(String),
     Io(io::Error),
