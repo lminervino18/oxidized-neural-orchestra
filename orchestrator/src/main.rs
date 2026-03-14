@@ -12,7 +12,7 @@ const WORKER_BASE_PORT: usize = 50_000;
 // The file path for the compose up script file.
 const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/compose_up.py");
 
-/// Set ups the docker containers for simulated execution of the system.
+/// Sets up the docker containers for simulated execution of the system.
 ///
 /// # Arguments
 /// * `workers` - The amount of workers to use.
