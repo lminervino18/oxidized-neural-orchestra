@@ -33,7 +33,7 @@ impl Dense {
         self.size
     }
 
-    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> Result<ArrayView2<'_, f32>> {
+    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> Result<ArrayView2<f32>> {
         self.input.reshape_inplace(x.raw_dim());
         self.input.assign(&x);
 
@@ -52,7 +52,7 @@ impl Dense {
         params: &[f32],
         grad: &mut [f32],
         d: ArrayViewMut2<f32>,
-    ) -> Result<ArrayViewMut2<'_, f32>> {
+    ) -> Result<ArrayViewMut2<f32>> {
         let (mut dw, mut db) = self.view_grad(grad)?;
         linalg::general_mat_mul(1.0, &self.input.t(), &d, 0.0, &mut dw);
         db.assign(&d.sum_axis(Axis(0)));
@@ -62,6 +62,36 @@ impl Dense {
         linalg::general_mat_mul(1.0, &d, &w.t(), 0.0, &mut self.delta);
 
         Ok(self.delta.view_mut())
+    }
+
+    /// Gives a view of the raw parameter slice as the weights and biases of this layer.
+    ///
+    /// # Arguments
+    /// * `params` - A slice of parameters.
+    ///
+    /// # Returns
+    /// A tuple containing the weights and biases or an error if there's a mismatch
+    /// between the size of the gradient and the size of the layer.
+    fn view_params<'a>(
+        &self,
+        params: &'a [f32],
+    ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
+        if params.len() != self.size {
+            return Err(MlErr::SizeMismatch {
+                what: "params",
+                got: params.len(),
+                expected: self.size,
+            });
+        }
+
+        let w_size = self.size - self.dim.1;
+
+        // SAFETY: The if condition above checks that the size of the
+        //         parameters is exactly the size of the layer.
+        let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
+        let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
+
+        Ok((weights, biases))
     }
 
     /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
@@ -93,36 +123,6 @@ impl Dense {
         let db = ArrayViewMut1::from_shape(self.dim.1, db_raw).unwrap();
 
         Ok((dw, db))
-    }
-
-    /// Gives a view of the raw parameter slice as the weights and biases of this layer.
-    ///
-    /// # Arguments
-    /// * `params` - A slice of parameters.
-    ///
-    /// # Returns
-    /// A tuple containing the weights and biases or an error if there's a mismatch
-    /// between the size of the gradient and the size of the layer.
-    fn view_params<'a>(
-        &self,
-        params: &'a [f32],
-    ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
-        if params.len() != self.size {
-            return Err(MlErr::SizeMismatch {
-                what: "params",
-                got: params.len(),
-                expected: self.size,
-            });
-        }
-
-        let w_size = self.size - self.dim.1;
-
-        // SAFETY: The if condition above checks that the size of the
-        //         parameters is exactly the size of the layer.
-        let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
-        let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
-
-        Ok((weights, biases))
     }
 }
 

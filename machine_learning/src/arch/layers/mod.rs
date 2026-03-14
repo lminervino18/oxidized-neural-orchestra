@@ -1,3 +1,4 @@
+mod conv2d;
 mod dense;
 mod layer;
 mod sigmoid;
@@ -6,6 +7,7 @@ use std::mem;
 
 use ndarray::{Array, Dimension, IntoDimension};
 
+pub(super) use conv2d::Conv2d;
 pub(super) use dense::Dense;
 pub use layer::Layer;
 pub(super) use sigmoid::Sigmoid;

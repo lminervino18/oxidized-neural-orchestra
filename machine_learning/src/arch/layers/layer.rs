@@ -1,6 +1,6 @@
 use ndarray::prelude::*;
 
-use super::{Dense, Sigmoid};
+use super::{Conv2d, Dense, Sigmoid};
 use crate::Result;
 
 mod private {
@@ -12,6 +12,7 @@ mod private {
     pub(super) enum Inner {
         Dense(Dense),
         Sigmoid(Sigmoid),
+        Conv2d(Conv2d),
     }
 }
 use private::Inner::{self, *};
@@ -43,6 +44,33 @@ impl Layer {
         Self(Inner::Sigmoid(Sigmoid::new(amp)))
     }
 
+    /// Creates a new `Layer::Conv2d` layer.
+    ///
+    /// # Arguments
+    /// * `filters` - The amount of filters.
+    /// * `in_channels` - The amount of input channels.
+    /// * `kernel_size` - The height and width of the kernel.
+    /// * `stride` - The stride for the kernel.
+    /// * `padding` - The parameter padding size.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
+    pub fn conv2d(
+        filters: usize,
+        in_channels: usize,
+        kernel_size: (usize, usize),
+        stride: usize,
+        padding: usize,
+    ) -> Self {
+        Self(Inner::Conv2d(Conv2d::new(
+            filters,
+            in_channels,
+            kernel_size,
+            stride,
+            padding,
+        )))
+    }
+
     /// The size of the layer.
     ///
     /// # Returns
@@ -51,6 +79,7 @@ impl Layer {
         match &self.0 {
             Dense(layer) => layer.size(),
             Sigmoid(layer) => layer.size(),
+            Conv2d(layer) => layer.size(),
         }
     }
 
@@ -70,6 +99,7 @@ impl Layer {
         match &mut self.0 {
             Dense(layer) => layer.forward(params, x),
             Sigmoid(layer) => layer.forward(x),
+            _ => todo!(),
         }
     }
 
@@ -92,6 +122,7 @@ impl Layer {
         match &mut self.0 {
             Dense(layer) => layer.backward(params, grad, d),
             Sigmoid(layer) => layer.backward(d),
+            _ => todo!(),
         }
     }
 }
