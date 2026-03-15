@@ -1,5 +1,6 @@
 mod conv2d;
 mod dense;
+mod flatten;
 mod layer;
 mod sigmoid;
 
@@ -9,6 +10,7 @@ use ndarray::{Array, Dimension, IntoDimension};
 
 pub(super) use conv2d::Conv2d;
 pub(super) use dense::Dense;
+pub(super) use flatten::Flatten;
 pub use layer::Layer;
 pub(super) use sigmoid::Sigmoid;
 

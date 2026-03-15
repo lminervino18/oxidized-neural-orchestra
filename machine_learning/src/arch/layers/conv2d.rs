@@ -1,6 +1,5 @@
-use ndarray::{
-    Array2, Array4, ArrayView1, ArrayView4, ArrayViewMut1, ArrayViewMut4, Axis, linalg, s,
-};
+use ndarray::prelude::*;
+use ndarray_conv::{ConvExt, ConvMode, PaddingMode};
 
 use crate::{MlErr, Result, arch::InplaceReshape};
 
@@ -12,16 +11,13 @@ pub struct Conv2d {
     size: usize,
     w_size: usize,
 
-    // Forward metadata
-    input_padded: Array4<f32>,
-    columns: Array2<f32>,
-    output_buffer: Array4<f32>,
-    res_buf: Array2<f32>,
+    // Input metadata
+    input: Array4<f32>,
+    output: Array4<f32>,
 
     // Output metadata
-    input: Array4<f32>,
     delta: Array4<f32>,
-    d_cols: Array2<f32>,
+    dilated: Array4<f32>,
 }
 
 impl Conv2d {
@@ -35,7 +31,6 @@ impl Conv2d {
         let (kh, kw) = kernel_size;
         let w_size = filters * in_channels * kh * kw;
         let size = w_size + filters;
-        let zeros2 = Array2::zeros((1, 1));
         let zeros4 = Array4::zeros((1, 1, 1, 1));
 
         Self {
@@ -44,13 +39,10 @@ impl Conv2d {
             padding,
             size,
             w_size,
-            input_padded: zeros4.clone(),
-            columns: zeros2.clone(),
-            res_buf: zeros2.clone(),
-            output_buffer: zeros4.clone(),
             input: zeros4.clone(),
+            output: zeros4.clone(),
             delta: zeros4.clone(),
-            d_cols: zeros2.clone(),
+            dilated: zeros4.clone(),
         }
     }
 
@@ -59,30 +51,30 @@ impl Conv2d {
     }
 
     pub fn forward(&mut self, params: &[f32], x: ArrayView4<f32>) -> Result<ArrayView4<'_, f32>> {
-        let (f, c, kh, kw) = self.kernel_dim;
-        let (batch, _, h, w) = x.dim();
-
-        let out_h = (h + 2 * self.padding - kh) / self.stride + 1;
-        let out_w = (w + 2 * self.padding - kw) / self.stride + 1;
+        let Self {
+            stride, padding, ..
+        } = *self;
 
         self.input.reshape_inplace(x.raw_dim());
         self.input.assign(&x);
 
-        self.im2col(x);
-
         let (w, b) = self.view_params(params)?;
-        let w_flat = w.to_shape((f, c * kh * kw)).unwrap();
+        let conv_mode = ConvMode::Custom {
+            padding: [0, 0, padding, padding],
+            strides: [1, 1, stride, stride],
+        };
 
-        self.res_buf.reshape_inplace((f, batch * out_h * out_w));
-        linalg::general_mat_mul(1.0, &w_flat, &self.columns, 0.0, &mut self.res_buf);
-        self.res_buf += &b.insert_axis(Axis(1));
+        let mut output = x.conv(&w, conv_mode, PaddingMode::Zeros).unwrap();
+        let b_reshaped = b
+            .view()
+            .insert_axis(Axis(0))
+            .insert_axis(Axis(2))
+            .insert_axis(Axis(3));
 
-        let temp_view = self.res_buf.to_shape((f, out_h, out_w, batch)).unwrap();
-        let permuted_axes = temp_view.permuted_axes([3, 0, 1, 2]);
-        self.output_buffer.reshape_inplace((batch, f, out_h, out_w));
-        self.output_buffer.assign(&permuted_axes);
+        output += &b_reshaped;
+        self.output = output;
 
-        Ok(self.output_buffer.view())
+        Ok(self.output.view())
     }
 
     pub fn backward(
@@ -91,119 +83,61 @@ impl Conv2d {
         grad: &mut [f32],
         d: ArrayViewMut4<f32>,
     ) -> Result<ArrayViewMut4<'_, f32>> {
-        let (f, c, kh, kw) = self.kernel_dim;
-        let (batch, _, xh, xw) = self.input.dim();
-        let out_h = (xh + 2 * self.padding - kh) / self.stride + 1;
-        let out_w = (xw + 2 * self.padding - kw) / self.stride + 1;
+        let Self {
+            padding,
+            stride,
+            kernel_dim: (.., kh, kw),
+            ..
+        } = *self;
 
+        let (.., in_h, in_w) = self.input.dim();
         let (mut dw, mut db) = self.view_grad(grad)?;
         let (w, _) = self.view_params(params)?;
 
-        let permuted = d.permuted_axes([1, 2, 3, 0]);
-        let d_out_reshaped = permuted.to_shape((f, batch * out_h * out_w)).unwrap();
-
-        let db_sum = d_out_reshaped.sum_axis(Axis(1));
+        let db_sum = d.sum_axis(Axis(0)).sum_axis(Axis(1)).sum_axis(Axis(1));
         db.assign(&db_sum);
 
-        let dw_view = dw.view_mut();
-        let mut dw_flat = dw_view.to_shape((f, c * kh * kw)).unwrap();
-        linalg::general_mat_mul(1.0, &d_out_reshaped, &self.columns.t(), 0.0, &mut dw_flat);
+        let (batch, filters, d_h, d_w) = d.dim();
+        let dilated_shape = (
+            batch,
+            filters,
+            (d_h - 1) * stride + 1,
+            (d_w - 1) * stride + 1,
+        );
 
-        let w_view = w.view();
-        let w_flat = w_view.to_shape((f, c * kh * kw)).unwrap();
+        self.dilated.reshape_inplace(dilated_shape);
+        self.dilated.fill(0.0);
+        self.dilated
+            .slice_mut(s![.., .., ..;stride, ..;stride])
+            .assign(&d);
 
-        self.d_cols
-            .reshape_inplace((c * kh * kw, batch * out_h * out_w));
-        linalg::general_mat_mul(1.0, &w_flat.t(), &d_out_reshaped, 0.0, &mut self.d_cols);
+        let dw_mode = ConvMode::Custom {
+            padding: [0, 0, padding, padding],
+            strides: [1, 1, 1, 1],
+        };
 
-        self.col2im();
+        let dw_conv = self
+            .input
+            .conv(&self.dilated, dw_mode, PaddingMode::Zeros)
+            .unwrap();
+
+        dw.assign(&dw_conv.slice(s![.., .., ..kh, ..kw]));
+
+        let flipped = w.slice(s![.., .., ..;-1, ..;-1]);
+        let full_delta = self
+            .dilated
+            .conv(&flipped, ConvMode::Full, PaddingMode::Zeros)
+            .unwrap();
+
+        let h_start = padding;
+        let w_start = padding;
+        let cropped_delta =
+            full_delta.slice(s![.., .., h_start..h_start + in_h, w_start..w_start + in_w]);
+
+        self.delta.reshape_inplace(cropped_delta.raw_dim());
+        self.delta.assign(&cropped_delta);
+
         Ok(self.delta.view_mut())
-    }
-
-    fn im2col(&mut self, x: ArrayView4<f32>) {
-        let (batch, channels, h, w) = x.dim();
-        let (_, _, kh, kw) = self.kernel_dim;
-
-        let double_padding = self.padding << 1;
-        let p_h = h + double_padding;
-        let p_w = w + double_padding;
-        let out_h = (p_h - kh) / self.stride + 1;
-        let out_w = (p_w - kw) / self.stride + 1;
-
-        self.input_padded
-            .reshape_inplace((batch, channels, p_h, p_w));
-        self.input_padded.fill(0.0);
-        self.input_padded
-            .slice_mut(s![
-                ..,
-                ..,
-                self.padding..h + self.padding,
-                self.padding..w + self.padding
-            ])
-            .assign(&x);
-
-        let patch_size = channels * kh * kw;
-        let num_patches = batch * out_h * out_w;
-        self.columns.reshape_inplace((patch_size, num_patches));
-
-        let mut col_idx = 0;
-        for y in (0..out_h).map(|i| i * self.stride) {
-            for x_coord in (0..out_w).map(|i| i * self.stride) {
-                for b in 0..batch {
-                    let window =
-                        self.input_padded
-                            .slice(s![b, .., y..y + kh, x_coord..x_coord + kw]);
-
-                    self.columns
-                        .column_mut(col_idx)
-                        .assign(&window.to_shape(patch_size).unwrap());
-
-                    col_idx += 1;
-                }
-            }
-        }
-    }
-
-    fn col2im(&mut self) {
-        let (batch, channels, h, w) = self.input.dim();
-        let (_, _, kh, kw) = self.kernel_dim;
-        let out_h = (h + 2 * self.padding - kh) / self.stride + 1;
-        let out_w = (w + 2 * self.padding - kw) / self.stride + 1;
-
-        let p_h = h + 2 * self.padding;
-        let p_w = w + 2 * self.padding;
-        self.input_padded
-            .reshape_inplace((batch, channels, p_h, p_w));
-        self.input_padded.fill(0.0);
-
-        let mut col_idx = 0;
-        for y in (0..out_h).map(|i| i * self.stride) {
-            for x_coord in (0..out_w).map(|i| i * self.stride) {
-                for b in 0..batch {
-                    let patch = self.d_cols.column(col_idx);
-                    let patch_reshaped = patch.to_shape((channels, kh, kw)).unwrap();
-
-                    let mut target_slice =
-                        self.input_padded
-                            .slice_mut(s![b, .., y..y + kh, x_coord..x_coord + kw]);
-                    target_slice += &patch_reshaped;
-
-                    col_idx += 1;
-                }
-            }
-        }
-
-        self.delta.reshape_inplace((batch, channels, h, w));
-        if self.padding > 0 {
-            self.delta.assign(&self.input_padded.slice(s![
-                ..,
-                ..,
-                self.padding..h + self.padding,
-                self.padding..w + self.padding
-            ]));
-        } else {
-            self.delta.assign(&self.input_padded);
-        }
     }
 
     /// Gives a view of the raw parameter slice as the weights and biases of this layer.
@@ -237,6 +171,14 @@ impl Conv2d {
         Ok((weights, biases))
     }
 
+    /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
+    ///
+    /// # Arguments
+    /// * `grad` - A gradient slice.
+    ///
+    /// # Returns
+    /// A tuple containing the delta weights and delta biases or an error if there's
+    /// a mismatch between the size of the gradient and the size of the layer.
     fn view_grad<'a>(
         &self,
         grad: &'a mut [f32],
@@ -264,24 +206,30 @@ impl Conv2d {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use super::*;
 
     #[test]
     fn test_conv2d_forward_backward_consistency() {
+        unsafe { env::set_var("RUST_BACKTRACE", "1") };
+
         let mut layer = Conv2d::new(
             1,      // 1 filter
             1,      // 1 input channel
             (2, 2), // 2x2 kernel
-            1,      // stride
+            2,      // stride
             0,      // no padding
         );
 
-        let input = Array4::from_elem((1, 1, 3, 3), 1.0);
-        let params = vec![0.1, 0.2, 0.3, 0.4, 0.5];
-        let mut grads = vec![0.0; 5];
+        let input = Array4::from_elem((1, 1, 4, 4), 1.0);
+        let params: Vec<_> = (0..layer.size()).map(|i| i as f32 / 10.0).collect();
+        let mut grads = vec![0.0; layer.size()];
 
         let output = layer.forward(&params, input.view()).unwrap();
         assert_eq!(output.dim(), (1, 1, 2, 2));
+
+        println!("{output:?}");
 
         let d_out = Array4::from_elem((1, 1, 2, 2), 1.0);
         layer
@@ -289,6 +237,6 @@ mod tests {
             .unwrap();
 
         assert!((grads[4] - 4.0).abs() < 1e-5);
-        println!("Gradients: {:?}", grads);
+        println!("Gradient: {:?}", grads);
     }
 }

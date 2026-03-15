@@ -1,4 +1,4 @@
-use ndarray::{ArrayView2, ArrayViewMut2};
+use ndarray::{ArrayView2, ArrayViewD, ArrayViewMutD};
 
 use super::{layers::Layer, loss::LossFn};
 use crate::{MlErr, Result, optimization::Optimizer, param_manager::ParamManager};
@@ -43,11 +43,10 @@ impl Sequential {
     pub fn forward<'x, 'mw>(
         &'x mut self,
         param_manager: &mut ParamManager<'mw>,
-        x: ArrayView2<'x, f32>,
-    ) -> Result<ArrayView2<'x, f32>> {
+        mut x: ArrayViewD<'x, f32>,
+    ) -> Result<ArrayViewD<'x, f32>> {
         let mut front = param_manager.front();
         let n = self.layers.len();
-        let mut x = x.into_dyn();
 
         for (i, layer) in self.layers.iter_mut().enumerate() {
             let params = front.next(layer.size()).ok_or(MlErr::SizeMismatch {
@@ -59,8 +58,7 @@ impl Sequential {
             x = layer.forward(params, x)?;
         }
 
-        // SAFETY: For now just support 2d outputs.
-        Ok(x.into_dimensionality().unwrap())
+        Ok(x)
     }
 
     /// Makes a backward pass through the network.
@@ -77,11 +75,10 @@ impl Sequential {
     pub fn backward<'d, 'mw>(
         &'d mut self,
         param_manager: &mut ParamManager<'mw>,
-        d: ArrayViewMut2<'d, f32>,
+        mut d: ArrayViewMutD<'d, f32>,
     ) -> Result<()> {
         let mut back = param_manager.back();
         let n = self.layers.len();
-        let mut d = d.into_dyn();
 
         for (i, layer) in self.layers.iter_mut().rev().enumerate() {
             let (params, grad) = back.next(layer.size()).ok_or(MlErr::SizeMismatch {
@@ -134,8 +131,8 @@ impl Sequential {
         let mut num_batches = 0;
 
         for (x, y) in batches {
-            let y_pred = self.forward(param_manager, x)?;
-            let (loss, mut d) = loss_fn.loss_prime(y_pred, y);
+            let y_pred = self.forward(param_manager, x.into_dyn())?;
+            let (loss, mut d) = loss_fn.loss_prime(y_pred, y.into_dyn());
 
             total_loss += loss;
             num_batches += 1;
