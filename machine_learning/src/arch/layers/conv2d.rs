@@ -58,7 +58,7 @@ impl Conv2d {
         self.size
     }
 
-    pub fn forward(&mut self, params: &[f32], x: ArrayView4<f32>) -> Result<ArrayView4<f32>> {
+    pub fn forward(&mut self, params: &[f32], x: ArrayView4<f32>) -> Result<ArrayView4<'_, f32>> {
         let (f, c, kh, kw) = self.kernel_dim;
         let (batch, _, h, w) = x.dim();
 
@@ -170,7 +170,6 @@ impl Conv2d {
         let out_h = (h + 2 * self.padding - kh) / self.stride + 1;
         let out_w = (w + 2 * self.padding - kw) / self.stride + 1;
 
-        // We reset delta and use input_padded as a temporary accumulation buffer
         let p_h = h + 2 * self.padding;
         let p_w = w + 2 * self.padding;
         self.input_padded
@@ -194,7 +193,6 @@ impl Conv2d {
             }
         }
 
-        // Slice out the padding to get the final delta
         self.delta.reshape_inplace((batch, channels, h, w));
         if self.padding > 0 {
             self.delta.assign(&self.input_padded.slice(s![

@@ -14,6 +14,10 @@ pub enum MlErr {
         got: usize,
         expected: usize,
     },
+    DimMismatch {
+        got: usize,
+        expected: usize,
+    },
 }
 
 impl Display for MlErr {
@@ -24,6 +28,9 @@ impl Display for MlErr {
                 got,
                 expected,
             } => format!("shape mismatch for {what}: got {got}, expected {expected}"),
+            MlErr::DimMismatch { got, expected } => {
+                format!("dimensionality mismatch: got {got}, expected {expected}")
+            }
         };
 
         write!(f, "{s}")

@@ -33,7 +33,7 @@ impl Dense {
         self.size
     }
 
-    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> Result<ArrayView2<f32>> {
+    pub fn forward(&mut self, params: &[f32], x: ArrayView2<f32>) -> Result<ArrayView2<'_, f32>> {
         self.input.reshape_inplace(x.raw_dim());
         self.input.assign(&x);
 
@@ -52,7 +52,7 @@ impl Dense {
         params: &[f32],
         grad: &mut [f32],
         d: ArrayViewMut2<f32>,
-    ) -> Result<ArrayViewMut2<f32>> {
+    ) -> Result<ArrayViewMut2<'_, f32>> {
         let (mut dw, mut db) = self.view_grad(grad)?;
         linalg::general_mat_mul(1.0, &self.input.t(), &d, 0.0, &mut dw);
         db.assign(&d.sum_axis(Axis(0)));

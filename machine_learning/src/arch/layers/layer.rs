@@ -1,21 +1,17 @@
-use ndarray::prelude::*;
+use ndarray::{Data, RawData, prelude::*};
 
 use super::{Conv2d, Dense, Sigmoid};
-use crate::Result;
+use crate::{MlErr, Result};
 
-mod private {
-    use super::*;
-
-    /// An indirection layer to prevent leaking the
-    /// inner enum representation to the upper mods.
-    #[derive(Clone)]
-    pub(super) enum Inner {
-        Dense(Dense),
-        Sigmoid(Sigmoid),
-        Conv2d(Conv2d),
-    }
+/// An indirection layer to prevent leaking the
+/// inner enum representation to the upper mods.
+#[derive(Clone)]
+enum Inner {
+    Conv2d(Conv2d),
+    Dense(Dense),
+    Sigmoid(Sigmoid),
 }
-use private::Inner::{self, *};
+use Inner::*;
 
 /// Represents the different types of layers in a model.
 #[derive(Clone)]
@@ -94,13 +90,15 @@ impl Layer {
     pub fn forward<'a>(
         &'a mut self,
         params: &[f32],
-        x: ArrayView2<f32>,
-    ) -> Result<ArrayView2<'a, f32>> {
-        match &mut self.0 {
-            Dense(layer) => layer.forward(params, x),
-            Sigmoid(layer) => layer.forward(x),
-            _ => todo!(),
-        }
+        x: ArrayViewD<f32>,
+    ) -> Result<ArrayViewD<'a, f32>> {
+        let y = match &mut self.0 {
+            Conv2d(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
+            Dense(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
+            Sigmoid(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
+        };
+
+        Ok(y)
     }
 
     /// Performs a backward pass, writes the gradient of the delta with respect to the layer's portion of
@@ -117,12 +115,40 @@ impl Layer {
         &'a mut self,
         params: &[f32],
         grad: &mut [f32],
-        d: ArrayViewMut2<'a, f32>,
-    ) -> Result<ArrayViewMut2<'a, f32>> {
-        match &mut self.0 {
-            Dense(layer) => layer.backward(params, grad, d),
-            Sigmoid(layer) => layer.backward(d),
-            _ => todo!(),
-        }
+        d: ArrayViewMutD<'a, f32>,
+    ) -> Result<ArrayViewMutD<'a, f32>> {
+        let q = match &mut self.0 {
+            Conv2d(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
+            Dense(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
+            Sigmoid(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
+        };
+
+        Ok(q)
     }
+}
+
+/// Tries to cast the dynamic dimension shape of the given array into a concrete dimension.
+///
+/// # Arguments
+/// * `arr` - The array to redimension.
+///
+/// # Errors
+/// A `MlErr::DimMismatch` if the dimension of the array and the required dimension don't agree.
+///
+/// # Returns
+/// The newly redimension array.
+fn try_cast_dim<S, D>(arr: ArrayBase<S, IxDyn>) -> Result<ArrayBase<S, D>>
+where
+    S: RawData<Elem = f32> + Data,
+    D: Dimension,
+{
+    let size = arr.dim().ndim();
+
+    arr.into_dimensionality().map_err(|_| MlErr::DimMismatch {
+        got: size,
+        // SAFETY: This will return a number for every dimension
+        //         except for `IxDyn` which is what this function
+        //         is trying to strip, defining a concrete dimension.
+        expected: D::NDIM.expect("Target dimension must be a fixed rank"),
+    })
 }
