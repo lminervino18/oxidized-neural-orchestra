@@ -21,7 +21,7 @@ use crate::{
 /// Opaque training configuration produced by `parameter_server(...)`.
 #[pyclass]
 pub struct PyTrainingConfig {
-    pub inner: TrainingConfig<String>,
+    pub inner: TrainingConfig,
     pub max_epochs: usize,
     pub worker_count: usize,
 }

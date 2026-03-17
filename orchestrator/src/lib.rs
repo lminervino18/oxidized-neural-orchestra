@@ -2,8 +2,6 @@ pub mod configs;
 mod error;
 mod session;
 
-use std::net::ToSocketAddrs;
-
 use configs::Adapter;
 use error::{OrchErr, Result};
 pub use session::{Session, TrainedModel, TrainingEvent};
@@ -21,7 +19,7 @@ use crate::configs::{ModelConfig, TrainingConfig, Validator};
 ///
 /// # Errors
 /// Returns an `OrchErr` if config validation fails or connecting to any worker or server fails.
-pub fn train<A: ToSocketAddrs>(model: ModelConfig, training: TrainingConfig<A>) -> Result<Session> {
+pub fn train(model: ModelConfig, training: TrainingConfig) -> Result<Session> {
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 

@@ -121,7 +121,7 @@ impl TrainingState {
     /// * `servers_total` - The number of parameter servers expected.
     pub fn new(
         model: ModelConfig,
-        training: TrainingConfig<String>,
+        training: TrainingConfig,
         workers_total: usize,
         servers_total: usize,
     ) -> Self {
