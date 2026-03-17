@@ -12,6 +12,7 @@ use crate::{
     },
     dataset::Dataset,
     optimization::{GradientDescent, Optimizer},
+    param_manager::ParamManager,
 };
 
 /// Builds `Trainer`s given a specification.
@@ -32,7 +33,11 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Trainer`.
-    pub fn build(&self, spec: TrainerSpec, server_sizes: &[usize]) -> Box<dyn Trainer> {
+    pub fn build(
+        &self,
+        spec: TrainerSpec,
+        server_sizes: &[usize],
+    ) -> Box<dyn for<'a> Trainer<ParamManager<'a>>> {
         self.resolve_optimizers(spec, server_sizes)
     }
 
@@ -44,7 +49,11 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_optimizers(&self, spec: TrainerSpec, server_sizes: &[usize]) -> Box<dyn Trainer> {
+    fn resolve_optimizers(
+        &self,
+        spec: TrainerSpec,
+        server_sizes: &[usize],
+    ) -> Box<dyn for<'a> Trainer<ParamManager<'a>>> {
         match spec.optimizer {
             OptimizerSpec::GradientDescent { learning_rate } => {
                 let optimizers: Vec<_> = server_sizes
@@ -65,7 +74,11 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_layers<O>(&self, spec: TrainerSpec, optimizers: Vec<O>) -> Box<dyn Trainer>
+    fn resolve_layers<O>(
+        &self,
+        spec: TrainerSpec,
+        optimizers: Vec<O>,
+    ) -> Box<dyn for<'a> Trainer<ParamManager<'a>>>
     where
         O: Optimizer + Send + 'static,
     {
@@ -128,7 +141,7 @@ impl TrainerBuilder {
         spec: TrainerSpec,
         optimizers: Vec<O>,
         layers: Vec<Layer>,
-    ) -> Box<dyn Trainer>
+    ) -> Box<dyn for<'a> Trainer<ParamManager<'a>>>
     where
         O: Optimizer + Send + 'static,
     {
@@ -156,7 +169,7 @@ impl TrainerBuilder {
         optimizers: Vec<O>,
         layers: Vec<Layer>,
         loss_fn: L,
-    ) -> Box<dyn Trainer>
+    ) -> Box<dyn for<'a> Trainer<ParamManager<'a>>>
     where
         O: Optimizer + Send + 'static,
         L: LossFn + 'static,

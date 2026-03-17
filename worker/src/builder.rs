@@ -1,7 +1,7 @@
 use comms::specs::worker::WorkerSpec;
 
 use super::worker::Worker;
-use machine_learning::training::TrainerBuilder;
+use machine_learning::{param_provider::ParamProvider, training::TrainerBuilder};
 
 #[derive(Default)]
 pub struct WorkerBuilder;
@@ -22,7 +22,8 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    pub fn build(&self, spec: WorkerSpec, server_sizes: &[usize]) -> Worker {
+    pub fn build(&self, spec: WorkerSpec, server_sizes: &[usize]) -> Worker
+where {
         let trainer_builder = TrainerBuilder::new();
         let trainer = trainer_builder.build(spec.trainer, server_sizes);
         Worker::new(trainer)

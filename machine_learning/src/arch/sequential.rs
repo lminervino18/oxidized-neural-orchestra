@@ -1,7 +1,11 @@
-use ndarray::{ArrayView2, ArrayViewD, ArrayViewMutD};
+use ndarray::{ArrayView, ArrayView2, ArrayViewD, ArrayViewMutD, Dimension};
 
 use super::{layers::Layer, loss::LossFn};
-use crate::{MlErr, Result, optimization::Optimizer, param_manager::ParamManager};
+use crate::{
+    MlErr, Result,
+    optimization::Optimizer,
+    param_provider::{BackwardParamIter, ForwardParamIter, ParamProvider},
+};
 
 /// A trainable model, this model's architecture is a sequence of trainable layers.
 #[derive(Clone)]
@@ -40,12 +44,17 @@ impl Sequential {
     ///
     /// # Returns
     /// The prediction for the given input or an error if occurred.
-    pub fn forward<'x, 'mw>(
+    pub fn forward<'x, P, I: Dimension, O: Dimension>(
         &'x mut self,
-        param_manager: &mut ParamManager<'mw>,
-        mut x: ArrayViewD<'x, f32>,
-    ) -> Result<ArrayViewD<'x, f32>> {
-        let mut front = param_manager.front();
+        param_provider: &mut P,
+        x: ArrayView<'x, f32, I>,
+    ) -> Result<ArrayView<'x, f32, O>>
+    where
+        P: ParamProvider,
+    {
+        let mut x = x.into_dyn();
+
+        let mut front = param_provider.front();
         let n = self.layers.len();
 
         for (i, layer) in self.layers.iter_mut().enumerate() {
@@ -57,6 +66,12 @@ impl Sequential {
 
             x = layer.forward(params, x)?;
         }
+
+        let x = x.into_dimensionality().map_err(|_| MlErr::DimMismatch {
+            // TODO: no sé qué poner en got/expected, cambiaría el err
+            got: 0,
+            expected: 0,
+        })?;
 
         Ok(x)
     }
@@ -72,12 +87,15 @@ impl Sequential {
     ///
     /// # Returns
     /// An error if occurred.
-    pub fn backward<'d, 'mw>(
+    pub fn backward<'d, P>(
         &'d mut self,
-        param_manager: &mut ParamManager<'mw>,
+        param_provider: &mut P,
         mut d: ArrayViewMutD<'d, f32>,
-    ) -> Result<()> {
-        let mut back = param_manager.back();
+    ) -> Result<()>
+    where
+        P: ParamProvider,
+    {
+        let mut back = param_provider.back();
         let n = self.layers.len();
 
         for (i, layer) in self.layers.iter_mut().rev().enumerate() {
@@ -115,9 +133,9 @@ impl Sequential {
     ///
     /// # Returns
     /// The epoch loss or an error if the model failed to run a backpropagation epoch.
-    pub fn backprop<'a, 'mw, O, L, I>(
+    pub fn backprop<'a, 'mw, O, L, I, P>(
         &mut self,
-        param_manager: &mut ParamManager<'mw>,
+        param_provider: &mut P,
         optimizers: &mut [O],
         loss_fn: &mut L,
         batches: I,
@@ -126,22 +144,23 @@ impl Sequential {
         L: LossFn,
         O: Optimizer + Send,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
+        P: ParamProvider,
     {
         let mut total_loss = 0.0;
         let mut num_batches = 0;
 
         for (x, y) in batches {
-            let y_pred = self.forward(param_manager, x.into_dyn())?;
+            let y_pred = self.forward(param_provider, x.into_dyn())?;
             let (loss, mut d) = loss_fn.loss_prime(y_pred, y.into_dyn());
 
             total_loss += loss;
             num_batches += 1;
 
-            self.backward(param_manager, d.view_mut())?;
+            self.backward(param_provider, d.view_mut())?;
 
-            param_manager.optimize(optimizers)?;
-            param_manager.acc_grad();
-            param_manager.zero_grad();
+            param_provider.optimize(optimizers)?;
+            param_provider.acc_grad();
+            param_provider.zero_grad();
         }
 
         Ok(total_loss / num_batches as f32)

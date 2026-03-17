@@ -5,14 +5,17 @@ use comms::{
     msg::{Command, Msg},
 };
 use log::{debug, info, warn};
-use machine_learning::training::{TrainResult, Trainer};
+use machine_learning::{
+    param_manager::ParamManager,
+    training::{TrainResult, Trainer},
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::middleware::Middleware;
 
 /// The middleman between the parameter server and the model trainer.
 pub struct Worker {
-    trainer: Box<dyn Trainer>,
+    trainer: Box<dyn for<'a> Trainer<ParamManager<'a>>>,
 }
 
 impl Worker {
@@ -23,7 +26,7 @@ impl Worker {
     ///
     /// # Returns
     /// A new `Worker` instance.
-    pub fn new(trainer: Box<dyn Trainer>) -> Self {
+    pub fn new(trainer: Box<dyn for<'a> Trainer<ParamManager<'a>>>) -> Self {
         Self { trainer }
     }
 

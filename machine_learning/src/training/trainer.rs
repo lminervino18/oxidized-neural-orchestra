@@ -1,4 +1,4 @@
-use crate::{Result, param_manager::ParamManager};
+use crate::{Result, param_provider::ParamProvider};
 
 /// The result of a training call.
 ///
@@ -9,7 +9,7 @@ pub struct TrainResult<'trainer> {
 }
 
 /// This trait generalizes all the different concrete `ModelTrainer` variations between optimizers, loss functions, ...
-pub trait Trainer {
+pub trait Trainer<P: ParamProvider> {
     /// Performs a single training 'cycle'.
     ///
     /// This cycle could involve one or more epochs.
@@ -19,5 +19,5 @@ pub trait Trainer {
     ///
     /// # Returns
     /// A training result declaring if the trianing has finished or should continue.
-    fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult<'_>>;
+    fn train(&mut self, param_manager: &mut P) -> Result<TrainResult<'_>>;
 }

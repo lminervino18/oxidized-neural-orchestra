@@ -8,7 +8,7 @@ use crate::{
     arch::{Sequential, loss::LossFn},
     dataset::Dataset,
     optimization::Optimizer,
-    param_manager::ParamManager,
+    param_provider::ParamProvider,
 };
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
@@ -79,11 +79,12 @@ where
     }
 }
 
-impl<O, L, R> Trainer for BackpropTrainer<O, L, R>
+impl<O, L, R, P> Trainer<P> for BackpropTrainer<O, L, R>
 where
     O: Optimizer + Send,
     L: LossFn,
     R: Rng,
+    P: ParamProvider,
 {
     /// Performs a training cycle.
     ///
@@ -92,7 +93,7 @@ where
     ///
     /// # Returns
     /// A tuple with the param grads and the epoch loss.
-    fn train<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<TrainResult<'_>> {
+    fn train(&mut self, param_provider: &mut P) -> Result<TrainResult<'_>> {
         let remaining = self.max_epochs.get() - self.epoch;
         let epochs = remaining.min(self.offline_epochs + 1);
 
@@ -103,7 +104,7 @@ where
             let batches = self.dataset.batches(self.batch_size);
 
             let loss = self.model.backprop(
-                param_manager,
+                param_provider,
                 &mut self.optimizers,
                 &mut self.loss_fn,
                 batches,

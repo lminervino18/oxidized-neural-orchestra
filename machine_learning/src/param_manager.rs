@@ -1,6 +1,10 @@
 use rayon::prelude::*;
 
-use crate::{MlErr, Result, optimization::Optimizer};
+use crate::{
+    MlErr, Result,
+    optimization::Optimizer,
+    param_provider::{BackwardParamIter, ForwardParamIter, ParamProvider},
+};
 
 /// The state necessary to make forward and backward passes through the network.
 pub struct ServerParamsMetadata<'mw> {
@@ -53,6 +57,18 @@ impl<'mw> ParamManager<'mw> {
             servers,
         }
     }
+}
+
+impl<'mw> ParamProvider for ParamManager<'mw> {
+    type Front<'pm>
+        = FrontIter<'pm, 'mw>
+    where
+        Self: 'pm;
+
+    type Back<'pm>
+        = BackIter<'pm, 'mw>
+    where
+        Self: 'pm;
 
     /// Creates a new `FrontIter` parameter iterator.
     ///
@@ -60,7 +76,7 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Returns
     /// A new `FrontIter` instance.
-    pub fn front<'pm>(&'pm mut self) -> FrontIter<'pm, 'mw> {
+    fn front<'pm>(&'pm mut self) -> FrontIter<'pm, 'mw> {
         self.cursors.fill(0);
 
         FrontIter {
@@ -77,7 +93,7 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Returns
     /// A new `Backiter` instance.
-    pub fn back<'pm>(&'pm mut self) -> BackIter<'pm, 'mw> {
+    fn back<'pm>(&'pm mut self) -> BackIter<'pm, 'mw> {
         self.cursors.fill(0);
 
         BackIter {
@@ -92,7 +108,7 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Arguments
     /// * `optimizers` - A list of optimizers, one per server.
-    pub fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) -> Result<()> {
+    fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) -> Result<()> {
         if optimizers.len() != self.servers.len() {
             return Err(MlErr::SizeMismatch {
                 what: "optimizers",
@@ -112,14 +128,14 @@ impl<'mw> ParamManager<'mw> {
     }
 
     /// Zeroes out the gradients of every server.
-    pub fn zero_grad(&mut self) {
+    fn zero_grad(&mut self) {
         self.servers
             .par_iter_mut()
             .for_each(|server| server.grad.fill(0.0));
     }
 
     /// Accumulates the current gradient onto the inner accumulated gradients buffer.
-    pub fn acc_grad(&mut self) {
+    fn acc_grad(&mut self) {
         self.servers.par_iter_mut().for_each(|server| {
             for (acc, g) in server.acc_grad_buf.iter_mut().zip(server.grad.iter()) {
                 *acc += *g;
@@ -138,7 +154,7 @@ pub struct FrontIter<'pm, 'mw> {
     curr: usize,
 }
 
-impl FrontIter<'_, '_> {
+impl ForwardParamIter for FrontIter<'_, '_> {
     /// Tries to yield the next layer's parameters and gradient.
     ///
     /// If the requested size is `0`, then the iterator will yield two empty
@@ -151,7 +167,7 @@ impl FrontIter<'_, '_> {
     ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
-    pub fn next(&mut self, n: usize) -> Option<&mut [f32]> {
+    fn next(&mut self, n: usize) -> Option<&mut [f32]> {
         if n == 0 {
             return Some(&mut []);
         }
@@ -182,7 +198,7 @@ pub struct BackIter<'pm, 'mw> {
     curr: usize,
 }
 
-impl BackIter<'_, '_> {
+impl BackwardParamIter for BackIter<'_, '_> {
     /// Tries to yield the next layer's parameters and gradient.
     ///
     /// If the requested size is `0`, then the iterator will yield two empty
@@ -195,7 +211,7 @@ impl BackIter<'_, '_> {
     ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
-    pub fn next(&mut self, n: usize) -> Option<(&mut [f32], &mut [f32])> {
+    fn next(&mut self, n: usize) -> Option<(&mut [f32], &mut [f32])> {
         if n == 0 {
             return Some((&mut [], &mut []));
         }
