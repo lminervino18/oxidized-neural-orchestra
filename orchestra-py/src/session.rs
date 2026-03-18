@@ -1,14 +1,11 @@
-use std::io::Write;
+use std::io::{IsTerminal, Write};
+use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
 
 use orchestrator::TrainingEvent;
 use pyo3::prelude::*;
 
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/// Formats a loss value with adaptive precision.
-///
-/// Uses scientific notation for values smaller than `1e-4` to avoid
-/// displaying them as `0.00000000` at fixed precision.
 fn fmt_loss(loss: f32) -> String {
     if loss.abs() < 1e-4 {
         format!("{loss:.3e}")
@@ -17,7 +14,6 @@ fn fmt_loss(loss: f32) -> String {
     }
 }
 
-/// The final trained model returned after a session completes.
 #[pyclass]
 pub struct TrainedModel {
     pub inner: orchestrator::TrainedModel,
@@ -25,21 +21,10 @@ pub struct TrainedModel {
 
 #[pymethods]
 impl TrainedModel {
-    /// Returns the trained model parameters as a flat Python list.
     pub fn weights(&self) -> Vec<f32> {
         self.inner.params().to_vec()
     }
 
-    /// Saves the trained parameters to a `.safetensors` file.
-    ///
-    /// Each dense layer produces two tensors: `layer_N.weight` and `layer_N.bias`,
-    /// following the PyTorch `state_dict` convention.
-    ///
-    /// # Args
-    /// * `path` - Output file path (e.g. `"model.safetensors"`).
-    ///
-    /// # Errors
-    /// Raises a `RuntimeError` if the file cannot be written.
     pub fn save_safetensors(&self, path: &str) -> PyResult<()> {
         self.inner
             .save_safetensors(path)
@@ -47,10 +32,6 @@ impl TrainedModel {
     }
 }
 
-/// A handle to an ongoing training session.
-///
-/// Wraps `orchestrator::Session` with additional metadata (`max_epochs`,
-/// `worker_count`) used to render the progress bar during training.
 #[pyclass]
 pub struct Session {
     pub inner: Option<orchestrator::Session>,
@@ -60,10 +41,6 @@ pub struct Session {
 
 #[pymethods]
 impl Session {
-    /// Blocks until training completes, showing a progress bar.
-    ///
-    /// # Errors
-    /// Raises a `RuntimeError` if training fails.
     pub fn wait(&mut self, py: Python<'_>) -> PyResult<TrainedModel> {
         let session = self
             .inner
@@ -72,6 +49,7 @@ impl Session {
 
         let max_epochs = self.max_epochs;
         let worker_count = self.worker_count;
+        let is_tty = std::io::stdout().is_terminal();
 
         let trained = py
             .allow_threads(|| {
@@ -79,13 +57,50 @@ impl Session {
                     let mut rx = session.event_listener();
                     let mut worker_epochs: Vec<usize> = vec![0; worker_count];
                     let mut last_loss: Vec<Option<f32>> = vec![None; worker_count];
-                    let mut spinner_i = 0usize;
                     let bar_width = 40usize;
 
-                    println!();
-                    println!();
+                    // Shared state for the spinner thread
+                    let spinner_i = Arc::new(AtomicUsize::new(0));
+                    let current_epoch = Arc::new(AtomicUsize::new(0));
+                    let avg_loss_bits = Arc::new(AtomicUsize::new(0f32.to_bits() as usize));
+                    let done = Arc::new(AtomicBool::new(false));
 
-                    loop {
+                    // Spawn spinner thread only for TTY
+                    let spinner_handle = if is_tty {
+                        println!();
+                        println!();
+
+                        let spinner_i = Arc::clone(&spinner_i);
+                        let current_epoch = Arc::clone(&current_epoch);
+                        let avg_loss_bits = Arc::clone(&avg_loss_bits);
+                        let done = Arc::clone(&done);
+
+                        Some(std::thread::spawn(move || {
+                            while !done.load(Ordering::Relaxed) {
+                                let i = spinner_i.fetch_add(1, Ordering::Relaxed);
+                                let spinner = SPINNER[i % SPINNER.len()];
+                                let epoch = current_epoch.load(Ordering::Relaxed);
+                                let loss = f32::from_bits(avg_loss_bits.load(Ordering::Relaxed) as u32);
+                                let filled = ((epoch * bar_width) / max_epochs.max(1)).min(bar_width);
+
+                                print!(
+                                    "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={}\n",
+                                    spinner,
+                                    "█".repeat(filled),
+                                    "░".repeat(bar_width - filled),
+                                    epoch,
+                                    max_epochs,
+                                    fmt_loss(loss),
+                                );
+                                let _ = std::io::stdout().flush();
+                                std::thread::sleep(std::time::Duration::from_millis(80));
+                            }
+                        }))
+                    } else {
+                        None
+                    };
+
+                    let result = loop {
                         match rx.blocking_recv() {
                             Some(TrainingEvent::Loss { worker_id, losses }) => {
                                 for loss in &losses {
@@ -94,51 +109,58 @@ impl Session {
                                         last_loss[worker_id] = Some(*loss);
                                     }
                                 }
-                                let current_epoch = *worker_epochs.iter().max().unwrap_or(&0);
+                                let epoch = *worker_epochs.iter().max().unwrap_or(&0);
                                 let reported: Vec<f32> =
                                     last_loss.iter().filter_map(|l| *l).collect();
-                                let avg_loss = reported.iter().sum::<f32>() / reported.len() as f32;
-                                let filled =
-                                    ((current_epoch * bar_width) / max_epochs).min(bar_width);
-                                let spinner = SPINNER[spinner_i % SPINNER.len()];
-                                spinner_i += 1;
-                                print!(
-                                    "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={}\n",
-                                    spinner,
-                                    "█".repeat(filled),
-                                    "░".repeat(bar_width - filled),
-                                    current_epoch,
-                                    max_epochs,
-                                    fmt_loss(avg_loss),
-                                );
-                                let _ = std::io::stdout().flush();
+                                let avg = reported.iter().sum::<f32>() / reported.len() as f32;
+
+                                current_epoch.store(epoch, Ordering::Relaxed);
+                                avg_loss_bits.store(avg.to_bits() as usize, Ordering::Relaxed);
+
+                                if !is_tty {
+                                    println!("  epoch {}/{} avg_loss={}", epoch, max_epochs, fmt_loss(avg));
+                                    let _ = std::io::stdout().flush();
+                                }
                             }
                             Some(TrainingEvent::Complete(trained)) => {
-                                let reported: Vec<f32> =
-                                    last_loss.iter().filter_map(|l| *l).collect();
-                                let avg_loss = if reported.is_empty() {
-                                    0.0
-                                } else {
-                                    reported.iter().sum::<f32>() / reported.len() as f32
-                                };
-                                print!(
-                                    "\x1b[2A\r  ✓ [{}] {}/{}\n  avg_loss={}\n\n",
-                                    "█".repeat(bar_width),
-                                    max_epochs,
-                                    max_epochs,
-                                    fmt_loss(avg_loss),
-                                );
-                                let _ = std::io::stdout().flush();
-                                return Ok(trained);
+                                break Ok(trained);
                             }
                             Some(TrainingEvent::Error(e)) => {
-                                println!();
-                                return Err(e.to_string());
+                                break Err(e.to_string());
                             }
                             Some(_) => continue,
-                            None => return Err("session channel closed unexpectedly".into()),
+                            None => break Err("session channel closed unexpectedly".into()),
                         }
+                    };
+
+                    // Stop spinner thread
+                    done.store(true, Ordering::Relaxed);
+                    if let Some(handle) = spinner_handle {
+                        let _ = handle.join();
                     }
+
+                    // Print final state
+                    if is_tty {
+                        let reported: Vec<f32> = last_loss.iter().filter_map(|l| *l).collect();
+                        let avg_loss = if reported.is_empty() {
+                            0.0
+                        } else {
+                            reported.iter().sum::<f32>() / reported.len() as f32
+                        };
+                        let (mark, epoch) = if result.is_ok() { ("✓", max_epochs) } else { ("✗", *worker_epochs.iter().max().unwrap_or(&0)) };
+                        print!(
+                            "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={}\n\n",
+                            mark,
+                            "█".repeat(bar_width),
+                            "",
+                            epoch,
+                            max_epochs,
+                            fmt_loss(avg_loss),
+                        );
+                        let _ = std::io::stdout().flush();
+                    }
+
+                    result
                 })
                 .join()
                 .map_err(|_| "session thread panicked".to_string())?
