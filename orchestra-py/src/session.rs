@@ -1,5 +1,8 @@
 use std::io::{IsTerminal, Write};
-use std::sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc,
+};
 
 use orchestrator::TrainingEvent;
 use pyo3::prelude::*;
@@ -80,8 +83,10 @@ impl Session {
                                 let i = spinner_i.fetch_add(1, Ordering::Relaxed);
                                 let spinner = SPINNER[i % SPINNER.len()];
                                 let epoch = current_epoch.load(Ordering::Relaxed);
-                                let loss = f32::from_bits(avg_loss_bits.load(Ordering::Relaxed) as u32);
-                                let filled = ((epoch * bar_width) / max_epochs.max(1)).min(bar_width);
+                                let loss =
+                                    f32::from_bits(avg_loss_bits.load(Ordering::Relaxed) as u32);
+                                let filled =
+                                    ((epoch * bar_width) / max_epochs.max(1)).min(bar_width);
 
                                 print!(
                                     "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={}\n",
@@ -118,7 +123,12 @@ impl Session {
                                 avg_loss_bits.store(avg.to_bits() as usize, Ordering::Relaxed);
 
                                 if !is_tty {
-                                    println!("  epoch {}/{} avg_loss={}", epoch, max_epochs, fmt_loss(avg));
+                                    println!(
+                                        "  epoch {}/{} avg_loss={}",
+                                        epoch,
+                                        max_epochs,
+                                        fmt_loss(avg)
+                                    );
                                     let _ = std::io::stdout().flush();
                                 }
                             }
@@ -147,7 +157,11 @@ impl Session {
                         } else {
                             reported.iter().sum::<f32>() / reported.len() as f32
                         };
-                        let (mark, epoch) = if result.is_ok() { ("✓", max_epochs) } else { ("✗", *worker_epochs.iter().max().unwrap_or(&0)) };
+                        let (mark, epoch) = if result.is_ok() {
+                            ("✓", max_epochs)
+                        } else {
+                            ("✗", *worker_epochs.iter().max().unwrap_or(&0))
+                        };
                         print!(
                             "\x1b[2A\r  {} [{}{}] {}/{}\n  avg_loss={}\n\n",
                             mark,
