@@ -1,4 +1,4 @@
-use std::io;
+use std::{borrow::Cow, io};
 
 use comms::{
     OnoReceiver, OnoSender,
@@ -109,7 +109,7 @@ where
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
-            let msg = Msg::Data(Payload::Grad(&server.acc_grad_buf));
+            let msg = Msg::Data(Payload::Grad(Cow::Borrowed(&server.acc_grad_buf)));
             server.tx.send(&msg).await?;
 
             // TODO: Maybe do this somewhere else.

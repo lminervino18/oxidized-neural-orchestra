@@ -78,7 +78,7 @@ where
                 break;
             }
             Msg::Data(Payload::Grad(grad)) => {
-                optimizer.update_params(grad, &mut params).unwrap();
+                optimizer.update_params(&grad, &mut params).unwrap();
                 let msg = Msg::Data(Payload::Params(&mut params));
                 tx.send(&msg).await?;
             }

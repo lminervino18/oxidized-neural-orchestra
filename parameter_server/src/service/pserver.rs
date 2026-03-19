@@ -61,8 +61,6 @@ impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
             }
         }
 
-        // SAFETY: This parameter vector is the same size as
-        //         the amount of parameters in the storage.
         let nparams = self.handle.len();
         let mut params = vec![0.; nparams];
         self.handle.pull_params(&mut params).await.unwrap();
@@ -90,8 +88,6 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
             let nparams = handle.len();
             let mut params = vec![0.; nparams];
 
-            // SAFETY: This buffer is the same size as the
-            //         amount of parameters in the storage.
             handle.pull_params(&mut params).await.unwrap();
 
             debug!(worker_id = id; "sending parameters");
@@ -103,10 +99,7 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                 match rx.recv_into(&mut msg_buf).await? {
                     Msg::Data(Payload::Grad(grad)) if nparams == grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
-
-                        // SAFETY: We checked that the gradient is the same
-                        //         size as the buffer and the storage.
-                        synchronizer.step(&handle, grad, &mut params).await.unwrap();
+                        synchronizer.step(&handle, &grad, &mut params).await.unwrap();
 
                         debug!(worker_id = id; "sending parameters");
                         let msg = Msg::Data(Payload::Params(&mut params));

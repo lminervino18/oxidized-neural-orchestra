@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::num::NonZeroUsize;
+use std::{borrow::Cow, num::NonZeroUsize};
 
 use comms::{
     OnoReceiver, OnoSender,
@@ -54,7 +54,7 @@ where
                     *g = *p - 1.0;
                 }
 
-                let msg = Msg::Data(Payload::Grad(&grad));
+                let msg = Msg::Data(Payload::Grad(Cow::Borrowed(&grad)));
                 tx.send(&msg).await?
             }
             _ => {}
