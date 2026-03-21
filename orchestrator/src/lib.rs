@@ -1,5 +1,5 @@
 pub mod configs;
-mod dataset_format;
+pub mod dataset_format;
 mod error;
 mod session;
 

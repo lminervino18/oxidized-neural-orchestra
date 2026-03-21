@@ -3,7 +3,7 @@ use std::time::Instant;
 use crossterm::event::KeyCode;
 use orchestrator::{
     Session,
-    configs::{ModelConfig, TrainingConfig},
+    configs::{DatasetSrc, ModelConfig, TrainingConfig},
     TrainedModel, TrainingEvent,
 };
 use ratatui::{
@@ -128,8 +128,9 @@ impl TrainingState {
     /// Creates a new `TrainingState`, spawning `train()` in a background thread
     /// so the TUI remains responsive during dataset conversion and connection setup.
     ///
-    /// The state starts in `Phase::Converting` and transitions to `Phase::Connecting`
-    /// once the background thread produces a session, or to `Phase::Error` on failure.
+    /// Starts in `Phase::Converting` only when the dataset source is a delimited
+    /// file that requires conversion. Otherwise starts in `Phase::Connecting`.
+    /// Transitions to `Phase::Error` if the background thread fails.
     ///
     /// # Args
     /// * `model` - The model architecture configuration.
@@ -150,10 +151,17 @@ impl TrainingState {
 
         let max_epochs = training.max_epochs.get();
 
+        let initial_phase = match &training.dataset.src {
+            DatasetSrc::Local { path }
+                if orchestrator::dataset_format::DatasetFormat::from_path(path).is_some() =>
+            {
+                Phase::Converting
+            }
+            _ => Phase::Connecting,
+        };
+
         let (startup_tx, startup_rx) = std::sync::mpsc::channel();
 
-        // Spawn train() in a background thread so the TUI can render
-        // Phase::Converting while dataset conversion and connection happen.
         std::thread::spawn(move || {
             let result = match orchestrator::train(model, training) {
                 Ok(session) => StartupResult::Ok(session),
@@ -173,19 +181,21 @@ impl TrainingState {
 
         let loss_series = vec![Vec::new(); workers_total];
 
+        let initial_log = match initial_phase {
+            Phase::Converting => "converting dataset to binary format...",
+            _ => "connecting to workers and servers...",
+        };
+
         Self {
             workers_total,
             servers_total,
             optimizer_label,
             max_epochs,
-            phase: Phase::Converting,
+            phase: initial_phase,
             started_at: Instant::now(),
             workers,
             loss_series,
-            logs: vec![(
-                LogLevel::Info,
-                "preparing dataset and connecting to workers...".into(),
-            )],
+            logs: vec![(LogLevel::Info, initial_log.into())],
             final_trained: None,
             error: None,
             events: None,
@@ -200,49 +210,46 @@ impl TrainingState {
     /// Drains all pending training events and applies them to the state.
     ///
     /// Also checks whether the background startup thread has finished and,
-    /// if so, transitions from `Converting` to `Connecting` and starts
-    /// listening for training events.
+    /// if so, transitions to `Phase::Connecting` and starts listening for
+    /// training events, or to `Phase::Error` on failure.
     pub fn tick(&mut self) {
-    // Check if the background train() thread has produced a session.
-    let startup_result = self
-        .startup_rx
-        .as_ref()
-        .and_then(|rx| rx.try_recv().ok());
+        let startup_result = self
+            .startup_rx
+            .as_ref()
+            .and_then(|rx| rx.try_recv().ok());
 
-    if let Some(result) = startup_result {
-        self.startup_rx = None;
-        match result {
-            StartupResult::Ok(session) => {
-                self.push_log(
-                    LogLevel::Info,
-                    format!(
-                        "connecting to {} worker(s) and {} server(s)...",
-                        self.workers_total, self.servers_total
-                    ),
-                );
-                self.phase = Phase::Connecting;
-                self.events = Some(session.event_listener());
-            }
-            StartupResult::Err(e) => {
-                self.phase = Phase::Error;
-                self.startup_error = Some(e.clone());
-                self.error = Some(e);
+        if let Some(result) = startup_result {
+            self.startup_rx = None;
+            match result {
+                StartupResult::Ok(session) => {
+                    self.push_log(
+                        LogLevel::Info,
+                        format!(
+                            "connecting to {} worker(s) and {} server(s)...",
+                            self.workers_total, self.servers_total
+                        ),
+                    );
+                    self.phase = Phase::Connecting;
+                    self.events = Some(session.event_listener());
+                }
+                StartupResult::Err(e) => {
+                    self.phase = Phase::Error;
+                    self.startup_error = Some(e.clone());
+                    self.error = Some(e);
+                }
             }
         }
-    }
 
-    // Collect all pending events first, then apply them.
-    // This avoids holding a borrow on self.events while calling self.apply().
-    let events: Vec<TrainingEvent> = self
-        .events
-        .as_mut()
-        .map(|rx| std::iter::from_fn(|| rx.try_recv().ok()).collect())
-        .unwrap_or_default();
+        let events: Vec<TrainingEvent> = self
+            .events
+            .as_mut()
+            .map(|rx| std::iter::from_fn(|| rx.try_recv().ok()).collect())
+            .unwrap_or_default();
 
-    for event in events {
-        self.apply(event);
+        for event in events {
+            self.apply(event);
+        }
     }
-}
 
     /// Applies a single training event to the state.
     fn apply(&mut self, event: TrainingEvent) {
@@ -380,7 +387,6 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
         return Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))));
     }
 
-    // Save popup takes priority over everything else.
     if let SavePopup::Visible(ref mut path) = state.save_popup {
         match key {
             KeyCode::Char(c) => {
@@ -494,7 +500,6 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     draw_log(f, rows[2], state);
 
-    // Render the converting popup on top of the dashboard.
     if state.phase == Phase::Converting {
         draw_converting(f, area, state);
     }
