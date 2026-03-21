@@ -68,6 +68,7 @@ where
     let mut optimizer = GradientDescent::new(learning_rate);
     let mut params = vec![0.5; nparams];
     let mut rx_buf = vec![0; 128];
+    let mut grad_buf = vec![0.0f32; nparams];
 
     let msg = Msg::Data(Payload::Params(&mut params));
     tx.send(&msg).await?;
@@ -77,8 +78,11 @@ where
             Msg::Control(Command::Disconnect) => {
                 break;
             }
-            Msg::Data(Payload::Grad(grad)) => {
-                optimizer.update_params(&grad, &mut params).unwrap();
+            Msg::Data(Payload::Grad(f16_grad)) => {
+                for (dst, &src) in grad_buf.iter_mut().zip(f16_grad.iter()) {
+                    *dst = src.to_f32();
+                }
+                optimizer.update_params(&grad_buf, &mut params).unwrap();
                 let msg = Msg::Data(Payload::Params(&mut params));
                 tx.send(&msg).await?;
             }

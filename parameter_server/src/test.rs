@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::{borrow::Cow, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 use comms::{
     OnoReceiver, OnoSender,
@@ -15,6 +15,7 @@ use crate::{
     storage::{BlockingStore, StoreHandle},
     synchronization::BarrierSync,
 };
+
 
 fn channel_pair() -> (
     (
@@ -45,16 +46,21 @@ where
     W: AsyncWrite + Unpin,
 {
     let mut rx_buf = vec![128];
-    let mut grad = vec![0.0; nparams];
+    let mut grad = vec![0.0f32; nparams];
+    let mut net_grad = vec![half::f16::ZERO; nparams];
 
     for _ in 0..max_epochs {
         match rx.recv_into(&mut rx_buf).await? {
             Msg::Data(Payload::Params(params)) => {
-                for (g, p) in grad.iter_mut().zip(params) {
+                for (g, p) in grad.iter_mut().zip(params.iter()) {
                     *g = *p - 1.0;
                 }
 
-                let msg = Msg::Data(Payload::Grad(Cow::Borrowed(&grad)));
+                for (net, &g) in net_grad.iter_mut().zip(grad.iter()) {
+                    *net = half::f16::from_f32(g);
+                }
+
+                let msg = Msg::Data(Payload::Grad(&net_grad));
                 tx.send(&msg).await?
             }
             _ => {}

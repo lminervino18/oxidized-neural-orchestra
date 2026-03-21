@@ -10,14 +10,16 @@ const HEADER_SIZE: usize = size_of::<Header>();
 
 /// The payload data for the `Data` variant of the `Msg` enum.
 ///
-/// `Grad` uses `Cow<'a, [f32]>` to support both the sending path
-/// (`Borrowed` — the caller owns the f32 buffer) and the receiving path
-/// (`Owned` — converted from the wire's f16 representation).
-/// `Params` and `Datachunk` remain as raw `f32` slices.
+/// `Grad` carries a slice of `f16` values — half the wire size of `f32` with
+/// acceptable precision loss for gradient communication. `Params` and
+/// `Datachunk` remain as `f32` slices since they require full precision.
 #[derive(Debug)]
 pub enum Payload<'a> {
-    Grad(Cow<'a, [f32]>),
+    /// Model gradient encoded as `f16` to halve network traffic.
+    Grad(&'a [half::f16]),
+    /// Full model parameters — sent as raw `f32` to preserve precision.
     Params(&'a mut [f32]),
+    /// Dataset chunk — sent as raw `f32`.
     Datachunk(&'a [f32]),
 }
 
@@ -79,13 +81,11 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 None
             }
             Msg::Data(payload) => match payload {
+                // Grad is zero-copy: cast the f16 slice directly to bytes.
                 Payload::Grad(grad) => {
                     let header = (2 as Header).to_be_bytes();
                     buf.extend_from_slice(&header);
-                    for &val in grad.as_ref() {
-                        buf.extend_from_slice(&half::f16::from_f32(val).to_le_bytes());
-                    }
-                    None
+                    Some(bytemuck::cast_slice(grad))
                 }
                 Payload::Params(params) => {
                     let header = (3 as Header).to_be_bytes();
@@ -116,21 +116,19 @@ impl<'a> Deserialize<'a> for Msg<'a> {
         match kind {
             0 => Ok(Self::Err(serde_json::from_slice(rest)?)),
             1 => Ok(Self::Control(serde_json::from_slice(rest)?)),
+            // Grad: zero-copy cast from bytes to f16 slice.
             2 => {
-                if rest.len() % 2 != 0 {
+                if rest.len() % size_of::<half::f16>() != 0 {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!(
-                            "Grad payload has odd byte count {}, expected even (f16 pairs)",
-                            rest.len()
+                            "Grad payload byte count {} is not a multiple of {}",
+                            rest.len(),
+                            size_of::<half::f16>()
                         ),
                     ));
                 }
-                let grad: Vec<f32> = rest
-                    .chunks_exact(2)
-                    .map(|chunk| half::f16::from_le_bytes([chunk[0], chunk[1]]).to_f32())
-                    .collect();
-                Ok(Self::Data(Payload::Grad(Cow::Owned(grad))))
+                Ok(Self::Data(Payload::Grad(bytemuck::cast_slice(rest))))
             }
             3 => Ok(Self::Data(Payload::Params(bytemuck::cast_slice_mut(rest)))),
             4 => Ok(Self::Data(Payload::Datachunk(bytemuck::cast_slice_mut(rest)))),

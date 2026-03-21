@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io};
+use std::io;
 
 use comms::{
     OnoReceiver, OnoSender,
@@ -7,6 +7,7 @@ use comms::{
 use futures::future;
 use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
+use half::f16;
 
 /// The starting size of the receiver buffer.
 const STARTING_RX_BUF_SIZE: usize = 1028;
@@ -23,6 +24,9 @@ where
     rx_buf: Vec<u32>,
     grad: Vec<f32>,
     acc_grad_buf: Vec<f32>,
+    /// Pre-allocated buffer for encoding gradients as `f16` before sending.
+    /// Reused across epochs to avoid repeated heap allocations.
+    net_grad: Vec<f16>,
 }
 
 // The communication manager between the worker process and the many servers.
@@ -67,6 +71,7 @@ where
             rx_buf: vec![0; STARTING_RX_BUF_SIZE],
             grad: vec![0.0; size],
             acc_grad_buf: vec![0.0; size],
+            net_grad: vec![half::f16::ZERO; size],
         };
 
         self.servers.push(metadata);
@@ -103,13 +108,20 @@ where
         Ok(ParamManager::new(servers, &self.server_ordering))
     }
 
-    /// Pushes the latest gradients to the servers.
+    /// Pushes the latest gradients to the servers encoded as `f16`.
+    ///
+    /// Converts the accumulated `f32` gradients to `f16` in the pre-allocated
+    /// `net_grad` buffer before sending, avoiding heap allocations per epoch.
     ///
     /// # Returns
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
-            let msg = Msg::Data(Payload::Grad(Cow::Borrowed(&server.acc_grad_buf)));
+            for (net, &acc) in server.net_grad.iter_mut().zip(server.acc_grad_buf.iter()) {
+                *net = half::f16::from_f32(acc);
+            }
+
+            let msg = Msg::Data(Payload::Grad(&server.net_grad));
             server.tx.send(&msg).await?;
 
             // TODO: Maybe do this somewhere else.

@@ -87,6 +87,9 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
         let task = async move {
             let nparams = handle.len();
             let mut params = vec![0.; nparams];
+            // Pre-allocated buffer for converting incoming f16 gradients to f32.
+            // Reused across epochs to avoid repeated heap allocations.
+            let mut grad_buf = vec![0.0f32; nparams];
 
             handle.pull_params(&mut params).await.unwrap();
 
@@ -97,9 +100,14 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
                 match rx.recv_into(&mut msg_buf).await? {
-                    Msg::Data(Payload::Grad(grad)) if nparams == grad.len() => {
+                    Msg::Data(Payload::Grad(f16_grad)) if nparams == f16_grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
-                        synchronizer.step(&handle, &grad, &mut params).await.unwrap();
+
+                        for (dst, &src) in grad_buf.iter_mut().zip(f16_grad.iter()) {
+                            *dst = src.to_f32();
+                        }
+
+                        synchronizer.step(&handle, &grad_buf, &mut params).await.unwrap();
 
                         debug!(worker_id = id; "sending parameters");
                         let msg = Msg::Data(Payload::Params(&mut params));
@@ -111,8 +119,8 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                         tx.send(&msg).await?;
                         break;
                     }
-                    Msg::Data(Payload::Grad(grad)) => {
-                        let ngrad = grad.len();
+                    Msg::Data(Payload::Grad(f16_grad)) => {
+                        let ngrad = f16_grad.len();
                         warn!(worker_id = id; "gradient size mismatch, expected {nparams}, got {ngrad}");
 
                         let msg = Msg::Err(Detail::BufferSizeMismatch {

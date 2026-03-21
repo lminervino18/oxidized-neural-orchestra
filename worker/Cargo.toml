@@ -16,6 +16,7 @@ tokio = { version = "1", features = [
   "net",
   "signal",
 ] }
+half = { version = "=2.3.1", features = ["bytemuck"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = [
