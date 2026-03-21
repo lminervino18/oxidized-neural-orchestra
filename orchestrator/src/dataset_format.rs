@@ -149,7 +149,7 @@ fn write_row(
                 format!("line {line_n}: cannot parse field as f32: {field:?}"),
             )
         })?;
-        writer.write_all(&val.to_ne_bytes())?;
+        writer.write_all(bytemuck::bytes_of(&val))?;
     }
     Ok(())
 }
