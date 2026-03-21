@@ -12,7 +12,7 @@ pub struct ChainedParamGen {
 impl ChainedParamGen {
     /// Creates a new `ChainedParamGen` parameter generator.
     ///
-    /// # Arguments
+    /// # Args
     /// * `param_gens` - A vec of potentially different parameter generators.
     ///
     /// # Returns

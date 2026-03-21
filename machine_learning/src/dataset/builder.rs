@@ -15,7 +15,7 @@ impl DatasetBuilder {
 
     /// Builds a `Dataset` from a vector with its raw data and a `DatasetSpec`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for the dataset.
     /// * `dataset_raw` - The dataset's raw data.
     ///

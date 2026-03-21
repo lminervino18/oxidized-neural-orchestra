@@ -11,7 +11,7 @@ def build_host_block(workers: int, servers: int) -> str:
     """
     Builds the translation string to incorporate to the /etc/hosts file.
 
-    # Arguments
+    # Args
     * `workers` - The amount of workers to use to train.
     * `servers` - The amount of servers to use to train.
 
@@ -27,7 +27,7 @@ def insert_block(hosts: str, block: str) -> str:
     """
     Appends or replaces the translations block in the given hosts string.
 
-    # Arguments
+    # Args
     * `hosts` - The content on the hosts translations file.
     * `block` - The block of server and worker addresses.
 

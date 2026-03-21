@@ -16,7 +16,7 @@ where
 
     /// Indirection method for `ParameterServer::spawn`
     ///
-    /// # Arguments
+    /// # Args
     /// * `rx` - The receiving end of the communication.
     /// * `tx` - The sending end of the communication.
     fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>);

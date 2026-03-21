@@ -4,7 +4,7 @@ use crate::storage::Result;
 pub trait Optimizer {
     /// Updates the provided slice of parameters using the accumulated gradients.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - A reference to the model's gradient.
     /// * `params` - The parameters to update.
     ///

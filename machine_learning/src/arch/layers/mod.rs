@@ -17,7 +17,7 @@ pub(super) use sigmoid::Sigmoid;
 pub trait InplaceReshape<D: Dimension> {
     /// Resizes the inner memory region for `Self` and returns a new instance.
     ///
-    /// # Arguments
+    /// # Args
     /// * `shape` - The shape of the given array.
     ///
     /// # Returns

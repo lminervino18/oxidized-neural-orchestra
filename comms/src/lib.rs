@@ -24,7 +24,7 @@ const LEN_TYPE_SIZE: usize = size_of::<LenType>();
 ///
 /// Given a writer and reader creates and returns both ends of the communication.
 ///
-/// # Arguments
+/// # Args
 /// * `rx` - An async readable.
 /// * `tx` - An async writable.
 ///

@@ -41,7 +41,7 @@ impl<O: Optimizer> Clone for BlockingStore<O> {
 impl<O: Optimizer> BlockingStore<O> {
     /// Creates a new `BlockingStore` parameter store.
     ///
-    /// # Arguments
+    /// # Args
     /// * `shard_size` - The maximum amount of parameters per shard.
     /// * `param_gen` - A parameter generator.
     /// * `optimizer_factory` - An `Optimizer` factory closure.

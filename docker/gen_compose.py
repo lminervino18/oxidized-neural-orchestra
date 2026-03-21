@@ -15,7 +15,7 @@ def generate_servers(servers: int, release: bool) -> dict[str, YmlField]:
     """
     Generates the servers' part of the compose file.
 
-    # Arguments
+    # Args
     * `servers` - The amount of servers to create.
     * `release` - If the executable should be compiled as release mode.
 
@@ -55,7 +55,7 @@ def generate_workers(workers: int, servers: int, release: bool) -> dict[str, Yml
     """
     Generates the workers' part of the compose file.
 
-    # Arguments
+    # Args
     * `workers` - The amount of workers to create.
     * `servers` - The amount of servers to create.
     * `release` - If the executable should be compiled as release mode.
@@ -111,7 +111,7 @@ def generate_compose(workers: int, servers: int, release: bool) -> dict[str, Yml
     """
     Generates the entire docker compose file in a dictionary.
 
-    # Arguments
+    # Args
     * `workers` - The amount of workers to create.
     * `servers` - The amount of servers to create.
     * `release` - If the executable should be compiled as release mode.
