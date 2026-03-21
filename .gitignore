@@ -51,3 +51,6 @@ training.json
 data/*
 !data/.gitkeep
 **/data/
+
+# Safetensors model
+*.safetensors

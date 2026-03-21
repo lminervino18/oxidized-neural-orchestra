@@ -19,6 +19,16 @@ fn fmt_loss(loss: f32) -> String {
     }
 }
 
+fn avg_loss(last_loss: &[Option<f32>]) -> f32 {
+    let reported: Vec<f32> = last_loss.iter().filter_map(|l| *l).collect();
+
+    if reported.is_empty() {
+        return 0.0;
+    }
+
+    reported.iter().sum::<f32>() / reported.len() as f32
+}
+
 /// Tracks per-worker training progress and renders it to stdout.
 ///
 /// In TTY mode renders an animated spinner with an in-place progress bar.
@@ -98,7 +108,7 @@ impl ProgressReporter {
         }
 
         let epoch = self.worker_epochs.iter().copied().max().unwrap_or(0);
-        let avg = self.avg_loss();
+        let avg = avg_loss(&self.last_loss);
 
         self.current_epoch.store(epoch, Ordering::Relaxed);
         self.avg_loss_bits
@@ -117,18 +127,27 @@ impl ProgressReporter {
 
     /// Stops the spinner and prints the final summary line.
     fn finish(self, success: bool) {
-        self.done.store(true, Ordering::Relaxed);
+        let Self {
+            done,
+            handle,
+            is_tty,
+            worker_epochs,
+            last_loss,
+            max_epochs,
+            ..
+        } = self;
 
-        if let Some(handle) = self.handle {
-            let _ = handle.join();
+        done.store(true, Ordering::Relaxed);
+
+        if let Some(h) = handle {
+            let _ = h.join();
         }
 
-        if self.is_tty {
-            let avg_loss = self.avg_loss();
+        if is_tty {
             let epoch = if success {
-                self.max_epochs
+                max_epochs
             } else {
-                self.worker_epochs.iter().copied().max().unwrap_or(0)
+                worker_epochs.iter().copied().max().unwrap_or(0)
             };
             let mark = if success { "✓" } else { "✗" };
 
@@ -137,21 +156,11 @@ impl ProgressReporter {
                 mark,
                 "█".repeat(BAR_WIDTH),
                 epoch,
-                self.max_epochs,
-                fmt_loss(avg_loss),
+                max_epochs,
+                fmt_loss(avg_loss(&last_loss)),
             );
             let _ = std::io::stdout().flush();
         }
-    }
-
-    fn avg_loss(&self) -> f32 {
-        let reported: Vec<f32> = self.last_loss.iter().filter_map(|l| *l).collect();
-
-        if reported.is_empty() {
-            return 0.0;
-        }
-
-        reported.iter().sum::<f32>() / reported.len() as f32
     }
 }
 
