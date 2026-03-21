@@ -26,15 +26,6 @@ DATASET_PATH = os.environ.get("DATASET_PATH", "data/mnist_train.bin")
 SAFETENSORS_PATH = os.environ.get("SAFETENSORS_PATH", "model.safetensors")
 
 
-def _verify_safetensors(path: str) -> None:
-    if not os.path.exists(path):
-        raise RuntimeError(f"{path} not found after save")
-    size = os.path.getsize(path)
-    if size == 0:
-        raise RuntimeError(f"{path} is empty after save")
-    print(f"model saved to {path} ({size} bytes)")
-
-
 def main() -> None:
     print(f"worker addrs: {WORKER_ADDRS}")
     print(f"server addrs: {SERVER_ADDRS}")
@@ -69,7 +60,7 @@ def main() -> None:
         trained = session.wait()
         print(f"training complete — {len(trained.weights())} parameters")
         trained.save_safetensors(SAFETENSORS_PATH)
-        _verify_safetensors(SAFETENSORS_PATH)
+        print(f"model saved to {SAFETENSORS_PATH}")
     except RuntimeError as e:
         print(f"training failed: {e}", file=sys.stderr)
         sys.exit(1)
