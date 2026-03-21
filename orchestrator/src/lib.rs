@@ -4,7 +4,7 @@ mod error;
 mod session;
 
 use configs::Adapter;
-use dataset_format::{DelimitedFormat, convert_to_binary};
+use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
 pub use session::{Session, TrainedModel, TrainingEvent};
 
@@ -33,7 +33,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     // always operates on raw packed f32 bytes.
     let converted_bin: Option<std::path::PathBuf> =
         if let DatasetSrc::Local { ref path } = training.dataset.src {
-            if let Some(format) = DelimitedFormat::from_path(path) {
+            if let Some(format) = DatasetFormat::from_path(path) {
                 let bin_path = convert_to_binary(path, format).map_err(OrchErr::Io)?;
                 training.dataset.src = DatasetSrc::Local {
                     path: bin_path.clone(),

@@ -6,21 +6,21 @@ use std::{
 
 use log::info;
 
-/// Supported delimited dataset formats that can be transparently converted
+/// Supported dataset formats that can be transparently converted
 /// to raw packed `f32` binary before training begins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DelimitedFormat {
+pub enum DatasetFormat {
     /// Comma-separated values — no header, all columns are `f32`.
     Csv,
     /// Tab-separated values — no header, all columns are `f32`.
     Tsv,
 }
 
-impl DelimitedFormat {
-    /// Infers the delimited format from the file extension.
+impl DatasetFormat {
+    /// Infers the dataset format from the file extension.
     ///
     /// # Returns
-    /// `Some(DelimitedFormat)` for known delimited extensions, `None` for raw binary.
+    /// `Some(DatasetFormat)` for known delimited extensions, `None` for raw binary.
     pub fn from_path(path: &Path) -> Option<Self> {
         match path.extension().and_then(|e| e.to_str()) {
             Some("csv") => Some(Self::Csv),
@@ -47,7 +47,7 @@ impl DelimitedFormat {
 ///
 /// # Args
 /// * `src` - Path to the source delimited file.
-/// * `format` - The delimited format to use for parsing.
+/// * `format` - The dataset format to use for parsing.
 ///
 /// # Returns
 /// The path to the converted binary file.
@@ -55,7 +55,7 @@ impl DelimitedFormat {
 /// # Errors
 /// Returns an `io::Error` if the file cannot be read or written, or if any
 /// field in a data row cannot be parsed as `f32`.
-pub fn convert_to_binary(src: &Path, format: DelimitedFormat) -> io::Result<PathBuf> {
+pub fn convert_to_binary(src: &Path, format: DatasetFormat) -> io::Result<PathBuf> {
     let out = src.with_extension("bin");
 
     if out.exists() {
