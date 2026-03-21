@@ -8,7 +8,7 @@ pub trait ParamGen {
 
     /// Should sample at most `n` parameters.
     ///
-    /// # Arguments
+    /// # Args
     /// * `n` - The upper limit of samples to generate.
     ///
     /// # Returns

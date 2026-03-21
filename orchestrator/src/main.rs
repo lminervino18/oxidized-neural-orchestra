@@ -14,7 +14,7 @@ const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/
 
 /// Sets up the docker containers for simulated execution of the system.
 ///
-/// # Arguments
+/// # Args
 /// * `workers` - The amount of workers to use.
 /// * `servers` - The amount of servers to use.
 /// * `release` - The compilation mode for the rust compiler.
@@ -39,7 +39,7 @@ fn setup_docker(workers: usize, servers: usize, release: bool) -> io::Result<Exi
 
 /// Builds the addresses for both workers and servers.
 ///
-/// # Arguments
+/// # Args
 /// * `workers` - The amount of workers to use.
 /// * `servers` - The amount of servers to use.
 ///

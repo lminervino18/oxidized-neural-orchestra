@@ -41,7 +41,7 @@ where
 {
     /// Returns a new `BackpropTrainer` model trainer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `model` - A trainable model.
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `dataset` - The dataset the model will be trained with.
@@ -87,7 +87,7 @@ where
 {
     /// Performs a training cycle.
     ///
-    /// # Arguments
+    /// # Args
     /// * `param_manager` - The manager of parameters for this training.
     ///
     /// # Returns

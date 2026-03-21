@@ -8,7 +8,7 @@ use crate::{
 
 /// Sends chunks of the dataset with `chunk` size.
 ///
-/// # Arguments
+/// # Args
 /// * `dataset` - The dataset's source.
 /// * `chunk` - The size of each chunk.
 /// * `tx` - An `OnoSender` for sending the chunks.

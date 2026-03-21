@@ -28,7 +28,7 @@ impl<O: Optimizer> Clone for WildStore<O> {
 impl<O: Optimizer> WildStore<O> {
     /// Creates a new `WildStore` parameter store.
     ///
-    /// # Arguments
+    /// # Args
     /// * `shard_size` - The maximum amount of parameters per shard.
     /// * `param_gen` - A parameter generator.
     /// * `optimizer_factory` - An `Optimizer` factory closure.
@@ -71,7 +71,7 @@ impl<O: Optimizer> Store for WildStore<O> {
     /// This method diverges from the trait's definition. It accumulates the grad
     /// directly into the parameters of the model in the same call.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - A flat slice containing a new model gradient.
     ///
     /// # Returns

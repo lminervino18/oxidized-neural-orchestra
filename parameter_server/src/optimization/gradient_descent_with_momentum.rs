@@ -11,7 +11,7 @@ pub struct GradientDescentWithMomentum {
 impl GradientDescentWithMomentum {
     /// Creates a new `GradientDescentWithMomentum` optimizer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `len` - The amount of parameters this instance should hold.
     /// * `learning_rate` - The small coefficient that modulates the amount of training per update.
     /// * `momentum` - Hyperparameter to the optimization algorithm.

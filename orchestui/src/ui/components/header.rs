@@ -18,6 +18,7 @@ use crate::ui::utils::fmt_loss;
 /// * `state` - The current training screen state.
 pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
     let phase_span = match state.phase {
+        Phase::Converting => Span::styled("CONVERTING", Theme::accent_cyan()),
         Phase::Connecting => Span::styled("CONNECTING", Theme::accent_cyan()),
         Phase::Training => Span::styled("TRAINING", Theme::ok()),
         Phase::Finished => Span::styled("FINISHED", Theme::accent_magenta()),

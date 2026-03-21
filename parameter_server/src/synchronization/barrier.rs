@@ -14,7 +14,7 @@ pub struct BarrierSync {
 impl BarrierSync {
     /// Creates a new `BarrierSync` synchronizer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `barrier_size` - The amount of workers to wait on until updating the parameters of the model.
     ///
     /// # Returns

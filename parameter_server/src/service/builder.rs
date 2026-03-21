@@ -30,7 +30,7 @@ const SHARD_AMOUNT_FACTOR: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 /// To avoid this duplication, this macro generalizes what it's immediately done with the concrete parameter generator,
 /// and thus avoids boxing parameter generators unnecessarily.
 ///
-/// # Arguments
+/// # Args
 /// * `rng` - A random number generator.
 /// * `dist_spec` - A specification for a distribution.
 /// * `limit` - The limit of parameters that the `RandParamGen` can generate.
@@ -88,7 +88,7 @@ impl ServerBuilder {
 
     /// Builds a new `Server` following a spec.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of the parameter server.
     ///
     /// # Returns
@@ -104,7 +104,7 @@ impl ServerBuilder {
 
     /// Generates a random number generator given (or not) a seed.
     ///
-    /// # Arguments
+    /// # Args
     /// * `seed` - An optional seed for the rng.
     ///
     /// # Returns
@@ -120,7 +120,7 @@ impl ServerBuilder {
 
     /// Resolves the `ParamGen` for this server.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of the parameter server.
     ///
     /// # Returns
@@ -155,7 +155,7 @@ impl ServerBuilder {
 
     /// Resolves the `ChainedParamGen` parameter generator.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `specs` - A list of parameter generator specifications.
     ///
@@ -197,7 +197,7 @@ impl ServerBuilder {
 
     /// Resolves the `Optimizer` for this server.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for the parameter server.
     /// * `param_gen` - A resolved parameter generator.
     ///
@@ -235,7 +235,7 @@ impl ServerBuilder {
 
     /// Resolves the `Synchronizer` for this server.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for the parameter server.
     /// * `param_gen` - A resolved parameter generator.
     /// * `optimizer_factory` - A factory of optimizers.
@@ -269,7 +269,7 @@ impl ServerBuilder {
 
     /// Resolves the `Store` for this server.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for the parameter server.
     /// * `param_gen` - A resolved parameter generator.
     /// * `optimizer_factory` - A factory of optimizers.
@@ -313,7 +313,7 @@ impl ServerBuilder {
 
     /// Terminates the entire build for this session and finally instanciates all the entities.
     ///
-    /// # Arguments
+    /// # Args
     /// * `store` - A resolved store.
     /// * `synchronizer` - A resolved synchronizer.
     ///

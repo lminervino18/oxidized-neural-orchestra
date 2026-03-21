@@ -26,7 +26,7 @@ pub struct ParameterServer<PS: Store, Sy: Synchronizer> {
 impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
     /// Creates a new `ParameterServer`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `handle` - The underlying parameter store to use behind a handle.
     /// * `synchronizer` - The synchronizer to use.
     ///
@@ -73,7 +73,7 @@ impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
 impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterServer<PS, Sy> {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rx` - The receiving end of the communication.
     /// * `tx` - The sending end of the communication.
     pub fn spawn<R, W>(&mut self, mut rx: OnoReceiver<R>, mut tx: OnoSender<W>)

@@ -20,7 +20,7 @@ unsafe impl<O: Optimizer> Sync for WildShard<O> {}
 impl<O: Optimizer> WildShard<O> {
     /// Creates a new `WildShard` parameter shard.
     ///
-    /// # Arguments
+    /// # Args
     /// * `params` - The initial state of the parameters.
     /// * `optimizer` - The optimization algorithm.
     ///
@@ -36,7 +36,7 @@ impl<O: Optimizer> WildShard<O> {
 
     /// Updates the parameters using a new gradient via the optimizer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - The gradient to accumulate to the shard's parameters.
     ///
     /// # Returns
@@ -60,7 +60,7 @@ impl<O: Optimizer> WildShard<O> {
 
     /// Copies the shard's inner parameters into the provided destination buffer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `out` - A mutable slice where the parameters will be copied.
     ///
     /// # Returns

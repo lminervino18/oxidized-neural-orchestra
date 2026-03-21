@@ -5,7 +5,7 @@ use ndarray::{ArrayView2, ArrayViewMut2};
 pub trait LossFn {
     /// Calculates a model's current loss and it's derivative vector in one call.
     ///
-    /// # Arguments
+    /// # Args
     /// * `y_pred` - The models' computed output.
     /// * `y` - The expected *real* output.
     ///
@@ -19,7 +19,7 @@ pub trait LossFn {
 
     /// Calculates the model's current loss.
     ///
-    /// # Arguments
+    /// # Args
     /// * `y_pred` - The models' computed output.
     /// * `y` - The expected *real* output.
     ///

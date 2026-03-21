@@ -26,7 +26,7 @@ impl TrainerBuilder {
 
     /// Builds a new `Trainer` following a spec.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for the trainer.
     /// * `server_sizes` - The mount of parameters per server.
     /// * `dataset` - A resolved dataset.
@@ -44,7 +44,7 @@ impl TrainerBuilder {
 
     /// Resolves the `Optimizer`s for this trainer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of the trainer.
     /// * `server_sizes` - The amount of parameters per server.
     /// * `dataset` - A resolved dataset.
@@ -72,7 +72,7 @@ impl TrainerBuilder {
 
     /// Resolves the the `Layer`s for a `Sequential` model.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of the trainer.
     /// * `dataset` - The dataset for the model to be trained on.
     ///
@@ -98,7 +98,7 @@ impl TrainerBuilder {
 
     /// Resolves a `Layer` for a `Sequential` model.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of a certain layer.
     ///
     /// # Returns
@@ -121,7 +121,7 @@ impl TrainerBuilder {
 
     /// Resolves the `ActFn` for a specific layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - An optional specification for an `ActFn`.
     ///
     /// # Returns
@@ -134,7 +134,7 @@ impl TrainerBuilder {
 
     /// Resolves the `LossFn` for this trainer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for this trainer.
     /// * `optimizers` - A list of resolved optimizers, one per server.
     /// * `layers` - A list of resolved layers.
@@ -162,7 +162,7 @@ impl TrainerBuilder {
 
     /// Terminates the entire build for this trainer and instanciates the final entity.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for this trainer.
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `layers` - A list of resolved layers.
@@ -200,7 +200,7 @@ impl TrainerBuilder {
 
     /// Generates a random number generator given (or not) a seed.
     ///
-    /// # Arguments
+    /// # Args
     /// * `seed` - An optional seed for the rng.
     ///
     /// # Returns

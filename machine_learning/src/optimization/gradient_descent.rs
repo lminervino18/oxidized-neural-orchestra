@@ -9,7 +9,7 @@ pub struct GradientDescent {
 impl GradientDescent {
     /// Returns a new `GradientDescent`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `learning_rate` - The *length* of the steps taken on `update_params`.
     pub fn new(learning_rate: f32) -> Self {
         Self { learning_rate }
@@ -20,7 +20,7 @@ impl Optimizer for GradientDescent {
     /// Updates the parameters according to the algorithm's learning rule, that is, making a step in
     /// the opposite direction of the gradient, with a length of `learning_rate`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - The gradient used for taking the step.
     /// * `params` - The parameters that are going to be modified.
     ///
