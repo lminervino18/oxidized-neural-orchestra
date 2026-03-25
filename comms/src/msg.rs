@@ -71,17 +71,22 @@ impl<'a> Serialize<'a> for Msg<'a> {
             Msg::Err(detail) => {
                 let header = (0 as Header).to_be_bytes();
                 buf.extend_from_slice(&header);
+
+                // SAFETY: Serialize impl for `Detail` is derived and not implemented
+                //         by hand. Nor has a non string-key map inside.
                 serde_json::to_writer(buf, &detail).unwrap();
                 None
             }
             Msg::Control(cmd) => {
                 let header = (1 as Header).to_be_bytes();
                 buf.extend_from_slice(&header);
+
+                // SAFETY: Serialize impl for `Command` is derived and not implemented
+                //         by hand. Nor has a non string-key map inside.
                 serde_json::to_writer(buf, &cmd).unwrap();
                 None
             }
             Msg::Data(payload) => match payload {
-                // Grad is zero-copy: cast the f16 slice directly to bytes.
                 Payload::Grad(grad) => {
                     let header = (2 as Header).to_be_bytes();
                     buf.extend_from_slice(&header);
@@ -111,12 +116,13 @@ impl<'a> Deserialize<'a> for Msg<'a> {
         }
 
         let (kind_buf, rest) = bytes.split_at_mut(HEADER_SIZE);
+
+        // SAFETY: We splitted the buffer to be of size `HEADER_SIZE` just above.
         let kind = Header::from_be_bytes(kind_buf.try_into().unwrap()) as u8;
 
         match kind {
             0 => Ok(Self::Err(serde_json::from_slice(rest)?)),
             1 => Ok(Self::Control(serde_json::from_slice(rest)?)),
-            // Grad: zero-copy cast from bytes to f16 slice.
             2 => {
                 if rest.len() % size_of::<half::f16>() != 0 {
                     return Err(io::Error::new(

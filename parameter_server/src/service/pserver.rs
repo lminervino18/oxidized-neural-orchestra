@@ -61,6 +61,8 @@ impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
             }
         }
 
+        // SAFETY: This parameter vector is the same size as
+        //         the amount of parameters in the storage.
         let nparams = self.handle.len();
         let mut params = vec![0.; nparams];
         self.handle.pull_params(&mut params).await.unwrap();
@@ -69,7 +71,7 @@ impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
 }
 
 impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterServer<PS, Sy> {
-    /// Binds a new worker to this server and spawns it's own training task.
+    /// Binds a new worker to this server and spawns its own training task.
     ///
     /// # Args
     /// * `rx` - The receiving end of the communication.
@@ -91,6 +93,8 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
             // Reused across epochs to avoid repeated heap allocations.
             let mut grad_buf = vec![0.0f32; nparams];
 
+            // SAFETY: This buffer is the same size as the
+            //         amount of parameters in the storage.
             handle.pull_params(&mut params).await.unwrap();
 
             debug!(worker_id = id; "sending parameters");
@@ -107,6 +111,8 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                             *dst = src.to_f32();
                         }
 
+                        // SAFETY: We checked that the gradient is the same
+                        //         size as the buffer and the storage.
                         synchronizer.step(&handle, &grad_buf, &mut params).await.unwrap();
 
                         debug!(worker_id = id; "sending parameters");
