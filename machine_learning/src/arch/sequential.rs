@@ -12,7 +12,7 @@ pub struct Sequential {
 impl Sequential {
     /// Creates a new `Sequential`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `layers` - A list of layers.
     ///
     /// # Returns
@@ -31,7 +31,7 @@ impl Sequential {
 
     /// Makes a forward pass through the network.
     ///
-    /// # Arguments
+    /// # Args
     /// * `param_manager` - The manager of parameters.
     /// * `x` - The input data.
     ///
@@ -63,7 +63,7 @@ impl Sequential {
 
     /// Makes a backward pass through the network.
     ///
-    /// # Arguments
+    /// # Args
     /// * `param_manager` - The manager of parameters.
     /// * `d` - The starting delta, the loss prime.
     ///
@@ -103,7 +103,7 @@ impl Sequential {
     /// losses, that is, loss * batch_size and then diving by the also weighted sum of
     /// num_batches.
     ///
-    /// # Arguments
+    /// # Args
     /// * `params` - The model's parameters.
     /// * `grad` - A buffer for writing the computed gradient on each batch pass.
     /// * `loss` - The loss function.

@@ -6,7 +6,7 @@ pub trait Serialize<'a> {
     ///
     /// Then the `OnoSender` will first write the contents of `buf` and then whatever this method returns.
     ///
-    /// # Arguments
+    /// # Args
     /// * `buf` - A writable vec of bytes.
     ///
     /// # Returns

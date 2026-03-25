@@ -11,7 +11,7 @@ pub enum DatasetSrc {
 impl DatasetSrc {
     /// Returns a new `DatasetSrc::Inline` dataset source.
     ///
-    /// # Arguments
+    /// # Args
     /// * `data` - The buffer containing the dataset's raw data.
     pub fn inmem(data: Vec<f32>) -> Self {
         DatasetSrc::InMem(InMemSrc::new(data))
@@ -28,7 +28,7 @@ impl DatasetSrc {
 
     /// Shuffles the rows in the dataset using a random number generator.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     pub fn shuffle<Rn: Rng>(&mut self, rows: usize, row_size: usize, rng: &mut Rn) {
         match self {
@@ -38,7 +38,7 @@ impl DatasetSrc {
 
     /// Retrieves a batch of the data source.
     ///
-    /// # Arguments
+    /// # Args
     /// * `range` - The range of the data to be retrieved.
     ///
     /// # Returns

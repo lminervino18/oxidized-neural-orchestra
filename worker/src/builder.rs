@@ -17,7 +17,7 @@ impl WorkerBuilder {
 
     /// Builds a `Worker` from a `WorkerSpec`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for a worker.
     ///
     /// # Returns

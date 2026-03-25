@@ -8,7 +8,7 @@ use crate::{
 
 /// Helper function for wrapping the dataset's source buffer in a writeable bytes cursor.
 ///
-/// # Arguments
+/// # Args
 /// * `dataset_raw`: The `f32` dataset buffer.
 ///
 /// # Returns a `Cursor<&mut [u8]>` wrapping the buffer.
@@ -19,7 +19,7 @@ pub fn get_dataset_cursor(dataset_raw: &mut [f32]) -> Cursor<&mut [u8]> {
 
 /// Receives chunks of the dataset and writes them into a storage.
 ///
-/// # Arguments
+/// # Args
 /// * `storage` - The storage for writing the chunks.
 /// * `size` - The total size of the dataset in bytes.
 /// * `rx` - An `OnoReceiver` for receiving the chunks.

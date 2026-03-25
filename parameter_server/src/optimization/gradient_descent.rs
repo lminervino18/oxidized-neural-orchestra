@@ -9,7 +9,7 @@ pub struct GradientDescent {
 impl GradientDescent {
     /// Creates a new `GradientDescent` optimizer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `learning_rate` - The small coefficient that modulates the amount of training per update.
     ///
     /// # Returns

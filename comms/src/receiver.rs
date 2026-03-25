@@ -12,7 +12,7 @@ pub struct OnoReceiver<R: AsyncRead + Unpin> {
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     /// Creates a new `OnoReceiver` instance.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rx` - The underlying reader.
     pub(super) fn new(rx: R) -> Self {
         Self { rx }
@@ -20,7 +20,7 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
 
     /// Waits to receive a new message from the inner receiver.
     ///
-    /// # Arguments
+    /// # Args
     /// * `buf` - The buffer to use for deserialization, the returned `T`'s lifetimes will be tied to this buffer.
     ///
     /// # Returns

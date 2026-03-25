@@ -13,7 +13,7 @@ pub struct OnoSender<W: AsyncWrite + Unpin> {
 impl<W: AsyncWrite + Unpin> OnoSender<W> {
     /// Creates a new `OnoSender` instance.
     ///
-    /// # Arguments
+    /// # Args
     /// * `tx` - The underlying writer.
     pub(super) fn new(tx: W) -> Self {
         Self {
@@ -24,7 +24,7 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
 
     /// Sends `msg` through the inner sender.
     ///
-    /// # Arguments
+    /// # Args
     /// * `msg` - A serializable object.
     ///
     /// # Returns

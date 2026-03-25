@@ -46,7 +46,7 @@ where
 {
     /// Creates a new `Middleware`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `server_ordering`: The ordering of the servers to know which layer's parameters correspond to which server.
     ///
     /// # Returns
@@ -60,7 +60,7 @@ where
 
     /// Adds a new server communicator to the middleware.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rx` - The worker's receiving end of the communication.
     /// * `tx` - The worker's sending end of the communication.
     /// * `size` - The amount of parameters this server holds.

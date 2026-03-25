@@ -21,7 +21,7 @@ pub struct BlockingShard<O: Optimizer> {
 impl<O: Optimizer> BlockingShard<O> {
     /// Creates a new `BlockingShard` parameter shard.
     ///
-    /// # Arguments
+    /// # Args
     /// * `params` - The initial state of the parameters.
     /// * `optimizer` - The optimization algorithm.
     ///
@@ -43,7 +43,7 @@ impl<O: Optimizer> BlockingShard<O> {
 
     /// Accumulates `grad` into the active gradient.
     ///
-    /// # Arguments
+    /// # Args
     /// * `active_idx` - The index of the active gradient, must be `0` or `1`.
     /// * `grad` - The gradient to accumulate to the active gradient.
     ///
@@ -65,7 +65,7 @@ impl<O: Optimizer> BlockingShard<O> {
 
     /// Updates the parameters using the frozen gradient via the optimizer and clears it.
     ///
-    /// # Arguments
+    /// # Args
     /// * `frozen_idx` - The index of the frozen gradient, must be `0` or `1`.
     pub fn update_params(&self, frozen_idx: usize) {
         let mut params = self.params.write();
@@ -82,7 +82,7 @@ impl<O: Optimizer> BlockingShard<O> {
 
     /// Copies the shard's inner parameters into the provided destination buffer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `out` - A mutable slice where the parameters will be copied.
     ///
     /// # Returns

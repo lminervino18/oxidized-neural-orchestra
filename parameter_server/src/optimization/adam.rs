@@ -16,7 +16,7 @@ pub struct Adam {
 impl Adam {
     /// Creates a new `Adam` optimizer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `len` - The amount of parameters this instance should hold.
     /// * `learning_rate` - The small coefficient that modulates the amount of training per update.
     /// * `beta1`, `beta2`, `epsilon` - Hyperparameters to the optimization algorithm.

@@ -5,7 +5,7 @@ use crate::Align1;
 pub trait Deserialize<'a>: Sized {
     /// Deserializes the given bytes and creates a new Self.
     ///
-    /// # Arguments
+    /// # Args
     /// * `buf` - A byte array.
     ///
     /// # Returns

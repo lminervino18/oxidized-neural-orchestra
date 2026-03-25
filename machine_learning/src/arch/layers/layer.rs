@@ -23,7 +23,7 @@ pub struct Layer(Inner);
 impl Layer {
     /// Creates a new `Layer::Dense` layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `dim` - The dimension of the layer: (input dimension, and output dimension)
     ///
     /// # Returns
@@ -34,7 +34,7 @@ impl Layer {
 
     /// Creates a new `Layer::Sigmoid` layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `amp` - The amlitude of the sigmoid.
     ///
     /// # Returns
@@ -56,7 +56,7 @@ impl Layer {
 
     /// Performs a forward pass of the layer and returns a view of its activation.
     ///
-    /// # Arguments
+    /// # Args
     /// * `params` - The parameters to use for the forward pass.
     /// * `x` - The input x that is to be *forwarded*.
     ///
@@ -76,7 +76,7 @@ impl Layer {
     /// Performs a backward pass, writes the gradient of the delta with respect to the layer's portion of
     /// parameters and returns a view of its delta.
     ///
-    /// # Arguments
+    /// # Args
     /// * `params` - The parameters to use for the backward pass.
     /// * `grad` - The buffer for writing the gradient of the layer.
     /// * `d` - The delta of the next layer.

@@ -2,7 +2,8 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    configs::{ModelConfig, TrainingConfig},
+    Session,
+    configs::{DatasetSrc, ModelConfig, TrainingConfig},
     TrainedModel, TrainingEvent,
 };
 use ratatui::{
@@ -11,13 +12,17 @@ use ratatui::{
     widgets::Block,
     Frame,
 };
-use tokio::sync::mpsc;
 
 use super::{Action, Screen};
 use crate::ui::{
     components::{
-        confirm_quit::draw_confirm_quit, header::draw_header, log_panel::draw_log,
-        loss_chart::draw_charts, params_panel::draw_params, save_popup::draw_save_popup,
+        confirm_quit::draw_confirm_quit,
+        converting::draw_converting,
+        header::draw_header,
+        log_panel::draw_log,
+        loss_chart::draw_charts,
+        params_panel::draw_params,
+        save_popup::draw_save_popup,
         workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
@@ -37,6 +42,8 @@ pub const WORKER_COLORS: &[Color] = &[
 /// The current phase of the training session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
+    /// Dataset is being converted from a delimited format to binary.
+    Converting,
     /// Waiting for all workers and servers to connect.
     Connecting,
     /// Training is in progress.
@@ -85,6 +92,12 @@ pub enum LogLevel {
     Error,
 }
 
+/// Internal startup result sent from the background thread.
+enum StartupResult {
+    Ok(Session),
+    Err(String),
+}
+
 /// Full state for the training dashboard screen.
 pub struct TrainingState {
     pub workers_total: usize,
@@ -100,19 +113,24 @@ pub struct TrainingState {
     /// The trained model received on completion, including architecture and params.
     pub final_trained: Option<TrainedModel>,
     pub error: Option<String>,
-    pub events: mpsc::Receiver<TrainingEvent>,
+    /// Active training event receiver, available once the session starts.
+    pub events: Option<tokio::sync::mpsc::Receiver<TrainingEvent>>,
     pub confirm_quit: ConfirmQuit,
     pub save_popup: SavePopup,
     pub selected_worker: usize,
     /// Set when the session fails to start — shown as a full-screen error.
     pub startup_error: Option<String>,
+    /// Channel that receives the session once `train()` completes in the background.
+    startup_rx: Option<std::sync::mpsc::Receiver<StartupResult>>,
 }
 
 impl TrainingState {
-    /// Creates a new `TrainingState`, starting the training session immediately.
+    /// Creates a new `TrainingState`, spawning `train()` in a background thread
+    /// so the TUI remains responsive during dataset conversion and connection setup.
     ///
-    /// If the session fails to start, the state transitions to an error screen
-    /// rather than panicking.
+    /// Starts in `Phase::Converting` only when the dataset source is a delimited
+    /// file that requires conversion. Otherwise starts in `Phase::Connecting`.
+    /// Transitions to `Phase::Error` if the background thread fails.
     ///
     /// # Args
     /// * `model` - The model architecture configuration.
@@ -133,20 +151,24 @@ impl TrainingState {
 
         let max_epochs = training.max_epochs.get();
 
-        let session = match orchestrator::train(model, training) {
-            Ok(s) => s,
-            Err(e) => {
-                return Self::dead(
-                    workers_total,
-                    servers_total,
-                    optimizer_label,
-                    max_epochs,
-                    e.to_string(),
-                );
+        let initial_phase = match &training.dataset.src {
+            DatasetSrc::Local { path }
+                if orchestrator::dataset_format::DatasetFormat::from_path(path).is_some() =>
+            {
+                Phase::Converting
             }
+            _ => Phase::Connecting,
         };
 
-        let events = session.event_listener();
+        let (startup_tx, startup_rx) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            let result = match orchestrator::train(model, training) {
+                Ok(session) => StartupResult::Ok(session),
+                Err(e) => StartupResult::Err(e.to_string()),
+            };
+            let _ = startup_tx.send(result);
+        });
 
         let workers = (0..workers_total)
             .map(|id| WorkerState {
@@ -159,61 +181,72 @@ impl TrainingState {
 
         let loss_series = vec![Vec::new(); workers_total];
 
+        let initial_log = match initial_phase {
+            Phase::Converting => "converting dataset to binary format...",
+            _ => "connecting to workers and servers...",
+        };
+
         Self {
             workers_total,
             servers_total,
             optimizer_label,
             max_epochs,
-            phase: Phase::Connecting,
+            phase: initial_phase,
             started_at: Instant::now(),
             workers,
             loss_series,
-            logs: vec![(
-                LogLevel::Info,
-                format!("connecting to {workers_total} worker(s) and {servers_total} server(s)..."),
-            )],
+            logs: vec![(LogLevel::Info, initial_log.into())],
             final_trained: None,
             error: None,
-            events,
+            events: None,
             confirm_quit: ConfirmQuit::Hidden,
             save_popup: SavePopup::Hidden,
             selected_worker: 0,
             startup_error: None,
-        }
-    }
-
-    /// Creates a dead state used when the session fails to start.
-    fn dead(
-        workers_total: usize,
-        servers_total: usize,
-        optimizer_label: String,
-        max_epochs: usize,
-        err: String,
-    ) -> Self {
-        let (_, rx) = mpsc::channel(1);
-        Self {
-            workers_total,
-            servers_total,
-            optimizer_label,
-            max_epochs,
-            phase: Phase::Error,
-            started_at: Instant::now(),
-            workers: Vec::new(),
-            loss_series: Vec::new(),
-            logs: Vec::new(),
-            final_trained: None,
-            error: Some(err.clone()),
-            events: rx,
-            confirm_quit: ConfirmQuit::Hidden,
-            save_popup: SavePopup::Hidden,
-            selected_worker: 0,
-            startup_error: Some(err),
+            startup_rx: Some(startup_rx),
         }
     }
 
     /// Drains all pending training events and applies them to the state.
+    ///
+    /// Also checks whether the background startup thread has finished and,
+    /// if so, transitions to `Phase::Connecting` and starts listening for
+    /// training events, or to `Phase::Error` on failure.
     pub fn tick(&mut self) {
-        while let Ok(event) = self.events.try_recv() {
+        let startup_result = self
+            .startup_rx
+            .as_ref()
+            .and_then(|rx| rx.try_recv().ok());
+
+        if let Some(result) = startup_result {
+            self.startup_rx = None;
+            match result {
+                StartupResult::Ok(session) => {
+                    self.push_log(
+                        LogLevel::Info,
+                        format!(
+                            "connecting to {} worker(s) and {} server(s)...",
+                            self.workers_total, self.servers_total
+                        ),
+                    );
+                    self.phase = Phase::Connecting;
+                    self.events = Some(session.event_listener());
+                }
+                StartupResult::Err(e) => {
+                    self.phase = Phase::Error;
+                    self.startup_error = Some(e.clone());
+                    self.error = Some(e);
+                }
+            }
+        }
+
+        let events: Vec<TrainingEvent> = self
+            .events
+            .as_mut()
+            .map(|rx| std::iter::from_fn(|| rx.try_recv().ok()).collect())
+            .unwrap_or_default();
+
+        for event in events {
             self.apply(event);
         }
     }
@@ -294,9 +327,12 @@ impl TrainingState {
         self.workers.iter().filter(|w| w.done).count()
     }
 
-    /// Returns `true` if the session is still connecting or training.
+    /// Returns `true` if the session is still converting, connecting, or training.
     pub fn is_active(&self) -> bool {
-        matches!(self.phase, Phase::Connecting | Phase::Training)
+        matches!(
+            self.phase,
+            Phase::Converting | Phase::Connecting | Phase::Training
+        )
     }
 
     /// Computes the average loss series across all workers.
@@ -351,7 +387,6 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
         return Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))));
     }
 
-    // Save popup takes priority over everything else.
     if let SavePopup::Visible(ref mut path) = state.save_popup {
         match key {
             KeyCode::Char(c) => {
@@ -465,6 +500,10 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     draw_log(f, rows[2], state);
 
+    if state.phase == Phase::Converting {
+        draw_converting(f, area, state);
+    }
+
     if state.confirm_quit == ConfirmQuit::Visible {
         draw_confirm_quit(f, area);
     }
@@ -476,7 +515,7 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
 fn draw_startup_error(f: &mut Frame, area: ratatui::layout::Rect, err: &str) {
     use ratatui::{
-        layout::{Alignment, Constraint, Direction, Layout},
+        layout::Alignment,
         style::Modifier,
         text::Span,
         widgets::{Block, Borders, Paragraph, Wrap},

@@ -16,7 +16,7 @@ pub struct Dataset {
 impl Dataset {
     /// Creates a new `Dataset`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `data` - A vector containing the raw data.
     /// * `x_size` - Per row sample size.
     /// * `y_size` - Per row Label size.
@@ -37,7 +37,7 @@ impl Dataset {
 
     /// Shuffles the rows in the dataset using a random number generator.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     pub fn shuffle<Rn: Rng>(&mut self, rng: &mut Rn) {
         self.src.shuffle(self.rows, self.row_size, rng);
@@ -45,7 +45,7 @@ impl Dataset {
 
     /// Retrieves the dataset in batches of size `batch_size`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `batch_size` - The maximum size of batches to yield.
     ///
     /// # Returns
@@ -62,7 +62,7 @@ impl Dataset {
 
     /// Creates a view over a certain batch of the dataset.
     ///
-    /// # Arguments
+    /// # Args
     /// * `row` - The starting row to retrieve.
     /// * `n` - The amount of rows to keep in the view.
     ///
