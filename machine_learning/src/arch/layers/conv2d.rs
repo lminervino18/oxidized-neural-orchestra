@@ -58,13 +58,13 @@ impl Conv2d {
         self.input.reshape_inplace(x.raw_dim());
         self.input.assign(&x);
 
-        let (w, b) = self.view_params(params)?;
+        let (k, b) = self.view_params(params)?;
         let conv_mode = ConvMode::Custom {
             padding: [0, 0, padding, padding],
             strides: [1, 1, stride, stride],
         };
 
-        let mut output = x.conv(&w, conv_mode, PaddingMode::Zeros).unwrap();
+        let mut output = x.conv(&k, conv_mode, PaddingMode::Zeros).unwrap();
         let b_reshaped = b
             .view()
             .insert_axis(Axis(0))
@@ -238,5 +238,31 @@ mod tests {
 
         assert!((grads[4] - 4.0).abs() < 1e-5);
         println!("Gradient: {:?}", grads);
+    }
+
+    #[test]
+    fn test_conv2d_forward() {
+        unsafe { env::set_var("RUST_BACKTRACE", "1") };
+
+        let input: Array4<f32> = array![[[
+            [1.0, 2.0, 3.0, 4.0],
+            [5.0, 6.0, 7.0, 8.0],
+            [9.0, 10.0, 11.0, 12.0],
+            [13.0, 14.0, 15.0, 16.0]
+        ]]];
+
+        let filters = 1;
+        let in_channels = 1;
+        let kernel_size = (2, 2);
+        let stride = 2;
+        let padding = 0;
+        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
+
+        let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
+        let expected_output = array![[[[31.0, 51.0], [111.0, 131.0]]]];
+
+        let output = conv.forward(&params[..], input.view()).unwrap();
+
+        assert_eq!(output, expected_output);
     }
 }
