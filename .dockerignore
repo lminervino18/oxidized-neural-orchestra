@@ -1,6 +1,10 @@
 .git/
 README.md
-compose.yml
-target/
-doc/
+assets/
+compose.yaml
+docker/
+docs/
+notebooks/
 references/
+target/
+
