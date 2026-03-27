@@ -59,13 +59,14 @@ impl Validator {
             return Err(OrchErr::InvalidConfig(text));
         }
 
-        let AlgorithmConfig::ParameterServer {
-            ref server_addrs, ..
-        } = training.algorithm;
-
-        if server_addrs.is_empty() {
-            let text = "at least one server address is required".into();
-            return Err(OrchErr::InvalidConfig(text));
+        match &training.algorithm {
+            AlgorithmConfig::ParameterServer { server_addrs, .. } => {
+                if server_addrs.is_empty() {
+                    let text = "at least one server address is required".into();
+                    return Err(OrchErr::InvalidConfig(text));
+                }
+            }
+            AlgorithmConfig::RingAllReduce => {}
         }
 
         let DatasetConfig {
@@ -91,7 +92,6 @@ impl Validator {
                     return Err(OrchErr::InvalidConfig(text));
                 }
 
-                // SAFETY: row_size is a positive integer.
                 len / row_size.get()
             }
             DatasetSrc::Local { path } => {
@@ -108,7 +108,6 @@ impl Validator {
                     return Err(OrchErr::InvalidConfig(text));
                 }
 
-                // SAFETY: row_size is a positive integer.
                 len / row_size.get()
             }
         };

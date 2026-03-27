@@ -25,11 +25,17 @@ use comms::{
 
 use crate::{
     OrchErr, Result,
-    configs::{LayerConfig, ModelConfig, Partition},
+    configs::{AlgorithmConfig, LayerConfig, ModelConfig, Partition},
 };
 
 type NetRx = OnoReceiver<OwnedReadHalf>;
 type NetTx = OnoSender<OwnedWriteHalf>;
+
+#[derive(Debug, Clone, Copy)]
+enum SessionAlgorithm {
+    ParameterServer,
+    RingAllReduce,
+}
 
 /// The result of a completed training session.
 ///
@@ -72,8 +78,6 @@ impl TrainedModel {
         let mut offset = 0;
         let mut prev = self.input_size;
 
-        // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
-        // alignment is valid, and the slice is live for the duration of this function.
         let params_bytes = unsafe {
             slice::from_raw_parts(self.params.as_ptr() as *const u8, self.params.len() * 4)
         };
@@ -135,6 +139,7 @@ pub struct Session {
     workers: Vec<(NetRx, NetTx)>,
     model: ModelConfig,
     input_size: usize,
+    algorithm: SessionAlgorithm,
 }
 
 impl Session {
@@ -146,6 +151,7 @@ impl Session {
     /// * `servers` - List of (address, spec) pairs for each parameter server.
     /// * `model` - The model architecture, kept for post-training serialization.
     /// * `input_size` - The input size of the first layer, derived from the dataset.
+    /// * `algorithm` - The distributed training algorithm for this session.
     ///
     /// # Returns
     /// A ready session with all connections established.
@@ -158,6 +164,7 @@ impl Session {
         servers: Vec<(String, ServerSpec)>,
         model: ModelConfig,
         input_size: usize,
+        algorithm: AlgorithmConfig,
     ) -> Result<Self> {
         let (nworkers, nservers) = (workers.len(), servers.len());
         info!("connecting to {nworkers} workers and {nservers} servers");
@@ -172,12 +179,18 @@ impl Session {
         let worker_chans = runtime.block_on(Self::create_workers(workers, partitions))?;
         debug!("successfully created all workers");
 
+        let algorithm = match algorithm {
+            AlgorithmConfig::ParameterServer { .. } => SessionAlgorithm::ParameterServer,
+            AlgorithmConfig::RingAllReduce => SessionAlgorithm::RingAllReduce,
+        };
+
         Ok(Self {
             runtime,
             servers: server_chans,
             workers: worker_chans,
             model,
             input_size,
+            algorithm,
         })
     }
 
@@ -237,6 +250,7 @@ impl Session {
         let (tx, rx) = mpsc::channel(256);
         let model = self.model;
         let input_size = self.input_size;
+        let algorithm = self.algorithm;
 
         thread::spawn(move || {
             self.runtime.block_on(async move {
@@ -246,42 +260,52 @@ impl Session {
 
                 future::join_all(futs).await;
 
-                debug!("all workers done, reading final params from all servers");
+                match algorithm {
+                    SessionAlgorithm::ParameterServer => {
+                        debug!("all workers done, reading final params from all servers");
 
-                let mut model_params: Vec<f32> = Vec::new();
-                let mut rx_buf = vec![0; 1024];
+                        let mut model_params: Vec<f32> = Vec::new();
+                        let mut rx_buf = vec![0; 1024];
 
-                for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
-                    match srx.recv_into(&mut rx_buf).await {
-                        Ok(Msg::Data(Payload::Params(params))) => {
-                            model_params.extend_from_slice(params);
+                        for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
+                            match srx.recv_into(&mut rx_buf).await {
+                                Ok(Msg::Data(Payload::Params(params))) => {
+                                    model_params.extend_from_slice(params);
+                                }
+                                Ok(msg) => {
+                                    let err = OrchErr::ServerError(format!(
+                                        "unexpected message from server {i}: {msg:?}"
+                                    ));
+                                    let _ = tx.send(TrainingEvent::Error(err)).await;
+                                    return;
+                                }
+                                Err(e) => {
+                                    let err = OrchErr::ServerError(format!(
+                                        "unexpected error from server {i}: {e}"
+                                    ));
+                                    let _ = tx.send(TrainingEvent::Error(err)).await;
+                                    return;
+                                }
+                            }
                         }
-                        Ok(msg) => {
-                            let err = OrchErr::ServerError(format!(
-                                "unexpected message from server {i}: {msg:?}"
-                            ));
-                            let _ = tx.send(TrainingEvent::Error(err)).await;
-                            return;
-                        }
-                        Err(e) => {
-                            let err = OrchErr::ServerError(format!(
-                                "unexpected error from server {i}: {e}"
-                            ));
-                            let _ = tx.send(TrainingEvent::Error(err)).await;
-                            return;
-                        }
+
+                        info!("received {} total parameters", model_params.len());
+
+                        let trained = TrainedModel {
+                            params: model_params,
+                            model,
+                            input_size,
+                        };
+
+                        let _ = tx.send(TrainingEvent::Complete(trained)).await;
+                    }
+                    SessionAlgorithm::RingAllReduce => {
+                        let err = OrchErr::Unsupported(
+                            "ring all-reduce session finalization is not implemented yet".into(),
+                        );
+                        let _ = tx.send(TrainingEvent::Error(err)).await;
                     }
                 }
-
-                info!("received {} total parameters", model_params.len());
-
-                let trained = TrainedModel {
-                    params: model_params,
-                    model,
-                    input_size,
-                };
-
-                let _ = tx.send(TrainingEvent::Complete(trained)).await;
             });
         });
 

@@ -29,8 +29,6 @@ use crate::configs::{DatasetSrc, ModelConfig, TrainingConfig, Validator};
 /// Returns an `OrchErr` if dataset conversion fails, config validation fails,
 /// or connecting to any worker or server fails.
 pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session> {
-    // Convert delimited datasets to binary before validation so the validator
-    // always operates on raw packed f32 bytes.
     let converted_bin: Option<std::path::PathBuf> =
         if let DatasetSrc::Local { ref path } = training.dataset.src {
             if let Some(format) = DatasetFormat::from_path(path) {
@@ -54,10 +52,15 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     let adapter = Adapter::new();
     let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
-    let session = Session::new(workers, partitions, servers, model, input_size)?;
+    let session = Session::new(
+        workers,
+        partitions,
+        servers,
+        model,
+        input_size,
+        training.algorithm.clone(),
+    )?;
 
-    // All partitions have been sent to workers — the converted binary is no
-    // longer needed and can be removed transparently.
     if let Some(bin_path) = converted_bin {
         if let Err(e) = std::fs::remove_file(&bin_path) {
             log::warn!(

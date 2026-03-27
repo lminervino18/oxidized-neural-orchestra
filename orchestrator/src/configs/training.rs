@@ -58,6 +58,7 @@ pub enum AlgorithmConfig {
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
+    RingAllReduce,
 }
 
 /// The `Training` configuration.

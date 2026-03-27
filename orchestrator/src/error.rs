@@ -11,6 +11,7 @@ pub enum OrchErr {
     ConnectionFailed { addr: String, source: io::Error },
     WorkerError { worker_id: usize, msg: String },
     ServerError(String),
+    Unsupported(String),
     Io(io::Error),
 }
 
@@ -28,6 +29,7 @@ impl Display for OrchErr {
                 format!("worker {worker_id} error: {msg}")
             }
             Self::ServerError(msg) => format!("server error: {msg}"),
+            Self::Unsupported(msg) => format!("unsupported operation: {msg}"),
             Self::Io(e) => format!("io error: {e}"),
         };
 
