@@ -10,7 +10,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::middleware::Middleware;
 
-/// The middleman between the parameter server and the model trainer.
+/// The middleman between the distributed synchronization layer and the model trainer.
 pub struct Worker {
     trainer: Box<dyn Trainer>,
 }
@@ -27,7 +27,7 @@ impl Worker {
         Self { trainer }
     }
 
-    /// Runs the worker using its configured distributed algorithm while keeping a live
+    /// Runs the worker against parameter servers while keeping a live
     /// bidirectional channel to the orchestrator.
     ///
     /// # Args
@@ -37,7 +37,7 @@ impl Worker {
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn run<R, W>(
+    pub async fn run_parameter_server<R, W>(
         self,
         mut rx: OnoReceiver<R>,
         mut tx: OnoSender<W>,
@@ -57,16 +57,16 @@ impl Worker {
                     debug!("received parameters from all servers, training...");
 
                     let mut param_manager = ret?;
+                    let TrainResult { losses, was_last } = trainer
+                        .train(&mut param_manager)
+                        .map_err(io::Error::other)?;
 
-                    // TODO: Handlear esto mejor, capaz podemos mandarle mensajes a todos los servidores
-                    //       para que reintenten de enviar el ultimo mensaje o algo asi (todavia no se
-                    //       si tiene sentido tampoco que les avisemos, despues de todo ellos mandaron
-                    //       mal el mensaje)
-                    let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
                     middleware.push_grads().await?;
 
                     should_continue = !was_last;
-                    let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
+                    let msg = Msg::Control(Command::ReportLoss {
+                        losses: Cow::Borrowed(losses),
+                    });
                     tx.send(&msg).await?;
                 }
                 ret = rx.recv_into(&mut rx_buf) => match ret? {
