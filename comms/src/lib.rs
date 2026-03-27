@@ -5,6 +5,7 @@ mod receiver;
 mod sender;
 mod serialize;
 mod share_dataset;
+mod sparse;
 pub mod specs;
 
 use tokio::io::{AsyncRead, AsyncWrite};
