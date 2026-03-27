@@ -132,7 +132,7 @@ impl<'a> Deserialize<'a> for Msg<'a> {
                 "received a Grad message via recv_into; use recv_grad_or_msg instead",
             )),
             3 => Ok(Self::Data(Payload::Params(bytemuck::cast_slice_mut(rest)))),
-            4 => Ok(Self::Data(Payload::Datachunk(bytemuck::cast_slice_mut(rest)))),
+            4 => Ok(Self::Data(Payload::Datachunk(bytemuck::cast_slice(rest)))),
             byte => Self::invalid_kind_byte(byte),
         }
     }
