@@ -7,7 +7,6 @@ use comms::{
 use futures::future;
 use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
-use half::f16;
 
 /// The starting size of the receiver buffer.
 const STARTING_RX_BUF_SIZE: usize = 1028;
@@ -24,12 +23,9 @@ where
     rx_buf: Vec<u32>,
     grad: Vec<f32>,
     acc_grad_buf: Vec<f32>,
-    /// Pre-allocated buffer for encoding gradients as `f16` before sending.
-    /// Reused across epochs to avoid repeated heap allocations.
-    net_grad: Vec<f16>,
 }
 
-// The communication manager between the worker process and the many servers.
+/// The communication manager between the worker process and the many servers.
 pub struct Middleware<R, W>
 where
     R: AsyncRead + Unpin,
@@ -47,7 +43,8 @@ where
     /// Creates a new `Middleware`.
     ///
     /// # Args
-    /// * `server_ordering`: The ordering of the servers to know which layer's parameters correspond to which server.
+    /// * `server_ordering` - The ordering of the servers to know which layer's parameters
+    ///                       correspond to which server.
     ///
     /// # Returns
     /// A new `Middleware` instance.
@@ -71,7 +68,6 @@ where
             rx_buf: vec![0; STARTING_RX_BUF_SIZE],
             grad: vec![0.0; size],
             acc_grad_buf: vec![0.0; size],
-            net_grad: vec![half::f16::ZERO; size],
         };
 
         self.servers.push(metadata);
@@ -108,20 +104,16 @@ where
         Ok(ParamManager::new(servers, &self.server_ordering))
     }
 
-    /// Pushes the latest gradients to the servers encoded as `f16`.
+    /// Pushes the latest accumulated gradients to all servers.
     ///
-    /// Converts the accumulated `f32` gradients to `f16` in the pre-allocated
-    /// `net_grad` buffer before sending, avoiding heap allocations per epoch.
+    /// Gradient values are sent as `f16` on the wire — the encoding is handled
+    /// transparently by the `comms` layer.
     ///
     /// # Returns
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
-            for (net, &acc) in server.net_grad.iter_mut().zip(server.acc_grad_buf.iter()) {
-                *net = half::f16::from_f32(acc);
-            }
-
-            let msg = Msg::Data(Payload::Grad(&server.net_grad));
+            let msg = Msg::Data(Payload::Grad(&server.acc_grad_buf));
             server.tx.send(&msg).await?;
 
             // TODO: Maybe do this somewhere else.

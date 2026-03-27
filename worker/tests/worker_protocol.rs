@@ -80,7 +80,7 @@ where
             }
             Msg::Data(Payload::Grad(f16_grad)) => {
                 for (dst, &src) in grad_buf.iter_mut().zip(f16_grad.iter()) {
-                    *dst = src.to_f32();
+                    *dst = src;
                 }
                 optimizer.update_params(&grad_buf, &mut params).unwrap();
                 let msg = Msg::Data(Payload::Params(&mut params));

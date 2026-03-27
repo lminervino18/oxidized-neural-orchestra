@@ -4,7 +4,7 @@ use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Detail, Msg, Payload},
 };
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     task::JoinSet,
@@ -84,14 +84,12 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
         let id = self.tasks.len() + 1;
         let handle = self.handle.clone();
         let synchronizer = self.synchronizer.clone();
-        let mut msg_buf = vec![0; 1028];
+        let mut msg_buf = vec![0u32; 1028];
 
         let task = async move {
             let nparams = handle.len();
-            let mut params = vec![0.; nparams];
-            // Pre-allocated buffer for converting incoming f16 gradients to f32.
-            // Reused across epochs to avoid repeated heap allocations.
-            let mut grad_buf = vec![0.0f32; nparams];
+            let mut params = vec![0f32; nparams];
+            let mut grad_buf = vec![0f32; nparams];
 
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
@@ -103,13 +101,9 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
-                match rx.recv_into(&mut msg_buf).await? {
-                    Msg::Data(Payload::Grad(f16_grad)) if nparams == f16_grad.len() => {
+                match rx.recv_grad_or_msg(&mut grad_buf, &mut msg_buf).await? {
+                    None => {
                         debug!(worker_id = id; "received gradient, applying step");
-
-                        for (dst, &src) in grad_buf.iter_mut().zip(f16_grad.iter()) {
-                            *dst = src.to_f32();
-                        }
 
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
@@ -119,24 +113,13 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                         let msg = Msg::Data(Payload::Params(&mut params));
                         tx.send(&msg).await?;
                     }
-                    Msg::Control(Command::Disconnect) => {
+                    Some(Msg::Control(Command::Disconnect)) => {
                         info!(worker_id = id; "gracefully disconnecting worker");
                         let msg = Msg::Control(Command::Disconnect);
                         tx.send(&msg).await?;
                         break;
                     }
-                    Msg::Data(Payload::Grad(f16_grad)) => {
-                        let ngrad = f16_grad.len();
-                        warn!(worker_id = id; "gradient size mismatch, expected {nparams}, got {ngrad}");
-
-                        let msg = Msg::Err(Detail::BufferSizeMismatch {
-                            expected: nparams,
-                            got: ngrad,
-                        });
-
-                        tx.send(&msg).await?;
-                    }
-                    msg => {
+                    Some(msg) => {
                         error!(worker_id = id; "received an invalid message {msg:?}");
 
                         let msg = Msg::Err(Detail::Fatal("invalid message".into()));

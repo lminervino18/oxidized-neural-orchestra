@@ -10,13 +10,14 @@ const HEADER_SIZE: usize = size_of::<Header>();
 
 /// The payload data for the `Data` variant of the `Msg` enum.
 ///
-/// `Grad` carries a slice of `f16` values — half the wire size of `f32` with
-/// acceptable precision loss for gradient communication. `Params` and
-/// `Datachunk` remain as `f32` slices since they require full precision.
+/// `Grad` carries a slice of `f32` values. The wire encoding transparently
+/// compresses them to `f16` to halve network traffic — callers always work
+/// in `f32` precision. `Params` and `Datachunk` are sent as raw `f32` since
+/// they require full precision.
 #[derive(Debug)]
 pub enum Payload<'a> {
-    /// Model gradient encoded as `f16` to halve network traffic.
-    Grad(&'a [half::f16]),
+    /// Model gradient — encoded as `f16` on the wire, exposed as `f32` to callers.
+    Grad(&'a [f32]),
     /// Full model parameters — sent as raw `f32` to preserve precision.
     Params(&'a mut [f32]),
     /// Dataset chunk — sent as raw `f32`.
@@ -90,7 +91,10 @@ impl<'a> Serialize<'a> for Msg<'a> {
                 Payload::Grad(grad) => {
                     let header = (2 as Header).to_be_bytes();
                     buf.extend_from_slice(&header);
-                    Some(bytemuck::cast_slice(grad))
+                    for &val in grad.iter() {
+                        buf.extend_from_slice(bytemuck::bytes_of(&half::f16::from_f32(val)));
+                    }
+                    None
                 }
                 Payload::Params(params) => {
                     let header = (3 as Header).to_be_bytes();
@@ -123,19 +127,10 @@ impl<'a> Deserialize<'a> for Msg<'a> {
         match kind {
             0 => Ok(Self::Err(serde_json::from_slice(rest)?)),
             1 => Ok(Self::Control(serde_json::from_slice(rest)?)),
-            2 => {
-                if rest.len() % size_of::<half::f16>() != 0 {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!(
-                            "Grad payload byte count {} is not a multiple of {}",
-                            rest.len(),
-                            size_of::<half::f16>()
-                        ),
-                    ));
-                }
-                Ok(Self::Data(Payload::Grad(bytemuck::cast_slice(rest))))
-            }
+            2 => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "received a Grad message via recv_into; use recv_grad_or_msg instead",
+            )),
             3 => Ok(Self::Data(Payload::Params(bytemuck::cast_slice_mut(rest)))),
             4 => Ok(Self::Data(Payload::Datachunk(bytemuck::cast_slice_mut(rest)))),
             byte => Self::invalid_kind_byte(byte),

@@ -16,7 +16,6 @@ use crate::{
     synchronization::BarrierSync,
 };
 
-
 fn channel_pair() -> (
     (
         OnoReceiver<ReadHalf<DuplexStream>>,
@@ -45,9 +44,8 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut rx_buf = vec![128];
+    let mut rx_buf = vec![0u32; 128];
     let mut grad = vec![0.0f32; nparams];
-    let mut net_grad = vec![half::f16::ZERO; nparams];
 
     for _ in 0..max_epochs {
         match rx.recv_into(&mut rx_buf).await? {
@@ -56,12 +54,8 @@ where
                     *g = *p - 1.0;
                 }
 
-                for (net, &g) in net_grad.iter_mut().zip(grad.iter()) {
-                    *net = half::f16::from_f32(g);
-                }
-
-                let msg = Msg::Data(Payload::Grad(&net_grad));
-                tx.send(&msg).await?
+                let msg = Msg::Data(Payload::Grad(&grad));
+                tx.send(&msg).await?;
             }
             _ => {}
         }
@@ -99,3 +93,4 @@ async fn test_lineal_convergence() -> io::Result<()> {
     println!("params: {params:?}");
     Ok(())
 }
+
