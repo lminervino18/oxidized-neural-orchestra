@@ -1,8 +1,8 @@
 use std::io;
 
 use comms::{
-    msg::{Command, Msg, Payload},
     OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 

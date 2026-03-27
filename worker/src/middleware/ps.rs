@@ -1,8 +1,8 @@
 use std::io;
 
 use comms::{
-    msg::{Command, Msg, Payload},
     OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
 };
 use futures::future;
 use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
@@ -78,23 +78,27 @@ where
     /// # Errors
     /// Returns an io error if a server sends an unexpected message.
     pub async fn pull_params(&mut self) -> io::Result<ParamManager<'_>> {
-        let futs = self.servers.iter_mut().enumerate().map(
-            async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
-                Msg::Data(Payload::Params(params)) => {
-                    let metadata = ServerParamsMetadata::new(
-                        params,
-                        &mut server.grad,
-                        &mut server.acc_grad_buf,
-                    );
+        let futs = self
+            .servers
+            .iter_mut()
+            .enumerate()
+            .map(
+                async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
+                    Msg::Data(Payload::Params(params)) => {
+                        let metadata = ServerParamsMetadata::new(
+                            params,
+                            &mut server.grad,
+                            &mut server.acc_grad_buf,
+                        );
 
-                    Ok(metadata)
-                }
-                msg => {
-                    let text = format!("expected params from server {i}, got: {msg:?}");
-                    Err(io::Error::other(text))
-                }
-            },
-        );
+                        Ok(metadata)
+                    }
+                    msg => {
+                        let text = format!("expected params from server {i}, got: {msg:?}");
+                        Err(io::Error::other(text))
+                    }
+                },
+            );
 
         let servers = future::try_join_all(futs).await?;
         Ok(ParamManager::new(servers, &self.server_ordering))

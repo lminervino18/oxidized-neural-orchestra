@@ -61,7 +61,10 @@ impl WorkerBuilder {
             .layers
             .iter()
             .map(|layer| match layer {
-                LayerSpec::Dense { dim: (input, output), .. } => input * output + output,
+                LayerSpec::Dense {
+                    dim: (input, output),
+                    ..
+                } => input * output + output,
             })
             .sum()
     }

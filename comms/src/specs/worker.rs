@@ -6,7 +6,7 @@ use super::{
 };
 
 /// The specification for the `Worker`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WorkerSpec {
     pub worker_id: usize,
     pub trainer: TrainerSpec,

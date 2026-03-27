@@ -10,7 +10,9 @@ use machine_learning::{
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
 use comms::msg::{Command, Msg, Payload};
-use worker::{middleware::Middleware, worker::Worker};
+use worker::{
+    middleware::ps::ParameterServerMiddleware, runtime::ps::ParameterServerRuntime, worker::Worker,
+};
 
 #[allow(clippy::type_complexity)]
 fn channel_pair() -> (
@@ -67,26 +69,24 @@ where
 {
     let mut optimizer = GradientDescent::new(learning_rate);
     let mut params = vec![0.5; nparams];
-    let mut rx_buf = vec![0; 128];
+    let mut rx_buf = vec![0u32; 128];
     let mut grad_buf = vec![0.0f32; nparams];
-
+    
     let msg = Msg::Data(Payload::Params(&mut params));
     tx.send(&msg).await?;
 
+
     loop {
-        match rx.recv_into(&mut rx_buf).await? {
-            Msg::Control(Command::Disconnect) => {
-                break;
-            }
-            Msg::Data(Payload::Grad(f16_grad)) => {
-                for (dst, &src) in grad_buf.iter_mut().zip(f16_grad.iter()) {
-                    *dst = src;
-                }
+        match rx.recv_grad_or_msg(&mut grad_buf, &mut rx_buf).await? {
+            None => {
                 optimizer.update_params(&grad_buf, &mut params).unwrap();
                 let msg = Msg::Data(Payload::Params(&mut params));
                 tx.send(&msg).await?;
             }
-            _ => {}
+            Some(Msg::Control(Command::Disconnect)) => {
+                break;
+            }
+            Some(_) => {}
         }
     }
 
@@ -125,12 +125,15 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     );
 
     let worker = Worker::new(Box::new(trainer));
-    let mut middleware = Middleware::new(vec![0]);
+    let mut middleware = ParameterServerMiddleware::new(vec![0]);
     middleware.spawn(wk_rx, wk_tx, 2);
 
-    let worker_fut = worker.run(wk_orch_rx, wk_orch_tx, middleware);
+    let runtime = ParameterServerRuntime::new(worker, wk_orch_rx, wk_orch_tx, middleware);
+
+    let worker_fut = runtime.run();
     let server_fut = mock_server(sv_rx, sv_tx, sv_orch_tx, 0.1, 2);
     let orch_fut = mock_orch(orch_wk_rx, orch_sv_rx);
+
     let (_, _, params) = tokio::try_join!(worker_fut, server_fut, orch_fut)?;
     println!("params: {params:?}");
     Ok(())
