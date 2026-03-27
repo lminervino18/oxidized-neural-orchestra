@@ -1,18 +1,15 @@
 use std::io;
 
 use comms::{
-    OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
+    OnoReceiver, OnoSender,
 };
 use futures::future;
 use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-/// The starting size of the receiver buffer.
 const STARTING_RX_BUF_SIZE: usize = 1028;
 
-/// The necessary information to maintain for the entire
-/// training duration for each of the servers.
 struct ServerMetadata<R, W>
 where
     R: AsyncRead + Unpin,
@@ -25,8 +22,8 @@ where
     acc_grad_buf: Vec<f32>,
 }
 
-/// The communication manager between the worker process and the many servers.
-pub struct Middleware<R, W>
+/// The communication manager between the worker process and the parameter servers.
+pub struct ParameterServerMiddleware<R, W>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -35,19 +32,19 @@ where
     server_ordering: Vec<usize>,
 }
 
-impl<R, W> Middleware<R, W>
+impl<R, W> ParameterServerMiddleware<R, W>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    /// Creates a new `Middleware`.
+    /// Creates a new `ParameterServerMiddleware`.
     ///
     /// # Args
     /// * `server_ordering` - The ordering of the servers to know which layer's parameters
-    ///                       correspond to which server.
+    ///   correspond to which server.
     ///
     /// # Returns
-    /// A new `Middleware` instance.
+    /// A new `ParameterServerMiddleware` instance.
     pub fn new(server_ordering: Vec<usize>) -> Self {
         Self {
             servers: Vec::new(),
@@ -77,28 +74,27 @@ where
     ///
     /// # Returns
     /// A new `ParamManager` instance with all the parameters.
+    ///
+    /// # Errors
+    /// Returns an io error if a server sends an unexpected message.
     pub async fn pull_params(&mut self) -> io::Result<ParamManager<'_>> {
-        let futs = self
-            .servers
-            .iter_mut()
-            .enumerate()
-            .map(
-                async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
-                    Msg::Data(Payload::Params(params)) => {
-                        let metadata = ServerParamsMetadata::new(
-                            params,
-                            &mut server.grad,
-                            &mut server.acc_grad_buf,
-                        );
+        let futs = self.servers.iter_mut().enumerate().map(
+            async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
+                Msg::Data(Payload::Params(params)) => {
+                    let metadata = ServerParamsMetadata::new(
+                        params,
+                        &mut server.grad,
+                        &mut server.acc_grad_buf,
+                    );
 
-                        Ok(metadata)
-                    }
-                    msg => {
-                        let text = format!("expected params from server {i}, got: {msg:?}");
-                        Err(io::Error::other(text))
-                    }
-                },
-            );
+                    Ok(metadata)
+                }
+                msg => {
+                    let text = format!("expected params from server {i}, got: {msg:?}");
+                    Err(io::Error::other(text))
+                }
+            },
+        );
 
         let servers = future::try_join_all(futs).await?;
         Ok(ParamManager::new(servers, &self.server_ordering))
@@ -106,17 +102,12 @@ where
 
     /// Pushes the latest accumulated gradients to all servers.
     ///
-    /// Gradient values are sent as `f16` on the wire — the encoding is handled
-    /// transparently by the `comms` layer.
-    ///
-    /// # Returns
-    /// An io error if occurred.
+    /// # Errors
+    /// Returns an io error if any server cannot receive the gradients.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
             let msg = Msg::Data(Payload::Grad(&server.acc_grad_buf));
             server.tx.send(&msg).await?;
-
-            // TODO: Maybe do this somewhere else.
             server.acc_grad_buf.fill(0.0);
             Ok::<_, io::Error>(())
         });
@@ -125,10 +116,10 @@ where
         Ok(())
     }
 
-    /// Disconnects this worker from all the servers.
+    /// Disconnects this worker from all parameter servers.
     ///
-    /// # Returns
-    /// An io error if occurred.
+    /// # Errors
+    /// Returns an io error if any disconnect exchange fails.
     pub async fn disconnect(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Disconnect);
 
