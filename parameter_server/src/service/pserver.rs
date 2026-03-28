@@ -84,7 +84,6 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
         let id = self.tasks.len() + 1;
         let handle = self.handle.clone();
         let synchronizer = self.synchronizer.clone();
-        let mut msg_buf = vec![0; 1028];
 
         let task = async move {
             let nparams = handle.len();
@@ -100,7 +99,7 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
-                match rx.recv_into(&mut msg_buf).await? {
+                match rx.recv().await? {
                     Msg::Data(Payload::Grad(grad)) if nparams == grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
 

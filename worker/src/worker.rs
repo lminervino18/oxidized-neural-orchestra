@@ -48,7 +48,6 @@ impl Worker {
         W: AsyncWrite + Unpin,
     {
         let mut trainer = self.trainer;
-        let mut rx_buf = vec![0; 1028];
         let mut should_continue = true;
 
         while should_continue {
@@ -69,7 +68,7 @@ impl Worker {
                     let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
                     tx.send(&msg).await?;
                 }
-                ret = rx.recv_into(&mut rx_buf) => match ret? {
+                ret = rx.recv() => match ret? {
                     Msg::Control(Command::Disconnect) => {
                         info!("received a Command::Disconnect from the orchestrator");
                         break;

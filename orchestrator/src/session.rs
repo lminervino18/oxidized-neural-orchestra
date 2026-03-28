@@ -182,10 +182,8 @@ impl Session {
     }
 
     async fn worker_listener(id: usize, mut rx: NetRx, _tx: NetTx, tx: Sender<TrainingEvent>) {
-        let mut rx_buf = vec![0; 128];
-
         loop {
-            match rx.recv_into(&mut rx_buf).await {
+            match rx.recv().await {
                 Ok(Msg::Control(Command::ReportLoss { losses })) => {
                     debug!("worker {id} reported {} losses", losses.len());
                     let event = TrainingEvent::Loss {
@@ -249,10 +247,9 @@ impl Session {
                 debug!("all workers done, reading final params from all servers");
 
                 let mut model_params: Vec<f32> = Vec::new();
-                let mut rx_buf = vec![0; 1024];
 
                 for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
-                    match srx.recv_into(&mut rx_buf).await {
+                    match srx.recv().await {
                         Ok(Msg::Data(Payload::Params(params))) => {
                             model_params.extend_from_slice(params);
                         }
