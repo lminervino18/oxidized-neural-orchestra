@@ -140,6 +140,37 @@ impl Conv2d {
         Ok(self.delta.view_mut())
     }
 
+    /// Performs inward and outward (padding) dilations to a input delta.
+    ///
+    /// This method assumes:
+    /// * That a forward pass has been performed on the convolutional layer.
+    //  TODO: make it so that this first assumption is not necessary
+    /// * (For now) That the kernel is a square matrix.
+    ///
+    /// ## Args
+    /// * `delta` - The input delta to dilate and pad.
+    ///
+    /// ## Returns
+    /// The dilated and padded delta.
+    ///
+    /// ## Panics
+    /// Panics if the current `dilated` buffer doesn't have a corresponding
+    /// shape.
+    fn dilate_and_pad<'a>(&'a mut self, delta: ArrayView4<f32>) -> Result<ArrayView4<'a, f32>> {
+        let dilated_dim = self.input.dim();
+        self.dilated.reshape_inplace(dilated_dim);
+
+        // let inward_padding = self.stride - 1;
+        let kernel_size = self.kernel_dim.2; // I'm assuming square kernel matrices for now
+        let outward_padding = kernel_size - self.padding - 1;
+
+        self.dilated
+            .slice_mut(s![.., ..,outward_padding..dilated_dim.2 - outward_padding; self.stride, outward_padding..dilated_dim.3 - outward_padding; self.stride])
+            .assign(&delta);
+
+        Ok(self.dilated.view())
+    }
+
     /// Gives a view of the raw parameter slice as the weights and biases of this layer.
     ///
     /// # Arguments
@@ -264,5 +295,94 @@ mod tests {
         let output = conv.forward(&params[..], input.view()).unwrap();
 
         assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_dilate_and_pad() {
+        unsafe { env::set_var("RUST_BACKTRACE", "1") };
+
+        // Input dimension is then used to get the dimension for the output delta
+        let input = array![[[
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
+            [0.0, 5.0, 0.0, 6.0, 0.0, 7.0, 0.0, 8.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
+            [0.0, 9.0, 0.0, 10.0, 0.0, 11.0, 0.0, 12.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
+            [0.0, 13.0, 0.0, 14.0, 0.0, 15.0, 0.0, 16.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        ]]];
+
+        let filters = 1;
+        let in_channels = 1;
+        let kernel_size = (2, 2);
+        let stride = 2;
+        let padding = 0;
+        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
+
+        let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
+        conv.forward(&params, input.view()).unwrap();
+
+        let delta: Array4<f32> = array![[[
+            [1.0, 2.0, 3.0, 4.0],
+            [5.0, 6.0, 7.0, 8.0],
+            [9.0, 10.0, 11.0, 12.0],
+            [13.0, 14.0, 15.0, 16.0]
+        ]]];
+
+        let expected = array![[[
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
+            [0.0, 5.0, 0.0, 6.0, 0.0, 7.0, 0.0, 8.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
+            [0.0, 9.0, 0.0, 10.0, 0.0, 11.0, 0.0, 12.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
+            [0.0, 13.0, 0.0, 14.0, 0.0, 15.0, 0.0, 16.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        ]]];
+
+        let got = conv.dilate_and_pad(delta.view()).unwrap();
+
+        assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn test_conv2d_backward() {
+        unsafe { env::set_var("RUST_BACKTRACE", "1") };
+
+        let input: Array4<f32> = array![[[
+            [1.0, 2.0, 3.0, 4.0],
+            [5.0, 6.0, 7.0, 8.0],
+            [9.0, 10.0, 11.0, 12.0],
+            [13.0, 14.0, 15.0, 16.0]
+        ]]];
+
+        let filters = 1;
+        let in_channels = 1;
+        let kernel_size = (2, 2);
+        let stride = 2;
+        let padding = 0;
+        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
+
+        let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
+        let mut grad: [f32; 5] = [0.0, 0.0, 0.0, 0.0, 0.0];
+        let _ = conv.forward(&params, input.view()).unwrap();
+
+        let mut delta_in: Array4<f32> = array![[[
+            [17.0, 18.0, 19.0, 20.0],
+            [21.0, 22.0, 23.0, 24.0],
+            [25.0, 26.0, 27.0, 28.0],
+            [29.0, 30.0, 31.0, 32.0]
+        ]]];
+
+        let expected_delta_out = array![[[[44.0, 66.0], [124.0, 144.0]]]];
+
+        let delta_out = conv
+            .backward(&params, &mut grad, delta_in.view_mut())
+            .unwrap();
+
+        assert_eq!(delta_out, expected_delta_out);
     }
 }
