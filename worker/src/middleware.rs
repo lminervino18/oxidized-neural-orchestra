@@ -22,7 +22,7 @@ where
     tx: OnoSender<W>,
     rx_buf: Vec<u32>,
     grad: Vec<f32>,
-    acc_grad_buf: Vec<f32>,
+    residual: Vec<f32>,
 }
 
 // The communication manager between the worker process and the many servers.
@@ -66,7 +66,7 @@ where
             tx,
             rx_buf: vec![0; STARTING_RX_BUF_SIZE],
             grad: vec![0.0; size],
-            acc_grad_buf: vec![0.0; size],
+            residual: vec![0.0; size],
         };
 
         self.servers.push(metadata);
@@ -87,7 +87,7 @@ where
                         let metadata = ServerParamsMetadata::new(
                             params,
                             &mut server.grad,
-                            &mut server.acc_grad_buf,
+                            &mut server.residual,
                         );
 
                         Ok(metadata)
@@ -109,12 +109,8 @@ where
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
-            let msg = Msg::Data(Payload::Grad(&server.acc_grad_buf));
+            let msg = Msg::Data(Payload::Grad(&server.residual));
             server.tx.send(&msg).await?;
-
-            // TODO: Maybe do this somewhere else.
-            server.acc_grad_buf.fill(0.0);
-            Ok::<_, io::Error>(())
         });
 
         future::try_join_all(futs).await?;

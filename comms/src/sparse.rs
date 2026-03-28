@@ -1,66 +1,113 @@
-use tokio::io;
+use rand::{Rng, seq::IndexedRandom};
 
 type Idx = u64;
 type ChunkLen = u32;
 
 const IDX_SIZE: usize = size_of::<Idx>();
 const CHUNK_LEN_SIZE: usize = size_of::<ChunkLen>();
+const SAMPLE_SIZE_MAX: usize = 1 << 14;
 
-fn get_threshold(grad: &[f32], r: f32) -> f32 {
-    1.0
-}
-
-pub fn grad_drop(grad: &[f32], r: f32) -> Vec<u8> {
-    let treshold = get_threshold(grad, r);
-    let mut kept = vec![];
-
-    let mut iter = grad.iter().enumerate().peekable();
-
-    while let Some((i, g)) = iter.next() {
-        if g.abs() >= treshold {
-            kept.extend_from_slice(&(i as Idx).to_be_bytes());
-            let size_idx = kept.len();
-            kept.extend_from_slice(&(0 as ChunkLen).to_be_bytes());
-            kept.extend_from_slice(&g.to_be_bytes());
-
-            let mut chunk_len: ChunkLen = 1;
-            while let Some((_, g)) = iter.peek()
-                && g.abs() >= treshold
-            {
-                kept.extend_from_slice(&g.to_be_bytes());
-                chunk_len += 1;
-                iter.next();
-            }
-
-            kept[size_idx..size_idx + CHUNK_LEN_SIZE].copy_from_slice(&chunk_len.to_be_bytes());
-        }
+/// Calculates the gradient's threshold approximately by sampling it's values.
+///
+/// # Args
+/// * `residual` - The residual gradient to use to calculate the threshold.
+/// * `r` - The ratio of values to keep.
+/// * `rng` - A random number generator to stochastically sample the gradient's values.
+///
+/// # Returns
+/// The threshold to use with `grad_drop`.
+pub fn calculate_threshold<R: Rng>(residual: &[f32], r: f32, rng: &mut R) -> f32 {
+    if residual.is_empty() {
+        return 0.0;
     }
 
-    kept
+    let sample_size = SAMPLE_SIZE_MAX.min(residual.len());
+    let mut sample: Vec<_> = residual.sample(rng, sample_size).map(|x| x.abs()).collect();
+    let k = (sample_size as f32 * (1.0 - r)) as usize;
+    let k = k.clamp(0, sample_size - 1);
+    sample.select_nth_unstable_by(k, |a, b| a.total_cmp(b));
+
+    sample[k].max(1e-12)
 }
 
-/// # Panics
+/// Serializes the given gradient into `buf` dropping any values with a magnitude lower than `threshold`.
 ///
-pub fn grad_lift(grad: &mut [f32], kept: &[u8]) -> io::Result<()> {
+/// Will zero out all the serialized values inside the residual buffer.
+///
+/// # Args
+/// * `buf` - The buffer to use to serialize the residual gradient.
+/// * `residual` - The residual gradient to serialize.
+/// * `threshold` - The minimum value the gradient's values have to reach to be sent.
+pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &mut [f32], threshold: f32) {
     let mut i = 0;
 
-    while i < kept.len() {
-        let idx_bytes = kept[i..i + IDX_SIZE].try_into().unwrap();
+    while i < residual.len() {
+        if residual[i].abs() >= threshold {
+            let (start, mut end) = (i, i + 1);
 
-        let idx = Idx::from_be_bytes(idx_bytes) as usize;
+            while end < residual.len() && residual[end].abs() >= threshold {
+                end += 1;
+            }
+
+            let chunk_len = end - start;
+            buf.extend_from_slice(&(start as Idx).to_le_bytes());
+            buf.extend_from_slice(&(chunk_len as ChunkLen).to_le_bytes());
+
+            let residual_chunk = &mut residual[start..end];
+            let chunk_bytes = bytemuck::cast_slice(residual_chunk);
+            buf.reserve(chunk_bytes.len());
+            buf.extend_from_slice(chunk_bytes);
+
+            residual_chunk.fill(0.0);
+            i = end;
+        } else {
+            i += 1;
+        }
+    }
+}
+
+/// Deserializes a sparse gradient into `grad`.
+///
+/// # Args
+/// * `grad` - The gradient to apply the new values.
+/// * `buf` - The buffer containing the serialized sparse gradient.
+///
+/// # Returns
+/// An error if there are missing or invalid values in the input buffer.
+pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> {
+    let mut i = 0;
+
+    while i < buf.len() {
+        let idx_bytes: [_; IDX_SIZE] = buf
+            .get(i..i + IDX_SIZE)
+            .ok_or("Missing index bytes at grad lift")?
+            .try_into()
+            // SAFETY: There are exactly `IDX_SIZE` bytes in the intermediate slice.
+            .unwrap();
+
+        let idx = Idx::from_le_bytes(idx_bytes) as usize;
         i += IDX_SIZE;
 
-        let chunk_len_bytes = kept[i..i + CHUNK_LEN_SIZE].try_into().unwrap();
-        let chunk_len = ChunkLen::from_be_bytes(chunk_len_bytes) as usize;
+        let chunk_len_bytes: [_; CHUNK_LEN_SIZE] = buf
+            .get(i..i + CHUNK_LEN_SIZE)
+            .ok_or("Missing chunk length bytes at grad lift")?
+            .try_into()
+            // SAFETY: There are exactly `CHUNK_LEN_SIZE` bytes in the intermediate slice.
+            .unwrap();
+
+        let chunk_len = ChunkLen::from_le_bytes(chunk_len_bytes) as usize;
         i += CHUNK_LEN_SIZE;
 
-        for j in 0..chunk_len {
-            let num_bytes = kept[i..i + size_of::<f32>()].try_into().unwrap();
-            let num: f32 = f32::from_be_bytes(num_bytes);
-            i += size_of::<f32>();
-
-            grad[idx + j] = num;
+        if idx > grad.len() || grad.len() - idx < chunk_len {
+            return Err("Gradient chunk exceeds target vector bounds");
         }
+
+        let chunk_size = chunk_len * size_of::<f32>();
+        let buf_nums = buf.get(i..i + chunk_size).ok_or("Missing float data")?;
+        let grad_nums = bytemuck::cast_slice_mut(&mut grad[idx..idx + chunk_len]);
+        grad_nums.copy_from_slice(buf_nums);
+
+        i += chunk_size;
     }
 
     Ok(())
@@ -68,34 +115,60 @@ pub fn grad_lift(grad: &mut [f32], kept: &[u8]) -> io::Result<()> {
 
 #[test]
 fn test_grad_drop() {
-    let grad = vec![1.0, 0.0, 1.0, 0.0];
+    let mut grad = vec![1.0, -1.0, 0.0, 2.0];
+    let mut buf = Vec::new();
+    let threshold = 1.0;
 
-    let dropped = grad_drop(&grad, 1.0);
-    println!("{:?}", dropped);
+    grad_drop_into(&mut buf, &mut grad, threshold);
+
+    for g in grad {
+        assert!(g < threshold);
+    }
+
+    let expected = vec![
+        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        2, 0, 0, 0, // ChunkLen
+        0, 0, 128, 63, // 1.0
+        0, 0, 128, 191, // -1.0
+        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // ChunkLen
+        0, 0, 0, 64, // 2.0
+    ];
+
+    assert_eq!(buf, expected);
 }
 
 #[test]
 fn test_grad_lift() {
-    let kept = vec![
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 63, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 63,
-        128, 0, 0,
+    let buf = vec![
+        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        2, 0, 0, 0, // ChunkLen
+        0, 0, 128, 63, // 1.0
+        0, 0, 128, 191, // -1.0
+        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // ChunkLen
+        0, 0, 0, 64, // 2.0
     ];
 
-    let expected = vec![1.0, 0.0, 1.0, 0.0];
-    let mut got = vec![0.0; expected.len()];
+    let expected = vec![1.0, -1.0, 0.0, 2.0];
+    let mut grad = vec![0.0; expected.len()];
+    grad_lift_into(&mut grad, &buf).unwrap();
 
-    grad_lift(&mut got, &kept).unwrap();
-
-    assert_eq!(got, expected);
+    assert_eq!(grad, expected);
 }
 
 #[test]
 fn test_drop_and_lift_consistency() {
-    let expected = vec![1.0, 0.0, 1.0, 0.0];
-    let mut got = vec![0.0; expected.len()];
+    let mut residual = vec![1.0, -1.0, 0.0, 2.0];
+    let expected = residual.clone();
 
-    let kept = grad_drop(&expected, 1.0);
-    grad_lift(&mut got, &kept).unwrap();
+    let mut buf = Vec::new();
+    let threshold = 1.0;
 
-    assert_eq!(got, expected);
+    grad_drop_into(&mut buf, &mut residual, threshold);
+
+    let mut grad = vec![0.0; residual.len()];
+    grad_lift_into(&mut grad, &buf).unwrap();
+
+    assert_eq!(grad, expected);
 }

@@ -140,7 +140,7 @@ impl Sequential {
             self.backward(param_manager, d.view_mut())?;
 
             param_manager.optimize(optimizers)?;
-            param_manager.acc_grad();
+            param_manager.acc_residual();
             param_manager.zero_grad();
         }
 
