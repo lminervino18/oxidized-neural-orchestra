@@ -44,11 +44,10 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut rx_buf = vec![128];
     let mut grad = vec![0.0; nparams];
 
     for _ in 0..max_epochs {
-        match rx.recv_into(&mut rx_buf).await? {
+        match rx.recv().await? {
             Msg::Data(Payload::Params(params)) => {
                 for (g, p) in grad.iter_mut().zip(params) {
                     *g = *p - 1.0;
@@ -64,10 +63,7 @@ where
     let msg = Msg::Control(Command::Disconnect);
     tx.send(&msg).await?;
 
-    while !matches!(
-        rx.recv_into(&mut rx_buf).await?,
-        Msg::Control(Command::Disconnect)
-    ) {}
+    while !matches!(rx.recv().await?, Msg::Control(Command::Disconnect)) {}
 
     Ok(())
 }

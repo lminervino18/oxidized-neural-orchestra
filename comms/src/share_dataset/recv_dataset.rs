@@ -31,14 +31,13 @@ where
     W: AsyncWrite + Unpin,
     R: AsyncRead + Unpin,
 {
-    let mut buf = Vec::<u32>::new();
     // TODO: ver si conviene configurar la capacity de writer
     let mut writer = BufWriter::new(storage);
 
     let mut received = 0;
 
     while (received as u64) < size {
-        let msg: Msg = rx.recv_into(&mut buf).await?;
+        let msg: Msg = rx.recv().await?;
 
         let Msg::Data(Payload::Datachunk(chunk)) = msg else {
             return Err(Error::new(
