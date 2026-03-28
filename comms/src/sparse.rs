@@ -1,3 +1,4 @@
+use half::f16;
 use rand::{Rng, seq::IndexedRandom};
 
 type Idx = u64;
@@ -53,12 +54,12 @@ pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &mut [f32], threshold: f32) {
             buf.extend_from_slice(&(start as Idx).to_le_bytes());
             buf.extend_from_slice(&(chunk_len as ChunkLen).to_le_bytes());
 
-            let residual_chunk = &mut residual[start..end];
-            let chunk_bytes = bytemuck::cast_slice(residual_chunk);
-            buf.reserve(chunk_bytes.len());
-            buf.extend_from_slice(chunk_bytes);
+            for g in residual[start..end].iter_mut() {
+                let g_short = f16::from_f32(*g);
+                buf.extend_from_slice(&g_short.to_le_bytes());
+                *g = 0.0;
+            }
 
-            residual_chunk.fill(0.0);
             i = end;
         } else {
             i += 1;
@@ -102,10 +103,13 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
             return Err("Gradient chunk exceeds target vector bounds");
         }
 
-        let chunk_size = chunk_len * size_of::<f32>();
+        let chunk_size = chunk_len * size_of::<f16>();
         let buf_nums = buf.get(i..i + chunk_size).ok_or("Missing float data")?;
-        let grad_nums = bytemuck::cast_slice_mut(&mut grad[idx..idx + chunk_len]);
-        grad_nums.copy_from_slice(buf_nums);
+        let compressed_data: &[f16] = bytemuck::cast_slice(buf_nums);
+
+        for (j, &val) in compressed_data.iter().enumerate() {
+            grad[idx + j] = val.to_f32();
+        }
 
         i += chunk_size;
     }
@@ -128,11 +132,11 @@ fn test_grad_drop() {
     let expected = vec![
         0, 0, 0, 0, 0, 0, 0, 0, // Idx
         2, 0, 0, 0, // ChunkLen
-        0, 0, 128, 63, // 1.0
-        0, 0, 128, 191, // -1.0
+        0, 60, // 1.0
+        0, 188, // -1.0
         3, 0, 0, 0, 0, 0, 0, 0, // Idx
         1, 0, 0, 0, // ChunkLen
-        0, 0, 0, 64, // 2.0
+        0, 64, // 2.0
     ];
 
     assert_eq!(buf, expected);
@@ -143,11 +147,11 @@ fn test_grad_lift() {
     let buf = vec![
         0, 0, 0, 0, 0, 0, 0, 0, // Idx
         2, 0, 0, 0, // ChunkLen
-        0, 0, 128, 63, // 1.0
-        0, 0, 128, 191, // -1.0
+        0, 60, // 1.0
+        0, 188, // -1.0
         3, 0, 0, 0, 0, 0, 0, 0, // Idx
         1, 0, 0, 0, // ChunkLen
-        0, 0, 0, 64, // 2.0
+        0, 64, // 2.0
     ];
 
     let expected = vec![1.0, -1.0, 0.0, 2.0];

@@ -95,8 +95,8 @@ impl<'a> Serialize<'a> for Msg<'a> {
 }
 
 impl<'a> Deserialize<'a> for Msg<'a> {
-    fn deserialize<B: Align1>(buf: &'a mut [B]) -> io::Result<Self> {
-        let bytes = bytemuck::cast_slice_mut(buf);
+    fn deserialize<B: Align1>(data: &'a mut [B]) -> io::Result<Self> {
+        let bytes = bytemuck::cast_slice_mut(data);
 
         if bytes.len() < HEADER_SIZE {
             return Self::buf_is_too_small(bytes.len());
@@ -112,6 +112,7 @@ impl<'a> Deserialize<'a> for Msg<'a> {
             1 => Ok(Self::Control(serde_json::from_slice(rest)?)),
             2..5 => {
                 let nums = bytemuck::cast_slice_mut(rest);
+
                 let payload = match kind {
                     2 => Payload::Grad(nums),
                     3 => Payload::Params(nums),
