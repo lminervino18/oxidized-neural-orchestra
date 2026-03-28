@@ -88,12 +88,22 @@ impl Conv2d {
 
         self.dilate_and_pad(d.view()).unwrap();
 
+        let kernel_size = self.kernel_dim.2; // I'm assuming square kernel matrices for now
+        let outward_padding = kernel_size - self.padding - 1;
+        let unpadded_dilated = &self.dilated.slice(s![
+            ..,
+            ..,
+            outward_padding..self.dilated.dim().2 - outward_padding,
+            outward_padding..self.dilated.dim().3 - outward_padding
+        ]);
+
         let dw_conv = self
             .input
-            .conv(&self.dilated, ConvMode::Full, PaddingMode::Zeros)
+            .conv(unpadded_dilated, ConvMode::Valid, PaddingMode::Zeros)
             .unwrap();
 
-        dw.assign(&dw_conv.slice(s![.., .., ..self.dilated.dim().2, ..self.dilated.dim().3]));
+        dw.assign(&dw_conv);
+        // dw.assign(&dw_conv.slice(s![.., .., ..self.dilated.dim().2, ..self.dilated.dim().3,]));
 
         let delta = self
             .dilated
@@ -347,17 +357,16 @@ mod tests {
         let mut delta_in: Array4<f32> = array![[[[17.0, 18.0], [19.0, 20.0]]]];
 
         let expected_delta_out = array![[[
-            [1.0, 2.0, 3.0, 4.0],
-            [5.0, 6.0, 7.0, 8.0],
-            [9.0, 10.0, 11.0, 12.0],
-            [13.0, 14.0, 15.0, 16.0]
+            [68.0, 51.0, 72.0, 54.0],
+            [34.0, 17.0, 36.0, 18.0],
+            [76.0, 57.0, 80.0, 60.0],
+            [38.0, 19.0, 40.0, 20.0]
         ]]];
 
         let delta_out = conv
             .backward(&params, &mut grad, delta_in.view_mut())
             .unwrap();
 
-        dbg!(&delta_out);
-        // assert_eq!(delta_out, expected_delta_out);
+        assert_eq!(delta_out, expected_delta_out);
     }
 }
