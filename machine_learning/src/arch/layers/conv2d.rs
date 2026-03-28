@@ -282,30 +282,12 @@ mod tests {
 
     #[test]
     fn test_dilate_and_pad() {
-        unsafe { env::set_var("RUST_BACKTRACE", "1") };
-
-        // Input dimension is then used to get the dimension for the output delta
-        let input = array![[[
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
-            [0.0, 5.0, 0.0, 6.0, 0.0, 7.0, 0.0, 8.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
-            [0.0, 9.0, 0.0, 10.0, 0.0, 11.0, 0.0, 12.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
-            [0.0, 13.0, 0.0, 14.0, 0.0, 15.0, 0.0, 16.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        ]]];
-
         let filters = 1;
         let in_channels = 1;
         let kernel_size = (2, 2);
         let stride = 2;
         let padding = 0;
         let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
-
-        let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
-        conv.forward(&params, input.view()).unwrap();
 
         let delta: Array4<f32> = array![[[
             [1.0, 2.0, 3.0, 4.0],
