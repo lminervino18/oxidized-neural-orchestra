@@ -76,7 +76,7 @@ where
             .servers
             .iter_mut()
             .enumerate()
-            .map(async |(i, server)| match server.rx.recv().await? {
+            .map(async |(i, server)| match server.rx.recv(None).await? {
                 Msg::Data(Payload::Params(params)) => {
                     let metadata =
                         ServerParamsMetadata::new(params, &mut server.grad, &mut server.residual);
@@ -100,11 +100,26 @@ where
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
             let msg = Msg::Data(Payload::Grad(&mut server.residual));
-            server.tx.send(msg).await?;
-            Ok::<_, io::Error>(())
+            let threshold = server.tx.send(&msg).await?;
+            Ok::<_, io::Error>(threshold)
         });
 
-        future::try_join_all(futs).await?;
+        let thresholds = future::try_join_all(futs).await?;
+
+        for (server, threshold) in self.servers.iter_mut().zip(thresholds) {
+            let residual = &mut server.residual;
+
+            match threshold {
+                None => residual.fill(0.0),
+                Some(t) => {
+                    residual
+                        .iter_mut()
+                        .filter(|g| **g >= t)
+                        .for_each(|g| *g = 0.0);
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -113,11 +128,15 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
-        let futs = self.servers.iter_mut().map(async |server| {
-            let msg = Msg::Control(Command::Disconnect);
-            server.tx.send(msg).await?;
+        let msg = Msg::Control(Command::Disconnect);
 
-            while !matches!(server.rx.recv().await?, Msg::Control(Command::Disconnect)) {}
+        let futs = self.servers.iter_mut().map(async |server| {
+            server.tx.send(&msg).await?;
+
+            while !matches!(
+                server.rx.recv(None).await?,
+                Msg::Control(Command::Disconnect)
+            ) {}
 
             Ok::<_, io::Error>(())
         });

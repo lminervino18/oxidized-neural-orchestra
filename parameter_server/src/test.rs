@@ -47,23 +47,23 @@ where
     let mut grad = vec![0.0; nparams];
 
     for _ in 0..max_epochs {
-        match rx.recv().await? {
+        match rx.recv(None).await? {
             Msg::Data(Payload::Params(params)) => {
                 for (g, p) in grad.iter_mut().zip(params) {
                     *g = *p - 1.0;
                 }
 
                 let msg = Msg::Data(Payload::Grad(&mut grad));
-                tx.send(msg).await?
+                tx.send(&msg).await?;
             }
             _ => {}
         }
     }
 
     let msg = Msg::Control(Command::Disconnect);
-    tx.send(msg).await?;
+    tx.send(&msg).await?;
 
-    while !matches!(rx.recv().await?, Msg::Control(Command::Disconnect)) {}
+    while !matches!(rx.recv(None).await?, Msg::Control(Command::Disconnect)) {}
 
     Ok(())
 }

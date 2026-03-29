@@ -2,12 +2,13 @@ use std::io;
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::{Deserialize, LEN_TYPE_SIZE, LenType};
+use super::{Deserializer, LEN_TYPE_SIZE, LenType, msg::Msg};
 
 /// The receiving end handle of the communication.
 pub struct OnoReceiver<R: AsyncRead + Unpin> {
     rx: R,
     rx_buf: Vec<u32>,
+    deserializer: Deserializer,
 }
 
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
@@ -19,6 +20,7 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
         Self {
             rx,
             rx_buf: Vec::new(),
+            deserializer: Deserializer::new(),
         }
     }
 
@@ -26,11 +28,15 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     ///
     /// # Returns
     /// A result object that returns `T` on success or `io::Error` on failure.
-    pub async fn recv<'buf, T>(&'buf mut self) -> io::Result<T>
+    pub async fn recv<'a, N>(&'a mut self, nums: N) -> io::Result<Msg<'a>>
     where
-        T: Deserialize<'buf>,
+        N: Into<Option<&'a mut [f32]>>,
     {
-        let Self { rx, rx_buf, .. } = self;
+        let Self {
+            rx,
+            rx_buf,
+            deserializer,
+        } = self;
 
         let mut size_buf = [0; LEN_TYPE_SIZE];
         rx.read_exact(&mut size_buf).await?;
@@ -51,6 +57,6 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
         let slice = &mut view[..len];
         rx.read_exact(slice).await?;
 
-        T::deserialize(slice)
+        deserializer.deserialize(slice, nums.into())
     }
 }

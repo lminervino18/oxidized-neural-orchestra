@@ -60,12 +60,21 @@ impl Serializer {
     /// * `out` - The output buffer.
     ///
     /// # Returns
-    /// An optional slice of bytes.
-    pub fn serialize<'a>(&'a mut self, msg: Msg<'a>, out: &mut Vec<u8>) -> Option<&'a [u8]> {
+    /// An optional zero copy slice and the threshold used to filter the
+    /// gradient values if the payload was smaller than sending the dense
+    /// gradient.
+    pub fn serialize<'a>(
+        &'a mut self,
+        msg: &'a Msg<'a>,
+        out: &mut Vec<u8>,
+    ) -> (Option<&'a [u8]>, Option<f32>) {
         match &mut self.0 {
-            Inner::Base => Inner::<StdRng>::serialize_base(msg, out),
+            Inner::Base => {
+                let zero_copy_data = Inner::<StdRng>::serialize_base(&msg, out);
+                (zero_copy_data, None)
+            }
             Inner::SparseCapable { ser_buf, r, rng } => {
-                Inner::serialize_sparse_capable(msg, out, ser_buf, *r, rng)
+                Inner::serialize_sparse_capable(&msg, out, ser_buf, *r, rng)
             }
         }
     }
@@ -92,7 +101,7 @@ impl<R: Rng> Inner<R> {
     ///
     /// # Returns
     /// An optional zero copy slice.
-    fn serialize_base<'a>(msg: Msg<'a>, out: &mut Vec<u8>) -> Option<&'a [u8]> {
+    fn serialize_base<'a>(msg: &'a Msg<'a>, out: &mut Vec<u8>) -> Option<&'a [u8]> {
         match msg {
             Msg::Err(detail) => {
                 let header = (0 as Header).to_be_bytes();
@@ -136,16 +145,19 @@ impl<R: Rng> Inner<R> {
     /// * `rng` - A random number generator.
     ///
     /// # Returns
-    /// An optional zero copy slice.
+    /// An optional zero copy slice and the threshold used to filter the
+    /// gradient values if the payload was smaller than sending the dense
+    /// gradient.
     fn serialize_sparse_capable<'a>(
-        msg: Msg<'a>,
+        msg: &'a Msg<'a>,
         out: &mut Vec<u8>,
         ser_buf: &'a mut Vec<u8>,
         r: Float01,
         rng: &mut R,
-    ) -> Option<&'a [u8]> {
+    ) -> (Option<&'a [u8]>, Option<f32>) {
         let Msg::Data(Payload::Grad(grad)) = msg else {
-            return Self::serialize_base(msg, out);
+            let zero_copy_data = Self::serialize_base(msg, out);
+            return (zero_copy_data, None);
         };
 
         let threshold = sparse::calculate_threshold(grad, r, rng);
@@ -153,16 +165,14 @@ impl<R: Rng> Inner<R> {
         ser_buf.clear();
         sparse::grad_drop_into(ser_buf, grad, threshold);
 
-        let zero_copy_bytes = if ser_buf.len() < grad.len() {
+        if ser_buf.len() < grad.len() * size_of::<f32>() {
             let header = (2 as Header).to_be_bytes();
             out.extend_from_slice(&header);
-            ser_buf
+            (Some(ser_buf), Some(threshold))
         } else {
             let header = (3 as Header).to_be_bytes();
             out.extend_from_slice(&header);
-            bytemuck::cast_slice(grad)
-        };
-
-        Some(zero_copy_bytes)
+            (Some(bytemuck::cast_slice(grad)), None)
+        }
     }
 }

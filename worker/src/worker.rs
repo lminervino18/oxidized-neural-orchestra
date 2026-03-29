@@ -66,9 +66,9 @@ impl Worker {
 
                     should_continue = !was_last;
                     let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
-                    tx.send(msg).await?;
+                    tx.send(&msg).await?;
                 }
-                ret = rx.recv() => match ret? {
+                ret = rx.recv(None) => match ret? {
                     Msg::Control(Command::Disconnect) => {
                         info!("received a Command::Disconnect from the orchestrator");
                         break;
@@ -82,7 +82,7 @@ impl Worker {
 
         middleware.disconnect().await?;
         let msg = Msg::Control(Command::Disconnect);
-        tx.send(msg).await?;
+        tx.send(&msg).await?;
         Ok(())
     }
 }

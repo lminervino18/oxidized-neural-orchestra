@@ -35,7 +35,7 @@ async fn main() -> io::Result<()> {
     info!("orchestrator connected from {addr}");
 
     let spec = loop {
-        match rx.recv().await {
+        match rx.recv(None).await {
             Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
             Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
             Err(e) => warn!("io error {e}"),

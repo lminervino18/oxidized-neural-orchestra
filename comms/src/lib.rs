@@ -1,5 +1,4 @@
-mod align;
-mod deserialize;
+mod deserializer;
 pub mod msg;
 mod receiver;
 mod sender;
@@ -10,8 +9,7 @@ pub mod specs;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-pub use align::Align1;
-pub use deserialize::Deserialize;
+pub use deserializer::Deserializer;
 pub use receiver::OnoReceiver;
 pub use sender::OnoSender;
 pub use serializer::Serializer;

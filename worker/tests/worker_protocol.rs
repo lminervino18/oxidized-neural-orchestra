@@ -36,14 +36,14 @@ where
     R: AsyncRead + Unpin,
 {
     loop {
-        match wk_rx.recv().await? {
+        match wk_rx.recv(None).await? {
             Msg::Control(Command::Disconnect) => break,
             Msg::Control(Command::ReportLoss { losses }) => println!("loss: {losses:?}"),
             _ => {}
         }
     }
 
-    let Msg::Data(Payload::Params(params)) = sv_rx.recv().await? else {
+    let Msg::Data(Payload::Params(params)) = sv_rx.recv(None).await? else {
         return Err(io::Error::other(
             "received an invalid message kind from the server",
         ));
@@ -67,27 +67,27 @@ where
     let mut params = vec![0.5; nparams];
 
     let msg = Msg::Data(Payload::Params(&mut params));
-    tx.send(msg).await?;
+    tx.send(&msg).await?;
 
     loop {
-        match rx.recv().await? {
+        match rx.recv(None).await? {
             Msg::Control(Command::Disconnect) => {
                 break;
             }
             Msg::Data(Payload::Grad(grad)) => {
                 optimizer.update_params(grad, &mut params).unwrap();
                 let msg = Msg::Data(Payload::Params(&mut params));
-                tx.send(msg).await?;
+                tx.send(&msg).await?;
             }
             _ => {}
         }
     }
 
     let msg = Msg::Control(Command::Disconnect);
-    tx.send(msg).await?;
+    tx.send(&msg).await?;
 
     let msg = Msg::Data(Payload::Params(&mut params));
-    orch_tx.send(msg).await?;
+    orch_tx.send(&msg).await?;
 
     Ok(())
 }

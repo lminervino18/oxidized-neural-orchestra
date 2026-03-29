@@ -37,7 +37,7 @@ async fn main() -> io::Result<()> {
     info!("orchestrator connected from {addr}");
 
     let spec = loop {
-        match rx.recv().await {
+        match rx.recv(None).await {
             Ok(Msg::Control(Command::CreateServer(spec))) => break spec,
             Ok(msg) => warn!("expected CreateServer, got {msg:?}"),
             Err(e) => warn!("io error {e}"),
@@ -60,7 +60,7 @@ async fn main() -> io::Result<()> {
             info!("wrapping up, sending parameters...");
             let mut params = ret?;
             let msg = Msg::Data(Payload::Params(&mut params));
-            tx.send(msg).await?;
+            tx.send(&msg).await?;
         },
         _ = signal::ctrl_c() => {
             info!("received SIGTERM");

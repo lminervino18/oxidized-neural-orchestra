@@ -183,7 +183,7 @@ impl Session {
 
     async fn worker_listener(id: usize, mut rx: NetRx, _tx: NetTx, tx: Sender<TrainingEvent>) {
         loop {
-            match rx.recv().await {
+            match rx.recv(None).await {
                 Ok(Msg::Control(Command::ReportLoss { losses })) => {
                     debug!("worker {id} reported {} losses", losses.len());
                     let event = TrainingEvent::Loss {
@@ -249,7 +249,7 @@ impl Session {
                 let mut model_params: Vec<f32> = Vec::new();
 
                 for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
-                    match srx.recv().await {
+                    match srx.recv(None).await {
                         Ok(Msg::Data(Payload::Params(params))) => {
                             model_params.extend_from_slice(params);
                         }
@@ -304,7 +304,7 @@ impl Session {
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
             let msg = Msg::Control(Command::CreateServer(spec));
-            tx.send(msg).await?;
+            tx.send(&msg).await?;
 
             channels.push((rx, tx));
         }
@@ -341,7 +341,7 @@ impl Session {
                         .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
                     let msg = Msg::Control(Command::CreateWorker(spec));
-                    tx.send(msg).await?;
+                    tx.send(&msg).await?;
 
                     match partition {
                         Partition::Local { path, offset, size } => {

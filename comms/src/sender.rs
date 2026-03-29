@@ -35,7 +35,7 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
     ///
     /// # Returns
     /// A result object that returns `io::Error` on failure.
-    pub async fn send<'a>(&mut self, msg: Msg<'a>) -> io::Result<()> {
+    pub async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<Option<f32>> {
         let Self {
             tx,
             tx_buf,
@@ -45,7 +45,7 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
         tx_buf.clear();
         tx_buf.resize(LEN_TYPE_SIZE, 0);
 
-        let zero_copy_data = serializer.serialize(msg, tx_buf);
+        let (zero_copy_data, threshold) = serializer.serialize(&msg, tx_buf);
         let len = tx_buf.len() - LEN_TYPE_SIZE + zero_copy_data.map(<[_]>::len).unwrap_or_default();
         let header = (len as LenType).to_be_bytes();
 
@@ -59,6 +59,7 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
             tx.write_all(data).await?;
         }
 
-        tx.flush().await
+        tx.flush().await?;
+        Ok(threshold)
     }
 }

@@ -9,6 +9,8 @@ const IDX_SIZE: usize = size_of::<Idx>();
 const CHUNK_LEN_SIZE: usize = size_of::<ChunkLen>();
 const SAMPLE_SIZE_MAX: usize = 1 << 14;
 
+const MIN_POSITIVE_F16: f32 = f16::MIN_POSITIVE.to_f32_const();
+
 /// A float with a value between `0.0` and `1.0`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Float01 {
@@ -52,7 +54,7 @@ pub fn calculate_threshold<R: Rng>(residual: &[f32], r: Float01, rng: &mut R) ->
     let k = k.clamp(0, sample_size - 1);
     sample.select_nth_unstable_by(k, |a, b| a.total_cmp(b));
 
-    sample[k].max(1e-12)
+    sample[k].max(MIN_POSITIVE_F16)
 }
 
 /// Serializes the given gradient into `buf` dropping any values with a magnitude lower than `threshold`.
@@ -63,28 +65,26 @@ pub fn calculate_threshold<R: Rng>(residual: &[f32], r: Float01, rng: &mut R) ->
 /// * `buf` - The buffer to use to serialize the residual gradient.
 /// * `residual` - The residual gradient to serialize.
 /// * `threshold` - The minimum value the gradient's values have to reach to be sent.
-pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &mut [f32], threshold: f32) {
-    let mut i = 0;
+pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &[f32], threshold: f32) {
+    buf.reserve(residual.len() / 10);
 
+    let mut i = 0;
     while i < residual.len() {
         if residual[i].abs() >= threshold {
-            let (start, mut end) = (i, i + 1);
+            let start = i;
 
-            while end < residual.len() && residual[end].abs() >= threshold {
-                end += 1;
+            while i < residual.len() && residual[i].abs() >= threshold {
+                i += 1;
             }
 
-            let chunk_len = end - start;
+            let chunk_len = i - start;
             buf.extend_from_slice(&(start as Idx).to_le_bytes());
             buf.extend_from_slice(&(chunk_len as ChunkLen).to_le_bytes());
 
-            for g in residual[start..end].iter_mut() {
+            for g in residual[start..i].iter() {
                 let g_short = f16::from_f32(*g);
                 buf.extend_from_slice(&g_short.to_le_bytes());
-                *g = 0.0;
             }
-
-            i = end;
         } else {
             i += 1;
         }
@@ -127,15 +127,14 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
             return Err("Gradient chunk exceeds target vector bounds");
         }
 
-        let chunk_size = chunk_len * size_of::<f16>();
-        let buf_nums = buf.get(i..i + chunk_size).ok_or("Missing float data")?;
-        let compressed_data: &[f16] = bytemuck::cast_slice(buf_nums);
+        for j in idx..idx + chunk_len {
+            let b = buf
+                .get(i..i + size_of::<f16>())
+                .ok_or("Truncated float data")?;
 
-        for (j, &val) in compressed_data.iter().enumerate() {
-            grad[idx + j] = val.to_f32();
+            grad[j] = f16::from_le_bytes([b[0], b[1]]).to_f32();
+            i += size_of::<f16>();
         }
-
-        i += chunk_size;
     }
 
     Ok(())
