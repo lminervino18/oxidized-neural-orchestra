@@ -37,7 +37,7 @@ where
     let mut received = 0;
 
     while (received as u64) < size {
-        let msg: Msg = rx.recv(None).await?;
+        let msg: Msg = rx.recv().await?;
 
         let Msg::Data(Payload::Datachunk(chunk)) = msg else {
             return Err(Error::new(

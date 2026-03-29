@@ -7,10 +7,7 @@ mod test;
 
 use std::{env, io};
 
-use comms::{
-    Serializer,
-    msg::{Command, Msg, Payload},
-};
+use comms::msg::{Command, Msg, Payload};
 use log::{info, warn};
 use tokio::{net::TcpListener, signal};
 
@@ -33,11 +30,11 @@ async fn main() -> io::Result<()> {
 
     let (stream, addr) = list.accept().await?;
     let (rx, tx) = stream.into_split();
-    let (mut rx, mut tx) = comms::channel(rx, tx, Serializer::default());
+    let (mut rx, mut tx) = comms::channel(rx, tx);
     info!("orchestrator connected from {addr}");
 
     let spec = loop {
-        match rx.recv(None).await {
+        match rx.recv().await {
             Ok(Msg::Control(Command::CreateServer(spec))) => break spec,
             Ok(msg) => warn!("expected CreateServer, got {msg:?}"),
             Err(e) => warn!("io error {e}"),
@@ -51,7 +48,6 @@ async fn main() -> io::Result<()> {
         let (stream, addr) = list.accept().await?;
         info!("worker {i}/{nworkers} connected from {addr}");
         let (rx, tx) = stream.into_split();
-        let (rx, tx) = comms::channel(rx, tx, Serializer::default());
         pserver.spawn(rx, tx);
     }
 

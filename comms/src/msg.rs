@@ -8,7 +8,7 @@ pub const HEADER_SIZE: usize = size_of::<Header>();
 /// The payload data for the `Data` variant of the `Msg` enum.
 #[derive(Debug)]
 pub enum Payload<'a> {
-    Grad(&'a mut [f32]),
+    Grad(&'a [f32]),
     Params(&'a mut [f32]),
     Datachunk(&'a [f32]),
 }

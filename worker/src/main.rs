@@ -1,7 +1,6 @@
 use std::{env, io};
 
 use comms::{
-    Serializer,
     msg::{Command, Msg},
     recv_dataset::{get_dataset_cursor, recv_dataset},
     specs::worker::{AlgorithmSpec, SerializerSpec},
@@ -31,11 +30,11 @@ async fn main() -> io::Result<()> {
 
     let (stream, addr) = list.accept().await?;
     let (rx, tx) = stream.into_split();
-    let (mut rx, tx) = comms::channel(rx, tx, Serializer::default());
+    let (mut rx, tx) = comms::channel(rx, tx);
     info!("orchestrator connected from {addr}");
 
     let spec = loop {
-        match rx.recv(None).await {
+        match rx.recv().await {
             Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
             Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
             Err(e) => warn!("io error {e}"),
@@ -52,11 +51,7 @@ async fn main() -> io::Result<()> {
         server_ordering,
     } = spec.algorithm.clone();
 
-    let serializer = match spec.serializer {
-        SerializerSpec::Base => Serializer::new(),
-        SerializerSpec::SparseCapable { r, seed } => Serializer::new_sparse_capable(r, seed),
-    };
-
+    let serializer = spec.serializer.clone();
     let worker_builder = WorkerBuilder::new();
     let worker = worker_builder.build(spec, &server_sizes, dataset_raw);
     let mut middleware = Middleware::new(server_ordering);
@@ -64,7 +59,12 @@ async fn main() -> io::Result<()> {
     for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
-        let (rx, tx) = comms::channel(rx, tx, serializer.clone());
+
+        let (rx, tx) = match serializer {
+            SerializerSpec::Base => comms::channel(rx, tx),
+            SerializerSpec::SparseCapable { r, seed } => comms::sparse_tx_channel(rx, tx, r, seed),
+        };
+
         middleware.spawn(rx, tx, size);
     }
 

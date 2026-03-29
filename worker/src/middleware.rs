@@ -76,7 +76,7 @@ where
             .servers
             .iter_mut()
             .enumerate()
-            .map(async |(i, server)| match server.rx.recv(None).await? {
+            .map(async |(i, server)| match server.rx.recv().await? {
                 Msg::Data(Payload::Params(params)) => {
                     let metadata =
                         ServerParamsMetadata::new(params, &mut server.grad, &mut server.residual);
@@ -133,10 +133,7 @@ where
         let futs = self.servers.iter_mut().map(async |server| {
             server.tx.send(&msg).await?;
 
-            while !matches!(
-                server.rx.recv(None).await?,
-                Msg::Control(Command::Disconnect)
-            ) {}
+            while !matches!(server.rx.recv().await?, Msg::Control(Command::Disconnect)) {}
 
             Ok::<_, io::Error>(())
         });

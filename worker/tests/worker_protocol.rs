@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use comms::{OnoReceiver, OnoSender, Serializer};
+use comms::{OnoReceiver, OnoSender};
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
     dataset::{Dataset, DatasetSrc},
@@ -26,8 +26,8 @@ fn channel_pair() -> (
     let (stream1, stream2) = io::duplex(4096);
     let (rx1, tx1) = io::split(stream1);
     let (rx2, tx2) = io::split(stream2);
-    let chan1 = comms::channel(rx1, tx1, Serializer::default());
-    let chan2 = comms::channel(rx2, tx2, Serializer::default());
+    let chan1 = comms::channel(rx1, tx1);
+    let chan2 = comms::channel(rx2, tx2);
     (chan1, chan2)
 }
 
@@ -36,14 +36,14 @@ where
     R: AsyncRead + Unpin,
 {
     loop {
-        match wk_rx.recv(None).await? {
+        match wk_rx.recv().await? {
             Msg::Control(Command::Disconnect) => break,
             Msg::Control(Command::ReportLoss { losses }) => println!("loss: {losses:?}"),
             _ => {}
         }
     }
 
-    let Msg::Data(Payload::Params(params)) = sv_rx.recv(None).await? else {
+    let Msg::Data(Payload::Params(params)) = sv_rx.recv().await? else {
         return Err(io::Error::other(
             "received an invalid message kind from the server",
         ));
@@ -70,7 +70,7 @@ where
     tx.send(&msg).await?;
 
     loop {
-        match rx.recv(None).await? {
+        match rx.recv().await? {
             Msg::Control(Command::Disconnect) => {
                 break;
             }

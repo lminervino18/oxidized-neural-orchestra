@@ -10,32 +10,32 @@ use super::{
 pub struct Serializer(Inner<StdRng>);
 
 impl Default for Serializer {
-    /// Creates a new `MsgSerializer` with the base configuration.
+    /// Creates a new `Serializer` with the base configuration.
     ///
     /// # Returns
-    /// A new `MsgSerializer` instance.
+    /// A new `Serializer` instance.
     fn default() -> Self {
         Self(Inner::default())
     }
 }
 
 impl Serializer {
-    /// Creates a new base `MsgSerializer`.
+    /// Creates a new base `Serializer`.
     ///
     /// # Returns
-    /// A new `MsgSerializer` instance.
+    /// A new `Serializer` instance.
     pub fn new() -> Self {
         Self(Inner::Base)
     }
 
-    /// Creates a new `MsgSerializer` capable of sparse gradient serialization.
+    /// Creates a new `Serializer` capable of sparse gradient serialization.
     ///
     /// # Args
-    /// * `r` - The ratio to obtain the gradient's value threshold.
+    /// * `r` - The ratio of compression for calculating the threshold value.
     /// * `seed` - A seed to initialize a random number generator.
     ///
     /// # Returns
-    /// A new `MsgSerializer` instance.
+    /// A new `Serializer` instance.
     pub fn new_sparse_capable(r: Float01, seed: Option<u64>) -> Self {
         let rng = match seed {
             Some(seed) => StdRng::seed_from_u64(seed),

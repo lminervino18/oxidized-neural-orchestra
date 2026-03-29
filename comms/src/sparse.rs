@@ -34,7 +34,7 @@ impl Float01 {
 ///
 /// # Args
 /// * `residual` - The residual gradient to use to calculate the threshold.
-/// * `r` - The ratio of values to keep.
+/// * `r` - The ratio of compression for calculating the threshold value.
 /// * `rng` - A random number generator to stochastically sample the gradient's values.
 ///
 /// # Returns

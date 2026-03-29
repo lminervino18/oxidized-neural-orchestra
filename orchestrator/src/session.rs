@@ -17,7 +17,7 @@ use tokio::{
 };
 
 use comms::{
-    OnoReceiver, OnoSender, Serializer,
+    OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
     send_dataset::send_dataset,
     specs::{server::ServerSpec, worker::WorkerSpec},
@@ -183,7 +183,7 @@ impl Session {
 
     async fn worker_listener(id: usize, mut rx: NetRx, _tx: NetTx, tx: Sender<TrainingEvent>) {
         loop {
-            match rx.recv(None).await {
+            match rx.recv().await {
                 Ok(Msg::Control(Command::ReportLoss { losses })) => {
                     debug!("worker {id} reported {} losses", losses.len());
                     let event = TrainingEvent::Loss {
@@ -249,7 +249,7 @@ impl Session {
                 let mut model_params: Vec<f32> = Vec::new();
 
                 for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
-                    match srx.recv(None).await {
+                    match srx.recv().await {
                         Ok(Msg::Data(Payload::Params(params))) => {
                             model_params.extend_from_slice(params);
                         }
@@ -377,7 +377,7 @@ impl Session {
     async fn open_channel(addr: &str) -> io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
-        Ok(comms::channel(rx, tx, Serializer::default()))
+        Ok(comms::channel(rx, tx))
     }
 }
 

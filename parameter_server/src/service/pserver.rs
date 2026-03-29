@@ -1,9 +1,6 @@
 use std::io;
 
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Detail, Msg, Payload},
-};
+use comms::msg::{Command, Detail, Msg, Payload};
 use log::{debug, error, info, warn};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -76,7 +73,7 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
     /// # Args
     /// * `rx` - The receiving end of the communication.
     /// * `tx` - The sending end of the communication.
-    pub fn spawn<R, W>(&mut self, mut rx: OnoReceiver<R>, mut tx: OnoSender<W>)
+    pub fn spawn<R, W>(&mut self, rx: R, tx: W)
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
@@ -88,7 +85,8 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
         let task = async move {
             let nparams = handle.len();
             let mut params = vec![0.0; nparams];
-            let mut nums_buf = vec![0.0; nparams];
+
+            let (mut rx, mut tx) = comms::sparse_rx_channel(rx, tx, nparams);
 
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
@@ -100,7 +98,7 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
-                match rx.recv(nums_buf.as_mut_slice()).await? {
+                match rx.recv().await? {
                     Msg::Data(Payload::Grad(grad)) if nparams == grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
 
@@ -111,8 +109,6 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                         debug!(worker_id = id; "sending parameters");
                         let msg = Msg::Data(Payload::Params(&mut params));
                         tx.send(&msg).await?;
-
-                        nums_buf.fill(0.0);
                     }
                     Msg::Control(Command::Disconnect) => {
                         info!(worker_id = id; "gracefully disconnecting worker");
@@ -161,7 +157,7 @@ where
         self.run().await
     }
 
-    fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>) {
+    fn spawn(&mut self, rx: R, tx: W) {
         self.spawn(rx, tx)
     }
 }

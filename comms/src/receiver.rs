@@ -12,15 +12,19 @@ pub struct OnoReceiver<R: AsyncRead + Unpin> {
 }
 
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
-    /// Creates a new `OnoReceiver` instance.
+    /// Creates a new `OnoReceiver`.
     ///
     /// # Args
     /// * `rx` - The underlying reader.
-    pub(super) fn new(rx: R) -> Self {
+    /// * `deserializer` - The message deserializer to use.
+    ///
+    /// # Returns
+    /// A new `OnoReceiver` instance.
+    pub(super) fn new(rx: R, deserializer: Deserializer) -> Self {
         Self {
             rx,
             rx_buf: Vec::new(),
-            deserializer: Deserializer::new(),
+            deserializer,
         }
     }
 
@@ -28,10 +32,7 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     ///
     /// # Returns
     /// A result object that returns `T` on success or `io::Error` on failure.
-    pub async fn recv<'a, N>(&'a mut self, nums: N) -> io::Result<Msg<'a>>
-    where
-        N: Into<Option<&'a mut [f32]>>,
-    {
+    pub async fn recv<'a>(&'a mut self) -> io::Result<Msg<'a>> {
         let Self {
             rx,
             rx_buf,
@@ -57,6 +58,6 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
         let slice = &mut view[..len];
         rx.read_exact(slice).await?;
 
-        deserializer.deserialize(slice, nums.into())
+        deserializer.deserialize(slice)
     }
 }

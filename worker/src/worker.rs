@@ -68,7 +68,7 @@ impl Worker {
                     let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
                     tx.send(&msg).await?;
                 }
-                ret = rx.recv(None) => match ret? {
+                ret = rx.recv() => match ret? {
                     Msg::Control(Command::Disconnect) => {
                         info!("received a Command::Disconnect from the orchestrator");
                         break;
