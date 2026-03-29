@@ -73,7 +73,7 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
     /// # Args
     /// * `rx` - The receiving end of the communication.
     /// * `tx` - The sending end of the communication.
-    pub fn spawn<R, W>(&mut self, rx: R, tx: W)
+    pub fn spawn<R, W>(&mut self, rx_raw: R, tx_raw: W)
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
@@ -86,7 +86,7 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
             let nparams = handle.len();
             let mut params = vec![0.0; nparams];
 
-            let (mut rx, mut tx) = comms::sparse_rx_channel(rx, tx, nparams);
+            let (mut rx, mut tx) = comms::sparse_rx_channel(rx_raw, tx_raw, nparams);
 
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
@@ -157,7 +157,7 @@ where
         self.run().await
     }
 
-    fn spawn(&mut self, rx: R, tx: W) {
-        self.spawn(rx, tx)
+    fn spawn(&mut self, rx_raw: R, tx_raw: W) {
+        self.spawn(rx_raw, tx_raw)
     }
 }

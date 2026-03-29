@@ -18,5 +18,5 @@ where
     /// # Args
     /// * `rx_raw` - The receiving end of the communication.
     /// * `tx_raw` - The sending end of the communication.
-    fn spawn(&mut self, rx: R, tx: W);
+    fn spawn(&mut self, rx_raw: R, tx_raw: W);
 }
