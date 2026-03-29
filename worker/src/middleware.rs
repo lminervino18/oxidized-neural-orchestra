@@ -99,8 +99,8 @@ where
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
-            let msg = Msg::Data(Payload::Grad(&server.residual));
-            server.tx.send(&msg).await?;
+            let msg = Msg::Data(Payload::Grad(&mut server.residual));
+            server.tx.send(msg).await?;
             Ok::<_, io::Error>(())
         });
 
@@ -113,10 +113,9 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
-        let msg = Msg::Control(Command::Disconnect);
-
         let futs = self.servers.iter_mut().map(async |server| {
-            server.tx.send(&msg).await?;
+            let msg = Msg::Control(Command::Disconnect);
+            server.tx.send(msg).await?;
 
             while !matches!(server.rx.recv().await?, Msg::Control(Command::Disconnect)) {}
 

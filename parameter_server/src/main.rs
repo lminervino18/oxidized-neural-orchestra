@@ -7,7 +7,10 @@ mod test;
 
 use std::{env, io};
 
-use comms::msg::{Command, Msg, Payload};
+use comms::{
+    Serializer,
+    msg::{Command, Msg, Payload},
+};
 use log::{info, warn};
 use tokio::{net::TcpListener, signal};
 
@@ -30,7 +33,7 @@ async fn main() -> io::Result<()> {
 
     let (stream, addr) = list.accept().await?;
     let (rx, tx) = stream.into_split();
-    let (mut rx, mut tx) = comms::channel(rx, tx);
+    let (mut rx, mut tx) = comms::channel(rx, tx, Serializer::default());
     info!("orchestrator connected from {addr}");
 
     let spec = loop {
@@ -48,7 +51,7 @@ async fn main() -> io::Result<()> {
         let (stream, addr) = list.accept().await?;
         info!("worker {i}/{nworkers} connected from {addr}");
         let (rx, tx) = stream.into_split();
-        let (rx, tx) = comms::channel(rx, tx);
+        let (rx, tx) = comms::channel(rx, tx, Serializer::default());
         pserver.spawn(rx, tx);
     }
 
@@ -57,7 +60,7 @@ async fn main() -> io::Result<()> {
             info!("wrapping up, sending parameters...");
             let mut params = ret?;
             let msg = Msg::Data(Payload::Params(&mut params));
-            tx.send(&msg).await?;
+            tx.send(msg).await?;
         },
         _ = signal::ctrl_c() => {
             info!("received SIGTERM");

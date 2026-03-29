@@ -33,8 +33,7 @@ where
         if read > 0 {
             let nums = bytemuck::cast_slice(&buf[..read]);
             let msg = Msg::Data(Payload::Datachunk(nums));
-
-            tx.send(&msg).await?;
+            tx.send(msg).await?;
         }
 
         if read == 0 {

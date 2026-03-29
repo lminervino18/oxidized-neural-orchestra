@@ -1,5 +1,6 @@
 use half::f16;
 use rand::{Rng, seq::IndexedRandom};
+use serde::{Deserialize, Serialize};
 
 type Idx = u64;
 type ChunkLen = u32;
@@ -7,6 +8,25 @@ type ChunkLen = u32;
 const IDX_SIZE: usize = size_of::<Idx>();
 const CHUNK_LEN_SIZE: usize = size_of::<ChunkLen>();
 const SAMPLE_SIZE_MAX: usize = 1 << 14;
+
+/// A float with a value between `0.0` and `1.0`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Float01 {
+    value: f32,
+}
+
+impl Float01 {
+    /// Creates a new `Float01`.
+    ///
+    /// # Args
+    /// * `value` - The value to store.
+    ///
+    /// # Returns
+    /// A new `Float01` instance if the given value is between `0.0` and `1.0`.
+    pub fn new(value: f32) -> Option<Self> {
+        (0.0 <= value && value <= 1.0).then_some(Self { value })
+    }
+}
 
 /// Calculates the gradient's threshold approximately by sampling it's values.
 ///
@@ -17,14 +37,18 @@ const SAMPLE_SIZE_MAX: usize = 1 << 14;
 ///
 /// # Returns
 /// The threshold to use with `grad_drop`.
-pub fn calculate_threshold<R: Rng>(residual: &[f32], r: f32, rng: &mut R) -> f32 {
+pub fn calculate_threshold<R: Rng>(residual: &[f32], r: Float01, rng: &mut R) -> f32 {
     if residual.is_empty() {
         return 0.0;
     }
 
     let sample_size = SAMPLE_SIZE_MAX.min(residual.len());
-    let mut sample: Vec<_> = residual.sample(rng, sample_size).map(|x| x.abs()).collect();
-    let k = (sample_size as f32 * (1.0 - r)) as usize;
+    let mut sample: Vec<_> = residual
+        .choose_multiple(rng, sample_size)
+        .map(|x| x.abs())
+        .collect();
+
+    let k = (sample_size as f32 * (1.0 - r.value)) as usize;
     let k = k.clamp(0, sample_size - 1);
     sample.select_nth_unstable_by(k, |a, b| a.total_cmp(b));
 

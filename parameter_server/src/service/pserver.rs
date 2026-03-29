@@ -95,7 +95,7 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 
             debug!(worker_id = id; "sending parameters");
             let msg = Msg::Data(Payload::Params(&mut params));
-            tx.send(&msg).await?;
+            tx.send(msg).await?;
 
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
@@ -109,12 +109,12 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 
                         debug!(worker_id = id; "sending parameters");
                         let msg = Msg::Data(Payload::Params(&mut params));
-                        tx.send(&msg).await?;
+                        tx.send(msg).await?;
                     }
                     Msg::Control(Command::Disconnect) => {
                         info!(worker_id = id; "gracefully disconnecting worker");
                         let msg = Msg::Control(Command::Disconnect);
-                        tx.send(&msg).await?;
+                        tx.send(msg).await?;
                         break;
                     }
                     Msg::Data(Payload::Grad(grad)) => {
@@ -126,13 +126,13 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                             got: ngrad,
                         });
 
-                        tx.send(&msg).await?;
+                        tx.send(msg).await?;
                     }
                     msg => {
                         error!(worker_id = id; "received an invalid message {msg:?}");
 
                         let msg = Msg::Err(Detail::Fatal("invalid message".into()));
-                        tx.send(&msg).await?;
+                        tx.send(msg).await?;
 
                         return Err(io::Error::other("invalid message"));
                     }

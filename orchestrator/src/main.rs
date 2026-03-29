@@ -87,6 +87,7 @@ fn main() -> io::Result<()> {
             synchronizer: SynchronizerConfig::Barrier,
             store: StoreConfig::Blocking,
         },
+        serializer: SerializerConfig::Base,
         dataset: DatasetConfig {
             src: DatasetSrc::Inline {
                 data: vec![

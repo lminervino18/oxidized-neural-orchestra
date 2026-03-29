@@ -66,7 +66,7 @@ impl Worker {
 
                     should_continue = !was_last;
                     let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
-                    tx.send(&msg).await?;
+                    tx.send(msg).await?;
                 }
                 ret = rx.recv() => match ret? {
                     Msg::Control(Command::Disconnect) => {
@@ -82,7 +82,7 @@ impl Worker {
 
         middleware.disconnect().await?;
         let msg = Msg::Control(Command::Disconnect);
-        tx.send(&msg).await?;
+        tx.send(msg).await?;
         Ok(())
     }
 }

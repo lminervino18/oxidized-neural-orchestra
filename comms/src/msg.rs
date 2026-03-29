@@ -1,17 +1,17 @@
 use std::{borrow::Cow, io};
 
-use crate::{
-    Align1, Deserialize, Serialize,
+use super::{
+    Align1, Deserialize,
     specs::{server::ServerSpec, worker::WorkerSpec},
 };
 
-type Header = u32;
+pub type Header = u32;
 const HEADER_SIZE: usize = size_of::<Header>();
 
 /// The payload data for the `Data` variant of the `Msg` enum.
 #[derive(Debug)]
 pub enum Payload<'a> {
-    Grad(&'a [f32]),
+    Grad(&'a mut [f32]),
     Params(&'a mut [f32]),
     Datachunk(&'a [f32]),
 }
@@ -58,42 +58,6 @@ impl Msg<'_> {
     }
 }
 
-impl<'a> Serialize<'a> for Msg<'a> {
-    fn serialize(&'a self, buf: &mut Vec<u8>) -> Option<&'a [u8]> {
-        match self {
-            Msg::Err(detail) => {
-                let header = (0 as Header).to_be_bytes();
-                buf.extend_from_slice(&header);
-
-                // SAFETY: Serialize impl for `Detail` is derived and not implemented
-                //         by hand. Nor has a non string-key map inside.
-                serde_json::to_writer(buf, &detail).unwrap();
-                None
-            }
-            Msg::Control(cmd) => {
-                let header = (1 as Header).to_be_bytes();
-                buf.extend_from_slice(&header);
-
-                // SAFETY: Serialize impl for `Command` is derived and not implemented
-                //         by hand. Nor has a non string-key map inside.
-                serde_json::to_writer(buf, &cmd).unwrap();
-                None
-            }
-            Msg::Data(payload) => {
-                let (kind, nums): (_, &[_]) = match payload {
-                    Payload::Grad(grad) => (2, grad),
-                    Payload::Params(params) => (3, params),
-                    Payload::Datachunk(chunk) => (4, chunk),
-                };
-
-                let header = (kind as Header).to_be_bytes();
-                buf.extend_from_slice(&header);
-                Some(bytemuck::cast_slice(nums))
-            }
-        }
-    }
-}
-
 impl<'a> Deserialize<'a> for Msg<'a> {
     fn deserialize<B: Align1>(data: &'a mut [B]) -> io::Result<Self> {
         let bytes = bytemuck::cast_slice_mut(data);
@@ -110,13 +74,16 @@ impl<'a> Deserialize<'a> for Msg<'a> {
         match kind {
             0 => Ok(Self::Err(serde_json::from_slice(rest)?)),
             1 => Ok(Self::Control(serde_json::from_slice(rest)?)),
-            2..5 => {
+            2 => {
+                todo!("Implement sparse deserialization")
+            }
+            3..6 => {
                 let nums = bytemuck::cast_slice_mut(rest);
 
                 let payload = match kind {
-                    2 => Payload::Grad(nums),
-                    3 => Payload::Params(nums),
-                    4 => Payload::Datachunk(nums),
+                    3 => Payload::Grad(nums),
+                    4 => Payload::Params(nums),
+                    5 => Payload::Datachunk(nums),
                     _ => unreachable!(),
                 };
 

@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use comms::{OnoReceiver, OnoSender};
+use comms::{OnoReceiver, OnoSender, Serializer};
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
     dataset::{Dataset, DatasetSrc},
@@ -26,8 +26,8 @@ fn channel_pair() -> (
     let (stream1, stream2) = io::duplex(4096);
     let (rx1, tx1) = io::split(stream1);
     let (rx2, tx2) = io::split(stream2);
-    let chan1 = comms::channel(rx1, tx1);
-    let chan2 = comms::channel(rx2, tx2);
+    let chan1 = comms::channel(rx1, tx1, Serializer::default());
+    let chan2 = comms::channel(rx2, tx2, Serializer::default());
     (chan1, chan2)
 }
 
@@ -67,7 +67,7 @@ where
     let mut params = vec![0.5; nparams];
 
     let msg = Msg::Data(Payload::Params(&mut params));
-    tx.send(&msg).await?;
+    tx.send(msg).await?;
 
     loop {
         match rx.recv().await? {
@@ -77,17 +77,17 @@ where
             Msg::Data(Payload::Grad(grad)) => {
                 optimizer.update_params(grad, &mut params).unwrap();
                 let msg = Msg::Data(Payload::Params(&mut params));
-                tx.send(&msg).await?;
+                tx.send(msg).await?;
             }
             _ => {}
         }
     }
 
     let msg = Msg::Control(Command::Disconnect);
-    tx.send(&msg).await?;
+    tx.send(msg).await?;
 
     let msg = Msg::Data(Payload::Params(&mut params));
-    orch_tx.send(&msg).await?;
+    orch_tx.send(msg).await?;
 
     Ok(())
 }

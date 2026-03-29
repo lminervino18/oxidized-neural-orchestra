@@ -2,7 +2,7 @@
 
 use tokio::io::{self, duplex};
 
-use crate::{channel, recv_dataset::recv_dataset, send_dataset::send_dataset};
+use crate::{Serializer, channel, recv_dataset::recv_dataset, send_dataset::send_dataset};
 
 #[tokio::test]
 async fn test_share_dataset() {
@@ -12,7 +12,7 @@ async fn test_share_dataset() {
     let (rx, tx) = duplex(SIZE);
     let (rx, _) = io::split(rx);
     let (_, tx) = io::split(tx);
-    let (mut receiver, mut sender) = channel(rx, tx);
+    let (mut receiver, mut sender) = channel(rx, tx, Serializer::default());
 
     let chunk = 4;
     let size = 127 * size_of::<f32>() as u64;

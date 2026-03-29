@@ -17,7 +17,7 @@ use tokio::{
 };
 
 use comms::{
-    OnoReceiver, OnoSender,
+    OnoReceiver, OnoSender, Serializer,
     msg::{Command, Msg, Payload},
     send_dataset::send_dataset,
     specs::{server::ServerSpec, worker::WorkerSpec},
@@ -303,7 +303,9 @@ impl Session {
                 .await
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
-            tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
+            let msg = Msg::Control(Command::CreateServer(spec));
+            tx.send(msg).await?;
+
             channels.push((rx, tx));
         }
 
@@ -338,7 +340,8 @@ impl Session {
                         .await
                         .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
-                    tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+                    let msg = Msg::Control(Command::CreateWorker(spec));
+                    tx.send(msg).await?;
 
                     match partition {
                         Partition::Local { path, offset, size } => {
@@ -374,7 +377,7 @@ impl Session {
     async fn open_channel(addr: &str) -> io::Result<(NetRx, NetTx)> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
-        Ok(comms::channel(rx, tx))
+        Ok(comms::channel(rx, tx, Serializer::default()))
     }
 }
 

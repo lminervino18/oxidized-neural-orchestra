@@ -3,7 +3,7 @@
 use std::num::NonZeroUsize;
 
 use comms::{
-    OnoReceiver, OnoSender,
+    OnoReceiver, OnoSender, Serializer,
     msg::{Command, Msg, Payload},
 };
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
@@ -29,8 +29,8 @@ fn channel_pair() -> (
     let (stream1, stream2) = io::duplex(4096);
     let (rx1, tx1) = io::split(stream1);
     let (rx2, tx2) = io::split(stream2);
-    let chan1 = comms::channel(rx1, tx1);
-    let chan2 = comms::channel(rx2, tx2);
+    let chan1 = comms::channel(rx1, tx1, Serializer::default());
+    let chan2 = comms::channel(rx2, tx2, Serializer::default());
     (chan1, chan2)
 }
 
@@ -53,15 +53,15 @@ where
                     *g = *p - 1.0;
                 }
 
-                let msg = Msg::Data(Payload::Grad(&grad));
-                tx.send(&msg).await?
+                let msg = Msg::Data(Payload::Grad(&mut grad));
+                tx.send(msg).await?
             }
             _ => {}
         }
     }
 
     let msg = Msg::Control(Command::Disconnect);
-    tx.send(&msg).await?;
+    tx.send(msg).await?;
 
     while !matches!(rx.recv().await?, Msg::Control(Command::Disconnect)) {}
 
