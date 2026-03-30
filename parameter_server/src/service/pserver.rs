@@ -84,12 +84,12 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
         let id = self.tasks.len() + 1;
         let handle = self.handle.clone();
         let synchronizer = self.synchronizer.clone();
-        let mut msg_buf = vec![0u32; 1028];
 
         let task = async move {
             let nparams = handle.len();
             let mut params = vec![0f32; nparams];
             let mut grad_buf = vec![0f32; nparams];
+            let mut msg_buf = vec![0u32; 256];
 
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.

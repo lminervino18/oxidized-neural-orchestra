@@ -35,17 +35,15 @@ async fn mock_orch<R>(mut wk_rx: OnoReceiver<R>, mut sv_rx: OnoReceiver<R>) -> i
 where
     R: AsyncRead + Unpin,
 {
-    let mut rx_buf = vec![0; 128];
-
     loop {
-        match wk_rx.recv_into(&mut rx_buf).await? {
+        match wk_rx.recv().await? {
             Msg::Control(Command::Disconnect) => break,
             Msg::Control(Command::ReportLoss { losses }) => println!("loss: {losses:?}"),
             _ => {}
         }
     }
 
-    let Msg::Data(Payload::Params(params)) = sv_rx.recv_into(&mut rx_buf).await? else {
+    let Msg::Data(Payload::Params(params)) = sv_rx.recv().await? else {
         return Err(io::Error::other(
             "received an invalid message kind from the server",
         ));
@@ -67,24 +65,21 @@ where
 {
     let mut optimizer = GradientDescent::new(learning_rate);
     let mut params = vec![0.5; nparams];
-    let mut rx_buf = vec![0; 128];
     let mut grad_buf = vec![0.0f32; nparams];
+    let mut msg_buf = vec![0u32; 256];
 
     let msg = Msg::Data(Payload::Params(&mut params));
     tx.send(&msg).await?;
 
     loop {
-        match rx.recv_into(&mut rx_buf).await? {
-            Msg::Control(Command::Disconnect) => {
-                break;
-            }
-            Msg::Data(Payload::Grad(f16_grad)) => {
-                for (dst, &src) in grad_buf.iter_mut().zip(f16_grad.iter()) {
-                    *dst = src;
-                }
+        match rx.recv_grad_or_msg(&mut grad_buf, &mut msg_buf).await? {
+            None => {
                 optimizer.update_params(&grad_buf, &mut params).unwrap();
                 let msg = Msg::Data(Payload::Params(&mut params));
                 tx.send(&msg).await?;
+            }
+            Some(Msg::Control(Command::Disconnect)) => {
+                break;
             }
             _ => {}
         }

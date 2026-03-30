@@ -2,7 +2,7 @@ use std::io;
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::{Align4, Deserialize, LEN_TYPE_SIZE, LenType, msg::Msg};
+use crate::{Deserialize, LEN_TYPE_SIZE, LenType, msg::Msg};
 
 const GRAD_KIND: u32 = 2;
 const KIND_SIZE: usize = size_of::<u32>();
@@ -10,6 +10,7 @@ const KIND_SIZE: usize = size_of::<u32>();
 /// The receiving end handle of the communication.
 pub struct OnoReceiver<R: AsyncRead + Unpin> {
     rx: R,
+    buf: Vec<u32>,
 }
 
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
@@ -18,38 +19,36 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     /// # Args
     /// * `rx` - The underlying reader.
     pub(super) fn new(rx: R) -> Self {
-        Self { rx }
+        Self {
+            rx,
+            buf: Vec::new(),
+        }
     }
 
     /// Waits to receive a new message from the inner receiver.
     ///
-    /// # Args
-    /// * `buf` - The buffer to use for deserialization; the returned `T`'s lifetimes
-    ///           will be tied to this buffer.
-    ///
     /// # Returns
     /// A result object that returns `T` on success or `io::Error` on failure.
-    pub async fn recv_into<'buf, T, B>(&mut self, buf: &'buf mut Vec<B>) -> io::Result<T>
+    pub async fn recv<'buf, T>(&'buf mut self) -> io::Result<T>
     where
         T: Deserialize<'buf>,
-        B: Align4,
     {
         let mut size_buf = [0; LEN_TYPE_SIZE];
         self.rx.read_exact(&mut size_buf).await?;
         let len = LenType::from_be_bytes(size_buf) as usize;
 
-        let b_size = size_of::<B>();
+        let b_size = size_of::<u32>();
         let needed_amount = len.div_ceil(b_size);
 
-        if buf.capacity() < needed_amount {
-            buf.reserve(needed_amount - buf.len());
+        if self.buf.capacity() < needed_amount {
+            self.buf.reserve(needed_amount - self.buf.len());
         }
 
         // SAFETY: The buffer has capacity for at least the amount of items. These
         //         will be immediately overwritten in the read_exact call.
-        unsafe { buf.set_len(needed_amount) };
+        unsafe { self.buf.set_len(needed_amount) };
 
-        let view = bytemuck::cast_slice_mut(buf);
+        let view = bytemuck::cast_slice_mut(&mut self.buf);
         let slice = &mut view[..len];
         self.rx.read_exact(slice).await?;
 
@@ -68,21 +67,20 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     /// * `msg_buf` - Buffer used for deserialization if the next message is not a gradient.
     ///
     /// # Returns
-    /// `None` if the message was a gradient (written to `grad_out`), or `Some(Msg)` otherwise.
+    /// `None` if the message was a gradient and `grad_out` was written, `Some(Msg)` otherwise.
     ///
     /// # Errors
-    /// Returns an `io::Error` if the connection fails or the received gradient length does
-    /// not match `grad_out`.
-    pub async fn recv_grad_or_msg<'buf, B: Align4>(
+    /// Returns an `io::Error` if the connection fails or the gradient length does not match `grad_out`.
+    pub async fn recv_grad_or_msg<'buf>(
         &mut self,
         grad_out: &mut [f32],
-        msg_buf: &'buf mut Vec<B>,
+        msg_buf: &'buf mut Vec<u32>,
     ) -> io::Result<Option<Msg<'buf>>> {
         let mut size_buf = [0u8; LEN_TYPE_SIZE];
         self.rx.read_exact(&mut size_buf).await?;
         let len = LenType::from_be_bytes(size_buf) as usize;
 
-        let b_size = size_of::<B>();
+        let b_size = size_of::<u32>();
         let needed = len.div_ceil(b_size);
 
         if msg_buf.capacity() < needed {
@@ -125,9 +123,9 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
 
             Ok(None)
         } else {
-            // SAFETY: `msg_buf` is borrowed for `'buf` and `B: Align4` implies `B: Pod`,
+            // SAFETY: `msg_buf` is borrowed for `'buf` and `u32` implements `Pod`,
             //         so reinterpreting as `u8` is sound. We slice to exactly `len` bytes,
-            //         which is within the `needed * size_of::<B>()` bytes allocated above.
+            //         which is within the `needed * size_of::<u32>()` bytes allocated above.
             let byte_slice: &'buf mut [u8] = unsafe {
                 std::slice::from_raw_parts_mut(msg_buf.as_mut_ptr() as *mut u8, len)
             };

@@ -33,9 +33,8 @@ async fn main() -> io::Result<()> {
     let (mut rx, tx) = comms::channel(rx, tx);
     info!("orchestrator connected from {addr}");
 
-    let mut rx_buf = vec![0; 1028];
     let spec = loop {
-        match rx.recv_into(&mut rx_buf).await {
+        match rx.recv().await {
             Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
             Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
             Err(e) => warn!("io error {e}"),

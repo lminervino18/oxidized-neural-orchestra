@@ -40,8 +40,7 @@ async fn send_recv() {
     let (rx, tx) = io::split(two);
     let (mut rx, _) = comms::channel(rx, tx);
 
-    let mut buf = vec![0; SIZE];
-    let s: MyStr = rx.recv_into(&mut buf).await.unwrap();
+    let s: MyStr = rx.recv().await.unwrap();
 
     assert_eq!(msg.0, s.0);
 }
