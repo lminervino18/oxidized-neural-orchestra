@@ -303,8 +303,7 @@ impl Session {
                 .await
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
-            let msg = Msg::Control(Command::CreateServer(spec));
-            tx.send(&msg).await?;
+            tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
 
             channels.push((rx, tx));
         }
@@ -340,8 +339,7 @@ impl Session {
                         .await
                         .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
-                    let msg = Msg::Control(Command::CreateWorker(spec));
-                    tx.send(&msg).await?;
+                    tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
                     match partition {
                         Partition::Local { path, offset, size } => {
