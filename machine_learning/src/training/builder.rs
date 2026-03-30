@@ -26,25 +26,37 @@ impl TrainerBuilder {
 
     /// Builds a new `Trainer` following a spec.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for the trainer.
     /// * `server_sizes` - The mount of parameters per server.
+    /// * `dataset` - A resolved dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
-    pub fn build(&self, spec: TrainerSpec, server_sizes: &[usize]) -> Box<dyn Trainer> {
-        self.resolve_optimizers(spec, server_sizes)
+    pub fn build(
+        &self,
+        spec: TrainerSpec,
+        server_sizes: &[usize],
+        dataset: Dataset,
+    ) -> Box<dyn Trainer> {
+        self.resolve_optimizers(spec, server_sizes, dataset)
     }
 
     /// Resolves the `Optimizer`s for this trainer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of the trainer.
     /// * `server_sizes` - The amount of parameters per server.
+    /// * `dataset` - A resolved dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_optimizers(&self, spec: TrainerSpec, server_sizes: &[usize]) -> Box<dyn Trainer> {
+    fn resolve_optimizers(
+        &self,
+        spec: TrainerSpec,
+        server_sizes: &[usize],
+        dataset: Dataset,
+    ) -> Box<dyn Trainer> {
         match spec.optimizer {
             OptimizerSpec::GradientDescent { learning_rate } => {
                 let optimizers: Vec<_> = server_sizes
@@ -52,7 +64,7 @@ impl TrainerBuilder {
                     .map(|_| GradientDescent::new(learning_rate))
                     .collect();
 
-                self.resolve_layers(spec, optimizers)
+                self.resolve_layers(spec, optimizers, dataset)
             }
             _ => unimplemented!(),
         }
@@ -60,12 +72,18 @@ impl TrainerBuilder {
 
     /// Resolves the the `Layer`s for a `Sequential` model.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of the trainer.
+    /// * `dataset` - The dataset for the model to be trained on.
     ///
     /// # Returns
     /// A new `Trainer`.
-    fn resolve_layers<O>(&self, spec: TrainerSpec, optimizers: Vec<O>) -> Box<dyn Trainer>
+    fn resolve_layers<O>(
+        &self,
+        spec: TrainerSpec,
+        optimizers: Vec<O>,
+        dataset: Dataset,
+    ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
     {
@@ -75,12 +93,12 @@ impl TrainerBuilder {
             .flat_map(|layer_spec| self.resolve_layer(*layer_spec))
             .collect();
 
-        self.resolve_loss_fn(spec, optimizers, layers)
+        self.resolve_loss_fn(spec, optimizers, layers, dataset)
     }
 
     /// Resolves a `Layer` for a `Sequential` model.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification of a certain layer.
     ///
     /// # Returns
@@ -103,7 +121,7 @@ impl TrainerBuilder {
 
     /// Resolves the `ActFn` for a specific layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - An optional specification for an `ActFn`.
     ///
     /// # Returns
@@ -116,10 +134,11 @@ impl TrainerBuilder {
 
     /// Resolves the `LossFn` for this trainer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for this trainer.
     /// * `optimizers` - A list of resolved optimizers, one per server.
     /// * `layers` - A list of resolved layers.
+    /// * `dataset` - A resolved dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
@@ -128,6 +147,7 @@ impl TrainerBuilder {
         spec: TrainerSpec,
         optimizers: Vec<O>,
         layers: Vec<Layer>,
+        dataset: Dataset,
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
@@ -135,18 +155,19 @@ impl TrainerBuilder {
         match spec.loss_fn {
             LossFnSpec::Mse => {
                 let loss_fn = Mse::new();
-                self.terminate_build(spec, optimizers, layers, loss_fn)
+                self.terminate_build(spec, optimizers, layers, loss_fn, dataset)
             }
         }
     }
 
     /// Terminates the entire build for this trainer and instanciates the final entity.
     ///
-    /// # Arguments
+    /// # Args
     /// * `spec` - The specification for this trainer.
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `layers` - A list of resolved layers.
     /// * `loss_fn` - A resolved loss function.
+    /// * `dataset` - A resolved dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
@@ -156,13 +177,13 @@ impl TrainerBuilder {
         optimizers: Vec<O>,
         layers: Vec<Layer>,
         loss_fn: L,
+        dataset: Dataset,
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
         L: LossFn + 'static,
     {
         let model = Sequential::new(layers);
-        let dataset = Dataset::new(spec.dataset.data, spec.dataset.x_size, spec.dataset.y_size);
         let trainer = BackpropTrainer::new(
             model,
             optimizers,
@@ -179,7 +200,7 @@ impl TrainerBuilder {
 
     /// Generates a random number generator given (or not) a seed.
     ///
-    /// # Arguments
+    /// # Args
     /// * `seed` - An optional seed for the rng.
     ///
     /// # Returns

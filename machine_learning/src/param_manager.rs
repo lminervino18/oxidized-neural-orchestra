@@ -12,7 +12,7 @@ pub struct ServerParamsMetadata<'mw> {
 impl<'mw> ServerParamsMetadata<'mw> {
     /// Creates a new `ServerParamsMetadata`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `params` - The mutable slice of this server's parameters.
     /// * `grad` - The server's dedicated gradient slice.
     /// * `acc_grad_buf` - The server's accumulated gradient buffer.
@@ -40,7 +40,7 @@ pub struct ParamManager<'mw> {
 impl<'mw> ParamManager<'mw> {
     /// Creates a new `ParamManager`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `servers` - A list of the necessary server metadata to have to iterate through the layers' parameters.
     /// * `server_ordering` - The ordering of the servers to know which layer corresponds to which server.
     ///
@@ -90,7 +90,7 @@ impl<'mw> ParamManager<'mw> {
 
     /// Applies the gradients onto the parameters of the model.
     ///
-    /// # Arguments
+    /// # Args
     /// * `optimizers` - A list of optimizers, one per server.
     pub fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) -> Result<()> {
         if optimizers.len() != self.servers.len() {
@@ -146,7 +146,7 @@ impl FrontIter<'_, '_> {
     /// handy for when trying to request parameters for a stateless (in terms
     /// of parameters) layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `n` - The amount of parameters to take from the inner storage of the next server.
     ///
     /// # Returns
@@ -190,7 +190,7 @@ impl BackIter<'_, '_> {
     /// handy for when trying to request parameters for a stateless (in terms
     /// of parameters) layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `n` - The amount of parameters to take from the inner storage of the next server.
     ///
     /// # Returns

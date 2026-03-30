@@ -14,7 +14,7 @@ pub trait Trainer {
     ///
     /// This cycle could involve one or more epochs.
     ///
-    /// # Arguments
+    /// # Args
     /// * `param_manager` - The manager of parameters for this training cycle.
     ///
     /// # Returns

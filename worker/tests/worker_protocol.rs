@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use comms::{OnoReceiver, OnoSender};
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
-    dataset::Dataset,
+    dataset::{Dataset, DatasetSrc},
     optimization::{GradientDescent, Optimizer},
     training::BackpropTrainer,
 };
@@ -12,6 +12,7 @@ use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 use comms::msg::{Command, Msg, Payload};
 use worker::{middleware::Middleware, worker::Worker};
 
+#[allow(clippy::type_complexity)]
 fn channel_pair() -> (
     (
         OnoReceiver<ReadHalf<DuplexStream>>,
@@ -34,17 +35,15 @@ async fn mock_orch<R>(mut wk_rx: OnoReceiver<R>, mut sv_rx: OnoReceiver<R>) -> i
 where
     R: AsyncRead + Unpin,
 {
-    let mut rx_buf = vec![0; 128];
-
     loop {
-        match wk_rx.recv_into(&mut rx_buf).await? {
+        match wk_rx.recv().await? {
             Msg::Control(Command::Disconnect) => break,
             Msg::Control(Command::ReportLoss { losses }) => println!("loss: {losses:?}"),
             _ => {}
         }
     }
 
-    let Msg::Data(Payload::Params(params)) = sv_rx.recv_into(&mut rx_buf).await? else {
+    let Msg::Data(Payload::Params(params)) = sv_rx.recv().await? else {
         return Err(io::Error::other(
             "received an invalid message kind from the server",
         ));
@@ -66,13 +65,12 @@ where
 {
     let mut optimizer = GradientDescent::new(learning_rate);
     let mut params = vec![0.5; nparams];
-    let mut rx_buf = vec![0; 128];
 
     let msg = Msg::Data(Payload::Params(&mut params));
     tx.send(&msg).await?;
 
     loop {
-        match rx.recv_into(&mut rx_buf).await? {
+        match rx.recv().await? {
             Msg::Control(Command::Disconnect) => {
                 break;
             }
@@ -107,7 +105,11 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let trainer = BackpropTrainer::new(
         model,
         vec![GradientDescent::new(0.1)],
-        Dataset::new(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0], x_size, x_size),
+        Dataset::new(
+            DatasetSrc::inmem(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0]),
+            x_size,
+            x_size,
+        ),
         Mse::new(),
         0,
         NonZeroUsize::new(MAX_EPOCHS).unwrap(),

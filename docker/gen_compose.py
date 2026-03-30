@@ -2,21 +2,22 @@
 
 import os
 import json
+from pathlib import Path
 
-DEFAULT_CONFIG_PATH = "config.json"
-DEFAULT_OUTPUT_PATH = "../compose.yml"
+# The directory containing this exact script.
+BASE_DIR = Path(__file__).resolve().parent
 
 # The various values for a yaml field.
 type YmlField = bool | int | float | str | list[YmlField] | dict[str, YmlField]
 
 
-def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
+def generate_servers(servers: int, release: bool) -> dict[str, YmlField]:
     """
     Generates the servers' part of the compose file.
 
-    # Arguments
-    * `release` - If the executable should be compiled as release mode.
+    # Args
     * `servers` - The amount of servers to create.
+    * `release` - If the executable should be compiled as release mode.
 
     # Returns
     A dictionary containing the servers' part of the compose file.
@@ -50,7 +51,18 @@ def generate_servers(release: bool, servers: int) -> dict[str, YmlField]:
     }
 
 
-def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
+def generate_workers(workers: int, servers: int, release: bool) -> dict[str, YmlField]:
+    """
+    Generates the workers' part of the compose file.
+
+    # Args
+    * `workers` - The amount of workers to create.
+    * `servers` - The amount of servers to create.
+    * `release` - If the executable should be compiled as release mode.
+
+    # Returns
+    A dictionary containing the workers' part of the compose file.
+    """
     mode = "release" if release else "debug"
     log_level = "info" if release else "debug"
     base_port = 50_000
@@ -64,6 +76,7 @@ def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
                     "MODE": mode,
                 },
             },
+            "depends_on": [f"server-{j}" for j in range(servers)],
             "ports": [
                 f"{base_port + i}:{base_port + i}",
             ],
@@ -80,41 +93,48 @@ def generate_workers(release: bool, workers: int) -> dict[str, YmlField]:
     }
 
 
-def generate_compose(release: bool, servers: int, workers: int) -> dict[str, YmlField]:
+def generate_network() -> dict[str, YmlField]:
     """
-    Generates the entire docker compose file in a dictionary.
-
-    # Arguments
-    * `release` - If the executable should be compiled as release mode.
-    * `servers` - The amount of servers to create.
-    * `workers` - The amount of workers to create.
+    Generates the network the system is going to be running on.
 
     # Returns
-    A dictionary containing the whole project's docker compose file.
+    A dictionary containing the network part of the compose file.
     """
-    services = generate_servers(release, servers) | generate_workers(release, workers)
-
     return {
-        "name": "distributed-training",
-        "services": services,
-        "networks": {
-            "training-network": {
-                "driver": "bridge",
-            },
+        "training-network": {
+            "driver": "bridge",
         },
     }
 
 
+def generate_compose(workers: int, servers: int, release: bool) -> dict[str, YmlField]:
+    """
+    Generates the entire docker compose file in a dictionary.
+
+    # Args
+    * `workers` - The amount of workers to create.
+    * `servers` - The amount of servers to create.
+    * `release` - If the executable should be compiled as release mode.
+
+    # Returns
+    A dictionary containing the whole project's docker compose file.
+    """
+    return {
+        "name": "distributed-training",
+        "services": generate_servers(servers, release) | generate_workers(workers, servers, release),
+        "networks": generate_network(),
+    }
+
+
 def main():
-    CONFIG_PATH = os.environ.get("CONFIG_PATH", DEFAULT_CONFIG_PATH)
+    workers = int(os.environ["WORKERS"])
+    servers = int(os.environ["SERVERS"])
+    release = os.environ["RELEASE"].lower() == "true"
 
-    with open(CONFIG_PATH) as f:
-        config = json.load(f)
+    docker_compose = generate_compose(workers, servers, release)
+    output_path = BASE_DIR.parent / "compose.yaml"
 
-    docker_compose = generate_compose(**config)
-    OUTPUT_PATH = os.environ.get("OUTPUT_PATH", DEFAULT_OUTPUT_PATH)
-
-    with open(OUTPUT_PATH, "w") as f:
+    with open(output_path, "w") as f:
         json.dump(docker_compose, f, indent=2)
 
 

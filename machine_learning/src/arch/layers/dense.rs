@@ -66,7 +66,7 @@ impl Dense {
 
     /// Gives a view of the raw parameter slice as the weights and biases of this layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `params` - A slice of parameters.
     ///
     /// # Returns
@@ -96,7 +96,7 @@ impl Dense {
 
     /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - A gradient slice.
     ///
     /// # Returns

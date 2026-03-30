@@ -9,7 +9,7 @@ pub struct ConstParamGen {
 impl ConstParamGen {
     /// Creates a new `ConstParamGen` parameter generator.
     ///
-    /// # Arguments
+    /// # Args
     /// * `value` - The value to always generate.
     /// * `limit` - The maximum amount of times to generate that value.
     ///

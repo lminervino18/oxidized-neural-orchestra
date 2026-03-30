@@ -14,7 +14,7 @@ pub trait Store: Clone {
 
     /// Accumulates a new gradient into the storage.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - A flat slice containing a new model gradient.
     ///
     /// # Returns
@@ -26,7 +26,7 @@ pub trait Store: Clone {
 
     /// Writes the parameters' values into the given output buffer.
     ///
-    /// # Arguments
+    /// # Args
     /// * `out` - A mutable slice where the parameters will be copied.
     ///
     /// # Returns

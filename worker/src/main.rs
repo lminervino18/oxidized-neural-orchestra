@@ -2,6 +2,7 @@ use std::{env, io};
 
 use comms::{
     msg::{Command, Msg},
+    recv_dataset::{get_dataset_cursor, recv_dataset},
     specs::worker::AlgorithmSpec,
 };
 use log::{info, warn};
@@ -32,14 +33,17 @@ async fn main() -> io::Result<()> {
     let (mut rx, tx) = comms::channel(rx, tx);
     info!("orchestrator connected from {addr}");
 
-    let mut rx_buf = vec![0; 1028];
     let spec = loop {
-        match rx.recv_into(&mut rx_buf).await {
+        match rx.recv().await {
             Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
             Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
             Err(e) => warn!("io error {e}"),
         }
     };
+
+    let size = spec.dataset.size;
+    let mut dataset_raw = vec![0f32; (size / size_of::<f32>() as u64) as usize];
+    recv_dataset(&mut get_dataset_cursor(&mut dataset_raw), size, &mut rx).await?;
 
     let AlgorithmSpec::ParameterServer {
         server_addrs,
@@ -48,7 +52,7 @@ async fn main() -> io::Result<()> {
     } = spec.algorithm.clone();
 
     let worker_builder = WorkerBuilder::new();
-    let worker = worker_builder.build(spec, &server_sizes);
+    let worker = worker_builder.build(spec, &server_sizes, dataset_raw);
     let mut middleware = Middleware::new(server_ordering);
 
     for (addr, size) in server_addrs.into_iter().zip(server_sizes) {

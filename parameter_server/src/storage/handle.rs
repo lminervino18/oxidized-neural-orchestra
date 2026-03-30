@@ -26,7 +26,7 @@ impl<S: Store> Deref for StoreHandle<S> {
 impl<S: Store> StoreHandle<S> {
     /// Creates a new `StoreHandle`
     ///
-    /// # Arguments
+    /// # Args
     /// * `store` - The underlying parameter store.
     ///
     /// # Returns
@@ -39,7 +39,7 @@ impl<S: Store> StoreHandle<S> {
 impl<S: Store> StoreHandle<S> {
     /// Async call to the synchronous implementation of `Store::accumulate`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - A flat slice containing a new model gradient.
     ///
     /// # Returns
@@ -55,7 +55,7 @@ impl<S: Store> StoreHandle<S> {
 
     /// Async call to the synchronous implementation of `Store::pull_params`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `out` - A mutable slice where the parameters will be copied.
     ///
     /// # Returns

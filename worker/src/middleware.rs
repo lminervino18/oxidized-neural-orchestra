@@ -8,9 +8,6 @@ use futures::future;
 use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-/// The starting size of the receiver buffer.
-const STARTING_RX_BUF_SIZE: usize = 1028;
-
 /// The necessary information to maintain for the entire
 /// training duration for each of the servers.
 struct ServerMetadata<R, W>
@@ -20,7 +17,6 @@ where
 {
     rx: OnoReceiver<R>,
     tx: OnoSender<W>,
-    rx_buf: Vec<u32>,
     grad: Vec<f32>,
     acc_grad_buf: Vec<f32>,
 }
@@ -42,7 +38,7 @@ where
 {
     /// Creates a new `Middleware`.
     ///
-    /// # Arguments
+    /// # Args
     /// * `server_ordering`: The ordering of the servers to know which layer's parameters correspond to which server.
     ///
     /// # Returns
@@ -56,7 +52,7 @@ where
 
     /// Adds a new server communicator to the middleware.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rx` - The worker's receiving end of the communication.
     /// * `tx` - The worker's sending end of the communication.
     /// * `size` - The amount of parameters this server holds.
@@ -64,7 +60,6 @@ where
         let metadata = ServerMetadata {
             rx,
             tx,
-            rx_buf: vec![0; STARTING_RX_BUF_SIZE],
             grad: vec![0.0; size],
             acc_grad_buf: vec![0.0; size],
         };
@@ -81,23 +76,21 @@ where
             .servers
             .iter_mut()
             .enumerate()
-            .map(
-                async |(i, server)| match server.rx.recv_into(&mut server.rx_buf).await? {
-                    Msg::Data(Payload::Params(params)) => {
-                        let metadata = ServerParamsMetadata::new(
-                            params,
-                            &mut server.grad,
-                            &mut server.acc_grad_buf,
-                        );
+            .map(async |(i, server)| match server.rx.recv().await? {
+                Msg::Data(Payload::Params(params)) => {
+                    let metadata = ServerParamsMetadata::new(
+                        params,
+                        &mut server.grad,
+                        &mut server.acc_grad_buf,
+                    );
 
-                        Ok(metadata)
-                    }
-                    msg => {
-                        let text = format!("expected params from server {i}, got: {msg:?}");
-                        Err(io::Error::other(text))
-                    }
-                },
-            );
+                    Ok(metadata)
+                }
+                msg => {
+                    let text = format!("expected params from server {i}, got: {msg:?}");
+                    Err(io::Error::other(text))
+                }
+            });
 
         let servers = future::try_join_all(futs).await?;
         Ok(ParamManager::new(servers, &self.server_ordering))
@@ -131,10 +124,7 @@ where
         let futs = self.servers.iter_mut().map(async |server| {
             server.tx.send(&msg).await?;
 
-            while !matches!(
-                server.rx.recv_into(&mut server.rx_buf).await?,
-                Msg::Control(Command::Disconnect)
-            ) {}
+            while !matches!(server.rx.recv().await?, Msg::Control(Command::Disconnect)) {}
 
             Ok::<_, io::Error>(())
         });

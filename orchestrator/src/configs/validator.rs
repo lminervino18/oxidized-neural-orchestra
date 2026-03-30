@@ -1,5 +1,3 @@
-use std::net::ToSocketAddrs;
-
 use super::{AlgorithmConfig, DatasetConfig, ModelConfig, TrainingConfig};
 use crate::{
     configs::training::DatasetSrc,
@@ -28,11 +26,7 @@ impl Validator {
     ///
     /// # Errors
     /// An `OrchErr` if any invariant is unmet.
-    pub fn validate<A: ToSocketAddrs>(
-        &self,
-        model: &ModelConfig,
-        training: &TrainingConfig<A>,
-    ) -> Result<()> {
+    pub fn validate(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<()> {
         self.validate_model(model)?;
         self.validate_training(training)?;
         Ok(())
@@ -59,7 +53,7 @@ impl Validator {
     ///
     /// # Errors
     /// An `OrchErr` if any training invariant is unmet.
-    fn validate_training<A: ToSocketAddrs>(&self, training: &TrainingConfig<A>) -> Result<()> {
+    fn validate_training(&self, training: &TrainingConfig) -> Result<()> {
         if training.worker_addrs.is_empty() {
             let text = "at least one worker address is required".into();
             return Err(OrchErr::InvalidConfig(text));
@@ -100,8 +94,22 @@ impl Validator {
                 // SAFETY: row_size is a positive integer.
                 len / row_size.get()
             }
-            DatasetSrc::Local { .. } => {
-                unimplemented!("dataset doesn't support local loading");
+            DatasetSrc::Local { path } => {
+                let metadata = std::fs::metadata(path).map_err(|e| {
+                    OrchErr::InvalidConfig(format!("cannot read dataset file: {e}"))
+                })?;
+                let len_bytes = metadata.len() as usize;
+                let len = len_bytes / size_of::<f32>();
+
+                if len % row_size != 0 {
+                    let text = format!(
+                        "dataset length ({len}) is not divisible by x_size + y_size ({row_size})"
+                    );
+                    return Err(OrchErr::InvalidConfig(text));
+                }
+
+                // SAFETY: row_size is a positive integer.
+                len / row_size.get()
             }
         };
 

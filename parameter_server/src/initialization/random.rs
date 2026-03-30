@@ -15,7 +15,7 @@ pub struct RandParamGen<R: Rng, D: Distribution<f32>> {
 impl<R: Rng, D: Distribution<f32>> RandParamGen<R, D> {
     /// Creates a new `RandParamGen` parameter generator.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `distribution` - The distribution to sample the random numbers from.
     /// * `limit` - The maximum amount of numbers to generate.
@@ -31,7 +31,7 @@ impl<R: Rng, D: Distribution<f32>> RandParamGen<R, D> {
 impl<R: Rng> RandParamGen<R, Uniform<f32>> {
     /// Creates a new `RandParamGen` parameter generator with a uniform distribution.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `low` - The incluive lower limit.
@@ -45,7 +45,7 @@ impl<R: Rng> RandParamGen<R, Uniform<f32>> {
 
     /// Creates a new `RandParamGen` parameter generator with an inclusive uniform distribution.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `low` - The inclusive lower limit.
@@ -64,7 +64,7 @@ impl<R: Rng> RandParamGen<R, Uniform<f32>> {
 
     /// Creates a new `RandParamGen` parameter generator using Xavier uniform initialization.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `fan_in` - The number of input units in the weight tensor.
@@ -84,7 +84,7 @@ impl<R: Rng> RandParamGen<R, Uniform<f32>> {
 
     /// Creates a new `RandParamGen` parameter generator using LeCun uniform initialization.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `fan_in` - The number of input units in the weight tensor.
@@ -100,7 +100,7 @@ impl<R: Rng> RandParamGen<R, Uniform<f32>> {
 impl<R: Rng> RandParamGen<R, Normal<f32>> {
     /// Creates a new `RandParamGen` parameter generator with a normal distribution.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `mean` - The mean of the distribution.
@@ -114,7 +114,7 @@ impl<R: Rng> RandParamGen<R, Normal<f32>> {
 
     /// Creates a new `RandParamGen` parameter generator using Kaiming normal initialization.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `fan_in` - The number of input units in the weight tensor.
@@ -128,7 +128,7 @@ impl<R: Rng> RandParamGen<R, Normal<f32>> {
 
     /// Creates a new `RandParamGen` parameter generator using Xavier normal initialization.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `fan_in` - The number of input units in the weight tensor.
@@ -147,7 +147,7 @@ impl<R: Rng> RandParamGen<R, Normal<f32>> {
 
     /// Creates a new `RandParamGen` parameter generator using LeCun normal initialization.
     ///
-    /// # Arguments
+    /// # Args
     /// * `rng` - A random number generator.
     /// * `limit` - The maximum amount of numbers to generate.
     /// * `fan_in` - The number of input units in the weight tensor.

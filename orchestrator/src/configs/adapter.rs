@@ -1,8 +1,5 @@
 use std::{
-    cmp::Reverse,
-    collections::BinaryHeap,
-    net::{SocketAddr, ToSocketAddrs},
-    num::NonZeroUsize,
+    cmp::Reverse, collections::BinaryHeap, fs, net::ToSocketAddrs, num::NonZeroUsize, path::PathBuf,
 };
 
 use comms::specs::{
@@ -11,7 +8,7 @@ use comms::specs::{
     worker::{AlgorithmSpec, WorkerSpec},
 };
 
-use super::{ModelConfig, TrainingConfig};
+use super::{ModelConfig, TrainingConfig, partition::Partition};
 use crate::{
     configs::{
         ActFnConfig, AlgorithmConfig, DatasetConfig, DatasetSrc, LayerConfig, LossFnConfig,
@@ -45,23 +42,31 @@ impl Adapter {
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
     #[allow(clippy::type_complexity)]
-    pub fn adapt_configs<A: ToSocketAddrs>(
+    pub fn adapt_configs<'a>(
         &self,
         model: ModelConfig,
-        training: TrainingConfig<A>,
-    ) -> Result<(Vec<(SocketAddr, WorkerSpec)>, Vec<(SocketAddr, ServerSpec)>)> {
+        training: &'a TrainingConfig,
+    ) -> Result<(
+        Vec<(String, WorkerSpec)>,
+        Vec<Partition<'a>>,
+        Vec<(String, ServerSpec)>,
+    )> {
         let (servers, server_addrs, server_sizes, server_ordering) =
-            self.adapt_servers(&model, &training)?;
+            self.adapt_servers(&model, training)?;
+
+        let (dataset_specs, partitions) =
+            self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
 
         let workers = self.adapt_workers(
             &model,
-            &training,
+            training,
+            dataset_specs,
             server_addrs,
             server_sizes,
             server_ordering,
         )?;
 
-        Ok((workers, servers))
+        Ok((workers, partitions, servers))
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -69,6 +74,7 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
+    /// * `dataset_specs` - Already-resolved dataset specs per worker.
     /// * `server_addrs` - Already-resolved server socket addresses.
     /// * `server_sizes` - The amounts of parameters per server.
     /// * `server_ordering` - The ordering of the layer owners.
@@ -78,14 +84,15 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
-    fn adapt_workers<A: ToSocketAddrs>(
+    fn adapt_workers(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig<A>,
-        server_addrs: Vec<SocketAddr>,
+        training: &TrainingConfig,
+        dataset_specs: Vec<DatasetSpec>,
+        server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-    ) -> Result<Vec<(SocketAddr, WorkerSpec)>> {
+    ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
         let algorithm_spec = AlgorithmSpec::ParameterServer {
             server_addrs,
@@ -97,27 +104,28 @@ impl Adapter {
             .worker_addrs
             .iter()
             .enumerate()
-            .map(|(i, addressable)| {
-                let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
-                    OrchErr::InvalidConfig(format!(
-                        "failted to resolve {i}'th worker's network address"
-                    ))
-                })?;
+            .zip(dataset_specs)
+            .map(|((i, addr), dataset)| {
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th worker's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
 
                 let worker_spec = WorkerSpec {
                     worker_id: i,
                     trainer: trainer_spec.clone(),
+                    dataset,
                     algorithm: algorithm_spec.clone(),
                 };
 
-                Ok((addr, worker_spec))
+                Ok((addr.clone(), worker_spec))
             })
             .collect::<Result<Vec<_>>>()?;
 
         Ok(worker_specs)
     }
 
-    /// Adapts both model's and trianing's configurations into a `ServerSpec`.
+    /// Adapts both model's and training's configurations into a `ServerSpec`.
     ///
     /// # Args
     /// * `model` - The model's architecture and initialization configuration.
@@ -129,13 +137,13 @@ impl Adapter {
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
     #[allow(clippy::type_complexity)]
-    fn adapt_servers<A: ToSocketAddrs>(
+    fn adapt_servers(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig<A>,
+        training: &TrainingConfig,
     ) -> Result<(
-        Vec<(SocketAddr, ServerSpec)>,
-        Vec<SocketAddr>,
+        Vec<(String, ServerSpec)>,
+        Vec<String>,
         Vec<usize>,
         Vec<usize>,
     )> {
@@ -162,7 +170,7 @@ impl Adapter {
         let mut server_ordering = vec![0; nlayers];
 
         for (server_i, bin) in param_gen_bins.iter().enumerate() {
-            for &(layer_i, _) in bin {
+            for &(layer_i, ..) in bin {
                 server_ordering[layer_i] = server_i;
             }
         }
@@ -185,12 +193,11 @@ impl Adapter {
             .iter()
             .zip(chained_param_gens)
             .enumerate()
-            .map(|(i, (addressable, (param_gen_spec, size)))| {
-                let addr = addressable.to_socket_addrs()?.next().ok_or_else(|| {
-                    OrchErr::InvalidConfig(format!(
-                        "failed to resolve {i}'th server's network address"
-                    ))
-                })?;
+            .map(|(i, (addr, (param_gen_spec, size)))| {
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th server's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
 
                 let server_spec = ServerSpec {
                     id: i,
@@ -202,13 +209,13 @@ impl Adapter {
                     seed: training.seed,
                 };
 
-                Ok(((addr, server_spec), size))
+                Ok(((addr.clone(), server_spec), size))
             })
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .unzip();
 
-        let server_addrs = servers.iter().map(|&(addr, _)| addr).collect();
+        let server_addrs = servers.iter().map(|(addr, _)| addr.clone()).collect();
         Ok((servers, server_addrs, server_sizes, server_ordering))
     }
 
@@ -216,9 +223,10 @@ impl Adapter {
     ///
     /// # Args
     /// * `synchronizer` - A synchronizer's configuration.
+    /// * `worker_amount` - The total number of workers.
     ///
     /// # Returns
-    /// THe synchronizer's specification.
+    /// The synchronizer's specification.
     fn adapt_synchronizer(
         &self,
         synchronizer: &SynchronizerConfig,
@@ -254,20 +262,14 @@ impl Adapter {
     ///
     /// # Returns
     /// The trainer's specification.
-    fn adapt_trainer<A: ToSocketAddrs>(
-        &self,
-        model: &ModelConfig,
-        training: &TrainingConfig<A>,
-    ) -> TrainerSpec {
+    fn adapt_trainer(&self, model: &ModelConfig, training: &TrainingConfig) -> TrainerSpec {
         let (layers, _) = self.adapt_layers(model, training.dataset.x_size);
         let optimizer_spec = self.adapt_optimizer(training.optimizer);
-        let dataset_spec = self.adapt_dataset(&training.dataset);
         let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);
 
         TrainerSpec {
             layers,
             optimizer: optimizer_spec,
-            dataset: dataset_spec,
             loss_fn: loss_fn_spec,
             offline_epochs: training.offline_epochs,
             max_epochs: training.max_epochs,
@@ -289,28 +291,136 @@ impl Adapter {
         }
     }
 
-    /// Adapts a `DatasetConfig` into a `DatasetSpec`.
+    /// Helper method for `adapt_dataset` — partitions an inline dataset slice.
+    ///
+    /// # Args
+    /// * `data` - The full inline dataset as a slice of `f32`.
+    /// * `partition_sizes` - An iterator of partition sizes in **bytes**.
+    /// * `x_size` - The number of input features per sample.
+    /// * `y_size` - The number of output values per sample.
+    ///
+    /// # Returns
+    /// Paired lists of `DatasetSpec`s and `Partition::Inline` variants.
+    fn adapt_inline_dataset<'a, T: Iterator<Item = u64>>(
+        &self,
+        data: &'a [f32],
+        partition_sizes: T,
+        x_size: NonZeroUsize,
+        y_size: NonZeroUsize,
+    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
+        let mut rest = data;
+        partition_sizes
+            .map(|size| {
+                let curr;
+                (curr, rest) = rest.split_at((size / size_of::<f32>() as u64) as usize);
+                let spec = DatasetSpec {
+                    size,
+                    x_size,
+                    y_size,
+                };
+                let partition = Partition::Inline { data: curr };
+
+                (spec, partition)
+            })
+            .collect()
+    }
+
+    /// Helper method for `adapt_dataset` — partitions a local dataset file.
+    ///
+    /// # Args
+    /// * `path` - Path to the local dataset file.
+    /// * `partition_sizes` - An iterator of partition sizes in **bytes**.
+    /// * `x_size` - The number of input features per sample.
+    /// * `y_size` - The number of output values per sample.
+    ///
+    /// # Returns
+    /// Paired lists of `DatasetSpec`s and `Partition::Local` variants.
+    fn adapt_local_dataset<'a, T: Iterator<Item = u64>>(
+        &self,
+        path: &'a PathBuf,
+        partition_sizes: T,
+        x_size: NonZeroUsize,
+        y_size: NonZeroUsize,
+    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
+        let mut offset = 0;
+        partition_sizes
+            .map(|size| {
+                let spec = DatasetSpec {
+                    size,
+                    x_size,
+                    y_size,
+                };
+                let partition = Partition::Local { path, offset, size };
+
+                offset += size;
+
+                (spec, partition)
+            })
+            .collect()
+    }
+
+    /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
+    ///
+    /// Partition sizes are computed in **bytes** so that they align correctly
+    /// with what `send_dataset` reads off the wire. Previously `row_size` was
+    /// expressed in number-of-f32s while `size` was in bytes, causing each
+    /// partition to be 4× larger than intended.
     ///
     /// # Args
     /// * `dataset` - A dataset's configuration.
+    /// * `npartitions` - The amount of partitions.
     ///
     /// # Returns
-    /// The dataset's specification.
-    fn adapt_dataset(&self, dataset: &DatasetConfig) -> DatasetSpec {
+    /// A list of resolved dataset specs and a list with partition metadata.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if the dataset cannot be resolved.
+    fn adapt_dataset<'a>(
+        &self,
+        dataset: &'a DatasetConfig,
+        npartitions: usize,
+    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
         let DatasetConfig {
-            ref src,
+            src,
             x_size,
             y_size,
-        } = *dataset;
+        } = dataset;
 
-        match src {
-            DatasetSrc::Local { .. } => unimplemented!("local dataset is not supported"),
-            DatasetSrc::Inline { data } => DatasetSpec {
-                data: data.clone(),
-                x_size,
-                y_size,
-            },
-        }
+        let size = match src {
+            DatasetSrc::Local { path } => fs::metadata(path)?.len(),
+            DatasetSrc::Inline { data } => (data.len() * size_of::<f32>()) as u64,
+        };
+
+        let npartitions = npartitions as u64;
+
+        // row_size and all partition sizes are expressed in bytes so they stay
+        // consistent with the raw byte counts returned by fs::metadata and used
+        // by send_dataset / recv_dataset.
+        let row_size_bytes = (x_size.get() + y_size.get()) as u64 * size_of::<f32>() as u64;
+        let nrows = size / row_size_bytes;
+        let base_rows = nrows / npartitions;
+        let remainder = nrows % npartitions;
+
+        let partition_sizes = (0..npartitions).map(|i| {
+            let rows = if i < remainder {
+                base_rows + 1
+            } else {
+                base_rows
+            };
+
+            rows * row_size_bytes
+        });
+
+        let (specs, partitions) = match src {
+            DatasetSrc::Inline { data } => {
+                self.adapt_inline_dataset(data, partition_sizes, *x_size, *y_size)
+            }
+            DatasetSrc::Local { path } => {
+                self.adapt_local_dataset(path, partition_sizes, *x_size, *y_size)
+            }
+        };
+
+        Ok((specs, partitions))
     }
 
     /// Adapts an `OptimizerConfig` into an `OptimizerSpec`.
@@ -336,7 +446,6 @@ impl Adapter {
     ///
     /// # Returns
     /// The layers' specifications and their parameter generators' specifications.
-    /// The model's specification and it's layers' parameter generators specifications.
     fn adapt_layers(
         &self,
         model: &ModelConfig,

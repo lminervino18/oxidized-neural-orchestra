@@ -28,7 +28,7 @@ impl<O: Optimizer> Clone for WildStore<O> {
 impl<O: Optimizer> WildStore<O> {
     /// Creates a new `WildStore` parameter store.
     ///
-    /// # Arguments
+    /// # Args
     /// * `shard_size` - The maximum amount of parameters per shard.
     /// * `param_gen` - A parameter generator.
     /// * `optimizer_factory` - An `Optimizer` factory closure.
@@ -71,13 +71,13 @@ impl<O: Optimizer> Store for WildStore<O> {
     /// This method diverges from the trait's definition. It accumulates the grad
     /// directly into the parameters of the model in the same call.
     ///
-    /// # Arguments
+    /// # Args
     /// * `grad` - A flat slice containing a new model gradient.
     ///
     /// # Returns
     /// A `SizeMismatchErr` if the length of `grad` and the size of the storage mismatch.
     fn accumulate(&self, grad: &[f32]) -> Result<()> {
-        if self.nparams == grad.len() {
+        if self.nparams != grad.len() {
             return Err(SizeMismatchErr);
         }
 
@@ -96,7 +96,7 @@ impl<O: Optimizer> Store for WildStore<O> {
     fn update_params(&self) {}
 
     fn pull_params(&self, out: &mut [f32]) -> Result<()> {
-        if self.nparams == out.len() {
+        if self.nparams != out.len() {
             return Err(SizeMismatchErr);
         }
 

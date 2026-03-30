@@ -21,7 +21,7 @@ pub(super) use sigmoid::Sigmoid;
 pub trait InplaceReshape<D: Dimension> {
     /// Resizes the inner memory region for `Self` and returns a new instance.
     ///
-    /// # Arguments
+    /// # Args
     /// * `shape` - The shape of the given array.
     ///
     /// # Returns
@@ -58,12 +58,12 @@ impl<T: Clone + Default, D: Dimension> InplaceReshape<D> for Array<T, D> {
         };
 
         let size = dim.size();
-        if size > v.len() {
-            v.resize(size, T::default());
-        }
 
-        // SAFETY: v was previously resized to
-        //         accomodate the new dimension.
+        // Grow if needed, shrink if the new shape is smaller than the
+        // current allocation — from_shape_vec requires v.len() == size exactly.
+        v.resize(size, T::default());
+
+        // SAFETY: v has been resized to exactly dim.size() elements above.
         *self = Array::from_shape_vec(dim, v).unwrap();
     }
 }

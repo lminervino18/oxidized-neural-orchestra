@@ -8,7 +8,7 @@ use crate::storage::{Result, Store, StoreHandle};
 pub trait SynchronizerTemplate: Clone {
     /// Should implement a step in the training process, meaning accumulating this gradient and updating the parameters.
     ///
-    /// # Arguments
+    /// # Args
     /// * `handle` - The parameter handle holding the parameters of the model.
     /// * `grad` - The incoming gradient to accumulate.
     /// * `params` - Where to write the resultant parameters.

@@ -11,12 +11,13 @@
 
 # Environment files
 .env
+.venv
 
 # Added by cargo
 /target
 
 # Docker compose files
-*compose*.yml
+*compose*.yaml
 
 # Local dev scripts and configs
 *.csv
@@ -24,3 +25,32 @@
 # Logs
 *.log
 temp/
+
+# Python build artifacts
+*.egg-info/
+**/__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.pyi
+wheels/
+dist/
+build/
+
+# Compiled Python extensions (maturin output)
+*.so
+
+# Generated compose files
+compose.yml
+
+# orchestui local config (copy from *.example.json to create)
+model.json
+training.json
+
+# Data directory contents (datasets, downloads, generated files)
+data/*
+!data/.gitkeep
+**/data/
+
+# Safetensors model
+*.safetensors

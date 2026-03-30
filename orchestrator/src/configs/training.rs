@@ -1,4 +1,4 @@
-use std::{net::ToSocketAddrs, num::NonZeroUsize, path::PathBuf};
+use std::{num::NonZeroUsize, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -17,7 +17,7 @@ pub enum OptimizerConfig {
 }
 
 /// The dataset's data source.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatasetSrc {
     Local { path: PathBuf },
@@ -25,7 +25,7 @@ pub enum DatasetSrc {
 }
 
 /// The `Dataset` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetConfig {
     pub src: DatasetSrc,
@@ -50,26 +50,27 @@ pub enum StoreConfig {
 }
 
 /// The `Algorithm` configuration.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AlgorithmConfig<A: ToSocketAddrs> {
+pub enum AlgorithmConfig {
     ParameterServer {
-        server_addrs: Vec<A>,
+        server_addrs: Vec<String>,
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
 }
 
 /// The `Training` configuration.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TrainingConfig<A: ToSocketAddrs> {
-    pub worker_addrs: Vec<A>,
-    pub algorithm: AlgorithmConfig<A>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainingConfig {
+    pub worker_addrs: Vec<String>,
+    pub algorithm: AlgorithmConfig,
     pub dataset: DatasetConfig,
     pub optimizer: OptimizerConfig,
     pub loss_fn: LossFnConfig,
     pub batch_size: NonZeroUsize,
     pub max_epochs: NonZeroUsize,
     pub offline_epochs: usize,
+    #[serde(default)]
     pub seed: Option<u64>,
 }

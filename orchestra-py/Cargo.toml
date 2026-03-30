@@ -1,0 +1,13 @@
+[package]
+name = "orchestra-py"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "_orchestra"
+crate-type = ["cdylib"]
+
+[dependencies]
+orchestrator = { path = "../orchestrator" }
+pyo3 = { version = "0.22", features = ["extension-module"] }
+tokio = { version = "1", features = ["full"] }
