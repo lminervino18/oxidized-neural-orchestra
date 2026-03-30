@@ -1,3 +1,4 @@
+mod cross_entropy;
 mod loss_fn;
 mod mse;
 
