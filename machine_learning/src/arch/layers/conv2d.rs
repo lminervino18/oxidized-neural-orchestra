@@ -64,7 +64,9 @@ impl Conv2d {
             strides: [1, 1, stride, stride],
         };
 
-        let mut output = x.conv(&k, conv_mode, PaddingMode::Zeros).unwrap();
+        let mut output = x
+            .conv(k.no_reverse(), conv_mode, PaddingMode::Zeros)
+            .unwrap();
         let b_reshaped = b
             .view()
             .insert_axis(Axis(0))
@@ -99,7 +101,11 @@ impl Conv2d {
 
         let dw_conv = self
             .input
-            .conv(unpadded_dilated, ConvMode::Valid, PaddingMode::Zeros)
+            .conv(
+                unpadded_dilated.no_reverse(),
+                ConvMode::Valid,
+                PaddingMode::Zeros,
+            )
             .unwrap();
 
         dw.assign(&dw_conv);
@@ -107,7 +113,7 @@ impl Conv2d {
 
         let delta = self
             .dilated
-            .conv(w.no_reverse(), ConvMode::Valid, PaddingMode::Zeros)
+            .conv(&w, ConvMode::Valid, PaddingMode::Zeros)
             .unwrap();
 
         self.delta.reshape_inplace(delta.dim());
@@ -220,21 +226,16 @@ impl Conv2d {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
     use super::*;
 
     #[test]
     fn test_conv2d_forward_backward_consistency() {
-        unsafe { env::set_var("RUST_BACKTRACE", "1") };
-
-        let mut layer = Conv2d::new(
-            1,      // 1 filter
-            1,      // 1 input channel
-            (2, 2), // 2x2 kernel
-            2,      // stride
-            0,      // no padding
-        );
+        let filters = 1;
+        let in_channels = 1;
+        let kernel_size = (2, 2);
+        let stride = 2;
+        let padding = 0;
+        let mut layer = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
         let input = Array4::from_elem((1, 1, 4, 4), 1.0);
         let params: Vec<_> = (0..layer.size()).map(|i| i as f32 / 10.0).collect();
@@ -243,20 +244,22 @@ mod tests {
         let output = layer.forward(&params, input.view()).unwrap();
         assert_eq!(output.dim(), (1, 1, 2, 2));
 
-        println!("{output:?}");
-
         let d_out = Array4::from_elem((1, 1, 2, 2), 1.0);
         layer
             .backward(&params, &mut grads, d_out.view().to_owned().view_mut())
             .unwrap();
 
         assert!((grads[4] - 4.0).abs() < 1e-5);
-        println!("Gradient: {:?}", grads);
     }
 
     #[test]
     fn test_conv2d_forward() {
-        unsafe { env::set_var("RUST_BACKTRACE", "1") };
+        let filters = 1;
+        let in_channels = 1;
+        let kernel_size = (2, 2);
+        let stride = 2;
+        let padding = 0;
+        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
         let input: Array4<f32> = array![[[
             [1.0, 2.0, 3.0, 4.0],
@@ -265,15 +268,8 @@ mod tests {
             [13.0, 14.0, 15.0, 16.0]
         ]]];
 
-        let filters = 1;
-        let in_channels = 1;
-        let kernel_size = (2, 2);
-        let stride = 2;
-        let padding = 0;
-        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
-
         let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
-        let expected_output = array![[[[31.0, 51.0], [111.0, 131.0]]]];
+        let expected_output = array![[[[49.0, 69.0], [129.0, 149.0]]]];
 
         let output = conv.forward(&params[..], input.view()).unwrap();
 
@@ -316,7 +312,12 @@ mod tests {
 
     #[test]
     fn test_conv2d_backward() {
-        unsafe { env::set_var("RUST_BACKTRACE", "1") };
+        let filters = 1;
+        let in_channels = 1;
+        let kernel_size = (2, 2);
+        let stride = 2;
+        let padding = 0;
+        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
         let input: Array4<f32> = array![[[
             [1.0, 2.0, 3.0, 4.0],
@@ -325,13 +326,6 @@ mod tests {
             [13.0, 14.0, 15.0, 16.0]
         ]]];
 
-        let filters = 1;
-        let in_channels = 1;
-        let kernel_size = (2, 2);
-        let stride = 2;
-        let padding = 0;
-        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
-
         let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
         let mut grad: [f32; 5] = [0.0, 0.0, 0.0, 0.0, 0.0];
         let _ = conv.forward(&params, input.view()).unwrap();
@@ -339,13 +333,13 @@ mod tests {
         let mut delta_in: Array4<f32> = array![[[[17.0, 18.0], [19.0, 20.0]]]];
 
         let expected_delta_out = array![[[
-            [68.0, 51.0, 72.0, 54.0],
-            [34.0, 17.0, 36.0, 18.0],
-            [76.0, 57.0, 80.0, 60.0],
-            [38.0, 19.0, 40.0, 20.0]
+            [17.0, 34.0, 18.0, 36.0],
+            [51.0, 68.0, 54.0, 72.0],
+            [19.0, 38.0, 20.0, 40.0],
+            [57.0, 76.0, 60.0, 80.0]
         ]]];
 
-        let expected_grad = [426.0, 500.0, 722.0, 796.0, 74.0];
+        let expected_grad = [462.0, 536.0, 758.0, 832.0, 74.0];
 
         let delta_out = conv
             .backward(&params, &mut grad, delta_in.view_mut())
