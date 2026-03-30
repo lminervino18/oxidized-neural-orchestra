@@ -345,10 +345,13 @@ mod tests {
             [38.0, 19.0, 40.0, 20.0]
         ]]];
 
+        let expected_grad = [426.0, 500.0, 722.0, 796.0, 74.0];
+
         let delta_out = conv
             .backward(&params, &mut grad, delta_in.view_mut())
             .unwrap();
 
         assert_eq!(delta_out, expected_delta_out);
+        assert_eq!(grad, expected_grad);
     }
 }
