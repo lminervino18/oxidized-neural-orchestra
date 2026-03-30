@@ -304,7 +304,6 @@ impl Session {
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
             tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
-
             channels.push((rx, tx));
         }
 
