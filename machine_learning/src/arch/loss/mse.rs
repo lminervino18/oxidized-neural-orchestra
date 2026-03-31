@@ -30,7 +30,7 @@ impl LossFn for Mse {
     where
         D: Dimension,
     {
-        self.delta.reshape_inplace(y_pred.raw_dim().into_dyn());
+        self.delta = ArrayD::zeros(y.raw_dim().into_dyn());
 
         let n = y_pred.len() as f32;
         let two_over_n = 2.0 / n;
