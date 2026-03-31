@@ -277,27 +277,25 @@ fn test_ml_xor2_gate_convergence() {
 fn test_ml_xor4_gate_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
-    // crear dataset
     let xor4 = [
         0.0, 0.0, 0.0, 0.0, 0.0, // 1
-        0.0, 0.0, 0.0, 1.0, 1.0, // 1
-        0.0, 0.0, 1.0, 0.0, 1.0, // 1
-        0.0, 0.0, 1.0, 1.0, 0.0, // 1
-        0.0, 1.0, 0.0, 0.0, 1.0, // 1
-        0.0, 1.0, 0.0, 1.0, 0.0, // 1
-        0.0, 1.0, 1.0, 0.0, 0.0, // 1
-        0.0, 1.0, 1.0, 1.0, 1.0, // 1
-        1.0, 0.0, 0.0, 0.0, 1.0, // 1
-        1.0, 0.0, 0.0, 1.0, 0.0, // 1
-        1.0, 0.0, 1.0, 0.0, 0.0, // 1
-        1.0, 0.0, 1.0, 1.0, 1.0, // 1
-        1.0, 1.0, 0.0, 0.0, 0.0, // 1
-        1.0, 1.0, 0.0, 1.0, 1.0, // 1
-        1.0, 1.0, 1.0, 0.0, 1.0, // 1
-        1.0, 1.0, 1.0, 1.0, 0.0, // 1
+        0.0, 0.0, 0.0, 1.0, 1.0, // 2
+        0.0, 0.0, 1.0, 0.0, 1.0, // 3
+        0.0, 0.0, 1.0, 1.0, 0.0, // 4
+        0.0, 1.0, 0.0, 0.0, 1.0, // 5
+        0.0, 1.0, 0.0, 1.0, 0.0, // 6
+        0.0, 1.0, 1.0, 0.0, 0.0, // 7
+        0.0, 1.0, 1.0, 1.0, 1.0, // 8
+        1.0, 0.0, 0.0, 0.0, 1.0, // 9
+        1.0, 0.0, 0.0, 1.0, 0.0, // 10
+        1.0, 0.0, 1.0, 0.0, 0.0, // 11
+        1.0, 0.0, 1.0, 1.0, 1.0, // 12
+        1.0, 1.0, 0.0, 0.0, 0.0, // 13
+        1.0, 1.0, 0.0, 1.0, 1.0, // 14
+        1.0, 1.0, 1.0, 0.0, 1.0, // 15
+        1.0, 1.0, 1.0, 1.0, 0.0, // 16
     ];
 
-    // params
     let mut model = Sequential::new(vec![
         Layer::dense((4, 8)),
         Layer::sigmoid(1.0),
@@ -308,12 +306,11 @@ fn test_ml_xor4_gate_convergence() {
     ]);
     let nparams = model.size();
 
-    // training
     let x_size = NonZeroUsize::new(4).unwrap();
     let y_size = NonZeroUsize::new(1).unwrap();
     let dataset = Dataset::new(DatasetSrc::inmem(xor4.into()), x_size, y_size);
     let offline_epochs = 0;
-    let max_epochs = NonZeroUsize::new(5000).unwrap();
+    let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(16).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
@@ -330,7 +327,7 @@ fn test_ml_xor4_gate_convergence() {
         rng,
     );
 
-    let ordering = [0, 0];
+    let ordering = [0, 0, 0];
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
@@ -340,8 +337,8 @@ fn test_ml_xor4_gate_convergence() {
     let mut param_manager = ParamManager::new(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
-    // pred
-    let data = ArrayView2::from_shape((16, 4), &xor4).unwrap();
+    // 2
+    let data = ArrayView2::from_shape((16, 5), &xor4).unwrap();
     let (x, y) = data.split_at(ndarray::Axis(1), 4);
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
