@@ -32,7 +32,7 @@ fn gen_params_grads(server_sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>
 }
 
 #[test]
-fn test_ml_lineal_convergence() {
+fn test_ml_linear_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
     let linear = [
@@ -79,9 +79,9 @@ fn test_ml_lineal_convergence() {
 
     let data = ArrayView2::from_shape((4, 2), &linear).unwrap();
     let (x, y) = data.split_at(ndarray::Axis(1), 1);
-    let y_pred = model.forward(&mut param_manager, x).unwrap();
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred, y);
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     println!("{y:#?}\n\n\n{y_pred:#?}");
     println!("loss: {loss}");
 }
@@ -140,9 +140,9 @@ fn test_ml_and2_gate_convergence() {
 
     let data = ArrayView2::from_shape((4, 3), &and2).unwrap();
     let (x, y) = data.split_at(ndarray::Axis(1), 2);
-    let y_pred = model.forward(&mut param_manager, x).unwrap();
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred, y);
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     println!("{y:#?}\n\n\n{y_pred:#?}");
     println!("loss: {loss}");
 }
@@ -205,9 +205,9 @@ fn test_ml_and3_gate_convergence() {
 
     let data = ArrayView2::from_shape((8, 4), &and3).unwrap();
     let (x, y) = data.split_at(ndarray::Axis(1), 3);
-    let y_pred = model.forward(&mut param_manager, x).unwrap();
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred, y);
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     println!("{y:#?}\n\n\n{y_pred:#?}");
     println!("loss: {loss}");
 }
@@ -266,70 +266,86 @@ fn test_ml_xor2_gate_convergence() {
 
     let data = ArrayView2::from_shape((4, 3), &xor2).unwrap();
     let (x, y) = data.split_at(ndarray::Axis(1), 2);
-    let y_pred = model.forward(&mut param_manager, x).unwrap();
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred, y);
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     println!("{y:#?}\n\n\n{y_pred:#?}");
     println!("loss: {loss}");
 }
 
-// #[test]
-// fn test_ml_xor4_gate_convergence() {
-//     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+#[test]
+fn test_ml_xor4_gate_convergence() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
-//     // crear dataset
-//     let xor4 = [
-//         0.0, 0.0, 0.0, 0.0, 0.0, // 1
-//         0.0, 0.0, 0.0, 1.0, 1.0, // 1
-//         0.0, 0.0, 1.0, 0.0, 1.0, // 1
-//         0.0, 0.0, 1.0, 1.0, 0.0, // 1
-//         0.0, 1.0, 0.0, 0.0, 1.0, // 1
-//         0.0, 1.0, 0.0, 1.0, 0.0, // 1
-//         0.0, 1.0, 1.0, 0.0, 0.0, // 1
-//         0.0, 1.0, 1.0, 1.0, 1.0, // 1
-//         1.0, 0.0, 0.0, 0.0, 1.0, // 1
-//         1.0, 0.0, 0.0, 1.0, 0.0, // 1
-//         1.0, 0.0, 1.0, 0.0, 0.0, // 1
-//         1.0, 0.0, 1.0, 1.0, 1.0, // 1
-//         1.0, 1.0, 0.0, 0.0, 0.0, // 1
-//         1.0, 1.0, 0.0, 1.0, 1.0, // 1
-//         1.0, 1.0, 1.0, 0.0, 1.0, // 1
-//         1.0, 1.0, 1.0, 1.0, 0.0, // 1
-//     ];
-//     let dataset = Dataset::new(xor4.into(), 4, 1);
+    // crear dataset
+    let xor4 = [
+        0.0, 0.0, 0.0, 0.0, 0.0, // 1
+        0.0, 0.0, 0.0, 1.0, 1.0, // 1
+        0.0, 0.0, 1.0, 0.0, 1.0, // 1
+        0.0, 0.0, 1.0, 1.0, 0.0, // 1
+        0.0, 1.0, 0.0, 0.0, 1.0, // 1
+        0.0, 1.0, 0.0, 1.0, 0.0, // 1
+        0.0, 1.0, 1.0, 0.0, 0.0, // 1
+        0.0, 1.0, 1.0, 1.0, 1.0, // 1
+        1.0, 0.0, 0.0, 0.0, 1.0, // 1
+        1.0, 0.0, 0.0, 1.0, 0.0, // 1
+        1.0, 0.0, 1.0, 0.0, 0.0, // 1
+        1.0, 0.0, 1.0, 1.0, 1.0, // 1
+        1.0, 1.0, 0.0, 0.0, 0.0, // 1
+        1.0, 1.0, 0.0, 1.0, 1.0, // 1
+        1.0, 1.0, 1.0, 0.0, 1.0, // 1
+        1.0, 1.0, 1.0, 1.0, 0.0, // 1
+    ];
 
-//     // params
-//     let mut model = Sequential::new([
-//         Layer::dense((4, 8), ActFn::sigmoid(1.0)),
-//         Layer::dense((8, 3), ActFn::sigmoid(1.0)),
-//         Layer::dense((3, 1), ActFn::sigmoid(1.0)),
-//     ]);
+    // params
+    let mut model = Sequential::new(vec![
+        Layer::dense((4, 8)),
+        Layer::sigmoid(1.0),
+        Layer::dense((8, 3)),
+        Layer::sigmoid(1.0),
+        Layer::dense((3, 1)),
+        Layer::sigmoid(1.0),
+    ]);
+    let nparams = model.size();
 
-//     let mut rng = rand::rng();
-//     let mut params: Vec<f32> = (0..model.size())
-//         .map(|_| (rng.random::<f32>() - 0.5) * 5.)
-//         .collect();
+    // training
+    let x_size = NonZeroUsize::new(4).unwrap();
+    let y_size = NonZeroUsize::new(1).unwrap();
+    let dataset = Dataset::new(DatasetSrc::inmem(xor4.into()), x_size, y_size);
+    let offline_epochs = 0;
+    let max_epochs = NonZeroUsize::new(5000).unwrap();
+    let batch_size = NonZeroUsize::new(16).unwrap();
+    let optimizer = GradientDescent::new(1.0);
+    let mut loss_fn = Mse::new();
+    let rng = rand::rng();
 
-//     // training
-//     let learning_rate = 1.;
-//     let optimizer = GradientDescent::new(learning_rate);
-//     let mut trainer = ModelTrainer::new(
-//         model.clone(),
-//         optimizer,
-//         dataset,
-//         5000 - 1,
-//         NonZeroUsize::new(16).unwrap(),
-//         Mse,
-//         rand::rng(),
-//     );
-//     trainer.train(&mut params);
+    let mut trainer = BackpropTrainer::new(
+        model.clone(),
+        vec![optimizer],
+        dataset,
+        loss_fn.clone(),
+        offline_epochs,
+        max_epochs,
+        batch_size,
+        rng,
+    );
 
-//     // pred
-//     let data = ArrayView2::from_shape((16, 5), &xor4).unwrap();
-//     let (x, y) = data.split_at(ndarray::Axis(1), 4);
-//     let y_pred = model.forward(&params, x);
+    let ordering = [0, 0];
+    let mut params_grads = gen_params_grads(&[nparams]);
+    let servers: Vec<_> = params_grads
+        .iter_mut()
+        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .collect();
 
-//     let loss = Mse.loss(y_pred, y);
-//     println!("{y:#?}\n\n\n{y_pred:#?}");
-//     println!("loss: {loss}");
-// }
+    let mut param_manager = ParamManager::new(servers, &ordering);
+    while !trainer.train(&mut param_manager).unwrap().was_last {}
+
+    // pred
+    let data = ArrayView2::from_shape((16, 4), &xor4).unwrap();
+    let (x, y) = data.split_at(ndarray::Axis(1), 4);
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
+
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    println!("{y:#?}\n\n\n{y_pred:#?}");
+    println!("loss: {loss}");
+}
