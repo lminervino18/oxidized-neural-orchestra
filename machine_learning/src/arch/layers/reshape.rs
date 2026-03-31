@@ -1,10 +1,14 @@
-use ndarray::{ArrayBase, ArrayViewD, ArrayViewMutD, Data, Ix2, Ix4};
+use ndarray::{
+    Array, ArrayBase, ArrayD, ArrayView2, ArrayView4, ArrayViewD, ArrayViewMut2, ArrayViewMut4,
+    ArrayViewMutD, Data, Dimension, Ix2, Ix4, IxDyn,
+};
 
-use crate::{MlErr, Result};
+use crate::{MlErr, Result, arch::InplaceReshape};
 
 /// The metadata of a `Reshape` layer.
 #[derive(Clone)]
 pub struct Reshape2 {
+    buf: ArrayD<f32>,
     channels: usize,
     height: usize,
     width: usize,
@@ -19,7 +23,10 @@ pub enum Reshape {
 
 impl Reshape {
     pub fn two_d_to4d(channels: usize, height: usize, width: usize) -> Self {
+        let zeros = ArrayD::zeros(IxDyn(&[0]));
+
         Self::TwoDTo4D(Reshape2 {
+            buf: zeros,
             channels,
             height,
             width,
@@ -27,7 +34,10 @@ impl Reshape {
     }
 
     pub fn four_d_to2d(channels: usize, height: usize, width: usize) -> Self {
+        let zeros = ArrayD::zeros(IxDyn(&[0]));
+
         Self::FourDTo2D(Reshape2 {
+            buf: zeros,
             channels,
             height,
             width,
@@ -45,17 +55,20 @@ impl Reshape {
     ///
     /// # Returns
     /// The tensor with its dimensionality converted to match the layer's output.
-    pub fn forward<'a>(&self, input: ArrayViewD<'a, f32>) -> Result<ArrayViewD<'a, f32>> {
+    pub fn forward<'a>(&'a mut self, input: ArrayViewD<f32>) -> Result<ArrayViewD<'a, f32>> {
         match self {
             Self::TwoDTo4D(reshape) => {
                 let input = input.into_dimensionality::<Ix2>().unwrap();
+                reshape.two_d_to_4d(input)?;
+                let reshaped = reshape.two_d_to_4d(input.view())?;
 
-                Ok(reshape.two_d_to_4d(input)?.into_dyn())
+                Ok(reshaped.into_dyn())
             }
             Self::FourDTo2D(reshape) => {
                 let input = input.into_dimensionality().unwrap();
+                let reshaped = reshape.four_d_to_2d(input)?;
 
-                Ok(reshape.four_d_to_2d(input)?.into_dyn())
+                Ok(reshaped.into_dyn())
             }
         }
     }
@@ -67,67 +80,120 @@ impl Reshape {
     ///
     /// # Returns
     /// The tensor with its dimensionality converted to match the layer's input.
-    pub fn backward<'a>(&self, delta: ArrayViewMutD<'a, f32>) -> Result<ArrayViewMutD<'a, f32>> {
+    pub fn backward<'a>(&'a mut self, delta: ArrayViewMutD<f32>) -> Result<ArrayViewMutD<'a, f32>> {
         match self {
             Self::TwoDTo4D(reshape) => {
                 let delta = delta.into_dimensionality().unwrap();
+                let reshaped = reshape.four_d_to_2d_mut(delta.view())?;
 
-                Ok(reshape.four_d_to_2d(delta)?.into_dyn())
+                Ok(reshaped.into_dyn())
             }
             Self::FourDTo2D(reshape) => {
-                let delta = delta.into_dimensionality::<Ix2>().unwrap();
+                let delta = delta.into_dimensionality().unwrap();
+                let reshaped = reshape.two_d_to_4d_mut(delta.view())?;
 
-                Ok(reshape.two_d_to_4d(delta)?.into_dyn())
+                Ok(reshaped.into_dyn())
             }
         }
     }
 }
 
-/* FIXME: this two methods are crashing because `into_shape_with_other()` is expecting memory to be
- * contiguous and this is not the case because of how we are handling the vecs for samples and
- * labels in `Dataset`. There are two options, the obvious and more tedious one would be to change
- * `Dataset` so that it has two different allocations for samples and labels, the second one would
- * be to have a buffer in which to copy the data in the `Reshape` layer. The latter sounds bad but
- * because it would be copying the whole dataset, but at least just once-allocated memory...
- ***/
+/* Finally went with the reshape buffer
+ * TODO: avoid code repetition, the problem here is that there doesn't exist a "downgrade" method
+ * for converting an array view mut into just a view, but there's probably still code that is
+ * unecessary dupped
+ * TODO: maybe check the other solution: having the dataset split its sample and label memory
+ * ***/
 impl Reshape2 {
-    fn two_d_to_4d<S>(&self, arr: ArrayBase<S, Ix2>) -> Result<ArrayBase<S, Ix4>>
-    where
-        S: Data<Elem = f32>,
-    {
+    fn two_d_to_4d<'a>(&'a mut self, arr: ArrayView2<f32>) -> Result<ArrayView4<'a, f32>>
+where {
         let Reshape2 {
+            ref mut buf,
             channels,
             height,
             width,
         } = *self;
         let batch_size = arr.dim().0;
 
+        buf.reshape_inplace(arr.raw_dim().into_dyn());
+        buf.assign(&arr);
+
         let arr_size = arr.dim().1;
-        arr.into_shape_with_order((batch_size, channels, height, width))
+        buf.view()
+            .into_shape_with_order((batch_size, channels, height, width))
             .map_err(|_| MlErr::SizeMismatch {
                 what: "2d array to 4d array",
                 got: arr_size,
-                expected: self.height * self.width,
+                expected: height * width,
             })
     }
 
-    fn four_d_to_2d<S>(&self, arr: ArrayBase<S, Ix4>) -> Result<ArrayBase<S, Ix2>>
-    where
-        S: Data<Elem = f32>,
-    {
+    fn four_d_to_2d<'a>(&'a mut self, arr: ArrayView4<f32>) -> Result<ArrayView2<'a, f32>>
+where {
         let Reshape2 {
+            ref mut buf,
             channels,
             height,
             width,
         } = *self;
         let batch_size = arr.dim().0;
 
+        buf.reshape_inplace(arr.raw_dim().into_dyn());
+        buf.assign(&arr);
+
         let arr_size = arr.dim().2 * arr.dim().3;
-        arr.into_shape_with_order((batch_size, channels * height * width))
+        buf.view()
+            .into_shape_with_order((batch_size, channels * height * width))
             .map_err(|_| MlErr::SizeMismatch {
                 what: "4d array to 2d array",
                 got: arr_size,
-                expected: self.height * self.width,
+                expected: height * width,
+            })
+    }
+
+    fn two_d_to_4d_mut<'a>(&'a mut self, arr: ArrayView2<f32>) -> Result<ArrayViewMut4<'a, f32>>
+where {
+        let Reshape2 {
+            ref mut buf,
+            channels,
+            height,
+            width,
+        } = *self;
+        let batch_size = arr.dim().0;
+
+        buf.reshape_inplace(arr.raw_dim().into_dyn());
+        buf.assign(&arr);
+
+        let arr_size = arr.dim().1;
+        buf.view_mut()
+            .into_shape_with_order((batch_size, channels, height, width))
+            .map_err(|_| MlErr::SizeMismatch {
+                what: "2d array to 4d array",
+                got: arr_size,
+                expected: height * width,
+            })
+    }
+
+    fn four_d_to_2d_mut<'a>(&'a mut self, arr: ArrayView4<f32>) -> Result<ArrayViewMut2<'a, f32>>
+where {
+        let Reshape2 {
+            ref mut buf,
+            channels,
+            height,
+            width,
+        } = *self;
+        let batch_size = arr.dim().0;
+
+        buf.reshape_inplace(arr.raw_dim().into_dyn());
+        buf.assign(&arr);
+
+        let arr_size = arr.dim().2 * arr.dim().3;
+        buf.view_mut()
+            .into_shape_with_order((batch_size, channels * height * width))
+            .map_err(|_| MlErr::SizeMismatch {
+                what: "4d array to 2d array",
+                got: arr_size,
+                expected: height * width,
             })
     }
 }

@@ -411,8 +411,7 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let mut param_manager = ParamManager::new(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
-    // 2
-    let data = ArrayView2::from_shape((4, 9), &symbols).unwrap();
+    let data = ArrayView2::from_shape((4, 13), &symbols).unwrap();
     let (x, y) = data.split_at(ndarray::Axis(1), 9);
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
