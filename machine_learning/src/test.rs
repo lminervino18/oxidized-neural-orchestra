@@ -346,3 +346,77 @@ fn test_ml_xor4_gate_convergence() {
     println!("{y:#?}\n\n\n{y_pred:#?}");
     println!("loss: {loss}");
 }
+
+#[test]
+fn test_ml_3by3_symbols_convergence_with_convolutional() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let symbols = [
+        0.0, 1.0, 0.0, //
+        1.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 0.0, 0.0, // plus sign
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, // dot
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, //
+        0.0, 0.0, 1.0, 0.0, // cross
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, //
+        0.0, 0.0, 0.0, 1.0,
+        // box
+    ];
+
+    let mut model = Sequential::new(vec![
+        Layer::two_d_to4d(1, 3, 3),
+        Layer::conv2d(1, 1, (2, 2), 1, 0),
+        Layer::four_d_to2d(1, 2, 2),
+        Layer::dense((4, 4)),
+        Layer::sigmoid(1.0),
+    ]);
+    let nparams = model.size();
+
+    let x_size = NonZeroUsize::new(9).unwrap();
+    let y_size = NonZeroUsize::new(4).unwrap();
+    let dataset = Dataset::new(DatasetSrc::inmem(symbols.into()), x_size, y_size);
+    let offline_epochs = 0;
+    let max_epochs = NonZeroUsize::new(1000).unwrap();
+    let batch_size = NonZeroUsize::new(4).unwrap();
+    let optimizer = GradientDescent::new(1.0);
+    let mut loss_fn = Mse::new();
+    let rng = rand::rng();
+
+    let mut trainer = BackpropTrainer::new(
+        model.clone(),
+        vec![optimizer],
+        dataset,
+        loss_fn.clone(),
+        offline_epochs,
+        max_epochs,
+        batch_size,
+        rng,
+    );
+
+    let ordering = [0, 0];
+    let mut params_grads = gen_params_grads(&[nparams]);
+    let servers: Vec<_> = params_grads
+        .iter_mut()
+        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .collect();
+
+    let mut param_manager = ParamManager::new(servers, &ordering);
+    while !trainer.train(&mut param_manager).unwrap().was_last {}
+
+    // 2
+    let data = ArrayView2::from_shape((4, 9), &symbols).unwrap();
+    let (x, y) = data.split_at(ndarray::Axis(1), 9);
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
+
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    println!("{y:#?}\n\n\n{y_pred:#?}");
+    println!("loss: {loss}");
+}
