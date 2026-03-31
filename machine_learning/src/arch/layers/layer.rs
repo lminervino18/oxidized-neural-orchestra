@@ -1,7 +1,7 @@
 use ndarray::{Data, RawData, prelude::*};
 
 use super::{Conv2d, Dense, Sigmoid};
-use crate::{MlErr, Result};
+use crate::{MlErr, Result, arch::layers::Reshape};
 
 /// An indirection layer to prevent leaking the
 /// inner enum representation to the upper mods.
@@ -10,6 +10,7 @@ enum Inner {
     Conv2d(Conv2d),
     Dense(Dense),
     Sigmoid(Sigmoid),
+    Reshape(Reshape),
 }
 use Inner::*;
 
@@ -67,6 +68,34 @@ impl Layer {
         )))
     }
 
+    /// Creates a new `Layer::Reshape` layer that reshapes 2D tensors into 4D ones.
+    ///
+    /// # Arguments
+    /// * `channels` - The amount of input channels.
+    /// * `height` - The height and width of the matrices.
+    /// * `width` - The width and width of the matrices.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
+    pub fn two_d_to4d(channels: usize, height: usize, width: usize) -> Self {
+        Self(Inner::Reshape(Reshape::two_d_to4d(channels, height, width)))
+    }
+
+    /// Creates a new `Layer::Reshape` layer that reshapes 4D tensors into 2D ones.
+    ///
+    /// # Arguments
+    /// * `channels` - The amount of input channels.
+    /// * `height` - The height and width of the matrices.
+    /// * `width` - The width and width of the matrices.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
+    pub fn four_d_to2d(channels: usize, height: usize, width: usize) -> Self {
+        Self(Inner::Reshape(Reshape::four_d_to2d(
+            channels, height, width,
+        )))
+    }
+
     /// The size of the layer.
     ///
     /// # Returns
@@ -76,6 +105,7 @@ impl Layer {
             Dense(layer) => layer.size(),
             Sigmoid(layer) => layer.size(),
             Conv2d(layer) => layer.size(),
+            Reshape(layer) => layer.size(),
         }
     }
 
@@ -90,12 +120,13 @@ impl Layer {
     pub fn forward<'a>(
         &'a mut self,
         params: &[f32],
-        x: ArrayViewD<f32>,
+        x: ArrayViewD<'a, f32>,
     ) -> Result<ArrayViewD<'a, f32>> {
         let y = match &mut self.0 {
             Conv2d(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
             Dense(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
             Sigmoid(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
+            Reshape(layer) => layer.forward(x)?,
         };
 
         Ok(y)
@@ -121,6 +152,7 @@ impl Layer {
             Conv2d(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
             Dense(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
             Sigmoid(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
+            Reshape(layer) => layer.backward(try_cast_dim(d)?)?,
         };
 
         Ok(q)
