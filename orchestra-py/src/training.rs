@@ -2,8 +2,8 @@ use std::num::NonZeroUsize;
 
 use orchestrator::{
     configs::{
-        AlgorithmConfig, DatasetConfig, DatasetSrc, LossFnConfig, OptimizerConfig, StoreConfig,
-        SynchronizerConfig, TrainingConfig,
+        AlgorithmConfig, DatasetConfig, DatasetSrc, LossFnConfig, OptimizerConfig,
+        SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
     },
     train,
 };
@@ -142,6 +142,7 @@ pub fn parameter_server(
                 synchronizer,
                 store: store_cfg,
             },
+            serializer: SerializerConfig::Base,
             dataset: dataset_config,
             optimizer: OptimizerConfig::GradientDescent { lr: optimizer.lr },
             loss_fn: loss_fn_cfg,
