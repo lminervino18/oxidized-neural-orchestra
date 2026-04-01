@@ -53,6 +53,7 @@ pub struct DatasetSpec {
 #[serde(rename_all = "snake_case")]
 pub enum LossFnSpec {
     Mse,
+    CrossEntropy,
 }
 
 /// The specification for the `Trainer` struct.
