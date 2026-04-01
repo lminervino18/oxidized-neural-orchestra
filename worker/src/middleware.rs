@@ -114,7 +114,7 @@ where
                 Some(t) => {
                     residual
                         .iter_mut()
-                        .filter(|g| **g >= t)
+                        .filter(|g| g.abs() >= t)
                         .for_each(|g| *g = 0.0);
                 }
             }
