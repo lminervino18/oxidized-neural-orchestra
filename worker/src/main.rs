@@ -3,7 +3,7 @@ use std::{env, io};
 use comms::{
     msg::{Command, Msg},
     recv_dataset::{get_dataset_cursor, recv_dataset},
-    specs::worker::AlgorithmSpec,
+    specs::worker::{AlgorithmSpec, SerializerSpec},
 };
 use log::{info, warn};
 use tokio::{
@@ -51,6 +51,7 @@ async fn main() -> io::Result<()> {
         server_ordering,
     } = spec.algorithm.clone();
 
+    let serializer = spec.serializer.clone();
     let worker_builder = WorkerBuilder::new();
     let worker = worker_builder.build(spec, &server_sizes, dataset_raw);
     let mut middleware = Middleware::new(server_ordering);
@@ -58,7 +59,12 @@ async fn main() -> io::Result<()> {
     for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
-        let (rx, tx) = comms::channel(rx, tx);
+
+        let (rx, tx) = match serializer {
+            SerializerSpec::Base => comms::channel(rx, tx),
+            SerializerSpec::SparseCapable { r, seed } => comms::sparse_tx_channel(rx, tx, r, seed),
+        };
+
         middleware.spawn(rx, tx, size);
     }
 

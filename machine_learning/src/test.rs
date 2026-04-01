@@ -69,7 +69,7 @@ fn test_ml_lineal_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::new(servers, &ordering);
@@ -130,7 +130,7 @@ fn test_ml_and2_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::new(servers, &ordering);
@@ -195,7 +195,7 @@ fn test_ml_and3_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::new(servers, &ordering);
@@ -256,7 +256,7 @@ fn test_ml_xor2_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::new(servers, &ordering);
