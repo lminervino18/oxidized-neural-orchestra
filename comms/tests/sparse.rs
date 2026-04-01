@@ -1,5 +1,5 @@
 use comms::{
-    Deserializer, Float01, Serializer,
+    Float01,
     msg::{Msg, Payload},
 };
 use tokio::io;
@@ -12,13 +12,13 @@ async fn test_sparse_gradient() -> io::Result<()> {
     let r = Float01::new(0.4).unwrap();
     let seed = Some(0);
 
+    // Server recibe sparse del worker
     let (rx, tx) = io::split(sv_stream);
-    let (mut sv_rx, mut sv_tx) = comms::channel(rx, tx);
+    let (mut sv_rx, mut sv_tx) = comms::sparse_rx_channel(rx, tx, GRAD_SIZE);
 
-    let deserializer = Deserializer::new_with_size(GRAD_SIZE);
-    let serializer = Serializer::new_sparse_capable(r, seed);
+    // Worker envía sparse al server
     let (rx, tx) = io::split(wk_stream);
-    let (mut wk_rx, mut wk_tx) = comms::sparse_channel(rx, tx, deserializer, serializer);
+    let (mut wk_rx, mut wk_tx) = comms::sparse_tx_channel(rx, tx, r, seed);
 
     // Server sends parameters to worker
     let mut params: Vec<_> = (0..GRAD_SIZE).map(|i| i as f32).collect();
