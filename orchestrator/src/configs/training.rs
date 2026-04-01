@@ -9,6 +9,7 @@ use comms::Float01;
 #[serde(rename_all = "snake_case")]
 pub enum LossFnConfig {
     Mse,
+    CrossEntropy,
 }
 
 /// The `Optimizer` configuration.

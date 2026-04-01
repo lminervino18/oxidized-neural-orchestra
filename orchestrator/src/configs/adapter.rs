@@ -307,6 +307,7 @@ impl Adapter {
     fn adapt_loss_fn(&self, loss_fn: LossFnConfig) -> LossFnSpec {
         match loss_fn {
             LossFnConfig::Mse => LossFnSpec::Mse,
+            LossFnConfig::CrossEntropy => LossFnSpec::CrossEntropy,
         }
     }
 

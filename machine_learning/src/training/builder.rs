@@ -8,7 +8,7 @@ use crate::{
     arch::{
         Sequential,
         layers::Layer,
-        loss::{LossFn, Mse},
+        loss::{CrossEntropy, LossFn, Mse},
     },
     dataset::Dataset,
     optimization::{GradientDescent, Optimizer},
@@ -155,6 +155,10 @@ impl TrainerBuilder {
         match spec.loss_fn {
             LossFnSpec::Mse => {
                 let loss_fn = Mse::new();
+                self.terminate_build(spec, optimizers, layers, loss_fn, dataset)
+            }
+            LossFnSpec::CrossEntropy => {
+                let loss_fn = CrossEntropy::new();
                 self.terminate_build(spec, optimizers, layers, loss_fn, dataset)
             }
         }

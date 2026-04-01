@@ -2,8 +2,8 @@ use std::num::NonZeroUsize;
 
 use orchestrator::{
     configs::{
-        AlgorithmConfig, DatasetConfig, DatasetSrc, LossFnConfig, OptimizerConfig, StoreConfig,
-        SynchronizerConfig, TrainingConfig,
+        AlgorithmConfig, DatasetConfig, DatasetSrc, LossFnConfig, OptimizerConfig,
+        SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
     },
     train,
 };
@@ -12,6 +12,7 @@ use pyo3::prelude::*;
 use crate::{
     arch::Sequential,
     datasets::{InlineDataset, LocalDataset},
+    loss_fns::{CrossEntropy, Mse},
     optimizers::GradientDescent,
     session::Session,
     store::{BlockingStore, WildStore},
@@ -33,6 +34,7 @@ pub struct PyTrainingConfig {
 /// * `server_addrs` - List of parameter server addresses.
 /// * `dataset` - The dataset to train on. Accepts either an `InlineDataset` or a `LocalDataset`.
 /// * `optimizer` - The optimizer to use.
+/// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`.
 /// * `sync` - Synchronization strategy (`BarrierSync()` or `NonBlockingSync()`).
 /// * `store` - Parameter store strategy (`BlockingStore()` or `WildStore()`).
 /// * `max_epochs` - Maximum number of training epochs.
@@ -43,12 +45,14 @@ pub struct PyTrainingConfig {
 /// # Errors
 /// Raises a `ValueError` if required fields are invalid.
 /// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
+/// Raises a `TypeError` if `loss_fn` is not `Mse()` or `CrossEntropy()`.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
     server_addrs,
     dataset,
     optimizer,
+    loss_fn,
     sync,
     store,
     max_epochs,
@@ -61,6 +65,7 @@ pub fn parameter_server(
     server_addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,
     optimizer: PyRef<GradientDescent>,
+    loss_fn: &Bound<'_, PyAny>,
     sync: &Bound<'_, PyAny>,
     store: &Bound<'_, PyAny>,
     max_epochs: usize,
@@ -95,7 +100,16 @@ pub fn parameter_server(
         ));
     };
 
-    // Resolve dataset config from either InlineDataset or LocalDataset.
+    let loss_fn_cfg = if loss_fn.is_instance_of::<Mse>() {
+        LossFnConfig::Mse
+    } else if loss_fn.is_instance_of::<CrossEntropy>() {
+        LossFnConfig::CrossEntropy
+    } else {
+        return Err(pyo3::exceptions::PyTypeError::new_err(
+            "loss_fn must be Mse() or CrossEntropy()",
+        ));
+    };
+
     let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
         DatasetConfig {
             src: DatasetSrc::Inline {
@@ -128,9 +142,10 @@ pub fn parameter_server(
                 synchronizer,
                 store: store_cfg,
             },
+            serializer: SerializerConfig::Base,
             dataset: dataset_config,
             optimizer: OptimizerConfig::GradientDescent { lr: optimizer.lr },
-            loss_fn: LossFnConfig::Mse,
+            loss_fn: loss_fn_cfg,
             batch_size: batch_size_nz,
             max_epochs: max_epochs_nz,
             offline_epochs,
