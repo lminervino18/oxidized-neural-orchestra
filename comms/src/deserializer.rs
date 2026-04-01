@@ -1,7 +1,9 @@
 use std::io;
 
+use half::f16;
+
 use super::{
-    msg::{HEADER_SIZE, Header, Msg, Payload},
+    msg::{Header, Msg, Payload, HEADER_SIZE},
     sparse,
 };
 
@@ -54,21 +56,31 @@ impl Deserializer {
             0 => Ok(Msg::Err(serde_json::from_slice(rest)?)),
             1 => Ok(Msg::Control(serde_json::from_slice(rest)?)),
             2 => {
+                // Sparse gradient: decompress f16 → f32
                 self.nums.fill(0.0);
                 sparse::grad_lift_into(&mut self.nums, rest).map_err(io::Error::other)?;
                 Ok(Msg::Data(Payload::Grad(&mut self.nums)))
             }
-            3..6 => {
+            3 => {
+                // Dense gradient: decode f16 → f32
+                let f16_slice: &[f16] = bytemuck::cast_slice(rest);
+                self.nums.resize(f16_slice.len(), 0.0);
+
+                for (i, &f16_val) in f16_slice.iter().enumerate() {
+                    self.nums[i] = f16_val.to_f32();
+                }
+
+                Ok(Msg::Data(Payload::Grad(&mut self.nums)))
+            }
+            4 => {
+                // Params: raw f32
                 let nums = bytemuck::cast_slice_mut(rest);
-
-                let payload = match kind {
-                    3 => Payload::Grad(nums),
-                    4 => Payload::Params(nums),
-                    5 => Payload::Datachunk(nums),
-                    _ => unreachable!(),
-                };
-
-                Ok(Msg::Data(payload))
+                Ok(Msg::Data(Payload::Params(nums)))
+            }
+            5 => {
+                // Datachunk: raw f32
+                let nums = bytemuck::cast_slice_mut(rest);
+                Ok(Msg::Data(Payload::Datachunk(nums)))
             }
             byte => Msg::invalid_kind_byte(byte),
         }

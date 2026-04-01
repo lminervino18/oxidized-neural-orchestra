@@ -1,4 +1,5 @@
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use half::f16;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use super::{
     msg::{Header, Msg, Payload},
@@ -121,17 +122,30 @@ impl<R: Rng> Inner<R> {
                 serde_json::to_writer(out, &cmd).unwrap();
                 None
             }
-            Msg::Data(payload) => {
-                let (kind, data): (_, &[_]) = match payload {
-                    Payload::Grad(grad) => (3, grad),
-                    Payload::Params(params) => (4, params),
-                    Payload::Datachunk(chunk) => (5, chunk),
-                };
+            Msg::Data(payload) => match payload {
+                Payload::Grad(grad) => {
+                    // Encode dense gradients as f16 to halve network traffic.
+                    let header = (3 as Header).to_be_bytes();
+                    out.extend_from_slice(&header);
 
-                let header = (kind as Header).to_be_bytes();
-                out.extend_from_slice(&header);
-                Some(bytemuck::cast_slice(data))
-            }
+                    for &g in grad.iter() {
+                        let g16 = f16::from_f32(g);
+                        out.extend_from_slice(&g16.to_le_bytes());
+                    }
+
+                    None
+                }
+                Payload::Params(params) => {
+                    let header = (4 as Header).to_be_bytes();
+                    out.extend_from_slice(&header);
+                    Some(bytemuck::cast_slice(params))
+                }
+                Payload::Datachunk(chunk) => {
+                    let header = (5 as Header).to_be_bytes();
+                    out.extend_from_slice(&header);
+                    Some(bytemuck::cast_slice(chunk))
+                }
+            },
         }
     }
 
@@ -165,14 +179,22 @@ impl<R: Rng> Inner<R> {
         ser_buf.clear();
         sparse::grad_drop_into(ser_buf, grad, threshold);
 
-        if ser_buf.len() < grad.len() * size_of::<f32>() {
+        if ser_buf.len() < grad.len() * size_of::<f16>() {
+            // Sparse is smaller than dense f16 → send sparse
             let header = (2 as Header).to_be_bytes();
             out.extend_from_slice(&header);
             (Some(ser_buf), Some(threshold))
         } else {
+            // Dense f16 is smaller or equal → send dense as f16
             let header = (3 as Header).to_be_bytes();
             out.extend_from_slice(&header);
-            (Some(bytemuck::cast_slice(grad)), None)
+
+            for &g in grad.iter() {
+                let g16 = f16::from_f32(g);
+                out.extend_from_slice(&g16.to_le_bytes());
+            }
+
+            (None, None)
         }
     }
 }
