@@ -2,6 +2,7 @@ mod activations;
 mod arch;
 mod datasets;
 mod initialization;
+mod loss_fns;
 mod optimizers;
 mod session;
 mod store;
@@ -36,6 +37,10 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // optimizers
     m.add_class::<optimizers::GradientDescent>()?;
+
+    // loss functions
+    m.add_class::<loss_fns::Mse>()?;
+    m.add_class::<loss_fns::CrossEntropy>()?;
 
     // sync
     m.add_class::<sync::BarrierSync>()?;
