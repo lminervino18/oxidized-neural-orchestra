@@ -5,10 +5,10 @@ use std::{
 use comms::specs::{
     machine_learning::{ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec},
     server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
-    worker::{AlgorithmSpec, WorkerSpec},
+    worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 
-use super::{ModelConfig, TrainingConfig, partition::Partition};
+use super::{ModelConfig, SerializerConfig, TrainingConfig, partition::Partition};
 use crate::{
     configs::{
         ActFnConfig, AlgorithmConfig, DatasetConfig, DatasetSrc, LayerConfig, LossFnConfig,
@@ -99,6 +99,7 @@ impl Adapter {
             server_sizes,
             server_ordering,
         };
+        let serializer_spec = self.adapt_serializer(training);
 
         let worker_specs = training
             .worker_addrs
@@ -116,6 +117,7 @@ impl Adapter {
                     trainer: trainer_spec.clone(),
                     dataset,
                     algorithm: algorithm_spec.clone(),
+                    serializer: serializer_spec.clone(),
                 };
 
                 Ok((addr.clone(), worker_spec))
@@ -123,6 +125,23 @@ impl Adapter {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(worker_specs)
+    }
+
+    /// Adapts the training's configurations into a `SerializerSpec`.
+    ///
+    /// # Args
+    /// * `training` - The training's configuration.
+    ///
+    /// # Returns
+    /// The serializer's specification.
+    fn adapt_serializer(&self, training: &TrainingConfig) -> SerializerSpec {
+        match training.serializer {
+            SerializerConfig::Base => SerializerSpec::Base,
+            SerializerConfig::SparseCapable { r } => SerializerSpec::SparseCapable {
+                r,
+                seed: training.seed,
+            },
+        }
     }
 
     /// Adapts both model's and training's configurations into a `ServerSpec`.

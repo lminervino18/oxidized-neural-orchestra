@@ -2,53 +2,64 @@ use std::io;
 
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-use crate::{LEN_TYPE_SIZE, LenType, Serialize};
+use super::{LEN_TYPE_SIZE, LenType, Serializer, msg::Msg};
 
 /// The sending end handle of the communication.
 pub struct OnoSender<W: AsyncWrite + Unpin> {
     tx: W,
-    buf: Vec<u8>,
+    tx_buf: Vec<u8>,
+    serializer: Serializer,
 }
 
 impl<W: AsyncWrite + Unpin> OnoSender<W> {
-    /// Creates a new `OnoSender` instance.
+    /// Creates a new `OnoSender`.
     ///
     /// # Args
     /// * `tx` - The underlying writer.
-    pub(super) fn new(tx: W) -> Self {
+    /// * `serializer` - The message serializer to use.
+    ///
+    /// # Returns
+    /// A new `OnoSender` instance.
+    pub(super) fn new(tx: W, serializer: Serializer) -> Self {
         Self {
             tx,
-            buf: Vec::new(),
+            tx_buf: Vec::new(),
+            serializer,
         }
     }
 
     /// Sends `msg` through the inner sender.
     ///
     /// # Args
-    /// * `msg` - A serializable object.
+    /// * `msg` - The message to serialize and send.
     ///
     /// # Returns
     /// A result object that returns `io::Error` on failure.
-    pub async fn send<'a, T: Serialize<'a>>(&mut self, msg: &'a T) -> io::Result<()> {
-        let Self { buf, tx } = self;
+    pub async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<Option<f32>> {
+        let Self {
+            tx,
+            tx_buf,
+            serializer,
+        } = self;
 
-        buf.clear();
-        buf.resize(LEN_TYPE_SIZE, 0);
+        tx_buf.clear();
+        tx_buf.resize(LEN_TYPE_SIZE, 0);
 
-        let zero_copy_data = msg.serialize(buf);
-        let len = buf.len() - LEN_TYPE_SIZE + zero_copy_data.map(<[_]>::len).unwrap_or_default();
+        let (zero_copy_data, threshold) = serializer.serialize(&msg, tx_buf);
+        let len = tx_buf.len() - LEN_TYPE_SIZE + zero_copy_data.map(<[_]>::len).unwrap_or_default();
         let header = (len as LenType).to_be_bytes();
 
-        buf[..header.len()].copy_from_slice(&header);
+        tx_buf[..header.len()].copy_from_slice(&header);
 
-        if !buf.is_empty() {
-            tx.write_all(buf).await?;
+        if !tx_buf.is_empty() {
+            tx.write_all(tx_buf).await?;
         }
 
         if let Some(data) = zero_copy_data {
             tx.write_all(data).await?;
         }
 
-        tx.flush().await
+        tx.flush().await?;
+        Ok(threshold)
     }
 }
