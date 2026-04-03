@@ -197,3 +197,85 @@ where {
             })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::array;
+
+    #[test]
+    fn test_reshape_two_d_to4d_forward() {
+        let channels = 1;
+        let height = 2;
+        let width = 2;
+        let mut reshape = Reshape::two_d_to4d(channels, height, width);
+
+        let input = array![[1., 2., 3., 4.], [5., 6., 7., 8.], [9., 10., 11., 12.]];
+        let expected = array![
+            [[[1.0, 2.0], [3.0, 4.0]]],
+            [[[5.0, 6.0], [7.0, 8.0]]],
+            [[[9.0, 10.0], [11.0, 12.0]]]
+        ]
+        .into_dyn();
+        let output = reshape.forward(input.into_dyn().view()).unwrap();
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_reshape_two_d_to4d_backward() {
+        let channels = 1;
+        let height = 2;
+        let width = 2;
+        let mut reshape = Reshape::two_d_to4d(channels, height, width);
+
+        let input = array![
+            [[[1.0, 2.0], [3.0, 4.0]]],
+            [[[5.0, 6.0], [7.0, 8.0]]],
+            [[[9.0, 10.0], [11.0, 12.0]]]
+        ]
+        .into_dyn();
+        let expected = array![[1., 2., 3., 4.], [5., 6., 7., 8.], [9., 10., 11., 12.]].into_dyn();
+        let output = reshape.backward(input.into_dyn().view_mut()).unwrap();
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_reshape_four_d_to_2d_forward() {
+        let channels = 1;
+        let height = 2;
+        let width = 2;
+        let mut reshape = Reshape::four_d_to2d(channels, height, width);
+
+        let input = array![
+            [[[1.0, 2.0], [3.0, 4.0]]],
+            [[[5.0, 6.0], [7.0, 8.0]]],
+            [[[9.0, 10.0], [11.0, 12.0]]]
+        ]
+        .into_dyn();
+        let expected = array![[1., 2., 3., 4.], [5., 6., 7., 8.], [9., 10., 11., 12.]].into_dyn();
+        let output = reshape.forward(input.into_dyn().view()).unwrap();
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_reshape_four_d_to2d_backward() {
+        let channels = 1;
+        let height = 2;
+        let width = 2;
+        let mut reshape = Reshape::four_d_to2d(channels, height, width);
+
+        let input = array![[1., 2., 3., 4.], [5., 6., 7., 8.], [9., 10., 11., 12.]];
+        let expected = array![
+            [[[1.0, 2.0], [3.0, 4.0]]],
+            [[[5.0, 6.0], [7.0, 8.0]]],
+            [[[9.0, 10.0], [11.0, 12.0]]]
+        ]
+        .into_dyn();
+        let output = reshape.backward(input.into_dyn().view_mut()).unwrap();
+
+        assert_eq!(output, expected);
+    }
+}
