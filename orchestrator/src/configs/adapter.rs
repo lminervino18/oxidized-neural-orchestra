@@ -2,10 +2,15 @@ use std::{
     cmp::Reverse, collections::BinaryHeap, fs, net::ToSocketAddrs, num::NonZeroUsize, path::PathBuf,
 };
 
-use comms::specs::{
-    machine_learning::{ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec},
-    server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
-    worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
+use comms::{
+    Float01,
+    specs::{
+        machine_learning::{
+            ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec,
+        },
+        server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
+        worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
+    },
 };
 
 use super::{ModelConfig, SerializerConfig, TrainingConfig, partition::Partition};
@@ -99,7 +104,7 @@ impl Adapter {
             server_sizes,
             server_ordering,
         };
-        let serializer_spec = self.adapt_serializer(training);
+        let serializer_spec = self.adapt_serializer(training)?;
 
         let worker_specs = training
             .worker_addrs
@@ -134,13 +139,24 @@ impl Adapter {
     ///
     /// # Returns
     /// The serializer's specification.
-    fn adapt_serializer(&self, training: &TrainingConfig) -> SerializerSpec {
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if the sparse compression ratio is invalid.
+    fn adapt_serializer(&self, training: &TrainingConfig) -> Result<SerializerSpec> {
         match training.serializer {
-            SerializerConfig::Base => SerializerSpec::Base,
-            SerializerConfig::SparseCapable { r } => SerializerSpec::SparseCapable {
-                r,
-                seed: training.seed,
-            },
+            SerializerConfig::Base => Ok(SerializerSpec::Base),
+            SerializerConfig::SparseCapable { r } => {
+                let r = Float01::new(r).ok_or_else(|| {
+                    OrchErr::InvalidConfig(
+                        "serializer.sparse_capable.r must be between 0.0 and 1.0".into(),
+                    )
+                })?;
+
+                Ok(SerializerSpec::SparseCapable {
+                    r,
+                    seed: training.seed,
+                })
+            }
         }
     }
 
@@ -413,9 +429,6 @@ impl Adapter {
 
         let npartitions = npartitions as u64;
 
-        // row_size and all partition sizes are expressed in bytes so they stay
-        // consistent with the raw byte counts returned by fs::metadata and used
-        // by send_dataset / recv_dataset.
         let row_size_bytes = (x_size.get() + y_size.get()) as u64 * size_of::<f32>() as u64;
         let nrows = size / row_size_bytes;
         let base_rows = nrows / npartitions;
