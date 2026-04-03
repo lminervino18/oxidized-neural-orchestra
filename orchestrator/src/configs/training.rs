@@ -71,11 +71,18 @@ pub enum SerializerConfig {
     SparseCapable { r: Float01 },
 }
 
+impl Default for SerializerConfig {
+    fn default() -> Self {
+        Self::Base
+    }
+}
+
 /// The `Training` configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingConfig {
     pub worker_addrs: Vec<String>,
     pub algorithm: AlgorithmConfig,
+    #[serde(default)]
     pub serializer: SerializerConfig,
     pub dataset: DatasetConfig,
     pub optimizer: OptimizerConfig,
