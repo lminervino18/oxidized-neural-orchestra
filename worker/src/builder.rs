@@ -22,9 +22,15 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    pub fn build(&self, spec: WorkerSpec, server_sizes: &[usize], dataset_raw: Vec<f32>) -> Worker {
+    pub fn build(
+        &self,
+        spec: WorkerSpec,
+        server_sizes: &[usize],
+        samples_raw: Vec<f32>,
+        labels_raw: Vec<f32>,
+    ) -> Worker {
         let dataset_builder = DatasetBuilder::new();
-        let dataset = dataset_builder.build_inmem(spec.dataset, dataset_raw);
+        let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
         let trainer_builder = TrainerBuilder::new();
         let trainer = trainer_builder.build(spec.trainer, server_sizes, dataset);
         Worker::new(trainer)

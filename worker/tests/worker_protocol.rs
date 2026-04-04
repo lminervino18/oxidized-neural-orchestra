@@ -102,13 +102,14 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
 
     let model = Sequential::new(vec![Layer::dense((1, 1))]);
     let x_size = NonZeroUsize::new(1).unwrap();
+    let y_size = NonZeroUsize::new(1).unwrap();
     let trainer = BackpropTrainer::new(
         model,
         vec![GradientDescent::new(0.1)],
         Dataset::new(
-            DatasetSrc::inmem(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0]),
+            DatasetSrc::inmem(vec![0., 1., 2., 3.], vec![1., 2., 3., 4.]),
             x_size,
-            x_size,
+            y_size,
         ),
         Mse::new(),
         0,
