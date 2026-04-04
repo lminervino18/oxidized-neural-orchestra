@@ -21,8 +21,13 @@ impl DatasetBuilder {
     ///
     /// # Returns
     /// A fully initialized `Dataset` instance.
-    pub fn build_inmem(&self, spec: DatasetSpec, dataset_raw: Vec<f32>) -> Dataset {
-        let dataset_src = DatasetSrc::inmem(dataset_raw);
+    pub fn build_inmem(
+        &self,
+        spec: DatasetSpec,
+        samples_raw: Vec<f32>,
+        labels_raw: Vec<f32>,
+    ) -> Dataset {
+        let dataset_src = DatasetSrc::inmem(samples_raw, labels_raw);
         Dataset::new(dataset_src, spec.x_size, spec.y_size)
     }
 }
