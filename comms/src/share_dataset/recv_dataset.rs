@@ -26,17 +26,38 @@ pub fn get_dataset_cursor(dataset_raw: &mut [f32]) -> Cursor<&mut [u8]> {
 ///
 /// # Errors
 /// Returns an `io::Error` if the connection or writting to the storage fail.
-pub async fn recv_dataset<W, R>(storage: &mut W, size: u64, rx: &mut OnoReceiver<R>) -> Result<()>
+pub async fn recv_dataset<W, R>(
+    x_storage: &mut W,
+    y_storage: &mut W,
+    x_size: usize,
+    y_size: usize,
+    rx: &mut OnoReceiver<R>,
+) -> Result<()>
 where
     W: AsyncWrite + Unpin,
     R: AsyncRead + Unpin,
 {
     // TODO: ver si conviene configurar la capacity de writer
-    let mut writer = BufWriter::new(storage);
+    let mut x_writer = BufWriter::new(x_storage);
+    let mut y_writer = BufWriter::new(y_storage);
 
+    recv_dataset_into(&mut x_writer, rx, x_size).await?;
+    recv_dataset_into(&mut y_writer, rx, y_size).await?;
+
+    Ok(())
+}
+
+async fn recv_dataset_into<W, R>(
+    writer: &mut BufWriter<&mut W>,
+    rx: &mut OnoReceiver<R>,
+    size: usize,
+) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin,
+{
     let mut received = 0;
-
-    while (received as u64) < size {
+    while received < size {
         let msg: Msg = rx.recv().await?;
 
         let Msg::Data(Payload::Datachunk(chunk)) = msg else {
