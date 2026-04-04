@@ -24,7 +24,7 @@ pub enum OptimizerConfig {
 #[serde(rename_all = "snake_case")]
 pub enum DatasetSrc {
     Local { path: PathBuf },
-    Inline { data: Vec<f32> },
+    Inline { samples: Vec<f32>, labels: Vec<f32> },
 }
 
 /// The `Dataset` configuration.

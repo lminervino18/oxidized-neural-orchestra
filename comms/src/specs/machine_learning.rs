@@ -39,7 +39,7 @@ pub enum OptimizerSpec {
 }
 
 /// The specification for the `Dataset`.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetSpec {
     /// The size of the dataset in bytes.

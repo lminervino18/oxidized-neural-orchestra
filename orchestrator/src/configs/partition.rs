@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 
 /// The metadata of a dataset partition.
+#[derive(PartialEq, Debug)]
 pub enum Partition<'a> {
     Inline {
-        data: &'a [f32],
+        samples: &'a [f32],
+        labels: &'a [f32],
     },
     Local {
         path: &'a PathBuf,
