@@ -31,20 +31,30 @@ use crate::configs::{DatasetSrc, ModelConfig, TrainingConfig, Validator};
 pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session> {
     // Convert delimited datasets to binary before validation so the validator
     // always operates on raw packed f32 bytes.
-    let converted_bin: Option<std::path::PathBuf> =
-        if let DatasetSrc::Local { ref path } = training.dataset.src {
-            if let Some(format) = DatasetFormat::from_path(path) {
-                let bin_path = convert_to_binary(path, format).map_err(OrchErr::Io)?;
-                training.dataset.src = DatasetSrc::Local {
-                    path: bin_path.clone(),
-                };
-                Some(bin_path)
-            } else {
-                None
-            }
+    let converted_bin = if let DatasetSrc::Local {
+        ref samples_path,
+        ref labels_path,
+    } = training.dataset.src
+    {
+        if let (Some(samples_format), Some(labels_format)) = (
+            DatasetFormat::from_path(samples_path),
+            DatasetFormat::from_path(labels_path),
+        ) {
+            let samples_bin_path =
+                convert_to_binary(samples_path, samples_format).map_err(OrchErr::Io)?;
+            let labels_bin_path =
+                convert_to_binary(labels_path, labels_format).map_err(OrchErr::Io)?;
+            training.dataset.src = DatasetSrc::Local {
+                samples_path: samples_bin_path.clone(),
+                labels_path: labels_bin_path.clone(),
+            };
+            (Some(samples_bin_path), Some(labels_bin_path))
         } else {
-            None
-        };
+            (None, None)
+        }
+    } else {
+        (None, None)
+    };
 
     let validator = Validator::new();
     validator.validate(&model, &training)?;
@@ -58,14 +68,28 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 
     // All partitions have been sent to workers — the converted binary is no
     // longer needed and can be removed transparently.
-    if let Some(bin_path) = converted_bin {
-        if let Err(e) = std::fs::remove_file(&bin_path) {
+    if let (Some(samples_bin_path), Some(labels_bin_path)) = converted_bin {
+        if let Err(e) = std::fs::remove_file(&samples_bin_path) {
             log::warn!(
-                "could not remove converted binary cache {}: {e}",
-                bin_path.display()
+                "could not remove converted samples binary cache {}: {e}",
+                samples_bin_path.display()
             );
         } else {
-            log::info!("removed converted binary cache {}", bin_path.display());
+            log::info!(
+                "removed converted samples binary cache {}",
+                samples_bin_path.display()
+            );
+        }
+        if let Err(e) = std::fs::remove_file(&labels_bin_path) {
+            log::warn!(
+                "could not remove converted labels binary cache {}: {e}",
+                labels_bin_path.display()
+            );
+        } else {
+            log::info!(
+                "removed converted labels binary cache {}",
+                labels_bin_path.display()
+            );
         }
     }
 

@@ -80,8 +80,8 @@ impl Validator {
         };
 
         let samples = match src {
-            DatasetSrc::Inline { data } => {
-                let len = data.len();
+            DatasetSrc::Inline { samples, labels } => {
+                let len = samples.len() + labels.len();
 
                 if len % row_size != 0 {
                     let text = format!(
@@ -94,12 +94,19 @@ impl Validator {
                 // SAFETY: row_size is a positive integer.
                 len / row_size.get()
             }
-            DatasetSrc::Local { path } => {
-                let metadata = std::fs::metadata(path).map_err(|e| {
-                    OrchErr::InvalidConfig(format!("cannot read dataset file: {e}"))
+            DatasetSrc::Local {
+                samples_path,
+                labels_path,
+            } => {
+                let samples_metadata = std::fs::metadata(samples_path).map_err(|e| {
+                    OrchErr::InvalidConfig(format!("cannot read dataset samples file: {e}"))
                 })?;
-                let len_bytes = metadata.len() as usize;
-                let len = len_bytes / size_of::<f32>();
+                let labels_metadata = std::fs::metadata(labels_path).map_err(|e| {
+                    OrchErr::InvalidConfig(format!("cannot read dataset labels file: {e}"))
+                })?;
+                let samples_len_bytes = samples_metadata.len() as usize;
+                let labels_len_bytes = labels_metadata.len() as usize;
+                let len = (samples_len_bytes + labels_len_bytes) / size_of::<f32>();
 
                 if len % row_size != 0 {
                     let text = format!(
