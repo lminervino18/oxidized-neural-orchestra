@@ -42,15 +42,15 @@ async fn main() -> io::Result<()> {
     };
 
     // TODO: esto quizás no debería estar acá...
-    let x_size = spec.dataset.x_size.get();
-    let y_size = spec.dataset.y_size.get();
-    let mut samples_raw = vec![0.; x_size * size_of::<f32>()];
-    let mut labels_raw = vec![0.; y_size * size_of::<f32>()];
+    let x_size_bytes = spec.dataset.x_size_bytes as usize;
+    let y_size_bytes = spec.dataset.y_size_bytes as usize;
+    let mut samples_raw = vec![0.; x_size_bytes / size_of::<f32>()];
+    let mut labels_raw = vec![0.; y_size_bytes / size_of::<f32>()];
     recv_dataset(
         &mut get_dataset_cursor(&mut samples_raw),
         &mut get_dataset_cursor(&mut labels_raw),
-        x_size,
-        y_size,
+        x_size_bytes,
+        y_size_bytes,
         &mut rx,
     )
     .await?;

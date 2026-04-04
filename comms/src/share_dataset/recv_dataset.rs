@@ -29,8 +29,8 @@ pub fn get_dataset_cursor(dataset_raw: &mut [f32]) -> Cursor<&mut [u8]> {
 pub async fn recv_dataset<W, R>(
     x_storage: &mut W,
     y_storage: &mut W,
-    x_size: usize,
-    y_size: usize,
+    x_size_bytes: usize,
+    y_size_bytes: usize,
     rx: &mut OnoReceiver<R>,
 ) -> Result<()>
 where
@@ -41,8 +41,8 @@ where
     let mut x_writer = BufWriter::new(x_storage);
     let mut y_writer = BufWriter::new(y_storage);
 
-    recv_dataset_into(&mut x_writer, rx, x_size).await?;
-    recv_dataset_into(&mut y_writer, rx, y_size).await?;
+    recv_dataset_into(&mut x_writer, rx, x_size_bytes).await?;
+    recv_dataset_into(&mut y_writer, rx, y_size_bytes).await?;
 
     Ok(())
 }
@@ -50,14 +50,14 @@ where
 async fn recv_dataset_into<W, R>(
     writer: &mut BufWriter<&mut W>,
     rx: &mut OnoReceiver<R>,
-    size: usize,
+    size_bytes: usize,
 ) -> Result<()>
 where
     W: AsyncWrite + Unpin,
     R: AsyncRead + Unpin,
 {
     let mut received = 0;
-    while received < size {
+    while received < size_bytes {
         let msg: Msg = rx.recv().await?;
 
         let Msg::Data(Payload::Datachunk(chunk)) = msg else {
