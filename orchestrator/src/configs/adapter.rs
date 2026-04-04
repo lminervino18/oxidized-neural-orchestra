@@ -365,31 +365,45 @@ impl Adapter {
     /// Helper method for `adapt_dataset` — partitions a local dataset file.
     ///
     /// # Args
-    /// * `path` - Path to the local dataset file.
-    /// * `partition_sizes` - An iterator of partition sizes in **bytes**.
+    /// * `samples_path` - Path to the local dataset samples file.
+    /// * `labels_path` - Path to the local dataset labels file.
+    /// * `partition_sizes` - An iterator of partition sample and label sizes in **bytes**.
     /// * `x_size` - The number of input features per sample.
     /// * `y_size` - The number of output values per sample.
     ///
     /// # Returns
     /// Paired lists of `DatasetSpec`s and `Partition::Local` variants.
-    fn adapt_local_dataset<'a, T: Iterator<Item = u64>>(
+    fn adapt_local_dataset<'a, T>(
         &self,
-        path: &'a PathBuf,
+        samples_path: &'a PathBuf,
+        labels_path: &'a PathBuf,
         partition_sizes: T,
         x_size: NonZeroUsize,
         y_size: NonZeroUsize,
-    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
-        let mut offset = 0;
+    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>)
+    where
+        T: Iterator<Item = (u64, u64)>,
+    {
+        let mut samples_offset = 0;
+        let mut labels_offset = 0;
         partition_sizes
-            .map(|size| {
+            .map(|(samples_size, labels_size)| {
                 let spec = DatasetSpec {
-                    size,
+                    size: samples_size + labels_size,
                     x_size,
                     y_size,
                 };
-                let partition = Partition::Local { path, offset, size };
+                let partition = Partition::Local {
+                    samples_path,
+                    labels_path,
+                    samples_offset,
+                    labels_offset,
+                    samples_size,
+                    labels_size,
+                };
 
-                offset += size;
+                samples_offset += samples_size;
+                labels_offset += labels_size;
 
                 (spec, partition)
             })
@@ -423,8 +437,15 @@ impl Adapter {
             y_size,
         } = dataset;
 
-        let size = match src {
-            DatasetSrc::Local { path } => fs::metadata(path)?.len(),
+        let size_bytes = match src {
+            DatasetSrc::Local {
+                samples_path,
+                labels_path,
+            } => {
+                let samples_size_bytes = fs::metadata(samples_path)?.len();
+                let labels_size_bytes = fs::metadata(labels_path)?.len();
+                samples_size_bytes + labels_size_bytes
+            }
             DatasetSrc::Inline { samples, labels } => {
                 let data_len = samples.len() + labels.len();
                 (data_len * size_of::<f32>()) as u64
@@ -436,7 +457,7 @@ impl Adapter {
         let x_size_bytes = (x_size.get() * size_of::<f32>()) as u64;
         let y_size_bytes = (y_size.get() * size_of::<f32>()) as u64;
         let row_size_bytes = x_size_bytes + y_size_bytes;
-        let nrows = size / row_size_bytes;
+        let nrows = size_bytes / row_size_bytes;
         let base_rows = nrows / npartitions;
         let remainder = nrows % npartitions;
 
@@ -454,9 +475,16 @@ impl Adapter {
             DatasetSrc::Inline { samples, labels } => {
                 self.adapt_inline_dataset(samples, labels, partition_sizes, *x_size, *y_size)
             }
-            DatasetSrc::Local { path } => {
-                self.adapt_local_dataset(path, partition_sizes, *x_size, *y_size)
-            }
+            DatasetSrc::Local {
+                samples_path,
+                labels_path,
+            } => self.adapt_local_dataset(
+                samples_path,
+                labels_path,
+                partition_sizes,
+                *x_size,
+                *y_size,
+            ),
         };
 
         Ok((specs, partitions))
