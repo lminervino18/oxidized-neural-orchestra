@@ -1,3 +1,5 @@
+use std::fs;
+
 use super::{AlgorithmConfig, DatasetConfig, ModelConfig, TrainingConfig};
 use crate::{
     configs::training::DatasetSrc,
@@ -98,10 +100,10 @@ impl Validator {
                 samples_path,
                 labels_path,
             } => {
-                let samples_metadata = std::fs::metadata(samples_path).map_err(|e| {
+                let samples_metadata = fs::metadata(samples_path).map_err(|e| {
                     OrchErr::InvalidConfig(format!("cannot read dataset samples file: {e}"))
                 })?;
-                let labels_metadata = std::fs::metadata(labels_path).map_err(|e| {
+                let labels_metadata = fs::metadata(labels_path).map_err(|e| {
                     OrchErr::InvalidConfig(format!("cannot read dataset labels file: {e}"))
                 })?;
                 let samples_len_bytes = samples_metadata.len() as usize;

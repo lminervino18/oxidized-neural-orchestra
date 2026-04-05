@@ -3,6 +3,8 @@ pub mod dataset_format;
 mod error;
 mod session;
 
+use std::fs;
+
 use configs::Adapter;
 use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
@@ -69,7 +71,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     // All partitions have been sent to workers — the converted binary is no
     // longer needed and can be removed transparently.
     if let (Some(samples_bin_path), Some(labels_bin_path)) = converted_bin {
-        if let Err(e) = std::fs::remove_file(&samples_bin_path) {
+        if let Err(e) = fs::remove_file(&samples_bin_path) {
             log::warn!(
                 "could not remove converted samples binary cache {}: {e}",
                 samples_bin_path.display()
@@ -80,7 +82,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
                 samples_bin_path.display()
             );
         }
-        if let Err(e) = std::fs::remove_file(&labels_bin_path) {
+        if let Err(e) = fs::remove_file(&labels_bin_path) {
             log::warn!(
                 "could not remove converted labels binary cache {}: {e}",
                 labels_bin_path.display()
