@@ -30,13 +30,13 @@ where
     let mut x_reader = BufReader::new(x_storage);
     let mut y_reader = BufReader::new(y_storage);
 
-    send_dataset_from(&mut x_reader, &mut buf, tx).await?;
-    send_dataset_from(&mut y_reader, &mut buf, tx).await?;
+    send_chunks_from(&mut x_reader, &mut buf, tx).await?;
+    send_chunks_from(&mut y_reader, &mut buf, tx).await?;
 
     Ok(())
 }
 
-async fn send_dataset_from<R, W>(
+async fn send_chunks_from<R, W>(
     reader: &mut BufReader<&mut R>,
     buf: &mut [u8],
     tx: &mut OnoSender<W>,

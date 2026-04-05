@@ -41,13 +41,13 @@ where
     let mut x_writer = BufWriter::new(x_storage);
     let mut y_writer = BufWriter::new(y_storage);
 
-    recv_dataset_into(&mut x_writer, rx, x_size_bytes).await?;
-    recv_dataset_into(&mut y_writer, rx, y_size_bytes).await?;
+    recv_chunks_into(&mut x_writer, rx, x_size_bytes).await?;
+    recv_chunks_into(&mut y_writer, rx, y_size_bytes).await?;
 
     Ok(())
 }
 
-async fn recv_dataset_into<W, R>(
+async fn recv_chunks_into<W, R>(
     writer: &mut BufWriter<&mut W>,
     rx: &mut OnoReceiver<R>,
     size_bytes: usize,
