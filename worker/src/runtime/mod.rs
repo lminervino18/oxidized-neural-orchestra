@@ -47,12 +47,15 @@ pub async fn build(
 ) -> io::Result<Box<dyn DistributedRuntime>> {
     match spec.algorithm.clone() {
         AlgorithmSpec::ParameterServer(ps_spec) => {
+            let serializer = spec.serializer.clone();
             let worker_builder = WorkerBuilder::new();
             let worker =
                 worker_builder.build_parameter_server(spec, &ps_spec.server_sizes, dataset_raw);
 
-            let runtime =
-                ps::ParameterServerRuntime::bootstrap(worker, ps_spec, orch_rx, orch_tx).await?;
+            let runtime = ps::ParameterServerRuntime::bootstrap(
+                worker, ps_spec, serializer, orch_rx, orch_tx,
+            )
+            .await?;
 
             Ok(Box::new(runtime) as Box<dyn DistributedRuntime>)
         }

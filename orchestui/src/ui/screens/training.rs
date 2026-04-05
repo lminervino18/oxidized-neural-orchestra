@@ -2,9 +2,8 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    Session,
     configs::{DatasetSrc, ModelConfig, TrainingConfig},
-    TrainedModel, TrainingEvent,
+    Session, TrainedModel, TrainingEvent,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -16,14 +15,9 @@ use ratatui::{
 use super::{Action, Screen};
 use crate::ui::{
     components::{
-        confirm_quit::draw_confirm_quit,
-        converting::draw_converting,
-        header::draw_header,
-        log_panel::draw_log,
-        loss_chart::draw_charts,
-        params_panel::draw_params,
-        save_popup::draw_save_popup,
-        workers_table::draw_workers_table,
+        confirm_quit::draw_confirm_quit, converting::draw_converting, header::draw_header,
+        log_panel::draw_log, loss_chart::draw_charts, params_panel::draw_params,
+        save_popup::draw_save_popup, workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
     theme::Theme,
@@ -213,10 +207,7 @@ impl TrainingState {
     /// if so, transitions to `Phase::Connecting` and starts listening for
     /// training events, or to `Phase::Error` on failure.
     pub fn tick(&mut self) {
-        let startup_result = self
-            .startup_rx
-            .as_ref()
-            .and_then(|rx| rx.try_recv().ok());
+        let startup_result = self.startup_rx.as_ref().and_then(|rx| rx.try_recv().ok());
 
         if let Some(result) = startup_result {
             self.startup_rx = None;

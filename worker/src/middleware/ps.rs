@@ -1,159 +1,148 @@
 use std::io;
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use comms::{
+    OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
+};
+use futures::future;
+use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::{Align4, Deserialize, Deserializer, LEN_TYPE_SIZE, LenType, msg::Msg};
-
-const GRAD_KIND: u32 = 2;
-const KIND_SIZE: usize = size_of::<u32>();
-
-/// The receiving end handle of the communication.
-pub struct OnoReceiver<R: AsyncRead + Unpin> {
-    rx: R,
-    rx_buf: Vec<u32>,
-    deserializer: Deserializer,
+/// The necessary information to maintain for the entire
+/// training duration for each of the servers.
+struct ServerMetadata<R, W>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    rx: OnoReceiver<R>,
+    tx: OnoSender<W>,
+    grad: Vec<f32>,
+    residual: Vec<f32>,
 }
 
-impl<R: AsyncRead + Unpin> OnoReceiver<R> {
-    /// Creates a new `OnoReceiver`.
+/// The communication manager between the worker process and the parameter servers.
+pub struct ParameterServerMiddleware<R, W>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    servers: Vec<ServerMetadata<R, W>>,
+    server_ordering: Vec<usize>,
+}
+
+impl<R, W> ParameterServerMiddleware<R, W>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    /// Creates a new `ParameterServerMiddleware`.
     ///
     /// # Args
-    /// * `rx` - The underlying reader.
-    /// * `deserializer` - The message deserializer to use.
+    /// * `server_ordering` - The ordering of the servers to know which layer's parameters
+    ///   correspond to which server.
     ///
     /// # Returns
-    /// A new `OnoReceiver` instance.
-    pub(super) fn new(rx: R, deserializer: Deserializer) -> Self {
+    /// A new `ParameterServerMiddleware` instance.
+    pub fn new(server_ordering: Vec<usize>) -> Self {
         Self {
-            rx,
-            rx_buf: Vec::new(),
-            deserializer,
+            servers: Vec::new(),
+            server_ordering,
         }
     }
 
-    /// Waits to receive a new message from the inner receiver.
-    ///
-    /// # Returns
-    /// A result object that returns `Msg` on success or `io::Error` on failure.
-    pub async fn recv<'a>(&'a mut self) -> io::Result<Msg<'a>> {
-        let Self {
-            rx,
-            rx_buf,
-            deserializer,
-        } = self;
-
-        let mut size_buf = [0; LEN_TYPE_SIZE];
-        rx.read_exact(&mut size_buf).await?;
-        let len = LenType::from_be_bytes(size_buf) as usize;
-
-        let b_size = size_of::<u32>();
-        let needed_amount = len.div_ceil(b_size);
-
-        if rx_buf.capacity() < needed_amount {
-            rx_buf.reserve(needed_amount - rx_buf.len());
-        }
-
-        unsafe { rx_buf.set_len(needed_amount) };
-
-        let view = bytemuck::cast_slice_mut(rx_buf);
-        let slice = &mut view[..len];
-        rx.read_exact(slice).await?;
-
-        deserializer.deserialize(slice)
-    }
-
-    /// Waits to receive a new message from the inner receiver into the provided buffer.
+    /// Adds a new server communicator to the middleware.
     ///
     /// # Args
-    /// * `buf` - The buffer to use for deserialization; the returned `T`'s lifetimes
-    ///           will be tied to this buffer.
-    ///
-    /// # Returns
-    /// A result object that returns `T` on success or `io::Error` on failure.
-    pub async fn recv_into<'buf, T, B>(&mut self, buf: &'buf mut Vec<B>) -> io::Result<T>
-    where
-        T: Deserialize<'buf>,
-        B: Align4,
-    {
-        let mut size_buf = [0; LEN_TYPE_SIZE];
-        self.rx.read_exact(&mut size_buf).await?;
-        let len = LenType::from_be_bytes(size_buf) as usize;
-
-        let b_size = size_of::<B>();
-        let needed_amount = len.div_ceil(b_size);
-
-        if buf.capacity() < needed_amount {
-            buf.reserve(needed_amount - buf.len());
-        }
-
-        unsafe { buf.set_len(needed_amount) };
-
-        let view = bytemuck::cast_slice_mut(buf);
-        let slice = &mut view[..len];
-        self.rx.read_exact(slice).await?;
-
-        T::deserialize(slice)
-    }
-
-    /// Receives the next message, dispatching on whether it is a gradient or another message type.
-    ///
-    /// This preserves the fast-path used by the f16 integration while remaining compatible
-    /// with the deserializer-based receiver design.
-    pub async fn recv_grad_or_msg<'buf, B: Align4>(
-        &mut self,
-        grad_out: &mut [f32],
-        msg_buf: &'buf mut Vec<B>,
-    ) -> io::Result<Option<Msg<'buf>>> {
-        let mut size_buf = [0u8; LEN_TYPE_SIZE];
-        self.rx.read_exact(&mut size_buf).await?;
-        let len = LenType::from_be_bytes(size_buf) as usize;
-
-        let b_size = size_of::<B>();
-        let needed = len.div_ceil(b_size);
-
-        if msg_buf.capacity() < needed {
-            msg_buf.reserve(needed - msg_buf.len());
-        }
-
-        unsafe { msg_buf.set_len(needed) };
-
-        {
-            let view: &mut [u8] = bytemuck::cast_slice_mut(msg_buf.as_mut_slice());
-            self.rx.read_exact(&mut view[..len]).await?;
-        }
-
-        let kind = {
-            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
-            u32::from_be_bytes(bytes[..KIND_SIZE].try_into().unwrap())
+    /// * `rx` - The worker's receiving end of the communication.
+    /// * `tx` - The worker's sending end of the communication.
+    /// * `size` - The amount of parameters this server holds.
+    pub fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>, size: usize) {
+        let metadata = ServerMetadata {
+            rx,
+            tx,
+            grad: vec![0.0; size],
+            residual: vec![0.0; size],
         };
 
-        if kind == GRAD_KIND {
-            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
-            let f16_bytes = &bytes[KIND_SIZE..len];
-            let f16_values: &[half::f16] = bytemuck::cast_slice(f16_bytes);
+        self.servers.push(metadata);
+    }
 
-            if f16_values.len() != grad_out.len() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "gradient size mismatch: expected {} values, got {}",
-                        grad_out.len(),
-                        f16_values.len()
-                    ),
-                ));
+    /// Pulls the new parameters from all the servers.
+    ///
+    /// # Returns
+    /// A new `ParamManager` instance with all the parameters.
+    ///
+    /// # Errors
+    /// Returns an io error if a server sends an unexpected message.
+    pub async fn pull_params(&mut self) -> io::Result<ParamManager<'_>> {
+        let futs = self
+            .servers
+            .iter_mut()
+            .enumerate()
+            .map(async |(i, server)| match server.rx.recv().await? {
+                Msg::Data(Payload::Params(params)) => {
+                    let metadata =
+                        ServerParamsMetadata::new(params, &mut server.grad, &mut server.residual);
+
+                    Ok(metadata)
+                }
+                msg => {
+                    let text = format!("expected params from server {i}, got: {msg:?}");
+                    Err(io::Error::other(text))
+                }
+            });
+
+        let servers = future::try_join_all(futs).await?;
+        Ok(ParamManager::new(servers, &self.server_ordering))
+    }
+
+    /// Pushes the latest accumulated gradients to all servers.
+    ///
+    /// # Errors
+    /// Returns an io error if any server cannot receive the gradients.
+    pub async fn push_grads(&mut self) -> io::Result<()> {
+        let futs = self.servers.iter_mut().map(async |server| {
+            let msg = Msg::Data(Payload::Grad(&server.residual));
+            let threshold = server.tx.send(&msg).await?;
+            Ok::<_, io::Error>(threshold)
+        });
+
+        let thresholds = future::try_join_all(futs).await?;
+
+        for (server, threshold) in self.servers.iter_mut().zip(thresholds) {
+            let residual = &mut server.residual;
+
+            match threshold {
+                None => residual.fill(0.0),
+                Some(t) => {
+                    residual
+                        .iter_mut()
+                        .filter(|g| g.abs() >= t)
+                        .for_each(|g| *g = 0.0);
+                }
             }
-
-            for (dst, &src) in grad_out.iter_mut().zip(f16_values) {
-                *dst = src.to_f32();
-            }
-
-            Ok(None)
-        } else {
-            let byte_slice: &'buf mut [u8] =
-                unsafe { std::slice::from_raw_parts_mut(msg_buf.as_mut_ptr() as *mut u8, len) };
-
-            let msg = self.deserializer.deserialize(byte_slice)?;
-            Ok(Some(msg))
         }
+
+        Ok(())
+    }
+
+    /// Disconnects this worker from all parameter servers.
+    ///
+    /// # Errors
+    /// Returns an io error if any disconnect exchange fails.
+    pub async fn disconnect(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Disconnect);
+
+        let futs = self.servers.iter_mut().map(async |server| {
+            server.tx.send(&msg).await?;
+
+            while !matches!(server.rx.recv().await?, Msg::Control(Command::Disconnect)) {}
+
+            Ok::<_, io::Error>(())
+        });
+
+        future::try_join_all(futs).await?;
+        Ok(())
     }
 }

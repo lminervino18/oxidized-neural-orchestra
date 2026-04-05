@@ -1,6 +1,6 @@
 use comms::{
-    msg::{Msg, Payload},
     Float01,
+    msg::{Msg, Payload},
 };
 use tokio::io;
 
@@ -36,7 +36,9 @@ async fn test_sparse_gradient() -> io::Result<()> {
 
     assert_eq!(
         grad,
-        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]
+        [
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0
+        ]
     );
     Ok(())
 }

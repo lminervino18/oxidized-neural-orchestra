@@ -3,7 +3,7 @@ use std::io;
 use half::f16;
 
 use super::{
-    msg::{Header, Msg, Payload, HEADER_SIZE},
+    msg::{HEADER_SIZE, Header, Msg, Payload},
     sparse,
 };
 

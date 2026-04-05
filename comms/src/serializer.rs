@@ -1,5 +1,5 @@
 use half::f16;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 use super::{
     msg::{Header, Msg, Payload},

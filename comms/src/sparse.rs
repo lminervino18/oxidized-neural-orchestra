@@ -1,5 +1,5 @@
 use half::f16;
-use rand::{seq::IndexedRandom, Rng};
+use rand::{Rng, seq::IndexedRandom};
 use serde::{Deserialize, Serialize};
 
 type Idx = u64;

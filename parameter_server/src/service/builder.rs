@@ -131,24 +131,33 @@ impl ServerBuilder {
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        match spec.param_gen {
+        let ServerSpec {
+            param_gen,
+            optimizer,
+            synchronizer,
+            store,
+            seed,
+            ..
+        } = spec;
+
+        match param_gen {
             ParamGenSpec::Const { value, limit } => {
                 let param_gen = ConstParamGen::new(value, limit);
-                Ok(self.resolve_optimizer(spec, param_gen))
+                Ok(self.resolve_optimizer(optimizer, synchronizer, store, param_gen))
             }
             ParamGenSpec::Rand {
                 distribution,
                 limit,
             } => {
-                let rng = self.generate_rng(spec.seed);
+                let rng = self.generate_rng(seed);
                 with_distribution!(rng, distribution, limit, |param_gen| {
-                    Ok(self.resolve_optimizer(spec, param_gen))
+                    Ok(self.resolve_optimizer(optimizer, synchronizer, store, param_gen))
                 })
             }
             ParamGenSpec::Chained { ref specs } => {
-                let rng = self.generate_rng(spec.seed);
+                let rng = self.generate_rng(seed);
                 let param_gen = self.resolve_chained(rng, specs)?;
-                Ok(self.resolve_optimizer(spec, param_gen))
+                Ok(self.resolve_optimizer(optimizer, synchronizer, store, param_gen))
             }
         }
     }
@@ -198,18 +207,26 @@ impl ServerBuilder {
     /// Resolves the `Optimizer` for this server.
     ///
     /// # Args
-    /// * `spec` - The specification for the parameter server.
+    /// * `optimizer` - The optimizer specification for the parameter server.
+    /// * `synchronizer` - The synchronizer specification for the parameter server.
+    /// * `store` - The store specification for the parameter server.
     /// * `param_gen` - A resolved parameter generator.
     ///
     /// # Returns
     /// A new server.
-    fn resolve_optimizer<R, W, PG>(&self, spec: ServerSpec, param_gen: PG) -> Box<dyn Server<R, W>>
+    fn resolve_optimizer<R, W, PG>(
+        &self,
+        optimizer: OptimizerSpec,
+        synchronizer: SynchronizerSpec,
+        store: StoreSpec,
+        param_gen: PG,
+    ) -> Box<dyn Server<R, W>>
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
         PG: ParamGen,
     {
-        match spec.optimizer {
+        match optimizer {
             OptimizerSpec::Adam {
                 learning_rate,
                 beta1,
@@ -217,18 +234,18 @@ impl ServerBuilder {
                 epsilon,
             } => {
                 let factory = |len| Adam::new(len, learning_rate, beta1, beta2, epsilon);
-                self.resolve_synchronizer(spec, param_gen, factory)
+                self.resolve_synchronizer(synchronizer, store, param_gen, factory)
             }
             OptimizerSpec::GradientDescent { learning_rate } => {
                 let factory = |_| GradientDescent::new(learning_rate);
-                self.resolve_synchronizer(spec, param_gen, factory)
+                self.resolve_synchronizer(synchronizer, store, param_gen, factory)
             }
             OptimizerSpec::GradientDescentWithMomentum {
                 learning_rate,
                 momentum,
             } => {
                 let factory = |len| GradientDescentWithMomentum::new(len, learning_rate, momentum);
-                self.resolve_synchronizer(spec, param_gen, factory)
+                self.resolve_synchronizer(synchronizer, store, param_gen, factory)
             }
         }
     }
@@ -236,7 +253,8 @@ impl ServerBuilder {
     /// Resolves the `Synchronizer` for this server.
     ///
     /// # Args
-    /// * `spec` - The specification for the parameter server.
+    /// * `synchronizer` - The synchronizer specification for the parameter server.
+    /// * `store` - The store specification for the parameter server.
     /// * `param_gen` - A resolved parameter generator.
     /// * `optimizer_factory` - A factory of optimizers.
     ///
@@ -244,7 +262,8 @@ impl ServerBuilder {
     /// A new server.
     fn resolve_synchronizer<R, W, PG, O, OF>(
         &self,
-        spec: ServerSpec,
+        synchronizer: SynchronizerSpec,
+        store: StoreSpec,
         param_gen: PG,
         optimizer_factory: OF,
     ) -> Box<dyn Server<R, W>>
@@ -255,14 +274,14 @@ impl ServerBuilder {
         O: Optimizer + Send + 'static,
         OF: FnMut(usize) -> O,
     {
-        match spec.synchronizer {
+        match synchronizer {
             SynchronizerSpec::Barrier { barrier_size } => {
                 let synchronizer = BarrierSync::new(barrier_size);
-                self.resolve_store(spec, param_gen, optimizer_factory, synchronizer)
+                self.resolve_store(store, param_gen, optimizer_factory, synchronizer)
             }
             SynchronizerSpec::NonBlocking => {
                 let synchronizer = NoBlockingSync::new();
-                self.resolve_store(spec, param_gen, optimizer_factory, synchronizer)
+                self.resolve_store(store, param_gen, optimizer_factory, synchronizer)
             }
         }
     }
@@ -270,7 +289,7 @@ impl ServerBuilder {
     /// Resolves the `Store` for this server.
     ///
     /// # Args
-    /// * `spec` - The specification for the parameter server.
+    /// * `store` - The store specification for the parameter server.
     /// * `param_gen` - A resolved parameter generator.
     /// * `optimizer_factory` - A factory of optimizers.
     /// * `synchronizer` - A resolved synchronizer.
@@ -279,7 +298,7 @@ impl ServerBuilder {
     /// A new server.
     fn resolve_store<R, W, PG, O, OF, S>(
         &self,
-        spec: ServerSpec,
+        store: StoreSpec,
         param_gen: PG,
         optimizer_factory: OF,
         synchronizer: S,
@@ -297,9 +316,9 @@ impl ServerBuilder {
         let cores = thread::available_parallelism().unwrap_or(DEFAULT_CORE_COUNT);
         let max_shard_amount = cores.saturating_mul(SHARD_AMOUNT_FACTOR);
         let shard_amount = nparams.min(max_shard_amount);
-        let shard_size = NonZeroUsize::new(shard_amount.get().div_ceil(nparams.get())).unwrap();
+        let shard_size = NonZeroUsize::new(nparams.get().div_ceil(shard_amount.get())).unwrap();
 
-        match spec.store {
+        match store {
             StoreSpec::Blocking => {
                 let store = BlockingStore::new(shard_size, param_gen, optimizer_factory);
                 self.terminate_build(store, synchronizer)

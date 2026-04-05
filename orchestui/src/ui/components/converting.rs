@@ -80,19 +80,12 @@ pub fn draw_converting(f: &mut Frame, area: Rect, state: &TrainingState) {
     );
 
     f.render_widget(
-        Paragraph::new(Span::styled(
-            format!(" elapsed  {elapsed}"),
-            Theme::dim(),
-        )),
+        Paragraph::new(Span::styled(format!(" elapsed  {elapsed}"), Theme::dim())),
         chunks[4],
     );
 
     f.render_widget(
-        Paragraph::new(Span::styled(
-            "[q]  cancel",
-            Theme::muted(),
-        ))
-        .alignment(Alignment::Center),
+        Paragraph::new(Span::styled("[q]  cancel", Theme::muted())).alignment(Alignment::Center),
         chunks[6],
     );
 }

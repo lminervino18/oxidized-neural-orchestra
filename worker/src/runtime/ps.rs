@@ -3,7 +3,7 @@ use std::{borrow::Cow, io};
 use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg},
-    specs::algorithm::ParameterServerSpec,
+    specs::{algorithm::ParameterServerSpec, worker::SerializerSpec},
 };
 use log::{debug, info, warn};
 use machine_learning::training::TrainResult;
@@ -36,6 +36,7 @@ impl ParameterServerRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::Own
     /// # Args
     /// * `worker` - The local worker state.
     /// * `spec` - The parameter-server algorithm specification.
+    /// * `serializer` - The gradient serialization strategy for worker-to-server links.
     /// * `orch_rx` - The receiving end of the communication between the worker and the orchestrator.
     /// * `orch_tx` - The sending end of the communication between the worker and the orchestrator.
     ///
@@ -47,6 +48,7 @@ impl ParameterServerRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::Own
     pub async fn bootstrap(
         worker: Worker,
         spec: ParameterServerSpec,
+        serializer: SerializerSpec,
         orch_rx: OrchRx,
         orch_tx: OrchTx,
     ) -> io::Result<Self> {
@@ -55,7 +57,14 @@ impl ParameterServerRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::Own
         for (addr, size) in spec.server_addrs.into_iter().zip(spec.server_sizes) {
             let stream = TcpStream::connect(addr).await?;
             let (rx, tx) = stream.into_split();
-            let (rx, tx) = comms::channel(rx, tx);
+
+            let (rx, tx) = match serializer.clone() {
+                SerializerSpec::Base => comms::channel(rx, tx),
+                SerializerSpec::SparseCapable { r, seed } => {
+                    comms::sparse_tx_channel(rx, tx, r, seed)
+                }
+            };
+
             middleware.spawn(rx, tx, size);
         }
 

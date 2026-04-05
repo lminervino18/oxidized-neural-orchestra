@@ -1,159 +1,413 @@
-use std::io;
+use futures::future;
+use log::{debug, error, info, warn};
+use std::{
+    io::{self, Cursor},
+    path::Path,
+    slice, thread,
+};
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncSeekExt},
+    net::{
+        TcpStream,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
+    runtime::Runtime,
+    sync::mpsc::{self, Receiver, Sender},
+};
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use comms::{
+    OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
+    send_dataset::send_dataset,
+    specs::{server::ServerSpec, worker::WorkerSpec},
+};
 
-use super::{Align4, Deserialize, Deserializer, LEN_TYPE_SIZE, LenType, msg::Msg};
+use crate::{
+    OrchErr, Result,
+    configs::{AlgorithmConfig, LayerConfig, ModelConfig, Partition},
+};
 
-const GRAD_KIND: u32 = 2;
-const KIND_SIZE: usize = size_of::<u32>();
+type NetRx = OnoReceiver<OwnedReadHalf>;
+type NetTx = OnoSender<OwnedWriteHalf>;
 
-/// The receiving end handle of the communication.
-pub struct OnoReceiver<R: AsyncRead + Unpin> {
-    rx: R,
-    rx_buf: Vec<u32>,
-    deserializer: Deserializer,
+#[derive(Debug, Clone, Copy)]
+enum SessionAlgorithm {
+    ParameterServer,
+    RingAllReduce,
 }
 
-impl<R: AsyncRead + Unpin> OnoReceiver<R> {
-    /// Creates a new `OnoReceiver`.
+/// The result of a completed training session.
+///
+/// Contains the trained model parameters alongside the model architecture,
+/// allowing the weights to be saved to disk without requiring additional context.
+#[derive(Debug)]
+pub struct TrainedModel {
+    /// The flat parameter vector received from the parameter servers.
+    pub params: Vec<f32>,
+    /// The model architecture used during training.
+    pub model: ModelConfig,
+    /// The input size of the first layer, derived from the dataset's `x_size`.
+    pub input_size: usize,
+}
+
+impl TrainedModel {
+    /// Returns the weights as a flat slice.
+    pub fn params(&self) -> &[f32] {
+        &self.params
+    }
+
+    /// Saves the trained model parameters to a `.safetensors` file.
+    ///
+    /// Each dense layer produces two tensors named `layer_N.weight` and
+    /// `layer_N.bias`, following the PyTorch `state_dict` convention.
+    /// The weight tensor has shape `[input_size, output_size]` and the
+    /// bias tensor has shape `[output_size]`.
     ///
     /// # Args
-    /// * `rx` - The underlying reader.
-    /// * `deserializer` - The message deserializer to use.
+    /// * `path` - The output file path (e.g. `"model.safetensors"`).
     ///
-    /// # Returns
-    /// A new `OnoReceiver` instance.
-    pub(super) fn new(rx: R, deserializer: Deserializer) -> Self {
-        Self {
-            rx,
-            rx_buf: Vec::new(),
-            deserializer,
-        }
-    }
+    /// # Errors
+    /// Returns an `OrchErr` if the file cannot be written or the parameter
+    /// buffer does not match the model architecture.
+    pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
+        use safetensors::Dtype;
+        use safetensors::tensor::TensorView;
 
-    /// Waits to receive a new message from the inner receiver.
-    ///
-    /// # Returns
-    /// A result object that returns `Msg` on success or `io::Error` on failure.
-    pub async fn recv<'a>(&'a mut self) -> io::Result<Msg<'a>> {
-        let Self {
-            rx,
-            rx_buf,
-            deserializer,
-        } = self;
+        let mut tensors: Vec<(String, TensorView)> = Vec::new();
+        let mut offset = 0;
+        let mut prev = self.input_size;
 
-        let mut size_buf = [0; LEN_TYPE_SIZE];
-        rx.read_exact(&mut size_buf).await?;
-        let len = LenType::from_be_bytes(size_buf) as usize;
-
-        let b_size = size_of::<u32>();
-        let needed_amount = len.div_ceil(b_size);
-
-        if rx_buf.capacity() < needed_amount {
-            rx_buf.reserve(needed_amount - rx_buf.len());
-        }
-
-        unsafe { rx_buf.set_len(needed_amount) };
-
-        let view = bytemuck::cast_slice_mut(rx_buf);
-        let slice = &mut view[..len];
-        rx.read_exact(slice).await?;
-
-        deserializer.deserialize(slice)
-    }
-
-    /// Waits to receive a new message from the inner receiver into the provided buffer.
-    ///
-    /// # Args
-    /// * `buf` - The buffer to use for deserialization; the returned `T`'s lifetimes
-    ///           will be tied to this buffer.
-    ///
-    /// # Returns
-    /// A result object that returns `T` on success or `io::Error` on failure.
-    pub async fn recv_into<'buf, T, B>(&mut self, buf: &'buf mut Vec<B>) -> io::Result<T>
-    where
-        T: Deserialize<'buf>,
-        B: Align4,
-    {
-        let mut size_buf = [0; LEN_TYPE_SIZE];
-        self.rx.read_exact(&mut size_buf).await?;
-        let len = LenType::from_be_bytes(size_buf) as usize;
-
-        let b_size = size_of::<B>();
-        let needed_amount = len.div_ceil(b_size);
-
-        if buf.capacity() < needed_amount {
-            buf.reserve(needed_amount - buf.len());
-        }
-
-        unsafe { buf.set_len(needed_amount) };
-
-        let view = bytemuck::cast_slice_mut(buf);
-        let slice = &mut view[..len];
-        self.rx.read_exact(slice).await?;
-
-        T::deserialize(slice)
-    }
-
-    /// Receives the next message, dispatching on whether it is a gradient or another message type.
-    ///
-    /// This preserves the fast-path used by the f16 integration while remaining compatible
-    /// with the deserializer-based receiver design.
-    pub async fn recv_grad_or_msg<'buf, B: Align4>(
-        &mut self,
-        grad_out: &mut [f32],
-        msg_buf: &'buf mut Vec<B>,
-    ) -> io::Result<Option<Msg<'buf>>> {
-        let mut size_buf = [0u8; LEN_TYPE_SIZE];
-        self.rx.read_exact(&mut size_buf).await?;
-        let len = LenType::from_be_bytes(size_buf) as usize;
-
-        let b_size = size_of::<B>();
-        let needed = len.div_ceil(b_size);
-
-        if msg_buf.capacity() < needed {
-            msg_buf.reserve(needed - msg_buf.len());
-        }
-
-        unsafe { msg_buf.set_len(needed) };
-
-        {
-            let view: &mut [u8] = bytemuck::cast_slice_mut(msg_buf.as_mut_slice());
-            self.rx.read_exact(&mut view[..len]).await?;
-        }
-
-        let kind = {
-            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
-            u32::from_be_bytes(bytes[..KIND_SIZE].try_into().unwrap())
+        let params_bytes = unsafe {
+            slice::from_raw_parts(self.params.as_ptr() as *const u8, self.params.len() * 4)
         };
 
-        if kind == GRAD_KIND {
-            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
-            let f16_bytes = &bytes[KIND_SIZE..len];
-            let f16_values: &[half::f16] = bytemuck::cast_slice(f16_bytes);
+        for (i, layer) in self.model.layers.iter().enumerate() {
+            let LayerConfig::Dense { output_size, .. } = layer;
+            let out = output_size.get();
+            let w_count = prev * out;
+            let b_count = out;
 
-            if f16_values.len() != grad_out.len() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "gradient size mismatch: expected {} values, got {}",
-                        grad_out.len(),
-                        f16_values.len()
-                    ),
-                ));
+            let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];
+            tensors.push((
+                format!("layer_{i}.weight"),
+                TensorView::new(Dtype::F32, vec![prev, out], w_bytes)
+                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
+            ));
+            offset += w_count;
+
+            let b_bytes = &params_bytes[offset * 4..(offset + b_count) * 4];
+            tensors.push((
+                format!("layer_{i}.bias"),
+                TensorView::new(Dtype::F32, vec![out], b_bytes)
+                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
+            ));
+            offset += b_count;
+
+            prev = out;
+        }
+
+        safetensors::tensor::serialize_to_file(
+            tensors.iter().map(|(k, v)| (k.as_str(), v.clone())),
+            &None,
+            path.as_ref(),
+        )
+        .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?;
+
+        info!("model saved to {}", path.as_ref().display());
+        Ok(())
+    }
+}
+
+/// An event produced during a training session.
+#[derive(Debug)]
+pub enum TrainingEvent {
+    /// A worker completed an epoch and reported its losses.
+    Loss { worker_id: usize, losses: Vec<f32> },
+    /// A worker finished and disconnected.
+    WorkerDone(usize),
+    /// Training completed and all servers returned the final trained model.
+    Complete(TrainedModel),
+    /// A worker or server produced an unrecoverable error.
+    Error(OrchErr),
+}
+
+/// Represents an ongoing training session.
+pub struct Session {
+    runtime: Runtime,
+    servers: Vec<(NetRx, NetTx)>,
+    workers: Vec<(NetRx, NetTx)>,
+    model: ModelConfig,
+    input_size: usize,
+    algorithm: SessionAlgorithm,
+}
+
+impl Session {
+    /// Creates a new session by connecting to all workers and servers.
+    ///
+    /// # Args
+    /// * `workers` - List of (address, spec) pairs for each worker.
+    /// * `partitions` - List of dataset partitions for each worker.
+    /// * `servers` - List of (address, spec) pairs for each parameter server.
+    /// * `model` - The model architecture, kept for post-training serialization.
+    /// * `input_size` - The input size of the first layer, derived from the dataset.
+    /// * `algorithm` - The distributed training algorithm for this session.
+    ///
+    /// # Returns
+    /// A ready session with all connections established.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if any connection or bootstrap message fails.
+    pub fn new(
+        workers: Vec<(String, WorkerSpec)>,
+        partitions: Vec<Partition>,
+        servers: Vec<(String, ServerSpec)>,
+        model: ModelConfig,
+        input_size: usize,
+        algorithm: AlgorithmConfig,
+    ) -> Result<Self> {
+        let (nworkers, nservers) = (workers.len(), servers.len());
+        info!("connecting to {nworkers} workers and {nservers} servers");
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+
+        let server_chans = runtime.block_on(Self::create_servers(servers))?;
+        debug!("successfully created all servers");
+
+        let worker_chans = runtime.block_on(Self::create_workers(workers, partitions))?;
+        debug!("successfully created all workers");
+
+        let algorithm = match algorithm {
+            AlgorithmConfig::ParameterServer { .. } => SessionAlgorithm::ParameterServer,
+            AlgorithmConfig::RingAllReduce => SessionAlgorithm::RingAllReduce,
+        };
+
+        Ok(Self {
+            runtime,
+            servers: server_chans,
+            workers: worker_chans,
+            model,
+            input_size,
+            algorithm,
+        })
+    }
+
+    async fn worker_listener(id: usize, mut rx: NetRx, _tx: NetTx, tx: Sender<TrainingEvent>) {
+        let mut rx_buf = vec![0; 128];
+
+        loop {
+            match rx.recv_into(&mut rx_buf).await {
+                Ok(Msg::Control(Command::ReportLoss { losses })) => {
+                    debug!("worker {id} reported {} losses", losses.len());
+                    let event = TrainingEvent::Loss {
+                        worker_id: id,
+                        losses: losses.into_owned(),
+                    };
+                    let _ = tx.send(event).await;
+                }
+                Ok(Msg::Control(Command::Disconnect)) => {
+                    info!("worker {id} disconnected");
+                    let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
+                    return;
+                }
+                Ok(msg) => {
+                    warn!("worker {id}: unexpected message {msg:?}");
+                    let event = TrainingEvent::Error(OrchErr::WorkerError {
+                        worker_id: id,
+                        msg: format!("unexpected message {msg:?}"),
+                    });
+                    let _ = tx.send(event).await;
+                    return;
+                }
+                Err(e) if is_eof(&e) => {
+                    info!("worker {id} closed connection");
+                    let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
+                    return;
+                }
+                Err(e) => {
+                    error!("worker {id} error: {e}");
+                    let event = TrainingEvent::Error(OrchErr::WorkerError {
+                        worker_id: id,
+                        msg: e.to_string(),
+                    });
+                    let _ = tx.send(event).await;
+                    return;
+                }
             }
-
-            for (dst, &src) in grad_out.iter_mut().zip(f16_values) {
-                *dst = src.to_f32();
-            }
-
-            Ok(None)
-        } else {
-            let byte_slice: &'buf mut [u8] =
-                unsafe { std::slice::from_raw_parts_mut(msg_buf.as_mut_ptr() as *mut u8, len) };
-
-            let msg = self.deserializer.deserialize(byte_slice)?;
-            Ok(Some(msg))
         }
     }
+
+    /// Consumes `self` and creates an event listener for this training session.
+    ///
+    /// Spawns a background thread that drives the session, listening to all
+    /// workers and parameter servers, and forwards events through the channel.
+    ///
+    /// # Returns
+    /// A receiver that yields `TrainingEvent`s as training progresses.
+    pub fn event_listener(self) -> Receiver<TrainingEvent> {
+        let (tx, rx) = mpsc::channel(256);
+        let model = self.model;
+        let input_size = self.input_size;
+        let algorithm = self.algorithm;
+
+        thread::spawn(move || {
+            self.runtime.block_on(async move {
+                let futs = self.workers.into_iter().enumerate().map(|(i, (wrx, wtx))| {
+                    tokio::spawn(Self::worker_listener(i, wrx, wtx, tx.clone()))
+                });
+
+                future::join_all(futs).await;
+
+                match algorithm {
+                    SessionAlgorithm::ParameterServer => {
+                        debug!("all workers done, reading final params from all servers");
+
+                        let mut model_params: Vec<f32> = Vec::new();
+                        let mut rx_buf = vec![0; 1024];
+
+                        for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
+                            match srx.recv_into(&mut rx_buf).await {
+                                Ok(Msg::Data(Payload::Params(params))) => {
+                                    model_params.extend_from_slice(params);
+                                }
+                                Ok(msg) => {
+                                    let err = OrchErr::ServerError(format!(
+                                        "unexpected message from server {i}: {msg:?}"
+                                    ));
+                                    let _ = tx.send(TrainingEvent::Error(err)).await;
+                                    return;
+                                }
+                                Err(e) => {
+                                    let err = OrchErr::ServerError(format!(
+                                        "unexpected error from server {i}: {e}"
+                                    ));
+                                    let _ = tx.send(TrainingEvent::Error(err)).await;
+                                    return;
+                                }
+                            }
+                        }
+
+                        info!("received {} total parameters", model_params.len());
+
+                        let trained = TrainedModel {
+                            params: model_params,
+                            model,
+                            input_size,
+                        };
+
+                        let _ = tx.send(TrainingEvent::Complete(trained)).await;
+                    }
+                    SessionAlgorithm::RingAllReduce => {
+                        let err = OrchErr::Unsupported(
+                            "ring all-reduce session finalization is not implemented yet".into(),
+                        );
+                        let _ = tx.send(TrainingEvent::Error(err)).await;
+                    }
+                }
+            });
+        });
+
+        rx
+    }
+
+    /// Connects to all parameter servers and sends each its bootstrap spec.
+    ///
+    /// # Args
+    /// * `servers` - List of (address, spec) pairs for each parameter server.
+    ///
+    /// # Returns
+    /// A list of open (receiver, sender) channel pairs, one per server.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if any connection or send fails.
+    async fn create_servers(servers: Vec<(String, ServerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
+        let mut channels = Vec::with_capacity(servers.len());
+
+        for (addr, spec) in servers {
+            let (rx, mut tx) = Self::open_channel(&addr)
+                .await
+                .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+
+            tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
+            channels.push((rx, tx));
+        }
+
+        Ok(channels)
+    }
+
+    /// Connects to all workers, sends each its bootstrap spec and dataset partition.
+    ///
+    /// # Args
+    /// * `workers` - List of (address, spec) pairs for each worker.
+    /// * `partitions` - List of dataset partitions for each worker.
+    ///
+    /// # Returns
+    /// A list of open (receiver, sender) channel pairs, one per worker.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if any connection or send fails.
+    async fn create_workers<'a>(
+        workers: Vec<(String, WorkerSpec)>,
+        partitions: Vec<Partition<'a>>,
+    ) -> Result<Vec<(NetRx, NetTx)>> {
+        const CHUNK_SIZE: usize = 8192;
+
+        let futs =
+            workers
+                .into_iter()
+                .zip(partitions)
+                .map(|((addr, spec), partition)| async move {
+                    debug!("connecting to worker at {addr}");
+
+                    let (rx, mut tx) = Self::open_channel(&addr)
+                        .await
+                        .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+
+                    tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+
+                    match partition {
+                        Partition::Local { path, offset, size } => {
+                            let mut fd = File::open(path).await?;
+                            fd.seek(io::SeekFrom::Start(offset)).await?;
+                            let mut fd = fd.take(size);
+                            send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
+                        }
+                        Partition::Inline { data } => {
+                            let bytes: &[u8] = bytemuck::cast_slice(data);
+                            let mut cursor = Cursor::new(bytes);
+                            send_dataset(&mut cursor, CHUNK_SIZE, &mut tx).await?;
+                        }
+                    }
+
+                    Ok::<_, OrchErr>((rx, tx))
+                });
+
+        let channels = future::try_join_all(futs).await?;
+        Ok(channels)
+    }
+
+    /// Opens a TCP channel to the given address.
+    ///
+    /// # Args
+    /// * `addr` - The socket address to connect to.
+    ///
+    /// # Returns
+    /// A (receiver, sender) channel pair.
+    ///
+    /// # Errors
+    /// Returns an `io::Error` if the connection fails.
+    async fn open_channel(addr: &str) -> io::Result<(NetRx, NetTx)> {
+        let stream = TcpStream::connect(addr).await?;
+        let (rx, tx) = stream.into_split();
+        Ok(comms::channel(rx, tx))
+    }
+}
+
+fn is_eof(e: &io::Error) -> bool {
+    matches!(
+        e.kind(),
+        io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionReset
+    ) || e.to_string().contains("early eof")
 }

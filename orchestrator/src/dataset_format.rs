@@ -66,7 +66,11 @@ pub fn convert_to_binary(src: &Path, format: DatasetFormat) -> io::Result<PathBu
         return Ok(out);
     }
 
-    info!("converting {} to binary at {}", src.display(), out.display());
+    info!(
+        "converting {} to binary at {}",
+        src.display(),
+        out.display()
+    );
 
     let sep = format.separator();
     let reader = BufReader::new(File::open(src)?);
@@ -122,7 +126,7 @@ where
 
         if !is_data_row(&trimmed, sep) {
             info!("skipping header row: {trimmed:?}");
-            return Ok(None);
+            continue;
         }
 
         return Ok(Some((n, trimmed)));
@@ -136,12 +140,7 @@ fn is_data_row(line: &str, sep: char) -> bool {
         .all(|field| field.trim().parse::<f32>().is_ok())
 }
 
-fn write_row(
-    line: &str,
-    sep: char,
-    line_n: usize,
-    writer: &mut BufWriter<File>,
-) -> io::Result<()> {
+fn write_row(line: &str, sep: char, line_n: usize, writer: &mut BufWriter<File>) -> io::Result<()> {
     for field in line.split(sep) {
         let val: f32 = field.trim().parse().map_err(|_| {
             io::Error::new(

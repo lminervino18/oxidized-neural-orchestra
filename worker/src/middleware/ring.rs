@@ -79,7 +79,8 @@ where
     /// Returns an io error if the chunk cannot be sent.
     pub async fn send_next_chunk(&mut self, chunk: &[f32]) -> io::Result<()> {
         let msg = Msg::Data(Payload::Datachunk(chunk));
-        self.next.tx.send(&msg).await
+        self.next.tx.send(&msg).await?;
+        Ok(())
     }
 
     /// Receives a chunk from the previous ring neighbor.
