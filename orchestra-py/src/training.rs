@@ -195,7 +195,7 @@ pub fn orchestrate(
     let training = training.inner.clone();
 
     let session = py
-        .allow_threads(|| {
+        .detach(|| {
             std::thread::spawn(move || train(model, training).map_err(|e| e.to_string()))
                 .join()
                 .map_err(|_| "thread panicked".to_string())?

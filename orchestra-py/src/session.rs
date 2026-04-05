@@ -209,7 +209,7 @@ impl Session {
         let worker_count = self.worker_count;
 
         let trained = py
-            .allow_threads(|| {
+            .detach(|| {
                 std::thread::spawn(move || {
                     let mut rx = session.event_listener();
                     let mut reporter = ProgressReporter::new(max_epochs, worker_count);
