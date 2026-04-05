@@ -3,7 +3,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 /// Base serializer — gradients are always sent densely.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct BaseSerializer;
 
@@ -19,7 +19,7 @@ impl BaseSerializer {
 ///
 /// # Args
 /// * `r` - Compression ratio threshold between `0.0` and `1.0`.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct SparseSerializer {
     pub r: Float01,

@@ -12,7 +12,7 @@ mod training;
 
 use pyo3::prelude::*;
 
-#[pymodule]
+#[pymodule(gil_used = true)]
 fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<arch::Sequential>()?;
     m.add_class::<arch::Dense>()?;

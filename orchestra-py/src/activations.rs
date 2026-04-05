@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 ///
 /// # Args
 /// * `amp` - Amplitude of the sigmoid. Defaults to 1.0.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Sigmoid {
     pub amp: f32,

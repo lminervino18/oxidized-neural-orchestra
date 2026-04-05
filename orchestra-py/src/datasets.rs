@@ -10,7 +10,7 @@ use pyo3::prelude::*;
 /// * `data` - Flat list of floats in row-major order.
 /// * `x_size` - Number of input features per sample.
 /// * `y_size` - Number of output features per sample.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct InlineDataset {
     pub data: Vec<f32>,
@@ -43,7 +43,7 @@ impl InlineDataset {
 /// * `path` - Path to the binary dataset file.
 /// * `x_size` - Number of input features per sample.
 /// * `y_size` - Number of output features per sample.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct LocalDataset {
     pub path: PathBuf,

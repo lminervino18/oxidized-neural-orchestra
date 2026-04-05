@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 /// Kaiming (He) initialization.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Kaiming;
 
@@ -14,7 +14,7 @@ impl Kaiming {
 }
 
 /// Xavier (Glorot) initialization.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Xavier;
 
@@ -27,7 +27,7 @@ impl Xavier {
 }
 
 /// Lecun initialization.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Lecun;
 
@@ -40,7 +40,7 @@ impl Lecun {
 }
 
 /// Xavier uniform initialization.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct XavierUniform;
 
@@ -53,7 +53,7 @@ impl XavierUniform {
 }
 
 /// Lecun uniform initialization.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct LecunUniform;
 
@@ -69,7 +69,7 @@ impl LecunUniform {
 ///
 /// # Args
 /// * `value` - The constant value to initialize all parameters with.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Const {
     pub value: f32,
@@ -88,7 +88,7 @@ impl Const {
 /// # Args
 /// * `low` - Lower bound of the uniform distribution.
 /// * `high` - Upper bound of the uniform distribution.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Uniform {
     pub low: f32,
@@ -108,7 +108,7 @@ impl Uniform {
 /// # Args
 /// * `low` - Lower bound of the uniform distribution (inclusive).
 /// * `high` - Upper bound of the uniform distribution (inclusive).
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct UniformInclusive {
     pub low: f32,
@@ -128,7 +128,7 @@ impl UniformInclusive {
 /// # Args
 /// * `mean` - Mean of the normal distribution.
 /// * `std_dev` - Standard deviation of the normal distribution.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Normal {
     pub mean: f32,

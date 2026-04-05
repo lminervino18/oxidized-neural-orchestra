@@ -1,25 +1,25 @@
 use pyo3::prelude::*;
 
-/// Barrier synchronization — all workers sync at each epoch.
-#[pyclass]
+/// Mean squared error loss function.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct BarrierSync;
+pub struct Mse;
 
 #[pymethods]
-impl BarrierSync {
+impl Mse {
     #[new]
     pub fn new() -> Self {
         Self
     }
 }
 
-/// Non-blocking synchronization — workers proceed without waiting.
-#[pyclass]
+/// Cross entropy loss function.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct NonBlockingSync;
+pub struct CrossEntropy;
 
 #[pymethods]
-impl NonBlockingSync {
+impl CrossEntropy {
     #[new]
     pub fn new() -> Self {
         Self

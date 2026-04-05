@@ -1,150 +1,75 @@
 use std::num::NonZeroUsize;
+use std::path::PathBuf;
 
-use orchestrator::configs::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use crate::activations::Sigmoid;
-use crate::initialization::{
-    Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier, XavierUniform,
-};
-
-#[derive(Clone)]
-pub enum PyInit {
-    Kaiming,
-    Xavier,
-    Lecun,
-    XavierUniform,
-    LecunUniform,
-    Const(f32),
-    Uniform(f32, f32),
-    UniformInclusive(f32, f32),
-    Normal(f32, f32),
-}
-
-#[derive(Clone)]
-pub enum PyActFn {
-    Sigmoid(f32),
-}
-
-/// A fully-connected dense layer.
+/// An inline dataset defined directly in Python.
 ///
 /// # Args
-/// * `output_size` - Number of output neurons.
-/// * `init` - Parameter initializer (e.g. `Kaiming()`, `Const(0.0)`).
-/// * `act_fn` - Optional activation function (e.g. `Sigmoid()`). Defaults to `None`.
-#[pyclass]
+/// * `data` - Flat list of floats in row-major order.
+/// * `x_size` - Number of input features per sample.
+/// * `y_size` - Number of output features per sample.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct Dense {
-    pub output_size: NonZeroUsize,
-    pub init: PyInit,
-    pub act_fn: Option<PyActFn>,
+pub struct InlineDataset {
+    pub data: Vec<f32>,
+    pub x_size: NonZeroUsize,
+    pub y_size: NonZeroUsize,
 }
 
 #[pymethods]
-impl Dense {
+impl InlineDataset {
     #[new]
-    #[pyo3(signature = (output_size, init, act_fn = None))]
-    pub fn new(
-        output_size: usize,
-        init: &Bound<'_, PyAny>,
-        act_fn: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Self> {
-        let output_size = NonZeroUsize::new(output_size).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("output_size must be greater than 0")
-        })?;
-
-        let init = if init.is_instance_of::<Kaiming>() {
-            PyInit::Kaiming
-        } else if init.is_instance_of::<Xavier>() {
-            PyInit::Xavier
-        } else if init.is_instance_of::<Lecun>() {
-            PyInit::Lecun
-        } else if init.is_instance_of::<XavierUniform>() {
-            PyInit::XavierUniform
-        } else if init.is_instance_of::<LecunUniform>() {
-            PyInit::LecunUniform
-        } else if let Ok(c) = init.extract::<PyRef<Const>>() {
-            PyInit::Const(c.value)
-        } else if let Ok(u) = init.extract::<PyRef<Uniform>>() {
-            PyInit::Uniform(u.low, u.high)
-        } else if let Ok(u) = init.extract::<PyRef<UniformInclusive>>() {
-            PyInit::UniformInclusive(u.low, u.high)
-        } else if let Ok(n) = init.extract::<PyRef<Normal>>() {
-            PyInit::Normal(n.mean, n.std_dev)
-        } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be a parameter initializer",
-            ));
-        };
-
-        let act_fn = match act_fn {
-            None => None,
-            Some(a) => {
-                if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
-                    Some(PyActFn::Sigmoid(s.amp))
-                } else {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "act_fn must be an activation function or None",
-                    ));
-                }
-            }
-        };
-
+    pub fn new(data: Vec<f32>, x_size: usize, y_size: usize) -> PyResult<Self> {
+        let x_size = NonZeroUsize::new(x_size)
+            .ok_or_else(|| PyValueError::new_err("x_size must be greater than 0"))?;
+        let y_size = NonZeroUsize::new(y_size)
+            .ok_or_else(|| PyValueError::new_err("y_size must be greater than 0"))?;
         Ok(Self {
-            output_size,
-            init,
-            act_fn,
+            data,
+            x_size,
+            y_size,
         })
     }
 }
 
-impl Dense {
-    pub fn to_layer_config(&self) -> LayerConfig {
-        let init = match self.init {
-            PyInit::Kaiming => ParamGenConfig::Kaiming,
-            PyInit::Xavier => ParamGenConfig::Xavier,
-            PyInit::Lecun => ParamGenConfig::Lecun,
-            PyInit::XavierUniform => ParamGenConfig::XavierUniform,
-            PyInit::LecunUniform => ParamGenConfig::LecunUniform,
-            PyInit::Const(v) => ParamGenConfig::Const { value: v },
-            PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low, high },
-            PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low, high },
-            PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean, std_dev },
-        };
-        let act_fn = self.act_fn.as_ref().map(|a| match a {
-            PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
-        });
-        LayerConfig::Dense {
-            output_size: self.output_size,
-            init,
-            act_fn,
-        }
-    }
-}
-
-/// A sequential model — layers are applied in order.
+/// A dataset loaded from a local binary file of packed `f32` values.
+///
+/// The file must contain raw little-endian `f32` values in row-major order,
+/// where each row is `x_size + y_size` floats.
 ///
 /// # Args
-/// * `layers` - List of `Dense` layers.
-#[pyclass]
-pub struct Sequential {
-    pub inner: ModelConfig,
+/// * `path` - Path to the binary dataset file.
+/// * `x_size` - Number of input features per sample.
+/// * `y_size` - Number of output features per sample.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct LocalDataset {
+    pub path: PathBuf,
+    pub x_size: NonZeroUsize,
+    pub y_size: NonZeroUsize,
 }
 
 #[pymethods]
-impl Sequential {
+impl LocalDataset {
     #[new]
-    pub fn new(layers: Vec<PyRef<Dense>>) -> PyResult<Self> {
-        if layers.is_empty() {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "model must have at least one layer",
-            ));
+    pub fn new(path: String, x_size: usize, y_size: usize) -> PyResult<Self> {
+        let x_size = NonZeroUsize::new(x_size)
+            .ok_or_else(|| PyValueError::new_err("x_size must be greater than 0"))?;
+        let y_size = NonZeroUsize::new(y_size)
+            .ok_or_else(|| PyValueError::new_err("y_size must be greater than 0"))?;
+        let path = PathBuf::from(path);
+        if !path.exists() {
+            return Err(PyValueError::new_err(format!(
+                "dataset file not found: {}",
+                path.display()
+            )));
         }
-        let layer_configs = layers.iter().map(|l| l.to_layer_config()).collect();
         Ok(Self {
-            inner: ModelConfig {
-                layers: layer_configs,
-            },
+            path,
+            x_size,
+            y_size,
         })
     }
 }

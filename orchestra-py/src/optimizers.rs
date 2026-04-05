@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 ///
 /// # Args
 /// * `lr` - Learning rate.
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct GradientDescent {
     pub lr: f32,
