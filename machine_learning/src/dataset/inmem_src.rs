@@ -47,3 +47,34 @@ impl InMemSrc {
         (&self.samples[x_range.clone()], &self.labels[y_range])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rand::{SeedableRng, rngs::StdRng};
+
+    use super::*;
+
+    // agrego este test porq me quedé pensando si no había roto algo xd
+    #[test]
+    fn some_test() {
+        let rows = 5;
+        let x_size = 2;
+        let y_size = 1;
+        let samples = vec![1., 2., 3., 4., 5., 6., 7., 8., 9., 10.];
+        let labels = vec![11., 12., 13., 14., 15.];
+        let mut rng = StdRng::seed_from_u64(42);
+
+        let mut in_mem = InMemSrc { samples, labels };
+        in_mem.shuffle(rows, x_size, y_size, &mut rng);
+
+        // antes del refactor
+        let samples_before = [1.0, 2.0, 7.0, 8.0, 5.0, 6.0, 9.0, 10.0, 3.0, 4.0];
+        let labels_before = [11.0, 14.0, 13.0, 15.0, 12.0];
+
+        let samples_now = in_mem.samples;
+        let labels_now = in_mem.labels;
+
+        assert_eq!(samples_now, samples_before);
+        assert_eq!(labels_now, labels_before);
+    }
+}
