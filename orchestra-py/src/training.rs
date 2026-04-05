@@ -36,7 +36,7 @@ pub struct PyTrainingConfig {
 /// * `server_addrs` - List of parameter server addresses.
 /// * `dataset` - The dataset to train on. Accepts either an `InlineDataset` or a `LocalDataset`.
 /// * `optimizer` - The optimizer to use.
-/// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`. Defaults to `Mse()`.
+/// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`.
 /// * `sync` - Synchronization strategy (`BarrierSync()` or `NonBlockingSync()`).
 /// * `store` - Parameter store strategy (`BlockingStore()` or `WildStore()`).
 /// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
@@ -57,7 +57,7 @@ pub struct PyTrainingConfig {
     dataset,
     optimizer,
     *,
-    loss_fn = None,
+    loss_fn,
     sync,
     store,
     serializer = None,
@@ -71,7 +71,7 @@ pub fn parameter_server(
     server_addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,
     optimizer: PyRef<GradientDescent>,
-    loss_fn: Option<&Bound<'_, PyAny>>,
+    loss_fn: &Bound<'_, PyAny>,
     sync: &Bound<'_, PyAny>,
     store: &Bound<'_, PyAny>,
     serializer: Option<&Bound<'_, PyAny>>,
@@ -105,15 +105,14 @@ pub fn parameter_server(
         ));
     };
 
-    let loss_fn_cfg = match loss_fn {
-        None => LossFnConfig::Mse,
-        Some(loss_fn) if loss_fn.is_instance_of::<Mse>() => LossFnConfig::Mse,
-        Some(loss_fn) if loss_fn.is_instance_of::<CrossEntropy>() => LossFnConfig::CrossEntropy,
-        Some(_) => {
-            return Err(PyTypeError::new_err(
-                "loss_fn must be Mse() or CrossEntropy()",
-            ));
-        }
+    let loss_fn_cfg = if loss_fn.is_instance_of::<Mse>() {
+        LossFnConfig::Mse
+    } else if loss_fn.is_instance_of::<CrossEntropy>() {
+        LossFnConfig::CrossEntropy
+    } else {
+        return Err(PyTypeError::new_err(
+            "loss_fn must be Mse() or CrossEntropy()",
+        ));
     };
 
     let serializer_cfg = match serializer {
