@@ -32,7 +32,7 @@ use crate::configs::{DatasetSrc, ModelConfig, TrainingConfig, Validator};
 /// Returns an `OrchErr` if dataset conversion fails, config validation fails,
 /// or connecting to any worker or server fails.
 pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session> {
-    let (samples_bin, labels_bin) = generate_binary_dataset(&mut training.dataset.src)?;
+    let dataset_bin = generate_binary_dataset(&mut training.dataset.src);
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 
@@ -43,9 +43,9 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 
     let session = Session::new(workers, partitions, servers, model, input_size)?;
 
-    if let (Some(ref samples_bin), Some(ref labels_bin)) = (samples_bin, labels_bin) {
-        remove_binary_dataset(samples_bin);
-        remove_binary_dataset(labels_bin);
+    if let Some((samples_bin, labels_bin)) = dataset_bin {
+        remove_binary(&samples_bin);
+        remove_binary(&labels_bin);
     }
 
     Ok(session)
@@ -58,42 +58,38 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 /// * `src` - The dataset source.
 ///
 /// # Returns
-/// The paths of the generated binary files if they were found.
-///
-/// # Errors
-/// Returns an `OrchErr` if dataset conversion fails.
-fn generate_binary_dataset(src: &mut DatasetSrc) -> Result<(Option<PathBuf>, Option<PathBuf>)> {
-    if let DatasetSrc::Local {
+/// The paths of the generated binary files if they were found or `None` if not.
+fn generate_binary_dataset(src: &mut DatasetSrc) -> Option<(PathBuf, PathBuf)> {
+    let DatasetSrc::Local {
         samples_path,
         labels_path,
     } = src
-    {
-        if let (Some(samples_format), Some(labels_format)) = (
-            DatasetFormat::from_path(samples_path),
-            DatasetFormat::from_path(labels_path),
-        ) {
-            let samples_bin_path =
-                convert_to_binary(samples_path, samples_format).map_err(OrchErr::Io)?;
-            let labels_bin_path =
-                convert_to_binary(labels_path, labels_format).map_err(OrchErr::Io)?;
-            *src = DatasetSrc::Local {
-                samples_path: samples_bin_path.clone(),
-                labels_path: labels_bin_path.clone(),
-            };
-            Ok((Some(samples_bin_path), Some(labels_bin_path)))
-        } else {
-            Ok((None, None))
-        }
-    } else {
-        Ok((None, None))
-    }
+    else {
+        return None;
+    };
+
+    let (Some(samples_format), Some(labels_format)) = (
+        DatasetFormat::from_path(samples_path),
+        DatasetFormat::from_path(labels_path),
+    ) else {
+        return None;
+    };
+
+    let samples_bin_path = convert_to_binary(samples_path, samples_format).ok()?;
+    let labels_bin_path = convert_to_binary(labels_path, labels_format).ok()?;
+    *src = DatasetSrc::Local {
+        samples_path: samples_bin_path.clone(),
+        labels_path: labels_bin_path.clone(),
+    };
+
+    Some((samples_bin_path, labels_bin_path))
 }
 
 /// Removes a binary dataset file.
 ///
 /// # Args
 /// * `path` - The path of the file to remove.
-fn remove_binary_dataset(path: &PathBuf) {
+fn remove_binary(path: &PathBuf) {
     if let Err(e) = fs::remove_file(path) {
         log::warn!(
             "could not remove converted dataset binary cache {}: {e}",
