@@ -22,6 +22,18 @@ use crate::{
 };
 
 /// Opaque training configuration produced by `parameter_server(...)`.
+///
+/// # Args
+/// This type is produced by `parameter_server(...)` and is not constructed directly.
+///
+/// # Returns
+/// A training configuration handle for `orchestrate(...)`.
+///
+/// # Errors
+/// Not applicable.
+///
+/// # Panics
+/// Not applicable.
 #[pyclass]
 pub struct PyTrainingConfig {
     pub inner: TrainingConfig,
@@ -45,11 +57,17 @@ pub struct PyTrainingConfig {
 /// * `offline_epochs` - Extra local epochs per sync round. Defaults to `0`.
 /// * `seed` - Optional random seed for reproducibility.
 ///
+/// # Returns
+/// A `PyTrainingConfig` ready to be passed to `orchestrate(...)`.
+///
 /// # Errors
 /// Raises a `ValueError` if required fields are invalid.
 /// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
 /// Raises a `TypeError` if `loss_fn` is not `Mse()` or `CrossEntropy()`.
 /// Raises a `TypeError` if `serializer` is not `BaseSerializer()` or `SparseSerializer(r=...)`.
+///
+/// # Panics
+/// This function does not panic.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
@@ -181,8 +199,14 @@ pub fn parameter_server(
 /// * `model` - The model to train.
 /// * `training` - The training configuration produced by `parameter_server(...)`.
 ///
+/// # Returns
+/// A `Session` handle that can be consumed with `wait()`.
+///
 /// # Errors
 /// Raises a `RuntimeError` if the session cannot be started.
+///
+/// # Panics
+/// This function does not panic.
 #[pyfunction]
 pub fn orchestrate(
     py: Python<'_>,

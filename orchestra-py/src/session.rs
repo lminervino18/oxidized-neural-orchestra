@@ -98,7 +98,6 @@ impl ProgressReporter {
         }
     }
 
-    /// Records losses for `worker_id` and refreshes the display.
     fn update(&mut self, worker_id: usize, losses: &[f32]) {
         for &loss in losses {
             if worker_id < self.worker_epochs.len() {
@@ -125,7 +124,6 @@ impl ProgressReporter {
         }
     }
 
-    /// Stops the spinner and prints the final summary line.
     fn finish(self, success: bool) {
         let Self {
             done,
@@ -171,10 +169,36 @@ pub struct TrainedModel {
 
 #[pymethods]
 impl TrainedModel {
+    /// Returns the trained model parameters as a flat vector.
+    ///
+    /// # Args
+    /// This method does not take arguments.
+    ///
+    /// # Returns
+    /// The trained parameters in a flat vector.
+    ///
+    /// # Errors
+    /// This method does not return errors.
+    ///
+    /// # Panics
+    /// This method does not panic.
     pub fn weights(&self) -> Vec<f32> {
         self.inner.params().to_vec()
     }
 
+    /// Saves the trained model in safetensors format.
+    ///
+    /// # Args
+    /// * `path` - Destination path for the safetensors file.
+    ///
+    /// # Returns
+    /// `None`.
+    ///
+    /// # Errors
+    /// Raises a `RuntimeError` if the model cannot be saved.
+    ///
+    /// # Panics
+    /// This method does not panic.
     pub fn save_safetensors(&self, path: &str) -> PyResult<()> {
         self.inner
             .save_safetensors(path)
@@ -193,12 +217,18 @@ pub struct Session {
 impl Session {
     /// Blocks until training completes and returns the trained model.
     ///
+    /// # Args
+    /// This method does not take arguments.
+    ///
     /// # Returns
     /// The trained model with its final parameters.
     ///
     /// # Errors
     /// Raises a `RuntimeError` if the session was already consumed, if training
     /// fails, or if the background thread panics.
+    ///
+    /// # Panics
+    /// This method does not panic.
     pub fn wait(&mut self, py: Python<'_>) -> PyResult<TrainedModel> {
         let session = self
             .inner

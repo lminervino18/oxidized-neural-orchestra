@@ -1,6 +1,18 @@
 use pyo3::prelude::*;
 
 /// Barrier synchronization — all workers sync at each epoch.
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A barrier synchronization configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct BarrierSync;
@@ -14,6 +26,18 @@ impl BarrierSync {
 }
 
 /// Non-blocking synchronization — workers proceed without waiting.
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A non-blocking synchronization configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct NonBlockingSync;

@@ -32,6 +32,17 @@ pub enum PyActFn {
 /// * `output_size` - Number of output neurons.
 /// * `init` - Parameter initializer (e.g. `Kaiming()`, `Const(0.0)`).
 /// * `act_fn` - Optional activation function (e.g. `Sigmoid()`). Defaults to `None`.
+///
+/// # Returns
+/// A dense layer configuration.
+///
+/// # Errors
+/// Raises a `TypeError` if `init` is not a supported initializer.
+/// Raises a `TypeError` if `act_fn` is not a supported activation function.
+/// Raises a `ValueError` if `output_size` is zero.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Dense {
@@ -126,6 +137,15 @@ impl Dense {
 ///
 /// # Args
 /// * `layers` - List of `Dense` layers.
+///
+/// # Returns
+/// A sequential model configuration.
+///
+/// # Errors
+/// Raises a `ValueError` if `layers` is empty.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass]
 pub struct Sequential {
     pub inner: ModelConfig,

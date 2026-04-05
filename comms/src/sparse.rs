@@ -176,7 +176,6 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
 #[test]
 fn test_grad_drop() {
     let grad = vec![1.0, -1.0, 0.0, 2.0];
-    let grad = vec![1.0, -1.0, 0.0, 2.0];
     let mut buf = Vec::new();
     let threshold = 1.0;
 
@@ -209,7 +208,6 @@ fn test_grad_lift() {
 
 #[test]
 fn test_drop_and_lift_consistency() {
-    let residual = vec![1.0, -1.0, 0.0, 2.0];
     let residual = vec![1.0, -1.0, 0.0, 2.0];
     let expected = residual.clone();
 

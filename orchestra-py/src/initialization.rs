@@ -1,6 +1,18 @@
 use pyo3::prelude::*;
 
 /// Kaiming (He) initialization.
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A Kaiming initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Kaiming;
@@ -14,6 +26,18 @@ impl Kaiming {
 }
 
 /// Xavier (Glorot) initialization.
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A Xavier initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Xavier;
@@ -27,6 +51,18 @@ impl Xavier {
 }
 
 /// Lecun initialization.
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A Lecun initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Lecun;
@@ -40,6 +76,18 @@ impl Lecun {
 }
 
 /// Xavier uniform initialization.
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A Xavier uniform initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct XavierUniform;
@@ -53,6 +101,18 @@ impl XavierUniform {
 }
 
 /// Lecun uniform initialization.
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A Lecun uniform initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct LecunUniform;
@@ -69,6 +129,15 @@ impl LecunUniform {
 ///
 /// # Args
 /// * `value` - The constant value to initialize all parameters with.
+///
+/// # Returns
+/// A constant initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Const {
@@ -88,6 +157,15 @@ impl Const {
 /// # Args
 /// * `low` - Lower bound of the uniform distribution.
 /// * `high` - Upper bound of the uniform distribution.
+///
+/// # Returns
+/// A uniform initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Uniform {
@@ -108,6 +186,15 @@ impl Uniform {
 /// # Args
 /// * `low` - Lower bound of the uniform distribution (inclusive).
 /// * `high` - Upper bound of the uniform distribution (inclusive).
+///
+/// # Returns
+/// A uniform inclusive initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct UniformInclusive {
@@ -128,6 +215,15 @@ impl UniformInclusive {
 /// # Args
 /// * `mean` - Mean of the normal distribution.
 /// * `std_dev` - Standard deviation of the normal distribution.
+///
+/// # Returns
+/// A normal initializer configuration.
+///
+/// # Errors
+/// This constructor does not return errors.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Normal {

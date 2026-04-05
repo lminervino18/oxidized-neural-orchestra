@@ -10,6 +10,16 @@ use pyo3::prelude::*;
 /// * `data` - Flat list of floats in row-major order.
 /// * `x_size` - Number of input features per sample.
 /// * `y_size` - Number of output features per sample.
+///
+/// # Returns
+/// An inline dataset configuration.
+///
+/// # Errors
+/// Raises a `ValueError` if `x_size` is zero.
+/// Raises a `ValueError` if `y_size` is zero.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct InlineDataset {
@@ -43,6 +53,17 @@ impl InlineDataset {
 /// * `path` - Path to the binary dataset file.
 /// * `x_size` - Number of input features per sample.
 /// * `y_size` - Number of output features per sample.
+///
+/// # Returns
+/// A local dataset configuration.
+///
+/// # Errors
+/// Raises a `ValueError` if `x_size` is zero.
+/// Raises a `ValueError` if `y_size` is zero.
+/// Raises a `ValueError` if `path` does not exist.
+///
+/// # Panics
+/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct LocalDataset {

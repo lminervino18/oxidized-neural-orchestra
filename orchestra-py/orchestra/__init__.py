@@ -1,17 +1,10 @@
-from orchestra._orchestra import (
-    Sequential,
-    Session,
-    TrainedModel,
-    PyTrainingConfig,
-    parameter_server,
-    orchestrate,
-)
+from orchestra._orchestra import PyTrainingConfig, Sequential, Session, TrainedModel, orchestrate, parameter_server
 
 __all__ = [
+    "PyTrainingConfig",
     "Sequential",
     "Session",
     "TrainedModel",
-    "PyTrainingConfig",
-    "parameter_server",
     "orchestrate",
+    "parameter_server",
 ]
