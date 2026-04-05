@@ -1,5 +1,6 @@
 use std::{num::NonZeroUsize, path::PathBuf};
 
+use comms::Float01;
 use serde::{Deserialize, Serialize};
 
 /// The `LossFn` configuration.
@@ -66,7 +67,7 @@ pub enum AlgorithmConfig {
 #[serde(rename_all = "snake_case")]
 pub enum SerializerConfig {
     Base,
-    SparseCapable { r: f32 },
+    SparseCapable { r: Float01 },
 }
 
 impl Default for SerializerConfig {
