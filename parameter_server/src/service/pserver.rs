@@ -1,155 +1,159 @@
 use std::io;
 
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Detail, Msg, Payload},
-};
-use log::{debug, error, info};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    task::JoinSet,
-};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
-use super::Server;
-use crate::{
-    storage::{Store, StoreHandle},
-    synchronization::Synchronizer,
-};
+use super::{Align4, Deserialize, Deserializer, LEN_TYPE_SIZE, LenType, msg::Msg};
 
-/// The central server structure, it handles task management and io between workers.
-pub struct ParameterServer<PS: Store, Sy: Synchronizer> {
-    tasks: JoinSet<io::Result<()>>,
-    handle: StoreHandle<PS>,
-    synchronizer: Sy,
+const GRAD_KIND: u32 = 2;
+const KIND_SIZE: usize = size_of::<u32>();
+
+/// The receiving end handle of the communication.
+pub struct OnoReceiver<R: AsyncRead + Unpin> {
+    rx: R,
+    rx_buf: Vec<u32>,
+    deserializer: Deserializer,
 }
 
-impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
-    /// Creates a new `ParameterServer`.
+impl<R: AsyncRead + Unpin> OnoReceiver<R> {
+    /// Creates a new `OnoReceiver`.
     ///
     /// # Args
-    /// * `handle` - The underlying parameter store to use behind a handle.
-    /// * `synchronizer` - The synchronizer to use.
+    /// * `rx` - The underlying reader.
+    /// * `deserializer` - The message deserializer to use.
     ///
     /// # Returns
-    /// A new `ParameterServer` instance.
-    pub fn new(handle: StoreHandle<PS>, synchronizer: Sy) -> Self {
+    /// A new `OnoReceiver` instance.
+    pub(super) fn new(rx: R, deserializer: Deserializer) -> Self {
         Self {
-            tasks: JoinSet::new(),
-            handle,
-            synchronizer,
+            rx,
+            rx_buf: Vec::new(),
+            deserializer,
         }
     }
-}
 
-impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
-    /// Starts the training process with the spawned workers.
+    /// Waits to receive a new message from the inner receiver.
     ///
     /// # Returns
-    /// The trained parameters of the model.
-    pub async fn run(&mut self) -> io::Result<Vec<f32>> {
-        while let Some(ret) = self.tasks.join_next().await {
-            match ret {
-                Ok(Err(e)) => {
-                    error!("worker task failed with error: {e}");
-                    return Err(e);
-                }
-                Err(e) => {
-                    error!("task panicked or was cancelled: {e}");
-                    return Err(io::Error::other(e));
-                }
-                _ => {}
-            }
+    /// A result object that returns `Msg` on success or `io::Error` on failure.
+    pub async fn recv<'a>(&'a mut self) -> io::Result<Msg<'a>> {
+        let Self {
+            rx,
+            rx_buf,
+            deserializer,
+        } = self;
+
+        let mut size_buf = [0; LEN_TYPE_SIZE];
+        rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
+
+        let b_size = size_of::<u32>();
+        let needed_amount = len.div_ceil(b_size);
+
+        if rx_buf.capacity() < needed_amount {
+            rx_buf.reserve(needed_amount - rx_buf.len());
         }
 
-        // SAFETY: This parameter vector is the same size as
-        //         the amount of parameters in the storage.
-        let nparams = self.handle.len();
-        let mut params = vec![0.; nparams];
-        self.handle.pull_params(&mut params).await.unwrap();
-        Ok(params)
-    }
-}
+        unsafe { rx_buf.set_len(needed_amount) };
 
-impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterServer<PS, Sy> {
-    /// Binds a new worker to this server and spawns its own training task.
+        let view = bytemuck::cast_slice_mut(rx_buf);
+        let slice = &mut view[..len];
+        rx.read_exact(slice).await?;
+
+        deserializer.deserialize(slice)
+    }
+
+    /// Waits to receive a new message from the inner receiver into the provided buffer.
     ///
     /// # Args
-    /// * `rx` - The receiving end of the communication.
-    /// * `tx` - The sending end of the communication.
-    pub fn spawn<R, W>(&mut self, mut rx: OnoReceiver<R>, mut tx: OnoSender<W>)
+    /// * `buf` - The buffer to use for deserialization; the returned `T`'s lifetimes
+    ///           will be tied to this buffer.
+    ///
+    /// # Returns
+    /// A result object that returns `T` on success or `io::Error` on failure.
+    pub async fn recv_into<'buf, T, B>(&mut self, buf: &'buf mut Vec<B>) -> io::Result<T>
     where
-        R: AsyncRead + Unpin + Send + 'static,
-        W: AsyncWrite + Unpin + Send + 'static,
+        T: Deserialize<'buf>,
+        B: Align4,
     {
-        let id = self.tasks.len() + 1;
-        let handle = self.handle.clone();
-        let synchronizer = self.synchronizer.clone();
-        let mut msg_buf = vec![0u32; 1028];
+        let mut size_buf = [0; LEN_TYPE_SIZE];
+        self.rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
 
-        let task = async move {
-            let nparams = handle.len();
-            let mut params = vec![0f32; nparams];
-            let mut grad_buf = vec![0f32; nparams];
+        let b_size = size_of::<B>();
+        let needed_amount = len.div_ceil(b_size);
 
-            // SAFETY: This buffer is the same size as the
-            //         amount of parameters in the storage.
-            handle.pull_params(&mut params).await.unwrap();
+        if buf.capacity() < needed_amount {
+            buf.reserve(needed_amount - buf.len());
+        }
 
-            debug!(worker_id = id; "sending parameters");
-            let msg = Msg::Data(Payload::Params(&mut params));
-            tx.send(&msg).await?;
+        unsafe { buf.set_len(needed_amount) };
 
-            loop {
-                debug!(worker_id = id; "waiting to receive a message");
-                match rx.recv_grad_or_msg(&mut grad_buf, &mut msg_buf).await? {
-                    None => {
-                        debug!(worker_id = id; "received gradient, applying step");
+        let view = bytemuck::cast_slice_mut(buf);
+        let slice = &mut view[..len];
+        self.rx.read_exact(slice).await?;
 
-                        // SAFETY: We checked that the gradient is the same
-                        //         size as the buffer and the storage.
-                        synchronizer.step(&handle, &grad_buf, &mut params).await.unwrap();
+        T::deserialize(slice)
+    }
 
-                        debug!(worker_id = id; "sending parameters");
-                        let msg = Msg::Data(Payload::Params(&mut params));
-                        tx.send(&msg).await?;
-                    }
-                    Some(Msg::Control(Command::Disconnect)) => {
-                        info!(worker_id = id; "gracefully disconnecting worker");
-                        let msg = Msg::Control(Command::Disconnect);
-                        tx.send(&msg).await?;
-                        break;
-                    }
-                    Some(msg) => {
-                        error!(worker_id = id; "received an invalid message {msg:?}");
+    /// Receives the next message, dispatching on whether it is a gradient or another message type.
+    ///
+    /// This preserves the fast-path used by the f16 integration while remaining compatible
+    /// with the deserializer-based receiver design.
+    pub async fn recv_grad_or_msg<'buf, B: Align4>(
+        &mut self,
+        grad_out: &mut [f32],
+        msg_buf: &'buf mut Vec<B>,
+    ) -> io::Result<Option<Msg<'buf>>> {
+        let mut size_buf = [0u8; LEN_TYPE_SIZE];
+        self.rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
 
-                        let msg = Msg::Err(Detail::Fatal("invalid message".into()));
-                        tx.send(&msg).await?;
+        let b_size = size_of::<B>();
+        let needed = len.div_ceil(b_size);
 
-                        return Err(io::Error::other("invalid message"));
-                    }
-                }
-            }
+        if msg_buf.capacity() < needed {
+            msg_buf.reserve(needed - msg_buf.len());
+        }
 
-            Ok(())
+        unsafe { msg_buf.set_len(needed) };
+
+        {
+            let view: &mut [u8] = bytemuck::cast_slice_mut(msg_buf.as_mut_slice());
+            self.rx.read_exact(&mut view[..len]).await?;
+        }
+
+        let kind = {
+            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
+            u32::from_be_bytes(bytes[..KIND_SIZE].try_into().unwrap())
         };
 
-        self.tasks.spawn(task);
-    }
-}
+        if kind == GRAD_KIND {
+            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
+            let f16_bytes = &bytes[KIND_SIZE..len];
+            let f16_values: &[half::f16] = bytemuck::cast_slice(f16_bytes);
 
-#[async_trait::async_trait]
-impl<R, W, PS, Sy> Server<R, W> for ParameterServer<PS, Sy>
-where
-    R: AsyncRead + Unpin + Send + 'static,
-    W: AsyncWrite + Unpin + Send + 'static,
-    PS: Store + Send + Sync + 'static,
-    Sy: Synchronizer + 'static,
-{
-    async fn run(&mut self) -> io::Result<Vec<f32>> {
-        self.run().await
-    }
+            if f16_values.len() != grad_out.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "gradient size mismatch: expected {} values, got {}",
+                        grad_out.len(),
+                        f16_values.len()
+                    ),
+                ));
+            }
 
-    fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>) {
-        self.spawn(rx, tx)
+            for (dst, &src) in grad_out.iter_mut().zip(f16_values) {
+                *dst = src.to_f32();
+            }
+
+            Ok(None)
+        } else {
+            let byte_slice: &'buf mut [u8] =
+                unsafe { std::slice::from_raw_parts_mut(msg_buf.as_mut_ptr() as *mut u8, len) };
+
+            let msg = self.deserializer.deserialize(byte_slice)?;
+            Ok(Some(msg))
+        }
     }
 }

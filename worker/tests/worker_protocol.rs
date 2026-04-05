@@ -1,140 +1,159 @@
-use std::num::NonZeroUsize;
+use std::io;
 
-use comms::{OnoReceiver, OnoSender};
-use machine_learning::{
-    arch::{Sequential, layers::Layer, loss::Mse},
-    dataset::{Dataset, DatasetSrc},
-    optimization::{GradientDescent, Optimizer},
-    training::BackpropTrainer,
-};
-use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
-use comms::msg::{Command, Msg, Payload};
-use worker::{
-    middleware::ps::ParameterServerMiddleware, runtime::ps::ParameterServerRuntime, worker::Worker,
-};
+use super::{Align4, Deserialize, Deserializer, LEN_TYPE_SIZE, LenType, msg::Msg};
 
-#[allow(clippy::type_complexity)]
-fn channel_pair() -> (
-    (
-        OnoReceiver<ReadHalf<DuplexStream>>,
-        OnoSender<WriteHalf<DuplexStream>>,
-    ),
-    (
-        OnoReceiver<ReadHalf<DuplexStream>>,
-        OnoSender<WriteHalf<DuplexStream>>,
-    ),
-) {
-    let (stream1, stream2) = io::duplex(4096);
-    let (rx1, tx1) = io::split(stream1);
-    let (rx2, tx2) = io::split(stream2);
-    let chan1 = comms::channel(rx1, tx1);
-    let chan2 = comms::channel(rx2, tx2);
-    (chan1, chan2)
+const GRAD_KIND: u32 = 2;
+const KIND_SIZE: usize = size_of::<u32>();
+
+/// The receiving end handle of the communication.
+pub struct OnoReceiver<R: AsyncRead + Unpin> {
+    rx: R,
+    rx_buf: Vec<u32>,
+    deserializer: Deserializer,
 }
 
-async fn mock_orch<R>(mut wk_rx: OnoReceiver<R>, mut sv_rx: OnoReceiver<R>) -> io::Result<Vec<f32>>
-where
-    R: AsyncRead + Unpin,
-{
-    let mut rx_buf = vec![0; 128];
-
-    loop {
-        match wk_rx.recv_into(&mut rx_buf).await? {
-            Msg::Control(Command::Disconnect) => break,
-            Msg::Control(Command::ReportLoss { losses }) => println!("loss: {losses:?}"),
-            _ => {}
+impl<R: AsyncRead + Unpin> OnoReceiver<R> {
+    /// Creates a new `OnoReceiver`.
+    ///
+    /// # Args
+    /// * `rx` - The underlying reader.
+    /// * `deserializer` - The message deserializer to use.
+    ///
+    /// # Returns
+    /// A new `OnoReceiver` instance.
+    pub(super) fn new(rx: R, deserializer: Deserializer) -> Self {
+        Self {
+            rx,
+            rx_buf: Vec::new(),
+            deserializer,
         }
     }
 
-    let Msg::Data(Payload::Params(params)) = sv_rx.recv_into(&mut rx_buf).await? else {
-        return Err(io::Error::other(
-            "received an invalid message kind from the server",
-        ));
-    };
+    /// Waits to receive a new message from the inner receiver.
+    ///
+    /// # Returns
+    /// A result object that returns `Msg` on success or `io::Error` on failure.
+    pub async fn recv<'a>(&'a mut self) -> io::Result<Msg<'a>> {
+        let Self {
+            rx,
+            rx_buf,
+            deserializer,
+        } = self;
 
-    Ok(params.to_vec())
-}
+        let mut size_buf = [0; LEN_TYPE_SIZE];
+        rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
 
-async fn mock_server<R, W>(
-    mut rx: OnoReceiver<R>,
-    mut tx: OnoSender<W>,
-    mut orch_tx: OnoSender<W>,
-    learning_rate: f32,
-    nparams: usize,
-) -> io::Result<()>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
-    let mut optimizer = GradientDescent::new(learning_rate);
-    let mut params = vec![0.5; nparams];
-    let mut rx_buf = vec![0u32; 128];
-    let mut grad_buf = vec![0.0f32; nparams];
-    
-    let msg = Msg::Data(Payload::Params(&mut params));
-    tx.send(&msg).await?;
+        let b_size = size_of::<u32>();
+        let needed_amount = len.div_ceil(b_size);
 
-
-    loop {
-        match rx.recv_grad_or_msg(&mut grad_buf, &mut rx_buf).await? {
-            None => {
-                optimizer.update_params(&grad_buf, &mut params).unwrap();
-                let msg = Msg::Data(Payload::Params(&mut params));
-                tx.send(&msg).await?;
-            }
-            Some(Msg::Control(Command::Disconnect)) => {
-                break;
-            }
-            Some(_) => {}
+        if rx_buf.capacity() < needed_amount {
+            rx_buf.reserve(needed_amount - rx_buf.len());
         }
+
+        unsafe { rx_buf.set_len(needed_amount) };
+
+        let view = bytemuck::cast_slice_mut(rx_buf);
+        let slice = &mut view[..len];
+        rx.read_exact(slice).await?;
+
+        deserializer.deserialize(slice)
     }
 
-    let msg = Msg::Control(Command::Disconnect);
-    tx.send(&msg).await?;
+    /// Waits to receive a new message from the inner receiver into the provided buffer.
+    ///
+    /// # Args
+    /// * `buf` - The buffer to use for deserialization; the returned `T`'s lifetimes
+    ///           will be tied to this buffer.
+    ///
+    /// # Returns
+    /// A result object that returns `T` on success or `io::Error` on failure.
+    pub async fn recv_into<'buf, T, B>(&mut self, buf: &'buf mut Vec<B>) -> io::Result<T>
+    where
+        T: Deserialize<'buf>,
+        B: Align4,
+    {
+        let mut size_buf = [0; LEN_TYPE_SIZE];
+        self.rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
 
-    let msg = Msg::Data(Payload::Params(&mut params));
-    orch_tx.send(&msg).await?;
+        let b_size = size_of::<B>();
+        let needed_amount = len.div_ceil(b_size);
 
-    Ok(())
-}
+        if buf.capacity() < needed_amount {
+            buf.reserve(needed_amount - buf.len());
+        }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_local_lineal_model_convergence() -> io::Result<()> {
-    let ((sv_rx, sv_tx), (wk_rx, wk_tx)) = channel_pair();
-    let ((wk_orch_rx, wk_orch_tx), (orch_wk_rx, _)) = channel_pair();
-    let ((_, sv_orch_tx), (orch_sv_rx, _)) = channel_pair();
+        unsafe { buf.set_len(needed_amount) };
 
-    const MAX_EPOCHS: usize = 100;
+        let view = bytemuck::cast_slice_mut(buf);
+        let slice = &mut view[..len];
+        self.rx.read_exact(slice).await?;
 
-    let model = Sequential::new(vec![Layer::dense((1, 1))]);
-    let x_size = NonZeroUsize::new(1).unwrap();
-    let trainer = BackpropTrainer::new(
-        model,
-        vec![GradientDescent::new(0.1)],
-        Dataset::new(
-            DatasetSrc::inmem(vec![0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0]),
-            x_size,
-            x_size,
-        ),
-        Mse::new(),
-        0,
-        NonZeroUsize::new(MAX_EPOCHS).unwrap(),
-        NonZeroUsize::new(4).unwrap(),
-        rand::rng(),
-    );
+        T::deserialize(slice)
+    }
 
-    let worker = Worker::new(Box::new(trainer));
-    let mut middleware = ParameterServerMiddleware::new(vec![0]);
-    middleware.spawn(wk_rx, wk_tx, 2);
+    /// Receives the next message, dispatching on whether it is a gradient or another message type.
+    ///
+    /// This preserves the fast-path used by the f16 integration while remaining compatible
+    /// with the deserializer-based receiver design.
+    pub async fn recv_grad_or_msg<'buf, B: Align4>(
+        &mut self,
+        grad_out: &mut [f32],
+        msg_buf: &'buf mut Vec<B>,
+    ) -> io::Result<Option<Msg<'buf>>> {
+        let mut size_buf = [0u8; LEN_TYPE_SIZE];
+        self.rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
 
-    let runtime = ParameterServerRuntime::new(worker, wk_orch_rx, wk_orch_tx, middleware);
+        let b_size = size_of::<B>();
+        let needed = len.div_ceil(b_size);
 
-    let worker_fut = runtime.run();
-    let server_fut = mock_server(sv_rx, sv_tx, sv_orch_tx, 0.1, 2);
-    let orch_fut = mock_orch(orch_wk_rx, orch_sv_rx);
+        if msg_buf.capacity() < needed {
+            msg_buf.reserve(needed - msg_buf.len());
+        }
 
-    let (_, _, params) = tokio::try_join!(worker_fut, server_fut, orch_fut)?;
-    println!("params: {params:?}");
-    Ok(())
+        unsafe { msg_buf.set_len(needed) };
+
+        {
+            let view: &mut [u8] = bytemuck::cast_slice_mut(msg_buf.as_mut_slice());
+            self.rx.read_exact(&mut view[..len]).await?;
+        }
+
+        let kind = {
+            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
+            u32::from_be_bytes(bytes[..KIND_SIZE].try_into().unwrap())
+        };
+
+        if kind == GRAD_KIND {
+            let bytes: &[u8] = bytemuck::cast_slice(msg_buf.as_slice());
+            let f16_bytes = &bytes[KIND_SIZE..len];
+            let f16_values: &[half::f16] = bytemuck::cast_slice(f16_bytes);
+
+            if f16_values.len() != grad_out.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "gradient size mismatch: expected {} values, got {}",
+                        grad_out.len(),
+                        f16_values.len()
+                    ),
+                ));
+            }
+
+            for (dst, &src) in grad_out.iter_mut().zip(f16_values) {
+                *dst = src.to_f32();
+            }
+
+            Ok(None)
+        } else {
+            let byte_slice: &'buf mut [u8] =
+                unsafe { std::slice::from_raw_parts_mut(msg_buf.as_mut_ptr() as *mut u8, len) };
+
+            let msg = self.deserializer.deserialize(byte_slice)?;
+            Ok(Some(msg))
+        }
+    }
 }

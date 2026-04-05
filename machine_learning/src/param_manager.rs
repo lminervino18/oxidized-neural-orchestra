@@ -6,7 +6,7 @@ use crate::{MlErr, Result, optimization::Optimizer};
 pub struct ServerParamsMetadata<'mw> {
     params: &'mw mut [f32],
     grad: &'mw mut [f32],
-    acc_grad_buf: &'mw mut [f32],
+    residual: &'mw mut [f32],
 }
 
 impl<'mw> ServerParamsMetadata<'mw> {
@@ -15,15 +15,15 @@ impl<'mw> ServerParamsMetadata<'mw> {
     /// # Args
     /// * `params` - The mutable slice of this server's parameters.
     /// * `grad` - The server's dedicated gradient slice.
-    /// * `acc_grad_buf` - The server's accumulated gradient buffer.
+    /// * `residual` - The server's accumulated gradient buffer.
     ///
     /// # Returns
     /// A new `ServerParamsMetadata` instance.
-    pub fn new(params: &'mw mut [f32], grad: &'mw mut [f32], acc_grad_buf: &'mw mut [f32]) -> Self {
+    pub fn new(params: &'mw mut [f32], grad: &'mw mut [f32], residual: &'mw mut [f32]) -> Self {
         Self {
             params,
             grad,
-            acc_grad_buf,
+            residual,
         }
     }
 }
@@ -118,10 +118,10 @@ impl<'mw> ParamManager<'mw> {
             .for_each(|server| server.grad.fill(0.0));
     }
 
-    /// Accumulates the current gradient onto the inner accumulated gradients buffer.
-    pub fn acc_grad(&mut self) {
+    /// Accumulates the current gradient onto the inner accumulated residual buffer.
+    pub fn acc_residual(&mut self) {
         self.servers.par_iter_mut().for_each(|server| {
-            for (acc, g) in server.acc_grad_buf.iter_mut().zip(server.grad.iter()) {
+            for (acc, g) in server.residual.iter_mut().zip(server.grad.iter()) {
                 *acc += *g;
             }
         });
@@ -240,9 +240,7 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, acc_grad_buf)| {
-                ServerParamsMetadata::new(params, grad, acc_grad_buf)
-            })
+            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
         let mut manager = ParamManager::new(servers, &ORDERING);
@@ -266,9 +264,7 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, acc_grad_buf)| {
-                ServerParamsMetadata::new(params, grad, acc_grad_buf)
-            })
+            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
         let mut manager = ParamManager::new(servers, &ORDERING);
@@ -295,9 +291,7 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, acc_grad_buf)| {
-                ServerParamsMetadata::new(params, grad, acc_grad_buf)
-            })
+            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
         let mut manager = ParamManager::new(servers, &ORDERING);
@@ -323,9 +317,7 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, acc_grad_buf)| {
-                ServerParamsMetadata::new(params, grad, acc_grad_buf)
-            })
+            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
         let mut manager = ParamManager::new(servers, &ORDERING);

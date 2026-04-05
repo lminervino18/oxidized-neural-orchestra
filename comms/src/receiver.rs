@@ -2,7 +2,7 @@ use std::io;
 
 use tokio::io::{AsyncRead, AsyncReadExt};
 
-use crate::{Align4, Deserialize, LEN_TYPE_SIZE, LenType, msg::Msg};
+use super::{Align4, Deserialize, Deserializer, LEN_TYPE_SIZE, LenType, msg::Msg};
 
 const GRAD_KIND: u32 = 2;
 const KIND_SIZE: usize = size_of::<u32>();
@@ -10,18 +10,59 @@ const KIND_SIZE: usize = size_of::<u32>();
 /// The receiving end handle of the communication.
 pub struct OnoReceiver<R: AsyncRead + Unpin> {
     rx: R,
+    rx_buf: Vec<u32>,
+    deserializer: Deserializer,
 }
 
 impl<R: AsyncRead + Unpin> OnoReceiver<R> {
-    /// Creates a new `OnoReceiver` instance.
+    /// Creates a new `OnoReceiver`.
     ///
     /// # Args
     /// * `rx` - The underlying reader.
-    pub(super) fn new(rx: R) -> Self {
-        Self { rx }
+    /// * `deserializer` - The message deserializer to use.
+    ///
+    /// # Returns
+    /// A new `OnoReceiver` instance.
+    pub(super) fn new(rx: R, deserializer: Deserializer) -> Self {
+        Self {
+            rx,
+            rx_buf: Vec::new(),
+            deserializer,
+        }
     }
 
     /// Waits to receive a new message from the inner receiver.
+    ///
+    /// # Returns
+    /// A result object that returns `Msg` on success or `io::Error` on failure.
+    pub async fn recv<'a>(&'a mut self) -> io::Result<Msg<'a>> {
+        let Self {
+            rx,
+            rx_buf,
+            deserializer,
+        } = self;
+
+        let mut size_buf = [0; LEN_TYPE_SIZE];
+        rx.read_exact(&mut size_buf).await?;
+        let len = LenType::from_be_bytes(size_buf) as usize;
+
+        let b_size = size_of::<u32>();
+        let needed_amount = len.div_ceil(b_size);
+
+        if rx_buf.capacity() < needed_amount {
+            rx_buf.reserve(needed_amount - rx_buf.len());
+        }
+
+        unsafe { rx_buf.set_len(needed_amount) };
+
+        let view = bytemuck::cast_slice_mut(rx_buf);
+        let slice = &mut view[..len];
+        rx.read_exact(slice).await?;
+
+        deserializer.deserialize(slice)
+    }
+
+    /// Waits to receive a new message from the inner receiver into the provided buffer.
     ///
     /// # Args
     /// * `buf` - The buffer to use for deserialization; the returned `T`'s lifetimes
@@ -45,8 +86,6 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
             buf.reserve(needed_amount - buf.len());
         }
 
-        // SAFETY: The buffer has capacity for at least the amount of items. These
-        //         will be immediately overwritten in the read_exact call.
         unsafe { buf.set_len(needed_amount) };
 
         let view = bytemuck::cast_slice_mut(buf);
@@ -58,21 +97,8 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
 
     /// Receives the next message, dispatching on whether it is a gradient or another message type.
     ///
-    /// Gradient messages are encoded as `f16` on the wire to halve network traffic.
-    /// This method transparently converts the incoming `f16` values to `f32` in `grad_out`,
-    /// so callers never handle the wire encoding directly.
-    ///
-    /// # Args
-    /// * `grad_out` - Buffer to write the decoded gradient into if the next message is a gradient.
-    ///               Must match the expected number of parameters exactly.
-    /// * `msg_buf` - Buffer used for deserialization if the next message is not a gradient.
-    ///
-    /// # Returns
-    /// `None` if the message was a gradient (written to `grad_out`), or `Some(Msg)` otherwise.
-    ///
-    /// # Errors
-    /// Returns an `io::Error` if the connection fails or the received gradient length does
-    /// not match `grad_out`.
+    /// This preserves the fast-path used by the f16 integration while remaining compatible
+    /// with the deserializer-based receiver design.
     pub async fn recv_grad_or_msg<'buf, B: Align4>(
         &mut self,
         grad_out: &mut [f32],
@@ -89,8 +115,6 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
             msg_buf.reserve(needed - msg_buf.len());
         }
 
-        // SAFETY: The buffer has capacity for at least `needed` items.
-        //         These will be immediately overwritten in the read_exact call below.
         unsafe { msg_buf.set_len(needed) };
 
         {
@@ -125,13 +149,10 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
 
             Ok(None)
         } else {
-            // SAFETY: `msg_buf` is borrowed for `'buf` and `B: Align4` implies `B: Pod`,
-            //         so reinterpreting as `u8` is sound. We slice to exactly `len` bytes,
-            //         which is within the `needed * size_of::<B>()` bytes allocated above.
-            let byte_slice: &'buf mut [u8] = unsafe {
-                std::slice::from_raw_parts_mut(msg_buf.as_mut_ptr() as *mut u8, len)
-            };
-            let msg = Msg::deserialize(byte_slice)?;
+            let byte_slice: &'buf mut [u8] =
+                unsafe { std::slice::from_raw_parts_mut(msg_buf.as_mut_ptr() as *mut u8, len) };
+
+            let msg = self.deserializer.deserialize(byte_slice)?;
             Ok(Some(msg))
         }
     }
