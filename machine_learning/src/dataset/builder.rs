@@ -1,5 +1,6 @@
-use super::{Dataset, DatasetSrc};
 use comms::specs::machine_learning::DatasetSpec;
+
+use super::{Dataset, DatasetSrc};
 
 #[derive(Default)]
 pub struct DatasetBuilder;
@@ -17,7 +18,8 @@ impl DatasetBuilder {
     ///
     /// # Args
     /// * `spec` - The specification for the dataset.
-    /// * `dataset_raw` - The dataset's raw data.
+    /// * `samples_raw` - The dataset samples raw data.
+    /// * `labels_raw` - The dataset labels raw data.
     ///
     /// # Returns
     /// A fully initialized `Dataset` instance.

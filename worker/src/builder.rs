@@ -1,7 +1,7 @@
 use comms::specs::worker::WorkerSpec;
+use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
 
 use super::worker::Worker;
-use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
 
 #[derive(Default)]
 pub struct WorkerBuilder;
@@ -19,6 +19,9 @@ impl WorkerBuilder {
     ///
     /// # Args
     /// * `spec` - The specification for a worker.
+    /// * `server_sizes` - The amount of parameters for each server.
+    /// * `samples_raw` - The dataset samples raw data.
+    /// * `labels_raw` - The dataset labels raw data.
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.

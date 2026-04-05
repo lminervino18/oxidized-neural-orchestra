@@ -1,5 +1,6 @@
-use rand::Rng;
 use std::ops::Range;
+
+use rand::Rng;
 
 pub struct InMemSrc {
     samples: Vec<f32>,
@@ -8,7 +9,6 @@ pub struct InMemSrc {
 
 impl InMemSrc {
     pub fn new(samples: Vec<f32>, labels: Vec<f32>) -> Self {
-        // TODO: maybe check that lengths are equal
         InMemSrc { samples, labels }
     }
 

@@ -1,4 +1,5 @@
 use std::io::{Cursor, Error, ErrorKind, Result};
+
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufWriter};
 
 use crate::{
@@ -20,8 +21,10 @@ pub fn get_dataset_cursor(dataset_raw: &mut [f32]) -> Cursor<&mut [u8]> {
 /// Receives chunks of the dataset and writes them into a storage.
 ///
 /// # Args
-/// * `storage` - The storage for writing the chunks.
-/// * `size` - The total size of the dataset in bytes.
+/// * `x_storage` - The storage for writing the sample chunks.
+/// * `y_storage` - The storage for writing the label chunks.
+/// * `x_size_bytes` - The total size of the dataset samples in bytes.
+/// * `y_size_bytes` - The total size of the dataset labels in bytes.
 /// * `rx` - An `OnoReceiver` for receiving the chunks.
 ///
 /// # Errors
