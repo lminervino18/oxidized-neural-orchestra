@@ -18,7 +18,7 @@ where
     rx: OnoReceiver<R>,
     tx: OnoSender<W>,
     grad: Vec<f32>,
-    acc_grad_buf: Vec<f32>,
+    residual: Vec<f32>,
 }
 
 // The communication manager between the worker process and the many servers.
@@ -61,7 +61,7 @@ where
             rx,
             tx,
             grad: vec![0.0; size],
-            acc_grad_buf: vec![0.0; size],
+            residual: vec![0.0; size],
         };
 
         self.servers.push(metadata);
@@ -78,11 +78,8 @@ where
             .enumerate()
             .map(async |(i, server)| match server.rx.recv().await? {
                 Msg::Data(Payload::Params(params)) => {
-                    let metadata = ServerParamsMetadata::new(
-                        params,
-                        &mut server.grad,
-                        &mut server.acc_grad_buf,
-                    );
+                    let metadata =
+                        ServerParamsMetadata::new(params, &mut server.grad, &mut server.residual);
 
                     Ok(metadata)
                 }
@@ -102,15 +99,27 @@ where
     /// An io error if occurred.
     pub async fn push_grads(&mut self) -> io::Result<()> {
         let futs = self.servers.iter_mut().map(async |server| {
-            let msg = Msg::Data(Payload::Grad(&server.acc_grad_buf));
-            server.tx.send(&msg).await?;
-
-            // TODO: Maybe do this somewhere else.
-            server.acc_grad_buf.fill(0.0);
-            Ok::<_, io::Error>(())
+            let msg = Msg::Data(Payload::Grad(&mut server.residual));
+            let threshold = server.tx.send(&msg).await?;
+            Ok::<_, io::Error>(threshold)
         });
 
-        future::try_join_all(futs).await?;
+        let thresholds = future::try_join_all(futs).await?;
+
+        for (server, threshold) in self.servers.iter_mut().zip(thresholds) {
+            let residual = &mut server.residual;
+
+            match threshold {
+                None => residual.fill(0.0),
+                Some(t) => {
+                    residual
+                        .iter_mut()
+                        .filter(|g| g.abs() >= t)
+                        .for_each(|g| *g = 0.0);
+                }
+            }
+        }
+
         Ok(())
     }
 

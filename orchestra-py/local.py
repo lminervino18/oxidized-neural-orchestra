@@ -8,6 +8,7 @@ from orchestra.activations import Sigmoid
 from orchestra.initialization import Kaiming
 from orchestra.datasets import LocalDataset
 from orchestra.optimizers import GradientDescent
+from orchestra.loss_fns import Mse
 from orchestra.sync import NonBlockingSync
 from orchestra.store import WildStore
 
@@ -44,6 +45,7 @@ def main() -> None:
         server_addrs=SERVER_ADDRS,
         dataset=LocalDataset(DATASET_PATH, x_size=784, y_size=10),
         optimizer=GradientDescent(lr=0.01),
+        loss_fn=Mse(),
         sync=NonBlockingSync(),
         store=WildStore(),
         max_epochs=50,

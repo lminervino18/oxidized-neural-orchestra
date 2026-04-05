@@ -48,7 +48,6 @@ async fn main() -> io::Result<()> {
         let (stream, addr) = list.accept().await?;
         info!("worker {i}/{nworkers} connected from {addr}");
         let (rx, tx) = stream.into_split();
-        let (rx, tx) = comms::channel(rx, tx);
         pserver.spawn(rx, tx);
     }
 

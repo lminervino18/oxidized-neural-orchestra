@@ -1,5 +1,6 @@
 use futures::future;
 use log::{debug, error, info, warn};
+use std::path::PathBuf;
 use std::{
     io::{self, Cursor},
     path::Path,
@@ -7,7 +8,7 @@ use std::{
 };
 use tokio::{
     fs::File,
-    io::{AsyncReadExt, AsyncSeekExt},
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWrite},
     net::{
         TcpStream,
         tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -341,16 +342,29 @@ impl Session {
                     tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
 
                     match partition {
-                        Partition::Local { path, offset, size } => {
-                            let mut fd = File::open(path).await?;
-                            fd.seek(io::SeekFrom::Start(offset)).await?;
-                            let mut fd = fd.take(size);
-                            send_dataset(&mut fd, CHUNK_SIZE, &mut tx).await?;
+                        Partition::Local {
+                            samples_path,
+                            labels_path,
+                            samples_offset,
+                            labels_offset,
+                            samples_size,
+                            labels_size,
+                        } => {
+                            Self::send_local_partition(
+                                samples_path,
+                                labels_path,
+                                samples_offset,
+                                labels_offset,
+                                samples_size,
+                                labels_size,
+                                CHUNK_SIZE,
+                                &mut tx,
+                            )
+                            .await?;
                         }
-                        Partition::Inline { data } => {
-                            let bytes: &[u8] = bytemuck::cast_slice(data);
-                            let mut cursor = Cursor::new(bytes);
-                            send_dataset(&mut cursor, CHUNK_SIZE, &mut tx).await?;
+                        Partition::Inline { samples, labels } => {
+                            Self::send_inline_partition(samples, labels, CHUNK_SIZE, &mut tx)
+                                .await?;
                         }
                     }
 
@@ -359,6 +373,51 @@ impl Session {
 
         let channels = future::try_join_all(futs).await?;
         Ok(channels)
+    }
+
+    async fn send_local_partition<W>(
+        samples_path: &PathBuf,
+        labels_path: &PathBuf,
+        samples_offset: u64,
+        labels_offset: u64,
+        samples_size: u64,
+        labels_size: u64,
+        chunk_size: usize,
+        tx: &mut OnoSender<W>,
+    ) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        let mut samples_fd = File::open(samples_path).await?;
+        let mut labels_fd = File::open(labels_path).await?;
+
+        samples_fd.seek(io::SeekFrom::Start(samples_offset)).await?;
+        labels_fd.seek(io::SeekFrom::Start(labels_offset)).await?;
+        let mut samples_fd = samples_fd.take(samples_size);
+        let mut labels_fd = labels_fd.take(labels_size);
+
+        send_dataset(&mut samples_fd, &mut labels_fd, chunk_size, tx).await?;
+
+        Ok(())
+    }
+
+    async fn send_inline_partition<W>(
+        samples: &[f32],
+        labels: &[f32],
+        chunk_size: usize,
+        tx: &mut OnoSender<W>,
+    ) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        let sample_bytes: &[u8] = bytemuck::cast_slice(samples);
+        let label_bytes: &[u8] = bytemuck::cast_slice(labels);
+        let mut samples_cursor = Cursor::new(sample_bytes);
+        let mut labels_cursor = Cursor::new(label_bytes);
+
+        send_dataset(&mut samples_cursor, &mut labels_cursor, chunk_size, tx).await?;
+
+        Ok(())
     }
 
     /// Opens a TCP channel to the given address.

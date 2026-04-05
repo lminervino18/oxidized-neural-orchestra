@@ -1,6 +1,5 @@
 use std::io;
 
-use comms::{OnoReceiver, OnoSender};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 /// This trait acts as an indirection layer, allowing the `ServerBuilder` to return
@@ -17,7 +16,7 @@ where
     /// Indirection method for `ParameterServer::spawn`
     ///
     /// # Args
-    /// * `rx` - The receiving end of the communication.
-    /// * `tx` - The sending end of the communication.
-    fn spawn(&mut self, rx: OnoReceiver<R>, tx: OnoSender<W>);
+    /// * `rx_raw` - The receiving end of the communication.
+    /// * `tx_raw` - The sending end of the communication.
+    fn spawn(&mut self, rx_raw: R, tx_raw: W);
 }

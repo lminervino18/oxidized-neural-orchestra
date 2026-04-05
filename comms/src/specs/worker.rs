@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::machine_learning::{DatasetSpec, TrainerSpec};
+use crate::sparse::Float01;
 
 /// Distributed training algorithm selection.
-///
-/// Only `parameter_server` is currently implemented.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmSpec {
@@ -15,6 +14,14 @@ pub enum AlgorithmSpec {
     },
 }
 
+/// Message serializer for gradient sparse compression.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SerializerSpec {
+    Base,
+    SparseCapable { r: Float01, seed: Option<u64> },
+}
+
 /// The specification for the `Worker`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkerSpec {
@@ -22,4 +29,5 @@ pub struct WorkerSpec {
     pub trainer: TrainerSpec,
     pub dataset: DatasetSpec,
     pub algorithm: AlgorithmSpec,
+    pub serializer: SerializerSpec,
 }

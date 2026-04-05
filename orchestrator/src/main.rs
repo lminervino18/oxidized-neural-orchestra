@@ -1,3 +1,4 @@
+use comms::Float01;
 use orchestrator::{configs::*, train};
 use std::{
     env, io,
@@ -87,14 +88,18 @@ fn main() -> io::Result<()> {
             synchronizer: SynchronizerConfig::Barrier,
             store: StoreConfig::Blocking,
         },
+        serializer: SerializerConfig::SparseCapable {
+            r: Float01::new(0.9).unwrap(),
+        },
         dataset: DatasetConfig {
             src: DatasetSrc::Inline {
-                data: vec![
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 0.0,
+                samples: vec![
+                    0., 0., //
+                    0., 1., //
+                    1., 0., //
+                    1., 1., //
                 ],
+                labels: vec![0., 1., 1., 0.],
             },
             x_size: NonZeroUsize::new(2).unwrap(),
             y_size: NonZeroUsize::new(1).unwrap(),

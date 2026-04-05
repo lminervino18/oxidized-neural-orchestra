@@ -2,10 +2,7 @@
 
 use std::num::NonZeroUsize;
 
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
-};
+use comms::msg::{Command, Msg, Payload};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
 use crate::{
@@ -17,34 +14,22 @@ use crate::{
 };
 
 fn channel_pair() -> (
-    (
-        OnoReceiver<ReadHalf<DuplexStream>>,
-        OnoSender<WriteHalf<DuplexStream>>,
-    ),
-    (
-        OnoReceiver<ReadHalf<DuplexStream>>,
-        OnoSender<WriteHalf<DuplexStream>>,
-    ),
+    (ReadHalf<DuplexStream>, WriteHalf<DuplexStream>),
+    (ReadHalf<DuplexStream>, WriteHalf<DuplexStream>),
 ) {
     let (stream1, stream2) = io::duplex(4096);
-    let (rx1, tx1) = io::split(stream1);
-    let (rx2, tx2) = io::split(stream2);
-    let chan1 = comms::channel(rx1, tx1);
-    let chan2 = comms::channel(rx2, tx2);
+    let chan1 = io::split(stream1);
+    let chan2 = io::split(stream2);
     (chan1, chan2)
 }
 
-async fn mock_lineal_worker<R, W>(
-    mut rx: OnoReceiver<R>,
-    mut tx: OnoSender<W>,
-    max_epochs: usize,
-    nparams: usize,
-) -> io::Result<()>
+async fn mock_lineal_worker<R, W>(rx: R, tx: W, max_epochs: usize, nparams: usize) -> io::Result<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
     let mut grad = vec![0.0; nparams];
+    let (mut rx, mut tx) = comms::channel(rx, tx);
 
     for _ in 0..max_epochs {
         match rx.recv().await? {
@@ -54,7 +39,7 @@ where
                 }
 
                 let msg = Msg::Data(Payload::Grad(&grad));
-                tx.send(&msg).await?
+                tx.send(&msg).await?;
             }
             _ => {}
         }
