@@ -71,11 +71,11 @@ impl Serializer {
     ) -> (Option<&'a [u8]>, Option<f32>) {
         match &mut self.0 {
             Inner::Base => {
-                let zero_copy_data = Inner::<StdRng>::serialize_base(&msg, out);
+                let zero_copy_data = Inner::<StdRng>::serialize_base(msg, out);
                 (zero_copy_data, None)
             }
             Inner::SparseCapable { ser_buf, r, rng } => {
-                Inner::serialize_sparse_capable(&msg, out, ser_buf, *r, rng)
+                Inner::serialize_sparse_capable(msg, out, ser_buf, *r, rng)
             }
         }
     }
@@ -124,28 +124,37 @@ impl<R: Rng> Inner<R> {
             }
             Msg::Data(payload) => match payload {
                 Payload::Grad(grad) => {
-                    // Encode dense gradients as f16 to halve network traffic.
-                    let header = (3 as Header).to_be_bytes();
-                    out.extend_from_slice(&header);
-
-                    for &g in grad.iter() {
-                        let g16 = f16::from_f32(g);
-                        out.extend_from_slice(&g16.to_le_bytes());
-                    }
-
+                    Self::serialize_dense_grad(out, grad);
                     None
                 }
-                Payload::Params(params) => {
-                    let header = (4 as Header).to_be_bytes();
+                payload => {
+                    let (kind, data): (Header, &[f32]) = match payload {
+                        Payload::Params(params) => (4, (*params).as_ref()),
+                        Payload::Datachunk(chunk) => (5, *chunk),
+                        Payload::Grad(_) => unreachable!(),
+                    };
+
+                    let header = kind.to_be_bytes();
                     out.extend_from_slice(&header);
-                    Some(bytemuck::cast_slice(params))
-                }
-                Payload::Datachunk(chunk) => {
-                    let header = (5 as Header).to_be_bytes();
-                    out.extend_from_slice(&header);
-                    Some(bytemuck::cast_slice(chunk))
+                    Some(bytemuck::cast_slice(data))
                 }
             },
+        }
+    }
+
+    /// Serializes the given dense gradient into `out` as `f16`.
+    ///
+    /// # Args
+    /// * `out` - The output buffer.
+    /// * `grad` - The gradient to serialize.
+    fn serialize_dense_grad(out: &mut Vec<u8>, grad: &[f32]) {
+        let header = (3 as Header).to_be_bytes();
+        out.extend_from_slice(&header);
+        out.reserve(grad.len() * std::mem::size_of::<f16>());
+
+        for &g in grad {
+            let g16 = f16::from_f32(g);
+            out.extend_from_slice(&g16.to_le_bytes());
         }
     }
 
@@ -179,21 +188,12 @@ impl<R: Rng> Inner<R> {
         ser_buf.clear();
         sparse::grad_drop_into(ser_buf, grad, threshold);
 
-        if ser_buf.len() < grad.len() * size_of::<f16>() {
-            // Sparse is smaller than dense f16 → send sparse
+        if ser_buf.len() < grad.len() * std::mem::size_of::<f16>() {
             let header = (2 as Header).to_be_bytes();
             out.extend_from_slice(&header);
             (Some(ser_buf), Some(threshold))
         } else {
-            // Dense f16 is smaller or equal → send dense as f16
-            let header = (3 as Header).to_be_bytes();
-            out.extend_from_slice(&header);
-
-            for &g in grad.iter() {
-                let g16 = f16::from_f32(g);
-                out.extend_from_slice(&g16.to_le_bytes());
-            }
-
+            Self::serialize_dense_grad(out, grad);
             (None, None)
         }
     }

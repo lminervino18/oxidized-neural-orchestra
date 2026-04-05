@@ -56,31 +56,46 @@ impl Deserializer {
             0 => Ok(Msg::Err(serde_json::from_slice(rest)?)),
             1 => Ok(Msg::Control(serde_json::from_slice(rest)?)),
             2 => {
-                // Sparse gradient: decompress f16 → f32
                 self.nums.fill(0.0);
                 sparse::grad_lift_into(&mut self.nums, rest).map_err(io::Error::other)?;
                 Ok(Msg::Data(Payload::Grad(&mut self.nums)))
             }
             3 => {
-                // Dense gradient: decode f16 → f32
+                if rest.len() % std::mem::size_of::<f16>() != 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "dense gradient payload has invalid byte length {}",
+                            rest.len()
+                        ),
+                    ));
+                }
+
                 let f16_slice: &[f16] = bytemuck::cast_slice(rest);
                 self.nums.resize(f16_slice.len(), 0.0);
 
-                for (i, &f16_val) in f16_slice.iter().enumerate() {
-                    self.nums[i] = f16_val.to_f32();
+                for (dst, &src) in self.nums.iter_mut().zip(f16_slice) {
+                    *dst = src.to_f32();
                 }
 
                 Ok(Msg::Data(Payload::Grad(&mut self.nums)))
             }
-            4 => {
-                // Params: raw f32
+            4..6 => {
+                if rest.len() % std::mem::size_of::<f32>() != 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("payload kind {kind} has invalid byte length {}", rest.len()),
+                    ));
+                }
+
                 let nums = bytemuck::cast_slice_mut(rest);
-                Ok(Msg::Data(Payload::Params(nums)))
-            }
-            5 => {
-                // Datachunk: raw f32
-                let nums = bytemuck::cast_slice_mut(rest);
-                Ok(Msg::Data(Payload::Datachunk(nums)))
+                let payload = match kind {
+                    4 => Payload::Params(nums),
+                    5 => Payload::Datachunk(nums),
+                    _ => unreachable!(),
+                };
+
+                Ok(Msg::Data(payload))
             }
             byte => Msg::invalid_kind_byte(byte),
         }
