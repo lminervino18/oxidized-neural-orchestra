@@ -25,21 +25,22 @@ impl InMemSrc {
             }
 
             let (i, j) = (i.min(j), i.max(j));
-            let x_i_data = i * x_size;
-            let y_i_data = i * y_size;
-            let x_j_data = j * x_size;
-            let y_j_data = j * y_size;
 
-            let (x_left, x_right) = self.samples.split_at_mut(x_j_data);
-            let (y_left, y_right) = self.labels.split_at_mut(y_j_data);
-            let x_row = &mut x_left[x_i_data..x_i_data + x_size];
-            let x_other = &mut x_right[..x_size];
-            let y_row = &mut y_left[y_i_data..y_i_data + y_size];
-            let y_other = &mut y_right[..y_size];
-
-            x_row.swap_with_slice(x_other);
-            y_row.swap_with_slice(y_other);
+            Self::shuffle_slice(&mut self.samples, i, j, x_size);
+            Self::shuffle_slice(&mut self.labels, i, j, y_size);
         }
+    }
+
+    fn shuffle_slice(slice: &mut [f32], min: usize, max: usize, size: usize) {
+        let i_data = min * size;
+        let j_data = max * size;
+
+        let (left, right) = slice.split_at_mut(j_data);
+
+        let row = &mut left[i_data..i_data + size];
+        let other = &mut right[..size];
+
+        row.swap_with_slice(other);
     }
 
     pub fn raw_batch(&self, x_range: Range<usize>, y_range: Range<usize>) -> (&[f32], &[f32]) {
