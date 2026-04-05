@@ -1,6 +1,6 @@
 use half::f16;
 use rand::{Rng, seq::IndexedRandom};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 type Idx = u64;
 type ChunkLen = u32;
@@ -12,7 +12,7 @@ const SAMPLE_SIZE_MAX: usize = 1 << 14;
 const MIN_POSITIVE_F16: f32 = f16::MIN_POSITIVE.to_f32_const();
 
 /// A float with a value between `0.0` and `1.0`.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct Float01 {
     value: f32,
 }
@@ -27,6 +27,43 @@ impl Float01 {
     /// A new `Float01` instance if the given value is between `0.0` and `1.0`.
     pub fn new(value: f32) -> Option<Self> {
         (0.0 <= value && value <= 1.0).then_some(Self { value })
+    }
+}
+
+impl Serialize for Float01 {
+    /// Serializes the inner value.
+    ///
+    /// # Args
+    /// * `serializer` - The serializer to write into.
+    ///
+    /// # Returns
+    /// The serialized float value.
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_f32(self.value)
+    }
+}
+
+impl<'de> Deserialize<'de> for Float01 {
+    /// Deserializes a `Float01` from a float value.
+    ///
+    /// # Args
+    /// * `deserializer` - The deserializer to read from.
+    ///
+    /// # Returns
+    /// A validated `Float01` instance.
+    ///
+    /// # Errors
+    /// Returns a deserialization error if the value is outside `[0.0, 1.0]`.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = f32::deserialize(deserializer)?;
+        Float01::new(value)
+            .ok_or_else(|| de::Error::custom("Float01 value must be between 0.0 and 1.0"))
     }
 }
 
@@ -107,7 +144,6 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
             .get(i..i + IDX_SIZE)
             .ok_or("Missing index bytes at grad lift")?
             .try_into()
-            // SAFETY: There are exactly `IDX_SIZE` bytes in the intermediate slice.
             .unwrap();
 
         let idx = Idx::from_le_bytes(idx_bytes) as usize;
@@ -117,7 +153,6 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
             .get(i..i + CHUNK_LEN_SIZE)
             .ok_or("Missing chunk length bytes at grad lift")?
             .try_into()
-            // SAFETY: There are exactly `CHUNK_LEN_SIZE` bytes in the intermediate slice.
             .unwrap();
 
         let chunk_len = ChunkLen::from_le_bytes(chunk_len_bytes) as usize;
@@ -142,24 +177,15 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
 
 #[test]
 fn test_grad_drop() {
-    let mut grad = vec![1.0, -1.0, 0.0, 2.0];
+    let grad = vec![1.0, -1.0, 0.0, 2.0];
     let mut buf = Vec::new();
     let threshold = 1.0;
 
-    grad_drop_into(&mut buf, &mut grad, threshold);
-
-    for g in grad {
-        assert!(g < threshold);
-    }
+    grad_drop_into(&mut buf, &grad, threshold);
 
     let expected = vec![
-        0, 0, 0, 0, 0, 0, 0, 0, // Idx
-        2, 0, 0, 0, // ChunkLen
-        0, 60, // 1.0
-        0, 188, // -1.0
-        3, 0, 0, 0, 0, 0, 0, 0, // Idx
-        1, 0, 0, 0, // ChunkLen
-        0, 64, // 2.0
+        0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        64,
     ];
 
     assert_eq!(buf, expected);
@@ -168,13 +194,8 @@ fn test_grad_drop() {
 #[test]
 fn test_grad_lift() {
     let buf = vec![
-        0, 0, 0, 0, 0, 0, 0, 0, // Idx
-        2, 0, 0, 0, // ChunkLen
-        0, 60, // 1.0
-        0, 188, // -1.0
-        3, 0, 0, 0, 0, 0, 0, 0, // Idx
-        1, 0, 0, 0, // ChunkLen
-        0, 64, // 2.0
+        0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+        64,
     ];
 
     let expected = vec![1.0, -1.0, 0.0, 2.0];
@@ -186,13 +207,13 @@ fn test_grad_lift() {
 
 #[test]
 fn test_drop_and_lift_consistency() {
-    let mut residual = vec![1.0, -1.0, 0.0, 2.0];
+    let residual = vec![1.0, -1.0, 0.0, 2.0];
     let expected = residual.clone();
 
     let mut buf = Vec::new();
     let threshold = 1.0;
 
-    grad_drop_into(&mut buf, &mut residual, threshold);
+    grad_drop_into(&mut buf, &residual, threshold);
 
     let mut grad = vec![0.0; residual.len()];
     grad_lift_into(&mut grad, &buf).unwrap();
