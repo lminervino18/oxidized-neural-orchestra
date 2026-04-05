@@ -96,8 +96,6 @@ pub fn calculate_threshold<R: Rng>(residual: &[f32], r: Float01, rng: &mut R) ->
 
 /// Serializes the given gradient into `buf` dropping any values with a magnitude lower than `threshold`.
 ///
-/// Will zero out all the serialized values inside the residual buffer.
-///
 /// # Args
 /// * `buf` - The buffer to use to serialize the residual gradient.
 /// * `residual` - The residual gradient to serialize.
@@ -118,8 +116,8 @@ pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &[f32], threshold: f32) {
             buf.extend_from_slice(&(start as Idx).to_le_bytes());
             buf.extend_from_slice(&(chunk_len as ChunkLen).to_le_bytes());
 
-            for g in residual[start..i].iter() {
-                let g_short = f16::from_f32(*g);
+            for &g in &residual[start..i] {
+                let g_short = f16::from_f32(g);
                 buf.extend_from_slice(&g_short.to_le_bytes());
             }
         } else {
@@ -178,14 +176,17 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
 #[test]
 fn test_grad_drop() {
     let grad = vec![1.0, -1.0, 0.0, 2.0];
+    let grad = vec![1.0, -1.0, 0.0, 2.0];
     let mut buf = Vec::new();
     let threshold = 1.0;
 
     grad_drop_into(&mut buf, &grad, threshold);
+    grad_drop_into(&mut buf, &grad, threshold);
 
     let expected = vec![
         0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        64,
+        64, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 64,
     ];
 
     assert_eq!(buf, expected);
@@ -195,7 +196,8 @@ fn test_grad_drop() {
 fn test_grad_lift() {
     let buf = vec![
         0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        64,
+        64, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        0, 64,
     ];
 
     let expected = vec![1.0, -1.0, 0.0, 2.0];
@@ -208,11 +210,13 @@ fn test_grad_lift() {
 #[test]
 fn test_drop_and_lift_consistency() {
     let residual = vec![1.0, -1.0, 0.0, 2.0];
+    let residual = vec![1.0, -1.0, 0.0, 2.0];
     let expected = residual.clone();
 
     let mut buf = Vec::new();
     let threshold = 1.0;
 
+    grad_drop_into(&mut buf, &residual, threshold);
     grad_drop_into(&mut buf, &residual, threshold);
 
     let mut grad = vec![0.0; residual.len()];
