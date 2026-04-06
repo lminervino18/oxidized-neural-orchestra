@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    Session,
     configs::{DatasetSrc, ModelConfig, TrainingConfig},
-    TrainedModel, TrainingEvent,
+    dataset_format::DatasetFormat,
+    Session, TrainedModel, TrainingEvent,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -16,14 +16,9 @@ use ratatui::{
 use super::{Action, Screen};
 use crate::ui::{
     components::{
-        confirm_quit::draw_confirm_quit,
-        converting::draw_converting,
-        header::draw_header,
-        log_panel::draw_log,
-        loss_chart::draw_charts,
-        params_panel::draw_params,
-        save_popup::draw_save_popup,
-        workers_table::draw_workers_table,
+        confirm_quit::draw_confirm_quit, converting::draw_converting, header::draw_header,
+        log_panel::draw_log, loss_chart::draw_charts, params_panel::draw_params,
+        save_popup::draw_save_popup, workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
     theme::Theme,
@@ -152,8 +147,11 @@ impl TrainingState {
         let max_epochs = training.max_epochs.get();
 
         let initial_phase = match &training.dataset.src {
-            DatasetSrc::Local { path }
-                if orchestrator::dataset_format::DatasetFormat::from_path(path).is_some() =>
+            DatasetSrc::Local {
+                samples_path,
+                labels_path,
+            } if DatasetFormat::from_path(samples_path).is_some()
+                && DatasetFormat::from_path(labels_path).is_some() =>
             {
                 Phase::Converting
             }
@@ -213,10 +211,7 @@ impl TrainingState {
     /// if so, transitions to `Phase::Connecting` and starts listening for
     /// training events, or to `Phase::Error` on failure.
     pub fn tick(&mut self) {
-        let startup_result = self
-            .startup_rx
-            .as_ref()
-            .and_then(|rx| rx.try_recv().ok());
+        let startup_result = self.startup_rx.as_ref().and_then(|rx| rx.try_recv().ok());
 
         if let Some(result) = startup_result {
             self.startup_rx = None;
