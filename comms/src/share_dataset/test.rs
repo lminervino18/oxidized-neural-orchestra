@@ -15,20 +15,34 @@ async fn test_share_dataset() {
     let (mut receiver, mut sender) = channel(rx, tx);
 
     let chunk = 4;
-    let size = 127 * size_of::<f32>() as u64;
-    let dataset: Vec<u8> = (0..size).map(|i| i as u8).collect();
+    let x_size = 254 * size_of::<f32>();
+    let y_size = 127 * size_of::<f32>();
+    let samples: Vec<u8> = (0..x_size).map(|i| i as u8).collect();
+    let labels: Vec<u8> = (0..y_size).map(|i| i as u8).collect();
 
-    let mut recvr_storage = vec![];
-    let mut sender_storage: &[u8] = &dataset;
+    let mut recvr_x_storage = vec![];
+    let mut recvr_y_storage = vec![];
+    let mut sender_x_storage: &[u8] = &samples;
+    let mut sender_y_storage: &[u8] = &labels;
 
-    let send = send_dataset(&mut sender_storage, chunk, &mut sender);
-    let recv = recv_dataset(&mut recvr_storage, size, &mut receiver);
+    let send = send_dataset(
+        &mut sender_x_storage,
+        &mut sender_y_storage,
+        chunk,
+        &mut sender,
+    );
+    let recv = recv_dataset(
+        &mut recvr_x_storage,
+        &mut recvr_y_storage,
+        x_size,
+        y_size,
+        &mut receiver,
+    );
 
     let (send_result, recv_result) = tokio::join!(send, recv);
     send_result.unwrap();
     recv_result.unwrap();
 
-    dbg!(&dataset);
-    dbg!(&recvr_storage);
-    assert_eq!(dataset, recvr_storage);
+    assert_eq!(samples, recvr_x_storage);
+    assert_eq!(labels, recvr_y_storage);
 }
