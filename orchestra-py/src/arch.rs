@@ -27,22 +27,6 @@ pub enum PyActFn {
 }
 
 /// A fully-connected dense layer.
-///
-/// # Args
-/// * `output_size` - Number of output neurons.
-/// * `init` - Parameter initializer (e.g. `Kaiming()`, `Const(0.0)`).
-/// * `act_fn` - Optional activation function (e.g. `Sigmoid()`). Defaults to `None`.
-///
-/// # Returns
-/// A dense layer configuration.
-///
-/// # Errors
-/// Raises a `TypeError` if `init` is not a supported initializer.
-/// Raises a `TypeError` if `act_fn` is not a supported activation function.
-/// Raises a `ValueError` if `output_size` is zero.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Dense {
@@ -53,6 +37,20 @@ pub struct Dense {
 
 #[pymethods]
 impl Dense {
+    /// Creates a dense layer configuration.
+    ///
+    /// # Args
+    /// * `output_size` - Number of output neurons.
+    /// * `init` - Parameter initializer (e.g. `Kaiming()`, `Const(0.0)`).
+    /// * `act_fn` - Optional activation function (e.g. `Sigmoid()`). Defaults to `None`.
+    ///
+    /// # Returns
+    /// A dense layer configuration.
+    ///
+    /// # Errors
+    /// Raises a `TypeError` if `init` is not a supported initializer.
+    /// Raises a `TypeError` if `act_fn` is not a supported activation function.
+    /// Raises a `ValueError` if `output_size` is zero.
     #[new]
     #[pyo3(signature = (output_size, init, act_fn = None))]
     pub fn new(
@@ -122,9 +120,11 @@ impl Dense {
             PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low, high },
             PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean, std_dev },
         };
+
         let act_fn = self.act_fn.as_ref().map(|a| match a {
             PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
         });
+
         LayerConfig::Dense {
             output_size: self.output_size,
             init,
@@ -134,18 +134,6 @@ impl Dense {
 }
 
 /// A sequential model — layers are applied in order.
-///
-/// # Args
-/// * `layers` - List of `Dense` layers.
-///
-/// # Returns
-/// A sequential model configuration.
-///
-/// # Errors
-/// Raises a `ValueError` if `layers` is empty.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass]
 pub struct Sequential {
     pub inner: ModelConfig,
@@ -153,6 +141,16 @@ pub struct Sequential {
 
 #[pymethods]
 impl Sequential {
+    /// Creates a sequential model configuration.
+    ///
+    /// # Args
+    /// * `layers` - List of `Dense` layers.
+    ///
+    /// # Returns
+    /// A sequential model configuration.
+    ///
+    /// # Errors
+    /// Raises a `ValueError` if `layers` is empty.
     #[new]
     pub fn new(layers: Vec<PyRef<Dense>>) -> PyResult<Self> {
         if layers.is_empty() {
@@ -160,7 +158,9 @@ impl Sequential {
                 "model must have at least one layer",
             ));
         }
+
         let layer_configs = layers.iter().map(|l| l.to_layer_config()).collect();
+
         Ok(Self {
             inner: ModelConfig {
                 layers: layer_configs,

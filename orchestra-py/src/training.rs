@@ -22,18 +22,6 @@ use crate::{
 };
 
 /// Opaque training configuration produced by `parameter_server(...)`.
-///
-/// # Args
-/// This type is produced by `parameter_server(...)` and is not constructed directly.
-///
-/// # Returns
-/// A training configuration handle for `orchestrate(...)`.
-///
-/// # Errors
-/// Not applicable.
-///
-/// # Panics
-/// Not applicable.
 #[pyclass]
 pub struct PyTrainingConfig {
     pub inner: TrainingConfig,
@@ -51,9 +39,9 @@ pub struct PyTrainingConfig {
 /// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`.
 /// * `sync` - Synchronization strategy (`BarrierSync()` or `NonBlockingSync()`).
 /// * `store` - Parameter store strategy (`BlockingStore()` or `WildStore()`).
-/// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
 /// * `max_epochs` - Maximum number of training epochs.
 /// * `batch_size` - Mini-batch size.
+/// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
 /// * `offline_epochs` - Extra local epochs per sync round. Defaults to `0`.
 /// * `seed` - Optional random seed for reproducibility.
 ///
@@ -65,22 +53,18 @@ pub struct PyTrainingConfig {
 /// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
 /// Raises a `TypeError` if `loss_fn` is not `Mse()` or `CrossEntropy()`.
 /// Raises a `TypeError` if `serializer` is not `BaseSerializer()` or `SparseSerializer(r=...)`.
-///
-/// # Panics
-/// This function does not panic.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
     server_addrs,
     dataset,
     optimizer,
-    *,
     loss_fn,
     sync,
     store,
-    serializer = None,
     max_epochs,
     batch_size,
+    serializer = None,
     offline_epochs = 0,
     seed = None,
 ))]
@@ -92,14 +76,15 @@ pub fn parameter_server(
     loss_fn: &Bound<'_, PyAny>,
     sync: &Bound<'_, PyAny>,
     store: &Bound<'_, PyAny>,
-    serializer: Option<&Bound<'_, PyAny>>,
     max_epochs: usize,
     batch_size: usize,
+    serializer: Option<&Bound<'_, PyAny>>,
     offline_epochs: usize,
     seed: Option<u64>,
 ) -> PyResult<PyTrainingConfig> {
     let max_epochs_nz = NonZeroUsize::new(max_epochs)
         .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
+
     let batch_size_nz = NonZeroUsize::new(batch_size)
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
 
@@ -204,9 +189,6 @@ pub fn parameter_server(
 ///
 /// # Errors
 /// Raises a `RuntimeError` if the session cannot be started.
-///
-/// # Panics
-/// This function does not panic.
 #[pyfunction]
 pub fn orchestrate(
     py: Python<'_>,

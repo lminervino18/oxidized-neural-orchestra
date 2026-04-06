@@ -1,6 +1,6 @@
 use half::f16;
 use rand::{Rng, seq::IndexedRandom};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde::{Deserialize, Deserializer, Serialize, de};
 
 type Idx = u64;
 type ChunkLen = u32;
@@ -12,7 +12,7 @@ const SAMPLE_SIZE_MAX: usize = 1 << 14;
 const MIN_POSITIVE_F16: f32 = f16::MIN_POSITIVE.to_f32_const();
 
 /// A float with a value between `0.0` and `1.0`.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct Float01 {
     value: f32,
 }
@@ -27,22 +27,6 @@ impl Float01 {
     /// A new `Float01` instance if the given value is between `0.0` and `1.0`.
     pub fn new(value: f32) -> Option<Self> {
         (0.0 <= value && value <= 1.0).then_some(Self { value })
-    }
-}
-
-impl Serialize for Float01 {
-    /// Serializes the inner value.
-    ///
-    /// # Args
-    /// * `serializer` - The serializer to write into.
-    ///
-    /// # Returns
-    /// The serialized float value.
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_f32(self.value)
     }
 }
 
@@ -180,12 +164,10 @@ fn test_grad_drop() {
     let threshold = 1.0;
 
     grad_drop_into(&mut buf, &grad, threshold);
-    grad_drop_into(&mut buf, &grad, threshold);
 
     let expected = vec![
         0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        64, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 64,
+        64,
     ];
 
     assert_eq!(buf, expected);
@@ -195,8 +177,7 @@ fn test_grad_drop() {
 fn test_grad_lift() {
     let buf = vec![
         0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        64, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
-        0, 64,
+        64,
     ];
 
     let expected = vec![1.0, -1.0, 0.0, 2.0];
@@ -208,6 +189,22 @@ fn test_grad_lift() {
 
 #[test]
 fn test_drop_and_lift_consistency() {
+    let residual = vec![1.0, -1.0, 0.0, 2.0];
+    let expected = residual.clone();
+
+    let mut buf = Vec::new();
+    let threshold = 1.0;
+
+    grad_drop_into(&mut buf, &residual, threshold);
+
+    let mut grad = vec![0.0; residual.len()];
+    grad_lift_into(&mut grad, &buf).unwrap();
+
+    assert_eq!(grad, expected);
+}
+
+#[test]
+fn test_grad_lift_with_concatenated_payloads() {
     let residual = vec![1.0, -1.0, 0.0, 2.0];
     let expected = residual.clone();
 
