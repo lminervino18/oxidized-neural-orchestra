@@ -1,7 +1,9 @@
 use std::io;
 
+use half::f16;
+
 use super::{
-    msg::{HEADER_SIZE, Header, Msg, Payload},
+    msg::{Header, Msg, Payload, HEADER_SIZE},
     sparse,
 };
 
@@ -58,11 +60,36 @@ impl Deserializer {
                 sparse::grad_lift_into(&mut self.nums, rest).map_err(io::Error::other)?;
                 Ok(Msg::Data(Payload::Grad(&mut self.nums)))
             }
-            3..6 => {
-                let nums = bytemuck::cast_slice_mut(rest);
+            3 => {
+                if rest.len() % std::mem::size_of::<f16>() != 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "dense gradient payload has invalid byte length {}",
+                            rest.len()
+                        ),
+                    ));
+                }
 
+                let f16_slice: &[f16] = bytemuck::cast_slice(rest);
+                self.nums.resize(f16_slice.len(), 0.0);
+
+                for (dst, &src) in self.nums.iter_mut().zip(f16_slice) {
+                    *dst = src.to_f32();
+                }
+
+                Ok(Msg::Data(Payload::Grad(&mut self.nums)))
+            }
+            4..6 => {
+                if rest.len() % std::mem::size_of::<f32>() != 0 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("payload kind {kind} has invalid byte length {}", rest.len()),
+                    ));
+                }
+
+                let nums = bytemuck::cast_slice_mut(rest);
                 let payload = match kind {
-                    3 => Payload::Grad(nums),
                     4 => Payload::Params(nums),
                     5 => Payload::Datachunk(nums),
                     _ => unreachable!(),
