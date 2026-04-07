@@ -7,6 +7,7 @@ use orchestrator::{
     },
     train,
 };
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
     datasets::{InlineDataset, LocalDataset},
     loss_fns::{CrossEntropy, Mse},
     optimizers::GradientDescent,
+    serializer::{BaseSerializer, SparseSerializer},
     session::Session,
     store::{BlockingStore, WildStore},
     sync::{BarrierSync, NonBlockingSync},
@@ -39,6 +41,7 @@ pub struct PyTrainingConfig {
 /// * `store` - Parameter store strategy (`BlockingStore()` or `WildStore()`).
 /// * `max_epochs` - Maximum number of training epochs.
 /// * `batch_size` - Mini-batch size.
+/// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
 /// * `offline_epochs` - Extra local epochs per sync round. Defaults to `0`.
 /// * `seed` - Optional random seed for reproducibility.
 ///
@@ -46,6 +49,7 @@ pub struct PyTrainingConfig {
 /// Raises a `ValueError` if required fields are invalid.
 /// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
 /// Raises a `TypeError` if `loss_fn` is not `Mse()` or `CrossEntropy()`.
+/// Raises a `TypeError` if `serializer` is not `BaseSerializer()` or `SparseSerializer(r=...)`.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
@@ -57,6 +61,7 @@ pub struct PyTrainingConfig {
     store,
     max_epochs,
     batch_size,
+    serializer = None,
     offline_epochs = 0,
     seed = None,
 ))]
@@ -70,22 +75,21 @@ pub fn parameter_server(
     store: &Bound<'_, PyAny>,
     max_epochs: usize,
     batch_size: usize,
+    serializer: Option<&Bound<'_, PyAny>>,
     offline_epochs: usize,
     seed: Option<u64>,
 ) -> PyResult<PyTrainingConfig> {
-    let max_epochs_nz = NonZeroUsize::new(max_epochs).ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err("max_epochs must be greater than 0")
-    })?;
-    let batch_size_nz = NonZeroUsize::new(batch_size).ok_or_else(|| {
-        pyo3::exceptions::PyValueError::new_err("batch_size must be greater than 0")
-    })?;
+    let max_epochs_nz = NonZeroUsize::new(max_epochs)
+        .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
+    let batch_size_nz = NonZeroUsize::new(batch_size)
+        .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
 
     let synchronizer = if sync.is_instance_of::<BarrierSync>() {
         SynchronizerConfig::Barrier
     } else if sync.is_instance_of::<NonBlockingSync>() {
         SynchronizerConfig::NonBlocking
     } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
+        return Err(PyTypeError::new_err(
             "sync must be BarrierSync() or NonBlockingSync()",
         ));
     };
@@ -95,7 +99,7 @@ pub fn parameter_server(
     } else if store.is_instance_of::<WildStore>() {
         StoreConfig::Wild
     } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
+        return Err(PyTypeError::new_err(
             "store must be BlockingStore() or WildStore()",
         ));
     };
@@ -105,15 +109,30 @@ pub fn parameter_server(
     } else if loss_fn.is_instance_of::<CrossEntropy>() {
         LossFnConfig::CrossEntropy
     } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
+        return Err(PyTypeError::new_err(
             "loss_fn must be Mse() or CrossEntropy()",
         ));
+    };
+
+    let serializer_cfg = match serializer {
+        None => SerializerConfig::Base,
+        Some(serializer) if serializer.is_instance_of::<BaseSerializer>() => SerializerConfig::Base,
+        Some(serializer) => {
+            if let Ok(sparse) = serializer.extract::<PyRef<SparseSerializer>>() {
+                SerializerConfig::SparseCapable { r: sparse.r }
+            } else {
+                return Err(PyTypeError::new_err(
+                    "serializer must be BaseSerializer() or SparseSerializer(r=...)",
+                ));
+            }
+        }
     };
 
     let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
         DatasetConfig {
             src: DatasetSrc::Inline {
-                data: d.data.clone(),
+                samples: d.samples.clone(),
+                labels: d.labels.clone(),
             },
             x_size: d.x_size,
             y_size: d.y_size,
@@ -121,13 +140,14 @@ pub fn parameter_server(
     } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
         DatasetConfig {
             src: DatasetSrc::Local {
-                path: d.path.clone(),
+                samples_path: d.samples_path.clone(),
+                labels_path: d.labels_path.clone(),
             },
             x_size: d.x_size,
             y_size: d.y_size,
         }
     } else {
-        return Err(pyo3::exceptions::PyTypeError::new_err(
+        return Err(PyTypeError::new_err(
             "dataset must be an InlineDataset or LocalDataset",
         ));
     };
@@ -142,7 +162,7 @@ pub fn parameter_server(
                 synchronizer,
                 store: store_cfg,
             },
-            serializer: SerializerConfig::Base,
+            serializer: serializer_cfg,
             dataset: dataset_config,
             optimizer: OptimizerConfig::GradientDescent { lr: optimizer.lr },
             loss_fn: loss_fn_cfg,

@@ -53,6 +53,7 @@ const EXAMPLE_TRAINING: &str = concat!(
     "      \"store\": \"blocking\"\n",
     "    }\n",
     "  },\n",
+    "  \"serializer\": { \"sparse_capable\": { \"r\": 0.95 } },\n",
     "  \"dataset\": {\n",
     "    \"src\": { \"local\": { \"path\": \"data.csv\" } },\n",
     "    \"x_size\": 2,\n",
@@ -66,6 +67,7 @@ const EXAMPLE_TRAINING: &str = concat!(
     "  \"seed\": null\n",
     "}\n",
     "\n",
+    "serializer: \"base\" | { \"sparse_capable\": { \"r\": 0.0..1.0 } }\n",
     "synchronizer: \"barrier\" | \"non_blocking\"\n",
     "store: blocking | wild\n",
     "optimizer types: gradient_descent\n",
@@ -79,11 +81,7 @@ enum Step {
     TrainingPath,
     ExampleModel,
     ExampleTraining,
-    /// JSON parsing failed — shows a full-screen error with the reason before
-    /// letting the user go back and fix their config files.
-    InvalidConfig {
-        reason: String,
-    },
+    InvalidConfig { reason: String },
 }
 
 /// State for the configuration screen.

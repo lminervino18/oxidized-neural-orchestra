@@ -662,6 +662,7 @@ dependencies = [
 name = "orchestra-py"
 version = "0.1.0"
 dependencies = [
+ "comms",
  "orchestrator",
  "pyo3",
  "tokio",
