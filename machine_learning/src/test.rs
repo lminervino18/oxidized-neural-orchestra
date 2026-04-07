@@ -9,7 +9,7 @@ use crate::{
     arch::{
         Sequential,
         layers::Layer,
-        loss::{LossFn, Mse},
+        loss::{CrossEntropy, LossFn, Mse},
     },
     dataset::{Dataset, DatasetSrc},
     optimization::GradientDescent,
@@ -353,29 +353,28 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let symbols = [
         0.0, 1.0, 0.0, //
         1.0, 1.0, 1.0, //
-        0.0, 1.0, 0.0, //
+        0.0, 1.0, 0.0, // plus sign
         0.0, 0.0, 0.0, //
         0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, // dot
         1.0, 0.0, 1.0, //
         0.0, 1.0, 0.0, //
-        1.0, 0.0, 1.0, //
+        1.0, 0.0, 1.0, // cross
         1.0, 1.0, 1.0, //
         1.0, 0.0, 1.0, //
-        1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, // box
     ];
 
     let labels = [
-        1.0, 0.0, 0.0, 0.0, // plus sign
-        0.0, 1.0, 0.0, 0.0, // dot
-        0.0, 0.0, 1.0, 0.0, // cross
-        0.0, 0.0, 0.0, 1.0,
-        // box
+        1.0, 0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, 1.0, //
     ];
 
     let mut model = Sequential::new(vec![
         Layer::two_d_to4d(1, 3, 3),
-        Layer::conv2d(1, 1, (2, 2), 1, 0),
+        Layer::conv2d(1, 1, 2, 1, 0),
         Layer::four_d_to2d(1, 2, 2),
         Layer::dense((4, 4)),
         Layer::sigmoid(1.0),
@@ -393,7 +392,7 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
-    let mut loss_fn = Mse::new();
+    let mut loss_fn = CrossEntropy::new();
     let rng = rand::rng();
 
     let mut trainer = BackpropTrainer::new(
@@ -422,6 +421,6 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("{y:#?}\n\n\n{y_pred:#?}");
+    println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
     println!("loss: {loss}");
 }

@@ -46,7 +46,7 @@ impl Layer {
     /// # Arguments
     /// * `filters` - The amount of filters.
     /// * `in_channels` - The amount of input channels.
-    /// * `kernel_size` - The height and width of the kernel.
+    /// * `kernel_size` - The height/width of the square kernel.
     /// * `stride` - The stride for the kernel.
     /// * `padding` - The parameter padding size.
     ///
@@ -55,7 +55,7 @@ impl Layer {
     pub fn conv2d(
         filters: usize,
         in_channels: usize,
-        kernel_size: (usize, usize),
+        kernel_size: usize,
         stride: usize,
         padding: usize,
     ) -> Self {

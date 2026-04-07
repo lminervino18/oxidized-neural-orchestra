@@ -5,18 +5,25 @@ use crate::{MlErr, Result, arch::InplaceReshape};
 
 #[derive(Clone)]
 pub struct Conv2d {
-    kernel_dim: (usize, usize, usize, usize),
+    filters: usize,
+    in_channels: usize,
+    /// The size of the square kernel matrix.
+    kernel_size: usize,
     stride: usize,
     padding: usize,
-    size: usize,
-    w_size: usize,
-    conv_mode: ConvMode<4>,
 
-    // Input metadata
+    kernels_size: usize,
+    /// The dimension of the kernels tensor, `(filters, in_channels, kernel_size,
+    /// kernel_size)`
+    kernels_dim: (usize, usize, usize, usize),
+    size: usize,
+
+    // Forward metadata
     input: Array4<f32>,
     output: Array4<f32>,
+    conv_mode: ConvMode<4>,
 
-    // Output metadata
+    // Backward metadata
     delta: Array4<f32>,
     dilated: Array4<f32>,
 }
@@ -25,13 +32,14 @@ impl Conv2d {
     pub fn new(
         filters: usize,
         in_channels: usize,
-        kernel_size: (usize, usize),
+        kernel_size: usize,
         stride: usize,
         padding: usize,
     ) -> Self {
-        let (kh, kw) = kernel_size;
-        let w_size = filters * in_channels * kh * kw;
-        let size = w_size + filters;
+        let kernels_size = filters * in_channels * kernel_size * kernel_size;
+        let kernels_dim = (filters, in_channels, kernel_size, kernel_size);
+        let size = kernels_size + filters;
+
         let zeros4 = Array4::zeros((1, 1, 1, 1));
         let conv_mode = ConvMode::Custom {
             padding: [0, 0, padding, padding],
@@ -39,16 +47,19 @@ impl Conv2d {
         };
 
         Self {
-            kernel_dim: (filters, in_channels, kh, kw),
+            filters,
+            in_channels,
+            kernel_size,
             stride,
             padding,
+            kernels_size,
+            kernels_dim,
             size,
-            w_size,
             conv_mode,
             input: zeros4.clone(),
             output: zeros4.clone(),
             delta: zeros4.clone(),
-            dilated: zeros4.clone(),
+            dilated: zeros4,
         }
     }
 
@@ -87,19 +98,26 @@ impl Conv2d {
         let (mut dw, mut db) = self.view_grad(grad)?;
         let (w, _) = self.view_params(params)?;
 
-        self.dilate_and_pad(d.view()).unwrap();
+        self.dilate_and_pad(d.view())?;
 
-        let kernel_size = self.kernel_dim.2; // I'm assuming square kernel matrices for now
-        let outward_padding = kernel_size - self.padding - 1;
-        let unpadded_dilated = &self.dilated.slice(s![
+        let Self {
+            padding,
+            kernel_size,
+            ref input,
+            ref mut delta,
+            ref mut dilated,
+            ..
+        } = *self;
+
+        let outward_padding = kernel_size - padding - 1;
+        let unpadded_dilated = dilated.slice(s![
             ..,
             ..,
-            outward_padding..self.dilated.dim().2 - outward_padding,
-            outward_padding..self.dilated.dim().3 - outward_padding
+            outward_padding..dilated.dim().2 - outward_padding,
+            outward_padding..dilated.dim().3 - outward_padding
         ]);
 
-        let dw_conv = self
-            .input
+        let dw_conv = input
             .conv(
                 unpadded_dilated.no_reverse(),
                 ConvMode::Valid,
@@ -108,52 +126,48 @@ impl Conv2d {
             .unwrap();
 
         dw.assign(&dw_conv);
-        // dw.assign(&dw_conv.slice(s![.., .., ..self.dilated.dim().2, ..self.dilated.dim().3,]));
 
-        let delta = self
-            .dilated
+        let delta_new = dilated
             .conv(&w, ConvMode::Valid, PaddingMode::Zeros)
             .unwrap();
 
-        self.delta.reshape_inplace(delta.dim());
-        self.delta.assign(&delta);
+        delta.reshape_inplace(delta_new.dim());
+        delta.assign(&delta_new);
 
         let db_sum = d.sum_axis(Axis(0)).sum_axis(Axis(1)).sum_axis(Axis(1));
         db.assign(&db_sum);
 
-        Ok(self.delta.view_mut())
+        Ok(delta.view_mut())
     }
 
     /// Performs inward and outward (padding) dilations to a input delta.
     ///
-    /// This method assumes:
-    /// * That a forward pass has been performed on the convolutional layer.
-    //  TODO: make it so that this first assumption is not necessary
-    /// * (For now) That the kernel is a square matrix.
-    ///
     /// ## Args
     /// * `delta` - The input delta to dilate and pad.
-    ///
-    /// ## Panics
-    /// Panics if the current `dilated` buffer doesn't have a corresponding
-    /// shape.
     fn dilate_and_pad(&mut self, delta: ArrayView4<f32>) -> Result<()> {
-        let inward_padding = self.stride - 1;
-        let kernel_size = self.kernel_dim.2; // I'm assuming square kernel matrices for now
-        let outward_padding = kernel_size - self.padding - 1;
+        let Self {
+            stride,
+            kernel_size,
+            padding,
+            ref mut dilated,
+            ..
+        } = *self;
 
-        let dilated_dim = (
-            delta.dim().0,
-            delta.dim().1,
-            delta.dim().2 + (delta.dim().2 - 1) * inward_padding + outward_padding * 2,
-            delta.dim().3 + (delta.dim().3 - 1) * inward_padding + outward_padding * 2,
-        );
+        let inward_padding = stride - 1;
+        let outward_padding = kernel_size - padding - 1;
 
-        self.dilated.reshape_inplace(dilated_dim);
-        self.dilated
+        let dilated_height =
+            delta.dim().2 + (delta.dim().2 - 1) * inward_padding + outward_padding * 2;
+        let dilated_width =
+            delta.dim().3 + (delta.dim().3 - 1) * inward_padding + outward_padding * 2;
+
+        let dilated_dim = (delta.dim().0, delta.dim().1, dilated_height, dilated_width);
+
+        dilated.reshape_inplace(dilated_dim);
+        dilated
             .slice_mut(s![.., ..,
-                outward_padding..dilated_dim.2 - outward_padding; self.stride,
-                outward_padding..dilated_dim.3 - outward_padding; self.stride])
+                outward_padding..dilated_height - outward_padding; stride,
+                outward_padding..dilated_width - outward_padding; stride])
             .assign(&delta);
 
         Ok(())
@@ -171,21 +185,26 @@ impl Conv2d {
         &self,
         params: &'a [f32],
     ) -> Result<(ArrayView4<'a, f32>, ArrayView1<'a, f32>)> {
-        if params.len() != self.size {
+        let Self {
+            filters,
+            kernels_size,
+            kernels_dim,
+            size,
+            ..
+        } = *self;
+
+        if params.len() != size {
             return Err(MlErr::SizeMismatch {
                 what: "params",
                 got: params.len(),
-                expected: self.size,
+                expected: size,
             });
         }
 
-        let (f, ..) = self.kernel_dim;
-        let w_size = self.w_size;
-
         // SAFETY: The if condition above checks that the size of the
         //         parameters is exactly the size of the layer.
-        let weights = ArrayView4::from_shape(self.kernel_dim, &params[..w_size]).unwrap();
-        let biases = ArrayView1::from_shape(f, &params[w_size..]).unwrap();
+        let weights = ArrayView4::from_shape(kernels_dim, &params[..kernels_size]).unwrap();
+        let biases = ArrayView1::from_shape(filters, &params[kernels_size..]).unwrap();
 
         Ok((weights, biases))
     }
@@ -202,7 +221,16 @@ impl Conv2d {
         &self,
         grad: &'a mut [f32],
     ) -> Result<(ArrayViewMut4<'a, f32>, ArrayViewMut1<'a, f32>)> {
-        if grad.len() != self.size {
+        let Self {
+            filters,
+            in_channels,
+            kernel_size,
+            kernels_size,
+            size,
+            ..
+        } = *self;
+
+        if grad.len() != size {
             return Err(MlErr::SizeMismatch {
                 what: "grad",
                 got: grad.len(),
@@ -210,14 +238,13 @@ impl Conv2d {
             });
         }
 
-        let (f, ..) = self.kernel_dim;
-        let w_size = self.w_size;
-
         // SAFETY: The if condition above checks that the size of the
         //         gradient is exactly the size of the layer.
-        let (dw_raw, db_raw) = grad.split_at_mut(w_size);
-        let dw = ArrayViewMut4::from_shape(self.kernel_dim, dw_raw).unwrap();
-        let db = ArrayViewMut1::from_shape(f, db_raw).unwrap();
+        let (dw_raw, db_raw) = grad.split_at_mut(kernels_size);
+
+        let kernels_dim = (filters, in_channels, kernel_size, kernel_size);
+        let dw = ArrayViewMut4::from_shape(kernels_dim, dw_raw).unwrap();
+        let db = ArrayViewMut1::from_shape(filters, db_raw).unwrap();
 
         Ok((dw, db))
     }
@@ -231,44 +258,44 @@ mod tests {
     fn test_conv2d_forward_backward_consistency() {
         let filters = 1;
         let in_channels = 1;
-        let kernel_size = (2, 2);
+        let kernel_size = 2;
         let stride = 2;
         let padding = 0;
         let mut layer = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
-        let input = Array4::from_elem((1, 1, 4, 4), 1.0);
-        let params: Vec<_> = (0..layer.size()).map(|i| i as f32 / 10.0).collect();
-        let mut grads = vec![0.0; layer.size()];
+        let input = Array4::from_elem((1, 1, 4, 4), 1.);
+        let params: Vec<_> = (0..layer.size()).map(|i| i as f32 / 10.).collect();
+        let mut grads = vec![0.; layer.size()];
 
         let output = layer.forward(&params, input.view()).unwrap();
         assert_eq!(output.dim(), (1, 1, 2, 2));
 
-        let d_out = Array4::from_elem((1, 1, 2, 2), 1.0);
+        let d_out = Array4::from_elem((1, 1, 2, 2), 1.);
         layer
             .backward(&params, &mut grads, d_out.view().to_owned().view_mut())
             .unwrap();
 
-        assert!((grads[4] - 4.0).abs() < 1e-5);
+        assert!((grads[4] - 4.).abs() < 1e-5);
     }
 
     #[test]
     fn test_conv2d_forward() {
         let filters = 1;
         let in_channels = 1;
-        let kernel_size = (2, 2);
+        let kernel_size = 2;
         let stride = 2;
         let padding = 0;
         let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
         let input: Array4<f32> = array![[[
-            [1.0, 2.0, 3.0, 4.0],
-            [5.0, 6.0, 7.0, 8.0],
-            [9.0, 10.0, 11.0, 12.0],
-            [13.0, 14.0, 15.0, 16.0]
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
         ]]];
 
-        let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
-        let expected_output = array![[[[49.0, 69.0], [129.0, 149.0]]]];
+        let params: [f32; 5] = [1., 2., 3., 4., 5.];
+        let expected_output = array![[[[49., 69.], [129., 149.]]]];
 
         let output = conv.forward(&params[..], input.view()).unwrap();
 
@@ -279,28 +306,28 @@ mod tests {
     fn test_dilate_and_pad() {
         let filters = 1;
         let in_channels = 1;
-        let kernel_size = (2, 2);
+        let kernel_size = 2;
         let stride = 2;
         let padding = 0;
         let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
         let delta: Array4<f32> = array![[[
-            [1.0, 2.0, 3.0, 4.0],
-            [5.0, 6.0, 7.0, 8.0],
-            [9.0, 10.0, 11.0, 12.0],
-            [13.0, 14.0, 15.0, 16.0]
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
         ]]];
 
         let expected = array![[[
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
-            [0.0, 5.0, 0.0, 6.0, 0.0, 7.0, 0.0, 8.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
-            [0.0, 9.0, 0.0, 10.0, 0.0, 11.0, 0.0, 12.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,],
-            [0.0, 13.0, 0.0, 14.0, 0.0, 15.0, 0.0, 16.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 1., 0., 2., 0., 3., 0., 4., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 5., 0., 6., 0., 7., 0., 8., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 9., 0., 10., 0., 11., 0., 12., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 13., 0., 14., 0., 15., 0., 16., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
         ]]];
 
         conv.dilate_and_pad(delta.view()).unwrap();
@@ -313,32 +340,32 @@ mod tests {
     fn test_conv2d_backward() {
         let filters = 1;
         let in_channels = 1;
-        let kernel_size = (2, 2);
+        let kernel_size = 2;
         let stride = 2;
         let padding = 0;
         let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
         let input: Array4<f32> = array![[[
-            [1.0, 2.0, 3.0, 4.0],
-            [5.0, 6.0, 7.0, 8.0],
-            [9.0, 10.0, 11.0, 12.0],
-            [13.0, 14.0, 15.0, 16.0]
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
         ]]];
 
-        let params: [f32; 5] = [1.0, 2.0, 3.0, 4.0, 5.0];
-        let mut grad: [f32; 5] = [0.0, 0.0, 0.0, 0.0, 0.0];
+        let params: [f32; 5] = [1., 2., 3., 4., 5.];
+        let mut grad: [f32; 5] = [0., 0., 0., 0., 0.];
         let _ = conv.forward(&params, input.view()).unwrap();
 
-        let mut delta_in: Array4<f32> = array![[[[17.0, 18.0], [19.0, 20.0]]]];
+        let mut delta_in: Array4<f32> = array![[[[17., 18.], [19., 20.]]]];
 
         let expected_delta_out = array![[[
-            [17.0, 34.0, 18.0, 36.0],
-            [51.0, 68.0, 54.0, 72.0],
-            [19.0, 38.0, 20.0, 40.0],
-            [57.0, 76.0, 60.0, 80.0]
+            [17., 34., 18., 36.],
+            [51., 68., 54., 72.],
+            [19., 38., 20., 40.],
+            [57., 76., 60., 80.]
         ]]];
 
-        let expected_grad = [462.0, 536.0, 758.0, 832.0, 74.0];
+        let expected_grad = [462., 536., 758., 832., 74.];
 
         let delta_out = conv
             .backward(&params, &mut grad, delta_in.view_mut())
