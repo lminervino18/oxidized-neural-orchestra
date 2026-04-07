@@ -10,6 +10,7 @@ pub struct Conv2d {
     padding: usize,
     size: usize,
     w_size: usize,
+    conv_mode: ConvMode<4>,
 
     // Input metadata
     input: Array4<f32>,
@@ -32,6 +33,10 @@ impl Conv2d {
         let w_size = filters * in_channels * kh * kw;
         let size = w_size + filters;
         let zeros4 = Array4::zeros((1, 1, 1, 1));
+        let conv_mode = ConvMode::Custom {
+            padding: [0, 0, padding, padding],
+            strides: [1, 1, stride, stride],
+        };
 
         Self {
             kernel_dim: (filters, in_channels, kh, kw),
@@ -39,6 +44,7 @@ impl Conv2d {
             padding,
             size,
             w_size,
+            conv_mode,
             input: zeros4.clone(),
             output: zeros4.clone(),
             delta: zeros4.clone(),
@@ -51,29 +57,22 @@ impl Conv2d {
     }
 
     pub fn forward(&mut self, params: &[f32], x: ArrayView4<f32>) -> Result<ArrayView4<'_, f32>> {
-        let Self {
-            stride, padding, ..
-        } = *self;
-
         self.input.reshape_inplace(x.raw_dim());
         self.input.assign(&x);
 
         let (k, b) = self.view_params(params)?;
-        let conv_mode = ConvMode::Custom {
-            padding: [0, 0, padding, padding],
-            strides: [1, 1, stride, stride],
-        };
 
+        // estos errores no los vamos a estar manejando, quisiera que fuera más ergonómico
+        // sacarlos, armar uno de los que teníamos acá es medio paja para hacerlo en cada forward,
+        // si vamos a estar esperando errores frecuentes bueno este to_string evidentemente está
+        // mal, me gustaría ver qué podemos hacer para que quede cool
         let mut output = x
-            .conv(k.no_reverse(), conv_mode, PaddingMode::Zeros)
-            .unwrap();
-        let b_reshaped = b
-            .view()
-            .insert_axis(Axis(0))
-            .insert_axis(Axis(2))
-            .insert_axis(Axis(3));
+            .conv(k.no_reverse(), self.conv_mode, PaddingMode::Zeros)
+            .map_err(|e| MlErr::MatrixError {
+                error: e.to_string(),
+            })?;
+        output += &b.into_dyn();
 
-        output += &b_reshaped;
         self.output = output;
 
         Ok(self.output.view())

@@ -18,6 +18,9 @@ pub enum MlErr {
         got: usize,
         expected: usize,
     },
+    MatrixError {
+        error: String,
+    },
 }
 
 impl Display for MlErr {
@@ -30,6 +33,9 @@ impl Display for MlErr {
             } => format!("shape mismatch for {what}: got {got}, expected {expected}"),
             MlErr::DimMismatch { got, expected } => {
                 format!("dimensionality mismatch: got {got}, expected {expected}")
+            }
+            MlErr::MatrixError { error } => {
+                format!("matrix error {error:?} ")
             }
         };
 
