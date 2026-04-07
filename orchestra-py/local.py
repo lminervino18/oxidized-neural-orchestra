@@ -23,14 +23,16 @@ _servers = int(os.environ.get("SERVERS", "3"))
 WORKER_ADDRS = _make_addrs(_workers, 50000, "worker")
 SERVER_ADDRS = _make_addrs(_servers, 40000, "server")
 
-DATASET_PATH = os.environ.get("DATASET_PATH", "data/mnist_train.bin")
+SAMPLES_PATH = os.environ.get("SAMPLES_PATH", "data/mnist_train_samples.bin")
+LABELS_PATH = os.environ.get("LABELS_PATH", "data/mnist_train_labels.bin")
 SAFETENSORS_PATH = os.environ.get("SAFETENSORS_PATH", "model.safetensors")
 
 
 def main() -> None:
     print(f"worker addrs: {WORKER_ADDRS}")
     print(f"server addrs: {SERVER_ADDRS}")
-    print(f"dataset: {DATASET_PATH}")
+    print(f"samples: {SAMPLES_PATH}")
+    print(f"labels: {LABELS_PATH}")
 
     print("\nbuilding model...")
     model = Sequential([
@@ -43,7 +45,7 @@ def main() -> None:
     training = orchestra.parameter_server(
         worker_addrs=WORKER_ADDRS,
         server_addrs=SERVER_ADDRS,
-        dataset=LocalDataset(DATASET_PATH, x_size=784, y_size=10),
+        dataset=LocalDataset(SAMPLES_PATH, LABELS_PATH, x_size=784, y_size=10),
         optimizer=GradientDescent(lr=0.01),
         loss_fn=Mse(),
         sync=NonBlockingSync(),

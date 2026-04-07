@@ -13,6 +13,7 @@ const MIN_POSITIVE_F16: f32 = f16::MIN_POSITIVE.to_f32_const();
 
 /// A float with a value between `0.0` and `1.0`.
 #[derive(Debug, Clone, Copy, Serialize)]
+#[serde(transparent)]
 pub struct Float01 {
     value: f32,
 }
@@ -166,8 +167,13 @@ fn test_grad_drop() {
     grad_drop_into(&mut buf, &grad, threshold);
 
     let expected = vec![
-        0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        64,
+        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        2, 0, 0, 0, // ChunkLen
+        0, 60, // 1.0
+        0, 188, // -1.0
+        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // ChunkLen
+        0, 64, // 2.0
     ];
 
     assert_eq!(buf, expected);
@@ -176,8 +182,13 @@ fn test_grad_drop() {
 #[test]
 fn test_grad_lift() {
     let buf = vec![
-        0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 60, 0, 188, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-        64,
+        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        2, 0, 0, 0, // ChunkLen
+        0, 60, // 1.0
+        0, 188, // -1.0
+        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // ChunkLen
+        0, 64, // 2.0
     ];
 
     let expected = vec![1.0, -1.0, 0.0, 2.0];
@@ -204,7 +215,7 @@ fn test_drop_and_lift_consistency() {
 }
 
 #[test]
-fn test_grad_lift_with_concatenated_payloads() {
+fn test_drop_and_lift_consistency_with_appended_buffers() {
     let residual = vec![1.0, -1.0, 0.0, 2.0];
     let expected = residual.clone();
 
@@ -213,6 +224,25 @@ fn test_grad_lift_with_concatenated_payloads() {
 
     grad_drop_into(&mut buf, &residual, threshold);
     grad_drop_into(&mut buf, &residual, threshold);
+
+    let expected_buf = vec![
+        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        2, 0, 0, 0, // ChunkLen
+        0, 60, // 1.0
+        0, 188, // -1.0
+        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // ChunkLen
+        0, 64, // 2.0
+        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        2, 0, 0, 0, // ChunkLen
+        0, 60, // 1.0
+        0, 188, // -1.0
+        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // ChunkLen
+        0, 64, // 2.0
+    ];
+
+    assert_eq!(buf, expected_buf);
 
     let mut grad = vec![0.0; residual.len()];
     grad_lift_into(&mut grad, &buf).unwrap();

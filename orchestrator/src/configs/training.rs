@@ -22,8 +22,14 @@ pub enum OptimizerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatasetSrc {
-    Local { path: PathBuf },
-    Inline { data: Vec<f32> },
+    Local {
+        samples_path: PathBuf,
+        labels_path: PathBuf,
+    },
+    Inline {
+        samples: Vec<f32>,
+        labels: Vec<f32>,
+    },
 }
 
 /// The `Dataset` configuration.

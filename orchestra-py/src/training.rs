@@ -135,7 +135,8 @@ pub fn parameter_server(
     let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
         DatasetConfig {
             src: DatasetSrc::Inline {
-                data: d.data.clone(),
+                samples: d.samples.clone(),
+                labels: d.labels.clone(),
             },
             x_size: d.x_size,
             y_size: d.y_size,
@@ -143,7 +144,8 @@ pub fn parameter_server(
     } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
         DatasetConfig {
             src: DatasetSrc::Local {
-                path: d.path.clone(),
+                samples_path: d.samples_path.clone(),
+                labels_path: d.labels_path.clone(),
             },
             x_size: d.x_size,
             y_size: d.y_size,
