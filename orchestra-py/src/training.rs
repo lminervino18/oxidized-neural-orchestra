@@ -39,9 +39,9 @@ pub struct PyTrainingConfig {
 /// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`.
 /// * `sync` - Synchronization strategy (`BarrierSync()` or `NonBlockingSync()`).
 /// * `store` - Parameter store strategy (`BlockingStore()` or `WildStore()`).
-/// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
 /// * `max_epochs` - Maximum number of training epochs.
 /// * `batch_size` - Mini-batch size.
+/// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
 /// * `offline_epochs` - Extra local epochs per sync round. Defaults to `0`.
 /// * `seed` - Optional random seed for reproducibility.
 ///
@@ -56,13 +56,12 @@ pub struct PyTrainingConfig {
     server_addrs,
     dataset,
     optimizer,
-    *,
     loss_fn,
     sync,
     store,
-    serializer = None,
     max_epochs,
     batch_size,
+    serializer = None,
     offline_epochs = 0,
     seed = None,
 ))]
@@ -74,9 +73,9 @@ pub fn parameter_server(
     loss_fn: &Bound<'_, PyAny>,
     sync: &Bound<'_, PyAny>,
     store: &Bound<'_, PyAny>,
-    serializer: Option<&Bound<'_, PyAny>>,
     max_epochs: usize,
     batch_size: usize,
+    serializer: Option<&Bound<'_, PyAny>>,
     offline_epochs: usize,
     seed: Option<u64>,
 ) -> PyResult<PyTrainingConfig> {
