@@ -1,6 +1,7 @@
-use ndarray::{ArrayD, ArrayView, ArrayViewMut, Dimension, IxDyn, azip};
+use ndarray::{ArrayD, ArrayView, ArrayViewMut, Dimension, IxDyn, ShapeBuilder, azip};
 
 use super::LossFn;
+use crate::arch::InplaceReshape;
 
 /// Cross entropy loss function.
 #[derive(Default, Clone)]
@@ -15,7 +16,7 @@ impl CrossEntropy {
     /// A new `CrossEntropy` instance.
     pub fn new() -> Self {
         Self {
-            delta: ArrayD::zeros(IxDyn(&[0])),
+            delta: ArrayD::zeros(IxDyn(&[1])),
         }
     }
 }
@@ -29,10 +30,7 @@ impl LossFn for CrossEntropy {
     where
         D: Dimension,
     {
-        // remove this memory allocation.
-        // This is temporarily solving a crash that might have to do with some memory
-        // re-arrangement in the above method call when using `into_dyn()`...
-        self.delta = ArrayD::zeros(y.raw_dim().into_dyn());
+        self.delta.reshape_inplace(y.raw_dim().into_dyn());
 
         let n = y_pred.len() as f32;
         let one_over_n = 1.0 / n;

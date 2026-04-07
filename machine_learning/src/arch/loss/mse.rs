@@ -16,7 +16,7 @@ impl Mse {
     /// A new `Mse` instance.
     pub fn new() -> Self {
         Self {
-            delta: ArrayD::zeros(IxDyn(&[0])),
+            delta: ArrayD::zeros(IxDyn(&[1])),
         }
     }
 }
@@ -30,10 +30,7 @@ impl LossFn for Mse {
     where
         D: Dimension,
     {
-        // TODO: (forgot to add this comment, see commit of the line below) remove this memory allocation.
-        // This is temporarily solving a crash that might have to do with some memory
-        // re-arrangement in the above method call when using `into_dyn()`...
-        self.delta = ArrayD::zeros(y.raw_dim().into_dyn());
+        self.delta.reshape_inplace(y.raw_dim().into_dyn());
 
         let n = y_pred.len() as f32;
         let two_over_n = 2.0 / n;

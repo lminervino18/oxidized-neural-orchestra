@@ -6,11 +6,10 @@ mod sigmoid;
 
 use std::mem;
 
-use ndarray::{Array, Dimension, IntoDimension};
-
 pub(super) use conv2d::Conv2d;
 pub(super) use dense::Dense;
 pub use layer::Layer;
+use ndarray::{Array, Dimension, IntoDimension};
 pub(super) use reshape::Reshape;
 pub(super) use sigmoid::Sigmoid;
 
@@ -42,7 +41,7 @@ impl<T: Clone + Default, D: Dimension> InplaceReshape<D> for Array<T, D> {
         }
 
         let arr = mem::take(self);
-        /* let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {
+        let (mut v, Some(0)) = arr.into_raw_vec_and_offset() else {
             // SAFETY: This implementation assumes 'self' is a standard,
             // uniquely owned, contiguous array.
             //
@@ -55,13 +54,6 @@ impl<T: Clone + Default, D: Dimension> InplaceReshape<D> for Array<T, D> {
             // we do not pass slices into this internal utility, the offset
             // is guaranteed to be 0 and the storage uniquely owned.
             unreachable!("Owned array had non-zero offset during inplace reshaping");
-        }; */
-
-        // TODO: printing tells me that this happens 4 times in convolutional convergence test,
-        // that's 1000 iterations. This should be removed anyway
-        let mut v = match arr.into_raw_vec_and_offset() {
-            (v, Some(0)) => v,
-            (_, _) => Vec::new(),
         };
 
         let size = dim.size();
