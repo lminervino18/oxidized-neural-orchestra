@@ -3,7 +3,13 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 /// Base serializer — gradients are always sent densely.
-#[pyclass]
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A dense serializer configuration.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct BaseSerializer;
 
@@ -19,7 +25,13 @@ impl BaseSerializer {
 ///
 /// # Args
 /// * `r` - Compression ratio threshold between `0.0` and `1.0`.
-#[pyclass]
+///
+/// # Returns
+/// A sparse serializer configuration.
+///
+/// # Errors
+/// Raises a `ValueError` if `r` is outside `[0.0, 1.0]`.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct SparseSerializer {
     pub r: Float01,

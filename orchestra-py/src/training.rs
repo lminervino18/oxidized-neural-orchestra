@@ -45,6 +45,9 @@ pub struct PyTrainingConfig {
 /// * `offline_epochs` - Extra local epochs per sync round. Defaults to `0`.
 /// * `seed` - Optional random seed for reproducibility.
 ///
+/// # Returns
+/// A `PyTrainingConfig` ready to be passed to `orchestrate(...)`.
+///
 /// # Errors
 /// Raises a `ValueError` if required fields are invalid.
 /// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
@@ -81,6 +84,7 @@ pub fn parameter_server(
 ) -> PyResult<PyTrainingConfig> {
     let max_epochs_nz = NonZeroUsize::new(max_epochs)
         .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
+
     let batch_size_nz = NonZeroUsize::new(batch_size)
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
 
@@ -182,6 +186,9 @@ pub fn parameter_server(
 /// * `model` - The model to train.
 /// * `training` - The training configuration produced by `parameter_server(...)`.
 ///
+/// # Returns
+/// A `Session` handle that can be consumed with `wait()`.
+///
 /// # Errors
 /// Raises a `RuntimeError` if the session cannot be started.
 #[pyfunction]
@@ -196,7 +203,7 @@ pub fn orchestrate(
     let training = training.inner.clone();
 
     let session = py
-        .allow_threads(|| {
+        .detach(|| {
             std::thread::spawn(move || train(model, training).map_err(|e| e.to_string()))
                 .join()
                 .map_err(|_| "thread panicked".to_string())?
