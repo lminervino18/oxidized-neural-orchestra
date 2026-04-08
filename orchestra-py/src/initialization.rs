@@ -7,12 +7,6 @@ use pyo3::prelude::*;
 ///
 /// # Returns
 /// A Kaiming initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Kaiming;
@@ -32,12 +26,6 @@ impl Kaiming {
 ///
 /// # Returns
 /// A Xavier initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Xavier;
@@ -57,12 +45,6 @@ impl Xavier {
 ///
 /// # Returns
 /// A Lecun initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Lecun;
@@ -82,12 +64,6 @@ impl Lecun {
 ///
 /// # Returns
 /// A Xavier uniform initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct XavierUniform;
@@ -107,12 +83,6 @@ impl XavierUniform {
 ///
 /// # Returns
 /// A Lecun uniform initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct LecunUniform;
@@ -132,12 +102,6 @@ impl LecunUniform {
 ///
 /// # Returns
 /// A constant initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Const {
@@ -160,12 +124,6 @@ impl Const {
 ///
 /// # Returns
 /// A uniform initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Uniform {
@@ -189,12 +147,6 @@ impl Uniform {
 ///
 /// # Returns
 /// A uniform inclusive initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct UniformInclusive {
@@ -218,12 +170,6 @@ impl UniformInclusive {
 ///
 /// # Returns
 /// A normal initializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Normal {

@@ -176,12 +176,6 @@ impl TrainedModel {
     ///
     /// # Returns
     /// The trained parameters in a flat vector.
-    ///
-    /// # Errors
-    /// This method does not return errors.
-    ///
-    /// # Panics
-    /// This method does not panic.
     pub fn weights(&self) -> Vec<f32> {
         self.inner.params().to_vec()
     }
@@ -193,12 +187,6 @@ impl TrainedModel {
     ///
     /// # Returns
     /// `None`.
-    ///
-    /// # Errors
-    /// Raises a `RuntimeError` if the model cannot be saved.
-    ///
-    /// # Panics
-    /// This method does not panic.
     pub fn save_safetensors(&self, path: &str) -> PyResult<()> {
         self.inner
             .save_safetensors(path)
@@ -226,9 +214,6 @@ impl Session {
     /// # Errors
     /// Raises a `RuntimeError` if the session was already consumed, if training
     /// fails, or if the background thread panics.
-    ///
-    /// # Panics
-    /// This method does not panic.
     pub fn wait(&mut self, py: Python<'_>) -> PyResult<TrainedModel> {
         let session = self
             .inner

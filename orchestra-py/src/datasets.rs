@@ -18,9 +18,6 @@ use pyo3::prelude::*;
 /// # Errors
 /// Raises a `ValueError` if `x_size` is zero.
 /// Raises a `ValueError` if `y_size` is zero.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct InlineDataset {
@@ -69,9 +66,6 @@ impl InlineDataset {
 /// Raises a `ValueError` if `x_size` is zero.
 /// Raises a `ValueError` if `y_size` is zero.
 /// Raises a `ValueError` if `path` does not exist.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct LocalDataset {

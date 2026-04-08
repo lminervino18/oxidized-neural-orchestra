@@ -7,12 +7,6 @@ use pyo3::prelude::*;
 ///
 /// # Returns
 /// An MSE loss configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Mse;
@@ -32,12 +26,6 @@ impl Mse {
 ///
 /// # Returns
 /// A cross entropy loss configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct CrossEntropy;

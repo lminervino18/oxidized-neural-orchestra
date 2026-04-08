@@ -9,12 +9,6 @@ use pyo3::prelude::*;
 ///
 /// # Returns
 /// A dense serializer configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct BaseSerializer;
@@ -37,9 +31,6 @@ impl BaseSerializer {
 ///
 /// # Errors
 /// Raises a `ValueError` if `r` is outside `[0.0, 1.0]`.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct SparseSerializer {

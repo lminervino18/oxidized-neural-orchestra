@@ -7,12 +7,6 @@ use pyo3::prelude::*;
 ///
 /// # Returns
 /// A blocking store configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct BlockingStore;
@@ -32,12 +26,6 @@ impl BlockingStore {
 ///
 /// # Returns
 /// A wild store configuration.
-///
-/// # Errors
-/// This constructor does not return errors.
-///
-/// # Panics
-/// This constructor does not panic.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct WildStore;
