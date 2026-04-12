@@ -1,8 +1,7 @@
 use std::{num::NonZeroUsize, path::PathBuf};
 
-use serde::{Deserialize, Serialize};
-
 use comms::Float01;
+use serde::{Deserialize, Serialize};
 
 /// The `LossFn` configuration.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -23,8 +22,14 @@ pub enum OptimizerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatasetSrc {
-    Local { path: PathBuf },
-    Inline { data: Vec<f32> },
+    Local {
+        samples_path: PathBuf,
+        labels_path: PathBuf,
+    },
+    Inline {
+        samples: Vec<f32>,
+        labels: Vec<f32>,
+    },
 }
 
 /// The `Dataset` configuration.
@@ -72,11 +77,18 @@ pub enum SerializerConfig {
     SparseCapable { r: Float01 },
 }
 
+impl Default for SerializerConfig {
+    fn default() -> Self {
+        Self::Base
+    }
+}
+
 /// The `Training` configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingConfig {
     pub worker_addrs: Vec<String>,
     pub algorithm: AlgorithmConfig,
+    #[serde(default)]
     pub serializer: SerializerConfig,
     pub dataset: DatasetConfig,
     pub optimizer: OptimizerConfig,

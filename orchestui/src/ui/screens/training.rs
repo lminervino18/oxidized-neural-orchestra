@@ -3,6 +3,7 @@ use std::time::Instant;
 use crossterm::event::KeyCode;
 use orchestrator::{
     configs::{DatasetSrc, ModelConfig, TrainingConfig},
+    dataset_format::DatasetFormat,
     Session, TrainedModel, TrainingEvent,
 };
 use ratatui::{
@@ -146,8 +147,11 @@ impl TrainingState {
         let max_epochs = training.max_epochs.get();
 
         let initial_phase = match &training.dataset.src {
-            DatasetSrc::Local { path }
-                if orchestrator::dataset_format::DatasetFormat::from_path(path).is_some() =>
+            DatasetSrc::Local {
+                samples_path,
+                labels_path,
+            } if DatasetFormat::from_path(samples_path).is_some()
+                && DatasetFormat::from_path(labels_path).is_some() =>
             {
                 Phase::Converting
             }

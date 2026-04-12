@@ -399,32 +399,50 @@ impl Adapter {
 
     /// Helper method for `adapt_dataset` — partitions an inline dataset slice.
     ///
+    /// Partition sizes must contemplate the rows of data that will go in each partition.
+    // TODO: return an error if this condition is not met, otherwise this will result in undefined
+    // behavior
+    ///
     /// # Args
-    /// * `data` - The full inline dataset as a slice of `f32`.
-    /// * `partition_sizes` - An iterator of partition sizes in **bytes**.
+    /// * `samples` - The full dataset samples as a slice of `f32`.
+    /// * `labels` - The full dataset labels as a slice of `f32`.
+    /// * `partition_sizes` - An iterator of partition sample and label sizes in **bytes**.
     /// * `x_size` - The number of input features per sample.
     /// * `y_size` - The number of output values per sample.
     ///
     /// # Returns
     /// Paired lists of `DatasetSpec`s and `Partition::Inline` variants.
-    fn adapt_inline_dataset<'a, T: Iterator<Item = u64>>(
+    fn adapt_inline_dataset<'a, T>(
         &self,
-        data: &'a [f32],
+        samples: &'a [f32],
+        labels: &'a [f32],
         partition_sizes: T,
         x_size: NonZeroUsize,
         y_size: NonZeroUsize,
-    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
-        let mut rest = data;
+    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>)
+    where
+        T: Iterator<Item = (u64, u64)>,
+    {
+        let mut samples_rest = samples;
+        let mut labels_rest = labels;
         partition_sizes
-            .map(|size| {
-                let curr;
-                (curr, rest) = rest.split_at((size / size_of::<f32>() as u64) as usize);
+            .map(|(x_size_bytes, y_size_bytes)| {
+                let samples_curr;
+                let labels_curr;
+                (samples_curr, samples_rest) =
+                    samples_rest.split_at((x_size_bytes / size_of::<f32>() as u64) as usize);
+                (labels_curr, labels_rest) =
+                    labels_rest.split_at((y_size_bytes / size_of::<f32>() as u64) as usize);
                 let spec = DatasetSpec {
-                    size,
+                    x_size_bytes,
+                    y_size_bytes,
                     x_size,
                     y_size,
                 };
-                let partition = Partition::Inline { data: curr };
+                let partition = Partition::Inline {
+                    samples: samples_curr,
+                    labels: labels_curr,
+                };
 
                 (spec, partition)
             })
@@ -434,31 +452,46 @@ impl Adapter {
     /// Helper method for `adapt_dataset` — partitions a local dataset file.
     ///
     /// # Args
-    /// * `path` - Path to the local dataset file.
-    /// * `partition_sizes` - An iterator of partition sizes in **bytes**.
+    /// * `samples_path` - Path to the local dataset samples file.
+    /// * `labels_path` - Path to the local dataset labels file.
+    /// * `partition_sizes` - An iterator of partition sample and label sizes in **bytes**.
     /// * `x_size` - The number of input features per sample.
     /// * `y_size` - The number of output values per sample.
     ///
     /// # Returns
     /// Paired lists of `DatasetSpec`s and `Partition::Local` variants.
-    fn adapt_local_dataset<'a, T: Iterator<Item = u64>>(
+    fn adapt_local_dataset<'a, T>(
         &self,
-        path: &'a PathBuf,
+        samples_path: &'a PathBuf,
+        labels_path: &'a PathBuf,
         partition_sizes: T,
         x_size: NonZeroUsize,
         y_size: NonZeroUsize,
-    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>) {
-        let mut offset = 0;
+    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>)
+    where
+        T: Iterator<Item = (u64, u64)>,
+    {
+        let mut samples_offset = 0;
+        let mut labels_offset = 0;
         partition_sizes
-            .map(|size| {
+            .map(|(x_size_bytes, y_size_bytes)| {
                 let spec = DatasetSpec {
-                    size,
+                    x_size_bytes,
+                    y_size_bytes,
                     x_size,
                     y_size,
                 };
-                let partition = Partition::Local { path, offset, size };
+                let partition = Partition::Local {
+                    samples_path,
+                    labels_path,
+                    samples_offset,
+                    labels_offset,
+                    samples_size: x_size_bytes,
+                    labels_size: y_size_bytes,
+                };
 
-                offset += size;
+                samples_offset += x_size_bytes;
+                labels_offset += y_size_bytes;
 
                 (spec, partition)
             })
@@ -492,15 +525,27 @@ impl Adapter {
             y_size,
         } = dataset;
 
-        let size = match src {
-            DatasetSrc::Local { path } => fs::metadata(path)?.len(),
-            DatasetSrc::Inline { data } => (data.len() * size_of::<f32>()) as u64,
+        let size_bytes = match src {
+            DatasetSrc::Local {
+                samples_path,
+                labels_path,
+            } => {
+                let samples_size_bytes = fs::metadata(samples_path)?.len();
+                let labels_size_bytes = fs::metadata(labels_path)?.len();
+                samples_size_bytes + labels_size_bytes
+            }
+            DatasetSrc::Inline { samples, labels } => {
+                let data_len = samples.len() + labels.len();
+                (data_len * size_of::<f32>()) as u64
+            }
         };
 
         let npartitions = npartitions as u64;
 
-        let row_size_bytes = (x_size.get() + y_size.get()) as u64 * size_of::<f32>() as u64;
-        let nrows = size / row_size_bytes;
+        let x_size_bytes = (x_size.get() * size_of::<f32>()) as u64;
+        let y_size_bytes = (y_size.get() * size_of::<f32>()) as u64;
+        let row_size_bytes = x_size_bytes + y_size_bytes;
+        let nrows = size_bytes / row_size_bytes;
         let base_rows = nrows / npartitions;
         let remainder = nrows % npartitions;
 
@@ -511,16 +556,23 @@ impl Adapter {
                 base_rows
             };
 
-            rows * row_size_bytes
+            (rows * x_size_bytes, rows * y_size_bytes)
         });
 
         let (specs, partitions) = match src {
-            DatasetSrc::Inline { data } => {
-                self.adapt_inline_dataset(data, partition_sizes, *x_size, *y_size)
+            DatasetSrc::Inline { samples, labels } => {
+                self.adapt_inline_dataset(samples, labels, partition_sizes, *x_size, *y_size)
             }
-            DatasetSrc::Local { path } => {
-                self.adapt_local_dataset(path, partition_sizes, *x_size, *y_size)
-            }
+            DatasetSrc::Local {
+                samples_path,
+                labels_path,
+            } => self.adapt_local_dataset(
+                samples_path,
+                labels_path,
+                partition_sizes,
+                *x_size,
+                *y_size,
+            ),
         };
 
         Ok((specs, partitions))
@@ -689,4 +741,127 @@ fn balanced_partitions<T>(mut items: Vec<(T, usize)>, k: usize) -> Vec<Vec<T>> {
     }
 
     bins
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adapter_adapt_inline_dataset() {
+        let samples = [1., 3., 5.];
+        let labels = [2., 4., 6.];
+        let x_size = NonZeroUsize::new(1).unwrap();
+        let y_size = NonZeroUsize::new(1).unwrap();
+        let npartitions = 3;
+        let x_size_bytes = ((samples.len() / npartitions) * size_of::<f32>()) as u64;
+        let y_size_bytes = ((labels.len() / npartitions) * size_of::<f32>()) as u64;
+        let config = DatasetConfig {
+            src: DatasetSrc::Inline {
+                samples: samples.into(),
+                labels: labels.into(),
+            },
+            x_size,
+            y_size,
+        };
+
+        let expected_specs = [
+            DatasetSpec {
+                x_size_bytes,
+                y_size_bytes,
+                x_size,
+                y_size,
+            },
+            DatasetSpec {
+                x_size_bytes,
+                y_size_bytes,
+                x_size,
+                y_size,
+            },
+            DatasetSpec {
+                x_size_bytes,
+                y_size_bytes,
+                x_size,
+                y_size,
+            },
+        ];
+        let expected_partitions = [
+            Partition::Inline {
+                samples: &samples[..1],
+                labels: &labels[..1],
+            },
+            Partition::Inline {
+                samples: &samples[1..2],
+                labels: &labels[1..2],
+            },
+            Partition::Inline {
+                samples: &samples[2..],
+                labels: &labels[2..],
+            },
+        ];
+
+        let adapter = Adapter::new();
+        let (specs, partitions) = adapter.adapt_dataset(&config, npartitions).unwrap();
+
+        assert_eq!(specs, expected_specs);
+        assert_eq!(partitions, expected_partitions);
+    }
+
+    #[test]
+    fn test_adapter_adapt_inline_xor2_3partitions() {
+        let samples = [0., 0., 0., 1., 1., 0., 1., 1.];
+        let labels = [0., 1., 1., 0.];
+        let x_size = NonZeroUsize::new(2).unwrap();
+        let y_size = NonZeroUsize::new(1).unwrap();
+        let npartitions = 3;
+        let config = DatasetConfig {
+            src: DatasetSrc::Inline {
+                samples: samples.into(),
+                labels: labels.into(),
+            },
+            x_size,
+            y_size,
+        };
+
+        let expected_specs = [
+            DatasetSpec {
+                x_size_bytes: (2 * x_size.get() * size_of::<f32>()) as u64,
+                y_size_bytes: (2 * y_size.get() * size_of::<f32>()) as u64,
+                x_size,
+                y_size,
+            },
+            DatasetSpec {
+                x_size_bytes: (x_size.get() * size_of::<f32>()) as u64,
+                y_size_bytes: (y_size.get() * size_of::<f32>()) as u64,
+                x_size,
+                y_size,
+            },
+            DatasetSpec {
+                x_size_bytes: (x_size.get() * size_of::<f32>()) as u64,
+                y_size_bytes: (y_size.get() * size_of::<f32>()) as u64,
+                x_size,
+                y_size,
+            },
+        ];
+        let expected_partitions = [
+            Partition::Inline {
+                samples: &samples[..2 * x_size.get()],
+                labels: &labels[..2 * y_size.get()],
+            },
+            Partition::Inline {
+                samples: &samples[4..6],
+                labels: &labels[2..3],
+            },
+            Partition::Inline {
+                samples: &samples[6..],
+                labels: &labels[3..],
+            },
+        ];
+
+        let adapter = Adapter::new();
+        let (specs, partitions) = adapter.adapt_dataset(&config, npartitions).unwrap();
+
+        assert_eq!(specs, expected_specs);
+        assert_eq!(partitions, expected_partitions);
+    }
 }

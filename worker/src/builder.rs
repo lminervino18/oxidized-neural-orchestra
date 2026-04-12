@@ -3,6 +3,8 @@ use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
 
 use super::worker::Worker;
 
+use super::worker::Worker;
+
 #[derive(Default)]
 pub struct WorkerBuilder;
 

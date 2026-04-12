@@ -8,7 +8,12 @@
     }
   },
   "dataset": {
-    "src": { "local": { "path": "data/dataset" } },
+    "src": {
+      "local": {
+        "samples_path": "data/samples.csv",
+        "labels_path": "data/labels.csv"
+      }
+    },
     "x_size": 2,
     "y_size": 1
   },
