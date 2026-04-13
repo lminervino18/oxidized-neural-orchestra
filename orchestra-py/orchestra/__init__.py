@@ -1,4 +1,4 @@
-from orchestra._orchestra import PyTrainingConfig, Sequential, Session, TrainedModel, orchestrate, parameter_server
+from orchestra._orchestra import PyTrainingConfig, Sequential, Session, TrainedModel, orchestrate, parameter_server, ring_all_reduce
 
 __all__ = [
     "PyTrainingConfig",
@@ -7,4 +7,5 @@ __all__ = [
     "TrainedModel",
     "orchestrate",
     "parameter_server",
+    "ring_all_reduce",
 ]
