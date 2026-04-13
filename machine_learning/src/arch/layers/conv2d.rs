@@ -110,11 +110,14 @@ impl Conv2d {
         } = *self;
 
         let outward_padding = kernel_size - padding - 1;
+        let dilated_witdh = dilated.dim().2;
+        let dilated_height = dilated.dim().3;
+
         let unpadded_dilated = dilated.slice(s![
             ..,
             ..,
-            outward_padding..dilated.dim().2 - outward_padding,
-            outward_padding..dilated.dim().3 - outward_padding
+            outward_padding..dilated_witdh - outward_padding,
+            outward_padding..dilated_height - outward_padding
         ]);
 
         let dw_conv = input
@@ -156,13 +159,21 @@ impl Conv2d {
 
         let inward_padding = stride - 1;
         let outward_padding = kernel_size - padding - 1;
+        let delta_filters = delta.dim().0;
+        let delta_in_channels = delta.dim().1;
+        let delta_width = delta.dim().3;
+        let delta_height = delta.dim().2;
 
+        let dilated_width = delta_width + (delta_width - 1) * inward_padding + outward_padding * 2;
         let dilated_height =
-            delta.dim().2 + (delta.dim().2 - 1) * inward_padding + outward_padding * 2;
-        let dilated_width =
-            delta.dim().3 + (delta.dim().3 - 1) * inward_padding + outward_padding * 2;
+            delta_height + (delta_height - 1) * inward_padding + outward_padding * 2;
 
-        let dilated_dim = (delta.dim().0, delta.dim().1, dilated_height, dilated_width);
+        let dilated_dim = (
+            delta_filters,
+            delta_in_channels,
+            dilated_height,
+            dilated_width,
+        );
 
         dilated.reshape_inplace(dilated_dim);
         dilated

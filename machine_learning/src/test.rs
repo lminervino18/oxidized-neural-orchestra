@@ -392,7 +392,7 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
-    let mut loss_fn = CrossEntropy::new();
+    let mut loss_fn = Mse::new();
     let rng = rand::rng();
 
     let mut trainer = BackpropTrainer::new(
