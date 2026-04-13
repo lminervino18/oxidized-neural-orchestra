@@ -1,12 +1,10 @@
 {
-  "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
-  "algorithm": {
-    "parameter_server": {
-      "server_addrs": ["127.0.0.1:40000", "127.0.0.1:40001"],
-      "synchronizer": "barrier",
-      "store": "blocking"
-    }
-  },
+  "worker_addrs": [
+    "127.0.0.1:50000",
+    "127.0.0.1:50001",
+    "127.0.0.1:50002"
+  ],
+  "algorithm": "ring_all_reduce",
   "dataset": {
     "src": {
       "local": {
