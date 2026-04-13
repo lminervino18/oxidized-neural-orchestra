@@ -6,7 +6,10 @@ use comms::{
     specs::{algorithm::ParameterServerSpec, worker::SerializerSpec},
 };
 use log::{debug, info, warn};
-use machine_learning::training::TrainResult;
+use machine_learning::{
+    param_manager::{ParamManager, ServerParamsMetadata},
+    training::TrainResult,
+};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
@@ -107,11 +110,21 @@ where
         let mut should_continue = true;
 
         while should_continue {
+            let server_ordering = self.middleware.server_ordering().to_vec();
+
             tokio::select! {
                 ret = self.middleware.pull_params() => {
                     debug!("received parameters from all servers, training...");
 
-                    let mut param_manager = ret?;
+                    let pulled = ret?;
+                    let servers = pulled
+                        .into_iter()
+                        .map(|server| {
+                            ServerParamsMetadata::new(server.params, server.grad, server.residual)
+                        })
+                        .collect();
+
+                    let mut param_manager = ParamManager::new(servers, &server_ordering);
                     let TrainResult { losses, was_last } = trainer
                         .train(&mut param_manager)
                         .map_err(io::Error::other)?;

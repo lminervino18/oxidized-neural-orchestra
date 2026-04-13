@@ -5,7 +5,6 @@ use comms::{
     msg::{Command, Msg, Payload},
 };
 use futures::future;
-use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 /// The necessary information to maintain for the entire
@@ -19,6 +18,13 @@ where
     tx: OnoSender<W>,
     grad: Vec<f32>,
     residual: Vec<f32>,
+}
+
+/// The pulled parameter buffers for a single parameter-server shard.
+pub struct PulledServerParams<'a> {
+    pub params: &'a mut [f32],
+    pub grad: &'a mut [f32],
+    pub residual: &'a mut [f32],
 }
 
 /// The communication manager between the worker process and the parameter servers.
@@ -71,30 +77,34 @@ where
     /// Pulls the new parameters from all the servers.
     ///
     /// # Returns
-    /// A new `ParamManager` instance with all the parameters.
+    /// The parameter, gradient and residual buffers for all server shards.
     ///
     /// # Errors
     /// Returns an io error if a server sends an unexpected message.
-    pub async fn pull_params(&mut self) -> io::Result<ParamManager<'_>> {
+    pub async fn pull_params(&mut self) -> io::Result<Vec<PulledServerParams<'_>>> {
         let futs = self
             .servers
             .iter_mut()
             .enumerate()
             .map(async |(i, server)| match server.rx.recv().await? {
-                Msg::Data(Payload::Params(params)) => {
-                    let metadata =
-                        ServerParamsMetadata::new(params, &mut server.grad, &mut server.residual);
-
-                    Ok(metadata)
-                }
+                Msg::Data(Payload::Params(params)) => Ok(PulledServerParams {
+                    params,
+                    grad: &mut server.grad,
+                    residual: &mut server.residual,
+                }),
                 msg => {
                     let text = format!("expected params from server {i}, got: {msg:?}");
                     Err(io::Error::other(text))
                 }
             });
 
-        let servers = future::try_join_all(futs).await?;
-        Ok(ParamManager::new(servers, &self.server_ordering))
+        future::try_join_all(futs).await
+    }
+
+    /// Returns the ordering of the servers to know which layer's parameters
+    /// correspond to which server.
+    pub fn server_ordering(&self) -> &[usize] {
+        &self.server_ordering
     }
 
     /// Pushes the latest accumulated gradients to all servers.
