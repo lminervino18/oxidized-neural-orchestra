@@ -1,3 +1,4 @@
+// worker/src/runtime/mod.rs
 pub mod ps;
 pub mod ring;
 
@@ -28,7 +29,8 @@ pub trait DistributedRuntime {
 ///
 /// # Args
 /// * `spec` - The worker specification received from the orchestrator.
-/// * `dataset_raw` - The raw dataset partition assigned to this worker.
+/// * `samples_raw` - The raw sample partition assigned to this worker.
+/// * `labels_raw` - The raw label partition assigned to this worker.
 /// * `orch_rx` - The receiving end of the communication between the worker and the orchestrator.
 /// * `orch_tx` - The sending end of the communication between the worker and the orchestrator.
 /// * `listener` - The worker listener used to accept ring-neighbor connections when needed.

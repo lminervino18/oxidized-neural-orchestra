@@ -1,3 +1,4 @@
+// worker/src/builder.rs
 use comms::specs::{machine_learning::LayerSpec, worker::WorkerSpec};
 use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
 
@@ -19,7 +20,7 @@ impl WorkerBuilder {
     ///
     /// # Args
     /// * `spec` - The specification for a worker.
-    /// * `server_sizes` - The amount of parameters held by each server.
+    /// * `partition_sizes` - The amount of parameters held by each partition.
     /// * `dataset_raw` - The raw dataset partition assigned to this worker.
     ///
     /// # Returns
@@ -27,11 +28,11 @@ impl WorkerBuilder {
     pub fn build_parameter_server(
         &self,
         spec: WorkerSpec,
-        server_sizes: &[usize],
+        partition_sizes: &[usize],
         samples_raw: Vec<f32>,
         labels_raw: Vec<f32>,
     ) -> Worker {
-        self.build(spec, server_sizes, samples_raw, labels_raw)
+        self.build(spec, partition_sizes, samples_raw, labels_raw)
     }
 
     /// Builds a ring all-reduce worker from a `WorkerSpec`.
@@ -55,7 +56,7 @@ impl WorkerBuilder {
     fn build(
         &self,
         spec: WorkerSpec,
-        server_sizes: &[usize],
+        partition_sizes: &[usize],
         samples_raw: Vec<f32>,
         labels_raw: Vec<f32>,
     ) -> Worker {
@@ -63,7 +64,7 @@ impl WorkerBuilder {
         let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
 
         let trainer_builder = TrainerBuilder::new();
-        let trainer = trainer_builder.build(spec.trainer, server_sizes, dataset);
+        let trainer = trainer_builder.build(spec.trainer, partition_sizes, dataset);
 
         Worker::new(trainer)
     }
