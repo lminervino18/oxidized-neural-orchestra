@@ -27,6 +27,7 @@ where
     orch_rx: OnoReceiver<R>,
     orch_tx: OnoSender<W>,
     middleware: RingMiddleware<R, W>,
+    ring_addrs: Vec<String>,
 }
 
 impl RingAllReduceRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::OwnedWriteHalf> {
@@ -60,7 +61,7 @@ impl RingAllReduceRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::Owned
         }
 
         let (prev_worker_id, next_worker_id, next_addr) =
-            resolve_ring_neighbors(worker_id, &spec.ring_ordering, &spec.worker_addrs)?;
+            resolve_ring_neighbors(worker_id, &spec.worker_addrs)?;
 
         let next_stream = TcpStream::connect(next_addr).await?;
         let (next_rx, next_tx) = next_stream.into_split();
@@ -70,6 +71,7 @@ impl RingAllReduceRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::Owned
         let (prev_rx, prev_tx) = prev_stream.into_split();
         let (prev_rx, prev_tx) = comms::channel(prev_rx, prev_tx);
 
+        let ring_addrs = spec.worker_addrs;
         let middleware = RingMiddleware::new(
             prev_worker_id,
             prev_rx,
@@ -79,7 +81,7 @@ impl RingAllReduceRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::Owned
             next_tx,
         );
 
-        Ok(Self::new(worker, orch_rx, orch_tx, middleware))
+        Ok(Self::new(worker, orch_rx, orch_tx, middleware, ring_addrs))
     }
 }
 
@@ -103,12 +105,14 @@ where
         orch_rx: OnoReceiver<R>,
         orch_tx: OnoSender<W>,
         middleware: RingMiddleware<R, W>,
+        ring_addrs: Vec<String>,
     ) -> Self {
         Self {
             worker,
             orch_rx,
             orch_tx,
             middleware,
+            ring_addrs,
         }
     }
 
@@ -155,20 +159,21 @@ impl DistributedRuntime
 
 fn resolve_ring_neighbors<'a>(
     worker_id: usize,
-    ring_ordering: &[usize],
     worker_addrs: &'a [String],
 ) -> io::Result<(usize, usize, &'a str)> {
-    let ring_len = ring_ordering.len();
-    let rank = ring_ordering
-        .iter()
-        .position(|&id| id == worker_id)
-        .ok_or_else(|| io::Error::other(format!("worker {worker_id} is not part of the ring")))?;
+    if worker_id >= worker_addrs.len() {
+        return Err(io::Error::other(format!(
+            "worker {worker_id} is not part of the ring"
+        )));
+    }
 
-    let prev_rank = if rank == 0 { ring_len - 1 } else { rank - 1 };
-    let next_rank = (rank + 1) % ring_len;
-
-    let prev_worker_id = ring_ordering[prev_rank];
-    let next_worker_id = ring_ordering[next_rank];
+    let ring_len = worker_addrs.len();
+    let prev_worker_id = if worker_id == 0 {
+        ring_len - 1
+    } else {
+        worker_id - 1
+    };
+    let next_worker_id = (worker_id + 1) % ring_len;
     let next_addr = worker_addrs
         .get(next_worker_id)
         .ok_or_else(|| io::Error::other(format!("missing address for worker {next_worker_id}")))?;

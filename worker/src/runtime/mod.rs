@@ -40,7 +40,8 @@ pub trait DistributedRuntime {
 /// Returns an io error if the runtime bootstrap fails.
 pub async fn build(
     spec: WorkerSpec,
-    dataset_raw: Vec<f32>,
+    samples_raw: Vec<f32>,
+    labels_raw: Vec<f32>,
     orch_rx: OrchRx,
     orch_tx: OrchTx,
     listener: TcpListener,
@@ -49,8 +50,12 @@ pub async fn build(
         AlgorithmSpec::ParameterServer(ps_spec) => {
             let serializer = spec.serializer.clone();
             let worker_builder = WorkerBuilder::new();
-            let worker =
-                worker_builder.build_parameter_server(spec, &ps_spec.server_sizes, dataset_raw);
+            let worker = worker_builder.build_parameter_server(
+                spec,
+                &ps_spec.server_sizes,
+                samples_raw,
+                labels_raw,
+            );
 
             let runtime = ps::ParameterServerRuntime::bootstrap(
                 worker, ps_spec, serializer, orch_rx, orch_tx,
@@ -61,7 +66,8 @@ pub async fn build(
         }
         AlgorithmSpec::RingAllReduce(ring_spec) => {
             let worker_builder = WorkerBuilder::new();
-            let worker = worker_builder.build_ring_all_reduce(spec.clone(), dataset_raw);
+            let worker =
+                worker_builder.build_ring_all_reduce(spec.clone(), samples_raw, labels_raw);
 
             let runtime = ring::RingAllReduceRuntime::bootstrap(
                 worker,

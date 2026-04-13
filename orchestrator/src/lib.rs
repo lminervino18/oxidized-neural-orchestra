@@ -41,7 +41,14 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     let adapter = Adapter::new();
     let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
-    let session = Session::new(workers, partitions, servers, model, input_size)?;
+    let session = Session::new(
+        workers,
+        partitions,
+        servers,
+        model,
+        input_size,
+        training.algorithm.clone(),
+    )?;
 
     if let Some((samples_bin, labels_bin)) = dataset_bin {
         remove_binary(&samples_bin);

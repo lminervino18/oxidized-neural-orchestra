@@ -12,7 +12,6 @@ pub struct ParameterServerSpec {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RingAllReduceSpec {
     pub worker_addrs: Vec<String>,
-    pub ring_ordering: Vec<usize>,
 }
 
 /// Distributed training algorithm selection.

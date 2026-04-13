@@ -37,11 +37,21 @@ async fn main() -> io::Result<()> {
         }
     };
 
-    let size = spec.dataset.size;
-    let mut dataset_raw = vec![0f32; (size / size_of::<f32>() as u64) as usize];
-    recv_dataset(&mut get_dataset_cursor(&mut dataset_raw), size, &mut rx).await?;
+    let x_size_bytes = spec.dataset.x_size_bytes as usize;
+    let y_size_bytes = spec.dataset.y_size_bytes as usize;
+    let mut samples_raw = vec![0f32; x_size_bytes / size_of::<f32>()];
+    let mut labels_raw = vec![0f32; y_size_bytes / size_of::<f32>()];
 
-    let runtime = runtime::build(spec, dataset_raw, rx, tx, listener).await?;
+    recv_dataset(
+        &mut get_dataset_cursor(&mut samples_raw),
+        &mut get_dataset_cursor(&mut labels_raw),
+        x_size_bytes,
+        y_size_bytes,
+        &mut rx,
+    )
+    .await?;
+
+    let runtime = runtime::build(spec, samples_raw, labels_raw, rx, tx, listener).await?;
 
     tokio::select! {
         ret = runtime.run() => {

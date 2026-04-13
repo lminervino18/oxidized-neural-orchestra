@@ -157,11 +157,9 @@ impl Adapter {
         dataset_specs: Vec<DatasetSpec>,
     ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
-        let ring_ordering = (0..training.worker_addrs.len()).collect();
 
         let algorithm_spec = AlgorithmSpec::RingAllReduce(RingAllReduceSpec {
             worker_addrs: training.worker_addrs.clone(),
-            ring_ordering,
         });
         let serializer_spec = self.adapt_serializer(training);
 

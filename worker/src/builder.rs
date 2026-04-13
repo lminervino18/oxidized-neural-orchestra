@@ -3,8 +3,6 @@ use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
 
 use super::worker::Worker;
 
-use super::worker::Worker;
-
 #[derive(Default)]
 pub struct WorkerBuilder;
 
@@ -30,9 +28,10 @@ impl WorkerBuilder {
         &self,
         spec: WorkerSpec,
         server_sizes: &[usize],
-        dataset_raw: Vec<f32>,
+        samples_raw: Vec<f32>,
+        labels_raw: Vec<f32>,
     ) -> Worker {
-        self.build(spec, server_sizes, dataset_raw)
+        self.build(spec, server_sizes, samples_raw, labels_raw)
     }
 
     /// Builds a ring all-reduce worker from a `WorkerSpec`.
@@ -43,14 +42,25 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized `Worker` instance.
-    pub fn build_ring_all_reduce(&self, spec: WorkerSpec, dataset_raw: Vec<f32>) -> Worker {
+    pub fn build_ring_all_reduce(
+        &self,
+        spec: WorkerSpec,
+        samples_raw: Vec<f32>,
+        labels_raw: Vec<f32>,
+    ) -> Worker {
         let model_size = self.model_size(&spec);
-        self.build(spec, &[model_size], dataset_raw)
+        self.build(spec, &[model_size], samples_raw, labels_raw)
     }
 
-    fn build(&self, spec: WorkerSpec, server_sizes: &[usize], dataset_raw: Vec<f32>) -> Worker {
+    fn build(
+        &self,
+        spec: WorkerSpec,
+        server_sizes: &[usize],
+        samples_raw: Vec<f32>,
+        labels_raw: Vec<f32>,
+    ) -> Worker {
         let dataset_builder = DatasetBuilder::new();
-        let dataset = dataset_builder.build_inmem(spec.dataset, dataset_raw);
+        let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
 
         let trainer_builder = TrainerBuilder::new();
         let trainer = trainer_builder.build(spec.trainer, server_sizes, dataset);

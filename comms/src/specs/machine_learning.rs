@@ -46,7 +46,6 @@ pub struct DatasetSpec {
     pub x_size_bytes: u64,
     /// The size of all the dataset labels in bytes.
     pub y_size_bytes: u64,
-    // TODO: no sé qué nombres poner...
     /// The length of each sample.
     pub x_size: NonZeroUsize,
     /// The length of each label.
