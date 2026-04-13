@@ -27,7 +27,8 @@ where
     orch_rx: OnoReceiver<R>,
     orch_tx: OnoSender<W>,
     middleware: RingMiddleware<R, W>,
-    ring_addrs: Vec<String>,
+
+    _ring_addrs: Vec<String>,
 }
 
 impl RingAllReduceRuntime<tokio::net::tcp::OwnedReadHalf, tokio::net::tcp::OwnedWriteHalf> {
@@ -112,7 +113,7 @@ where
             orch_rx,
             orch_tx,
             middleware,
-            ring_addrs,
+            _ring_addrs: ring_addrs,
         }
     }
 
