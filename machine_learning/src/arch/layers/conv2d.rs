@@ -98,7 +98,7 @@ impl Conv2d {
         let (mut dw, mut db) = self.view_grad(grad)?;
         let (w, _) = self.view_params(params)?;
 
-        self.dilate_and_pad(d.view())?;
+        self.dilate_and_pad(d.view());
 
         let Self {
             padding,
@@ -140,11 +140,12 @@ impl Conv2d {
         Ok(delta.view_mut())
     }
 
-    /// Performs inward and outward (padding) dilations to a input delta.
+    /// Performs inward and outward (padding) dilations to a input delta and saves the result into
+    /// the delta metadata array.
     ///
     /// ## Args
     /// * `delta` - The input delta to dilate and pad.
-    fn dilate_and_pad(&mut self, delta: ArrayView4<f32>) -> Result<()> {
+    fn dilate_and_pad(&mut self, delta: ArrayView4<f32>) {
         let Self {
             stride,
             kernel_size,
@@ -169,8 +170,6 @@ impl Conv2d {
                 outward_padding..dilated_height - outward_padding; stride,
                 outward_padding..dilated_width - outward_padding; stride])
             .assign(&delta);
-
-        Ok(())
     }
 
     /// Gives a view of the raw parameter slice as the weights and biases of this layer.
@@ -330,7 +329,7 @@ mod tests {
             [0., 0., 0., 0., 0., 0., 0., 0., 0.],
         ]]];
 
-        conv.dilate_and_pad(delta.view()).unwrap();
+        conv.dilate_and_pad(delta.view());
         let got = conv.dilated;
 
         assert_eq!(got, expected);
