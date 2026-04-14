@@ -3,18 +3,11 @@ use std::{env, io};
 use comms::{
     msg::{Command, Msg},
     recv_dataset::{get_dataset_cursor, recv_dataset},
-    specs::worker::{AlgorithmSpec, SerializerSpec},
 };
 use log::{info, warn};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    signal,
-};
+use tokio::{net::TcpListener, signal};
 
-use worker::{
-    builder::WorkerBuilder,
-    middlewares::{all_reduce::AllReduceMiddleware, parameter_server::ParameterServerMiddleware},
-};
+use worker::builder::WorkerBuilder;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
@@ -25,7 +18,6 @@ async fn main() -> io::Result<()> {
     let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
     let port = env::var("PORT").map_err(io::Error::other)?;
     let bind_addr = format!("{host}:{port}");
-    let worker_addr = env::var("WORKER_ADDR").unwrap_or_else(|_| bind_addr.clone());
 
     let list = TcpListener::bind(&bind_addr).await?;
     info!("listening at {bind_addr}");
@@ -57,25 +49,29 @@ async fn main() -> io::Result<()> {
     )
     .await?;
 
+    let worker_builder = WorkerBuilder::new();
+
     match spec.algorithm.clone() {
-        AlgorithmSpec::ParameterServer {
+        comms::specs::worker::AlgorithmSpec::ParameterServer {
             server_addrs,
             server_sizes,
             server_ordering,
         } => {
             let serializer = spec.serializer.clone();
-            let worker_builder = WorkerBuilder::new();
             let worker =
                 worker_builder.build_parameter_server(spec, &server_sizes, samples_raw, labels_raw);
-            let mut middleware = ParameterServerMiddleware::new(server_ordering);
+            let mut middleware =
+                worker::middlewares::parameter_server::ParameterServerMiddleware::new(
+                    server_ordering,
+                );
 
             for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
-                let stream = TcpStream::connect(addr).await?;
+                let stream = tokio::net::TcpStream::connect(addr).await?;
                 let (rx, tx) = stream.into_split();
 
                 let (rx, tx) = match serializer {
-                    SerializerSpec::Base => comms::channel(rx, tx),
-                    SerializerSpec::SparseCapable { r, seed } => {
+                    comms::specs::worker::SerializerSpec::Base => comms::channel(rx, tx),
+                    comms::specs::worker::SerializerSpec::SparseCapable { r, seed } => {
                         comms::sparse_tx_channel(rx, tx, r, seed)
                     }
                 };
@@ -93,16 +89,18 @@ async fn main() -> io::Result<()> {
                 }
             }
         }
-        AlgorithmSpec::AllReduce { worker_addrs } => {
-            let worker_builder = WorkerBuilder::new();
+        comms::specs::worker::AlgorithmSpec::AllReduce { worker_addrs } => {
             let worker = worker_builder.build_all_reduce(
                 spec,
-                worker_addr.clone(),
+                bind_addr.clone(),
                 worker_addrs.clone(),
                 samples_raw,
                 labels_raw,
             );
-            let middleware = AllReduceMiddleware::new(&worker_addr, worker_addrs)?;
+            let middleware = worker::middlewares::all_reduce::AllReduceMiddleware::new(
+                &bind_addr,
+                worker_addrs,
+            )?;
 
             tokio::select! {
                 ret = worker.run(rx, tx, middleware) => {
