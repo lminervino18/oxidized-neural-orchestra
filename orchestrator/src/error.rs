@@ -8,6 +8,7 @@ use std::{
 #[derive(Debug)]
 pub enum OrchErr {
     InvalidConfig(String),
+    Unsupported(String),
     ConnectionFailed { addr: String, source: io::Error },
     WorkerError { worker_id: usize, msg: String },
     ServerError(String),
@@ -21,6 +22,7 @@ impl Display for OrchErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             Self::InvalidConfig(msg) => format!("invalid config: {msg}"),
+            Self::Unsupported(msg) => format!("unsupported: {msg}"),
             Self::ConnectionFailed { addr, source } => {
                 format!("failed to reach to {addr}: {source}")
             }
