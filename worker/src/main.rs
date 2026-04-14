@@ -50,67 +50,17 @@ async fn main() -> io::Result<()> {
     .await?;
 
     let worker_builder = WorkerBuilder::new();
+    let worker = worker_builder
+        .build(spec, bind_addr.clone(), samples_raw, labels_raw)
+        .await?;
 
-    match spec.algorithm.clone() {
-        comms::specs::worker::AlgorithmSpec::ParameterServer {
-            server_addrs,
-            server_sizes,
-            server_ordering,
-        } => {
-            let serializer = spec.serializer.clone();
-            let worker =
-                worker_builder.build_parameter_server(spec, &server_sizes, samples_raw, labels_raw);
-            let mut middleware =
-                worker::middlewares::parameter_server::ParameterServerMiddleware::new(
-                    server_ordering,
-                );
-
-            for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
-                let stream = tokio::net::TcpStream::connect(addr).await?;
-                let (rx, tx) = stream.into_split();
-
-                let (rx, tx) = match serializer {
-                    comms::specs::worker::SerializerSpec::Base => comms::channel(rx, tx),
-                    comms::specs::worker::SerializerSpec::SparseCapable { r, seed } => {
-                        comms::sparse_tx_channel(rx, tx, r, seed)
-                    }
-                };
-
-                middleware.spawn(rx, tx, size);
-            }
-
-            tokio::select! {
-                ret = worker.run(rx, tx, middleware) => {
-                    ret?;
-                    info!("wrapping up, disconnecting...");
-                }
-                _ = signal::ctrl_c() => {
-                    info!("received SIGTERM");
-                }
-            }
+    tokio::select! {
+        ret = worker.run(rx, tx) => {
+            ret?;
+            info!("wrapping up, disconnecting...");
         }
-        comms::specs::worker::AlgorithmSpec::AllReduce { worker_addrs } => {
-            let worker = worker_builder.build_all_reduce(
-                spec,
-                bind_addr.clone(),
-                worker_addrs.clone(),
-                samples_raw,
-                labels_raw,
-            );
-            let middleware = worker::middlewares::all_reduce::AllReduceMiddleware::new(
-                &bind_addr,
-                worker_addrs,
-            )?;
-
-            tokio::select! {
-                ret = worker.run(rx, tx, middleware) => {
-                    ret?;
-                    info!("wrapping up, disconnecting...");
-                }
-                _ = signal::ctrl_c() => {
-                    info!("received SIGTERM");
-                }
-            }
+        _ = signal::ctrl_c() => {
+            info!("received SIGTERM");
         }
     }
 
