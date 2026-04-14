@@ -52,6 +52,7 @@ pub fn load_training(path: &str) -> Result<TrainingJson, String> {
         AlgorithmConfig::ParameterServer { server_addrs, .. } => {
             (config.worker_addrs.len(), server_addrs.len())
         }
+        AlgorithmConfig::AllReduce => (config.worker_addrs.len(), 0),
     };
 
     Ok(TrainingJson {

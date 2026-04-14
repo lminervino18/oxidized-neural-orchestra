@@ -180,8 +180,16 @@ impl TrainingState {
         let loss_series = vec![Vec::new(); workers_total];
 
         let initial_log = match initial_phase {
-            Phase::Converting => "converting dataset to binary format...",
-            _ => "connecting to workers and servers...",
+            Phase::Converting => "converting dataset to binary format...".to_string(),
+            _ => {
+                if servers_total > 0 {
+                    format!(
+                        "connecting to {workers_total} worker(s) and {servers_total} server(s)..."
+                    )
+                } else {
+                    format!("connecting to {workers_total} worker(s)...")
+                }
+            }
         };
 
         Self {
@@ -193,7 +201,7 @@ impl TrainingState {
             started_at: Instant::now(),
             workers,
             loss_series,
-            logs: vec![(LogLevel::Info, initial_log.into())],
+            logs: vec![(LogLevel::Info, initial_log)],
             final_trained: None,
             error: None,
             events: None,
@@ -217,13 +225,20 @@ impl TrainingState {
             self.startup_rx = None;
             match result {
                 StartupResult::Ok(session) => {
-                    self.push_log(
-                        LogLevel::Info,
-                        format!(
-                            "connecting to {} worker(s) and {} server(s)...",
-                            self.workers_total, self.servers_total
-                        ),
-                    );
+                    if self.servers_total > 0 {
+                        self.push_log(
+                            LogLevel::Info,
+                            format!(
+                                "connecting to {} worker(s) and {} server(s)...",
+                                self.workers_total, self.servers_total
+                            ),
+                        );
+                    } else {
+                        self.push_log(
+                            LogLevel::Info,
+                            format!("connecting to {} worker(s)...", self.workers_total),
+                        );
+                    }
                     self.phase = Phase::Connecting;
                     self.events = Some(session.event_listener());
                 }
