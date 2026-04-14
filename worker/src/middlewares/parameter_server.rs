@@ -22,7 +22,7 @@ where
 }
 
 // The communication manager between the worker process and the many servers.
-pub struct Middleware<R, W>
+pub struct ParameterServerMiddleware<R, W>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -31,7 +31,7 @@ where
     server_ordering: Vec<usize>,
 }
 
-impl<R, W> Middleware<R, W>
+impl<R, W> ParameterServerMiddleware<R, W>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,

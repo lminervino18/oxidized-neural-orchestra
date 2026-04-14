@@ -1,3 +1,3 @@
 pub mod builder;
-pub mod middleware;
-pub mod worker;
+pub mod middlewares;
+pub mod workers;
