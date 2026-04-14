@@ -1,7 +1,13 @@
 use pyo3::prelude::*;
 
 /// Mean squared error loss function.
-#[pyclass]
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// An MSE loss configuration.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Mse;
 
@@ -14,7 +20,13 @@ impl Mse {
 }
 
 /// Cross entropy loss function.
-#[pyclass]
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A cross entropy loss configuration.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct CrossEntropy;
 

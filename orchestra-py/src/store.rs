@@ -1,7 +1,13 @@
 use pyo3::prelude::*;
 
 /// Blocking parameter store — gradient updates are applied synchronously.
-#[pyclass]
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A blocking store configuration.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct BlockingStore;
 
@@ -14,7 +20,13 @@ impl BlockingStore {
 }
 
 /// Wild parameter store — gradient updates are applied without locking.
-#[pyclass]
+///
+/// # Args
+/// This constructor does not take arguments.
+///
+/// # Returns
+/// A wild store configuration.
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct WildStore;
 

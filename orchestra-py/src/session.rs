@@ -98,7 +98,6 @@ impl ProgressReporter {
         }
     }
 
-    /// Records losses for `worker_id` and refreshes the display.
     fn update(&mut self, worker_id: usize, losses: &[f32]) {
         for &loss in losses {
             if worker_id < self.worker_epochs.len() {
@@ -125,7 +124,6 @@ impl ProgressReporter {
         }
     }
 
-    /// Stops the spinner and prints the final summary line.
     fn finish(self, success: bool) {
         let Self {
             done,
@@ -171,10 +169,24 @@ pub struct TrainedModel {
 
 #[pymethods]
 impl TrainedModel {
+    /// Returns the trained model parameters as a flat vector.
+    ///
+    /// # Args
+    /// This method does not take arguments.
+    ///
+    /// # Returns
+    /// The trained parameters in a flat vector.
     pub fn weights(&self) -> Vec<f32> {
         self.inner.params().to_vec()
     }
 
+    /// Saves the trained model in safetensors format.
+    ///
+    /// # Args
+    /// * `path` - Destination path for the safetensors file.
+    ///
+    /// # Returns
+    /// `None`.
     pub fn save_safetensors(&self, path: &str) -> PyResult<()> {
         self.inner
             .save_safetensors(path)
@@ -193,6 +205,9 @@ pub struct Session {
 impl Session {
     /// Blocks until training completes and returns the trained model.
     ///
+    /// # Args
+    /// This method does not take arguments.
+    ///
     /// # Returns
     /// The trained model with its final parameters.
     ///
@@ -209,7 +224,7 @@ impl Session {
         let worker_count = self.worker_count;
 
         let trained = py
-            .allow_threads(|| {
+            .detach(|| {
                 std::thread::spawn(move || {
                     let mut rx = session.event_listener();
                     let mut reporter = ProgressReporter::new(max_epochs, worker_count);
@@ -237,4 +252,3 @@ impl Session {
         Ok(TrainedModel { inner: trained })
     }
 }
-
