@@ -12,6 +12,9 @@ pub enum AlgorithmSpec {
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     },
+    AllReduce {
+        worker_addrs: Vec<String>,
+    },
 }
 
 /// Message serializer for gradient sparse compression.

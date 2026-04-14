@@ -51,6 +51,7 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<training::PyTrainingConfig>()?;
     m.add_function(wrap_pyfunction!(training::parameter_server, m)?)?;
+    m.add_function(wrap_pyfunction!(training::all_reduce, m)?)?;
     m.add_function(wrap_pyfunction!(training::orchestrate, m)?)?;
 
     Ok(())

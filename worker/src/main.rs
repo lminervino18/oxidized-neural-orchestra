@@ -3,15 +3,11 @@ use std::{env, io};
 use comms::{
     msg::{Command, Msg},
     recv_dataset::{get_dataset_cursor, recv_dataset},
-    specs::worker::{AlgorithmSpec, SerializerSpec},
 };
 use log::{info, warn};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    signal,
-};
+use tokio::{net::TcpListener, signal};
 
-use worker::{builder::WorkerBuilder, middleware::Middleware};
+use worker::builder::WorkerBuilder;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
@@ -19,19 +15,17 @@ const DEFAULT_HOST: &str = "127.0.0.1";
 async fn main() -> io::Result<()> {
     env_logger::init();
 
-    let addr = format!(
-        "{}:{}",
-        env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
-        env::var("PORT").map_err(io::Error::other)?,
-    );
+    let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
+    let port = env::var("PORT").map_err(io::Error::other)?;
+    let bind_addr = format!("{host}:{port}");
 
-    let list = TcpListener::bind(&addr).await?;
-    info!("listening at {addr}");
+    let list = TcpListener::bind(&bind_addr).await?;
+    info!("listening at {bind_addr}");
 
-    let (stream, addr) = list.accept().await?;
+    let (stream, orch_addr) = list.accept().await?;
     let (rx, tx) = stream.into_split();
     let (mut rx, tx) = comms::channel(rx, tx);
-    info!("orchestrator connected from {addr}");
+    info!("orchestrator connected from {orch_addr}");
 
     let spec = loop {
         match rx.recv().await {
@@ -55,31 +49,13 @@ async fn main() -> io::Result<()> {
     )
     .await?;
 
-    let AlgorithmSpec::ParameterServer {
-        server_addrs,
-        server_sizes,
-        server_ordering,
-    } = spec.algorithm.clone();
-
-    let serializer = spec.serializer.clone();
     let worker_builder = WorkerBuilder::new();
-    let worker = worker_builder.build(spec, &server_sizes, samples_raw, labels_raw);
-    let mut middleware = Middleware::new(server_ordering);
-
-    for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
-        let stream = TcpStream::connect(addr).await?;
-        let (rx, tx) = stream.into_split();
-
-        let (rx, tx) = match serializer {
-            SerializerSpec::Base => comms::channel(rx, tx),
-            SerializerSpec::SparseCapable { r, seed } => comms::sparse_tx_channel(rx, tx, r, seed),
-        };
-
-        middleware.spawn(rx, tx, size);
-    }
+    let worker = worker_builder
+        .build(spec, bind_addr.clone(), samples_raw, labels_raw)
+        .await?;
 
     tokio::select! {
-        ret = worker.run(rx, tx, middleware) => {
+        ret = worker.run(rx, tx) => {
             ret?;
             info!("wrapping up, disconnecting...");
         }

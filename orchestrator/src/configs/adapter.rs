@@ -51,22 +51,31 @@ impl Adapter {
         Vec<Partition<'a>>,
         Vec<(String, ServerSpec)>,
     )> {
-        let (servers, server_addrs, server_sizes, server_ordering) =
-            self.adapt_servers(&model, training)?;
-
         let (dataset_specs, partitions) =
             self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
 
-        let workers = self.adapt_workers(
-            &model,
-            training,
-            dataset_specs,
-            server_addrs,
-            server_sizes,
-            server_ordering,
-        )?;
+        match &training.algorithm {
+            AlgorithmConfig::ParameterServer { .. } => {
+                let (servers, server_addrs, server_sizes, server_ordering) =
+                    self.adapt_servers(&model, training)?;
 
-        Ok((workers, partitions, servers))
+                let workers = self.adapt_parameter_server_workers(
+                    &model,
+                    training,
+                    dataset_specs,
+                    server_addrs,
+                    server_sizes,
+                    server_ordering,
+                )?;
+
+                Ok((workers, partitions, servers))
+            }
+            AlgorithmConfig::AllReduce => {
+                let workers = self.adapt_all_reduce_workers(&model, training, dataset_specs)?;
+
+                Ok((workers, partitions, Vec::new()))
+            }
+        }
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -84,7 +93,7 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
-    fn adapt_workers(
+    fn adapt_parameter_server_workers(
         &self,
         model: &ModelConfig,
         training: &TrainingConfig,
@@ -98,6 +107,56 @@ impl Adapter {
             server_addrs,
             server_sizes,
             server_ordering,
+        };
+        let serializer_spec = self.adapt_serializer(training);
+
+        let worker_specs = training
+            .worker_addrs
+            .iter()
+            .enumerate()
+            .zip(dataset_specs)
+            .map(|((i, addr), dataset)| {
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th worker's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
+
+                let worker_spec = WorkerSpec {
+                    worker_id: i,
+                    trainer: trainer_spec.clone(),
+                    dataset,
+                    algorithm: algorithm_spec.clone(),
+                    serializer: serializer_spec.clone(),
+                };
+
+                Ok((addr.clone(), worker_spec))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(worker_specs)
+    }
+
+    /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
+    ///
+    /// # Args
+    /// * `model` - The model's configuration.
+    /// * `training` - The training's configuration.
+    /// * `dataset_specs` - Already-resolved dataset specs per worker.
+    ///
+    /// # Returns
+    /// Worker addresses and specifications.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if any address cannot be resolved.
+    fn adapt_all_reduce_workers(
+        &self,
+        model: &ModelConfig,
+        training: &TrainingConfig,
+        dataset_specs: Vec<DatasetSpec>,
+    ) -> Result<Vec<(String, WorkerSpec)>> {
+        let trainer_spec = self.adapt_trainer(model, training);
+        let algorithm_spec = AlgorithmSpec::AllReduce {
+            worker_addrs: training.worker_addrs.clone(),
         };
         let serializer_spec = self.adapt_serializer(training);
 
@@ -171,7 +230,11 @@ impl Adapter {
             synchronizer,
             store,
             ..
-        } = &training.algorithm;
+        } = &training.algorithm
+        else {
+            let text = "all-reduce does not use parameter servers".into();
+            return Err(OrchErr::Unsupported(text));
+        };
 
         let (_, param_gens) = self.adapt_layers(model, training.dataset.x_size);
         let nlayers = param_gens.len();

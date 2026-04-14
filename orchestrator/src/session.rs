@@ -21,7 +21,10 @@ use comms::{
     OnoReceiver, OnoSender,
     msg::{Command, Msg, Payload},
     send_dataset::send_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
+    specs::{
+        server::ServerSpec,
+        worker::{AlgorithmSpec, WorkerSpec},
+    },
 };
 
 use crate::{
@@ -136,6 +139,7 @@ pub struct Session {
     workers: Vec<(NetRx, NetTx)>,
     model: ModelConfig,
     input_size: usize,
+    algorithm: AlgorithmSpec,
 }
 
 impl Session {
@@ -160,6 +164,11 @@ impl Session {
         model: ModelConfig,
         input_size: usize,
     ) -> Result<Self> {
+        let algorithm = workers
+            .first()
+            .map(|(_, spec)| spec.algorithm.clone())
+            .ok_or_else(|| OrchErr::InvalidConfig("at least one worker is required".into()))?;
+
         let (nworkers, nservers) = (workers.len(), servers.len());
         info!("connecting to {nworkers} workers and {nservers} servers");
 
@@ -179,6 +188,7 @@ impl Session {
             workers: worker_chans,
             model,
             input_size,
+            algorithm,
         })
     }
 
@@ -236,6 +246,7 @@ impl Session {
         let (tx, rx) = mpsc::channel(256);
         let model = self.model;
         let input_size = self.input_size;
+        let algorithm = self.algorithm;
 
         thread::spawn(move || {
             self.runtime.block_on(async move {
@@ -245,41 +256,53 @@ impl Session {
 
                 future::join_all(futs).await;
 
-                debug!("all workers done, reading final params from all servers");
+                match algorithm {
+                    AlgorithmSpec::ParameterServer { .. } => {
+                        debug!("all workers done, reading final params from all servers");
 
-                let mut model_params: Vec<f32> = Vec::new();
+                        let mut model_params: Vec<f32> = Vec::new();
 
-                for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
-                    match srx.recv().await {
-                        Ok(Msg::Data(Payload::Params(params))) => {
-                            model_params.extend_from_slice(params);
+                        for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
+                            match srx.recv().await {
+                                Ok(Msg::Data(Payload::Params(params))) => {
+                                    model_params.extend_from_slice(params);
+                                }
+                                Ok(msg) => {
+                                    let err = OrchErr::ServerError(format!(
+                                        "unexpected message from server {i}: {msg:?}"
+                                    ));
+                                    let _ = tx.send(TrainingEvent::Error(err)).await;
+                                    return;
+                                }
+                                Err(e) => {
+                                    let err = OrchErr::ServerError(format!(
+                                        "unexpected error from server {i}: {e}"
+                                    ));
+                                    let _ = tx.send(TrainingEvent::Error(err)).await;
+                                    return;
+                                }
+                            }
                         }
-                        Ok(msg) => {
-                            let err = OrchErr::ServerError(format!(
-                                "unexpected message from server {i}: {msg:?}"
-                            ));
-                            let _ = tx.send(TrainingEvent::Error(err)).await;
-                            return;
-                        }
-                        Err(e) => {
-                            let err = OrchErr::ServerError(format!(
-                                "unexpected error from server {i}: {e}"
-                            ));
-                            let _ = tx.send(TrainingEvent::Error(err)).await;
-                            return;
-                        }
+
+                        info!("received {} total parameters", model_params.len());
+
+                        let trained = TrainedModel {
+                            params: model_params,
+                            model,
+                            input_size,
+                        };
+
+                        let _ = tx.send(TrainingEvent::Complete(trained)).await;
+                    }
+                    AlgorithmSpec::AllReduce { .. } => {
+                        // TODO: define how the orchestrator receives the final model and how
+                        //       all-reduce workers signal that the training session completed.
+                        let err = OrchErr::Unsupported(
+                            "all-reduce session finalization is not implemented yet".into(),
+                        );
+                        let _ = tx.send(TrainingEvent::Error(err)).await;
                     }
                 }
-
-                info!("received {} total parameters", model_params.len());
-
-                let trained = TrainedModel {
-                    params: model_params,
-                    model,
-                    input_size,
-                };
-
-                let _ = tx.send(TrainingEvent::Complete(trained)).await;
             });
         });
 
