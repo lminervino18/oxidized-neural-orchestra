@@ -17,6 +17,13 @@ pub enum LayerSpec {
         dim: (usize, usize),
         act_fn: Option<ActFnSpec>,
     },
+    Conv {
+        /// The filters, in channels, and size of the square kernel.
+        kernel_dim: (usize, usize, usize),
+        stride: usize,
+        padding: usize,
+        act_fn: Option<ActFnSpec>,
+    },
 }
 
 /// The specification for the `Optimizer` trait.

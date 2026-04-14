@@ -34,6 +34,15 @@ pub enum LayerConfig {
         #[serde(default)]
         act_fn: Option<ActFnConfig>,
     },
+    Conv {
+        /// The filters, in channels, and size of the square kernel.
+        kernel_dim: (NonZeroUsize, NonZeroUsize, NonZeroUsize),
+        stride: NonZeroUsize,
+        padding: usize,
+        init: ParamGenConfig,
+        #[serde(default)]
+        act_fn: Option<ActFnConfig>,
+    },
 }
 
 /// The `Model` configuration.
