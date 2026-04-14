@@ -18,6 +18,11 @@ pub struct ParamServerHandle<R, L> {
     compression_buf: Vec<f16>,
 }
 
+/// The response to the parameter pull.
+pub enum PullParamsResponse<'a> {
+    Params(&'a mut [f32]),
+}
+
 /// The necessary metadata to enable the sparse gradient capability.
 struct SparseMetadata<R> {
     r: Float01,
@@ -77,8 +82,10 @@ where
     /// # Returns
     /// The parameters as a mutable slice or an io error if occurred.
     pub async fn pull_params(&mut self) -> io::Result<&mut [f32]> {
-        let msg = self.transport.recv().await?;
+        let msg = Msg::Control(Command::RequestParams);
+        self.transport.send(&msg).await?;
 
+        let msg = self.transport.recv().await?;
         let Msg::Data(Payload::Params(params)) = msg else {
             let text = format!("Expected params from server {}, got: {msg:?}", self.id);
             return Err(io::Error::other(text));
@@ -143,14 +150,7 @@ where
     /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Disconnect);
-        self.transport.send(&msg).await?;
-
-        while !matches!(
-            self.transport.recv().await?,
-            Msg::Control(Command::Disconnect),
-        ) {}
-
-        Ok(())
+        self.transport.send(&msg).await
     }
 
     /// Compresses the given gradient buffer into the inner `compression_buf`.

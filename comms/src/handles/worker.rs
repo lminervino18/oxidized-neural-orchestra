@@ -6,17 +6,17 @@ use crate::{
     transport::TransportLayer,
 };
 
-/// Top level worker message variants.
-pub enum WorkerMsg<'a> {
-    Grad(&'a [f32]),
-    Disconnect,
-}
-
 /// The handle for communicating with a `Worker`.
 pub struct WorkerHandle<L> {
     id: usize,
     transport: L,
     grad: Vec<f32>,
+}
+
+/// The response to the gradient pull.
+pub enum PullGradResponse<'a> {
+    Grad(&'a [f32]),
+    Disconnect,
 }
 
 impl<L: TransportLayer> WorkerHandle<L> {
@@ -39,8 +39,8 @@ impl<L: TransportLayer> WorkerHandle<L> {
     /// Blocks until receiving a message from the worker.
     ///
     /// # Returns
-    /// A worker message or an io error if occurred.
-    pub async fn recv(&mut self) -> io::Result<WorkerMsg> {
+    /// A `PullGradResponse` message or an io error if occurred.
+    pub async fn pull_grad(&mut self) -> io::Result<PullGradResponse> {
         self.grad.fill(0.0);
 
         let msg = match self.transport.recv().await? {
@@ -56,13 +56,13 @@ impl<L: TransportLayer> WorkerHandle<L> {
                     *r = g.to_f32();
                 }
 
-                WorkerMsg::Grad(&self.grad)
+                PullGradResponse::Grad(&self.grad)
             }
             Msg::Data(Payload::SparseGrad(grad)) => {
                 sparse::grad_lift_into(&mut self.grad, grad).map_err(io::Error::other)?;
-                WorkerMsg::Grad(&self.grad)
+                PullGradResponse::Grad(&self.grad)
             }
-            Msg::Control(Command::Disconnect) => WorkerMsg::Disconnect,
+            Msg::Control(Command::Disconnect) => PullGradResponse::Disconnect,
             msg => {
                 let text = format!("Expected grads from worker {}, got: {msg:?}", self.id);
                 return Err(io::Error::other(text));
