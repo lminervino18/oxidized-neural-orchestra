@@ -7,9 +7,9 @@ use crate::{
 };
 
 /// The handle for communicating with a `Worker`.
-pub struct WorkerHandle<L> {
+pub struct WorkerHandle<T> {
     id: usize,
-    transport: L,
+    transport: T,
     grad: Vec<f32>,
 }
 
@@ -19,7 +19,7 @@ pub enum PullGradResponse<'a> {
     Disconnect,
 }
 
-impl<L: TransportLayer> WorkerHandle<L> {
+impl<T: TransportLayer> WorkerHandle<T> {
     /// Creates a new `WorkerHandle`.
     ///
     /// # Args
@@ -28,7 +28,7 @@ impl<L: TransportLayer> WorkerHandle<L> {
     ///
     /// # Returns
     /// A new `WorkerHandle` instance.
-    pub fn new(id: usize, transport: L) -> Self {
+    pub fn new(id: usize, transport: T) -> Self {
         Self {
             id,
             transport,
@@ -36,14 +36,14 @@ impl<L: TransportLayer> WorkerHandle<L> {
         }
     }
 
-    /// Blocks until receiving a message from the worker.
+    /// Blocks until receiving a message from a worker, it expects a gradient.
     ///
     /// # Returns
     /// A `PullGradResponse` message or an io error if occurred.
     pub async fn pull_grad(&mut self) -> io::Result<PullGradResponse> {
         self.grad.fill(0.0);
 
-        let msg = match self.transport.recv().await? {
+        let response = match self.transport.recv().await? {
             Msg::Data(Payload::Grad(grad)) => {
                 let additional = self.grad.capacity().saturating_sub(grad.len());
                 self.grad.reserve(additional);
@@ -69,7 +69,7 @@ impl<L: TransportLayer> WorkerHandle<L> {
             }
         };
 
-        Ok(msg)
+        Ok(response)
     }
 
     /// Pushes the latest state of the parameters to the worker.

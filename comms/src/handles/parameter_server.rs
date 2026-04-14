@@ -10,9 +10,9 @@ use crate::{
 };
 
 /// The handle for communicating with a `ParameterServer`.
-pub struct ParamServerHandle<R, L> {
+pub struct ParamServerHandle<T, R> {
     id: usize,
-    transport: L,
+    transport: T,
     last_threshold: Option<f32>,
     sparse_capability: Option<SparseMetadata<R>>,
     compression_buf: Vec<f16>,
@@ -30,10 +30,9 @@ struct SparseMetadata<R> {
     ser_buf: Vec<u8>,
 }
 
-impl<R, L> ParamServerHandle<R, L>
+impl<T> ParamServerHandle<T, _>
 where
-    R: Rng,
-    L: TransportLayer,
+    T: TransportLayer,
 {
     /// Creates a new `ParamServerHandle`.
     ///
@@ -43,7 +42,7 @@ where
     ///
     /// # Returns
     /// A new `ParamServerHandle` instance.
-    pub fn new(id: usize, transport: L) -> Self {
+    pub fn new(id: usize, transport: T) -> Self {
         Self {
             id,
             transport,
@@ -52,8 +51,14 @@ where
             compression_buf: Vec::new(),
         }
     }
+}
 
-    /// Creates a new `ParmaServerHandle` with the sparse gradient capability.
+impl<T, R> ParamServerHandle<T, R>
+where
+    T: TransportLayer,
+    R: Rng,
+{
+    /// Creates a new `ParamServerHandle` with the sparse gradient capability.
     ///
     /// # Args
     /// * `id` - The id number of the server.
@@ -63,7 +68,7 @@ where
     ///
     /// # Returns
     /// A new `ParamServerHandle` instance.
-    pub fn with_sparse_capability(id: usize, transport: L, r: Float01, rng: R) -> Self {
+    pub fn with_sparse_capability(id: usize, transport: T, r: Float01, rng: R) -> Self {
         Self {
             id,
             transport,
@@ -81,7 +86,7 @@ where
     ///
     /// # Returns
     /// The parameters as a mutable slice or an io error if occurred.
-    pub async fn pull_params(&mut self) -> io::Result<&mut [f32]> {
+    pub async fn pull_params(&mut self) -> io::Result<PullParamsResponse> {
         let msg = Msg::Control(Command::RequestParams);
         self.transport.send(&msg).await?;
 
@@ -91,7 +96,7 @@ where
             return Err(io::Error::other(text));
         };
 
-        Ok(params)
+        Ok(PullParamsResponse::Params(params))
     }
 
     /// Pushes the gradient to the server.
@@ -100,9 +105,10 @@ where
     /// * `residual` - The gradient to send.
     ///
     /// # Returns
-    /// An io error if occurred.
-    pub async fn push_grads(&mut self, residual: &[f32]) -> io::Result<()> {
-        let payload = match self.sparse_capability.as_mut() {
+    /// Either `Some(threshold)` if sparse gradient was used or `None` if dense gradient was used.
+    /// Or an io error if occurred.
+    pub async fn push_grad(&mut self, residual: &[f32]) -> io::Result<Option<f32>> {
+        let (payload, threshold) = match self.sparse_capability.as_mut() {
             Some(cap) => {
                 cap.ser_buf.clear();
 
@@ -111,37 +117,24 @@ where
 
                 if cap.ser_buf.len() <= residual.len() * size_of::<f16>() {
                     self.last_threshold = Some(threshold);
-                    Payload::SparseGrad(&cap.ser_buf)
+                    let payload = Payload::SparseGrad(&cap.ser_buf);
+                    (payload, Some(threshold))
                 } else {
-                    self.compress_dense_grad(residual);
-                    Payload::Grad(&self.compression_buf)
+                    Self::compress_dense_grad(&mut self.compression_buf, residual);
+                    let payload = Payload::Grad(&self.compression_buf);
+                    (payload, None)
                 }
             }
             None => {
-                self.compress_dense_grad(residual);
-                Payload::Grad(&self.compression_buf)
+                Self::compress_dense_grad(&mut self.compression_buf, residual);
+                let payload = Payload::Grad(&self.compression_buf);
+                (payload, None)
             }
         };
 
         let msg = Msg::Data(payload);
-        self.transport.send(&msg).await
-    }
-
-    /// Zeroes out the residual buffer using the latest threshold value.
-    ///
-    /// # Args
-    /// * `residual` - The gradient buffer to zero out.
-    pub fn zero_residual(&mut self, residual: &mut [f32]) {
-        match self.last_threshold.take() {
-            None => residual.fill(0.0),
-            Some(t) => {
-                for g in residual.iter_mut() {
-                    if g.abs() >= t {
-                        *g = 0.0;
-                    }
-                }
-            }
-        }
+        self.transport.send(&msg).await?;
+        Ok(threshold)
     }
 
     /// Disconnects the parameter server.
@@ -156,20 +149,17 @@ where
     /// Compresses the given gradient buffer into the inner `compression_buf`.
     ///
     /// # Args
+    /// * `compression_buf`: The buffer where to write the compressed residual gradient.
     /// * `residual` - The gradient to compress.
-    fn compress_dense_grad(&mut self, residual: &[f32]) {
-        let additional = self
-            .compression_buf
-            .capacity()
-            .saturating_sub(residual.len());
-
-        self.compression_buf.reserve(additional);
+    fn compress_dense_grad(compression_buf: &mut Vec<f16>, residual: &[f32]) {
+        let additional = compression_buf.capacity().saturating_sub(residual.len());
+        compression_buf.reserve(additional);
 
         // SAFETY: The new uninitialized bytes will be overwritten right
         //         after with the compressed 16 bit gradient values.
-        unsafe { self.compression_buf.set_len(residual.len()) };
+        unsafe { compression_buf.set_len(residual.len()) };
 
-        for (g, r) in self.compression_buf.iter_mut().zip(residual) {
+        for (g, r) in compression_buf.iter_mut().zip(residual) {
             *g = f16::from_f32(*r);
         }
     }

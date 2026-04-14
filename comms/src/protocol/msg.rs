@@ -1,6 +1,7 @@
 use std::{borrow::Cow, io};
 
 use half::f16;
+use serde::{Deserialize, Serialize};
 
 use super::specs::{server::ServerSpec, worker::WorkerSpec};
 
@@ -16,10 +17,19 @@ pub enum Payload<'a> {
     Datachunk(&'a [f32]),
 }
 
+/// An enum of the different types of entities in the system.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SrcEntity {
+    Worker { id: usize },
+    ParamServer { id: usize, sparse_cabaple: bool },
+    Orchestrator,
+}
+
 /// The command for the `Control` variant of the `Msg` enum.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Command<'a> {
+    Connect(SrcEntity),
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
     ReportLoss { losses: Cow<'a, [f32]> },
