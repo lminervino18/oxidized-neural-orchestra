@@ -1,10 +1,11 @@
-use comms::Float01;
-use orchestrator::{configs::*, train};
 use std::{
     env, io,
     num::NonZeroUsize,
     process::{Command, ExitStatus},
 };
+
+use comms::Float01;
+use orchestrator::{configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
 const SERVER_BASE_PORT: usize = 40_000;
@@ -68,13 +69,19 @@ fn main() -> io::Result<()> {
 
     let model_config = ModelConfig {
         layers: vec![
-            LayerConfig::Dense {
-                output_size: NonZeroUsize::new(2).unwrap(),
+            LayerConfig::Conv {
+                kernel_dim: (
+                    NonZeroUsize::new(1).unwrap(),
+                    NonZeroUsize::new(1).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
+                ),
+                stride: NonZeroUsize::new(1).unwrap(),
+                padding: 0,
                 init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+                act_fn: None,
             },
             LayerConfig::Dense {
-                output_size: NonZeroUsize::new(1).unwrap(),
+                output_size: NonZeroUsize::new(4).unwrap(),
                 init: ParamGenConfig::Kaiming,
                 act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
@@ -94,20 +101,33 @@ fn main() -> io::Result<()> {
         dataset: DatasetConfig {
             src: DatasetSrc::Inline {
                 samples: vec![
-                    0., 0., //
-                    0., 1., //
-                    1., 0., //
-                    1., 1., //
+                    0.0, 1.0, 0.0, //
+                    1.0, 1.0, 1.0, //
+                    0.0, 1.0, 0.0, // plus sign
+                    0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, //
+                    0.0, 0.0, 0.0, // dot
+                    1.0, 0.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    1.0, 0.0, 1.0, // cross
+                    1.0, 1.0, 1.0, //
+                    1.0, 0.0, 1.0, //
+                    1.0, 1.0, 1.0, // box
                 ],
-                labels: vec![0., 1., 1., 0.],
+                labels: vec![
+                    1.0, 0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, 0.0, //
+                    0.0, 0.0, 1.0, 0.0, //
+                    0.0, 0.0, 0.0, 1.0, //
+                ],
             },
-            x_size: NonZeroUsize::new(2).unwrap(),
-            y_size: NonZeroUsize::new(1).unwrap(),
+            x_size: NonZeroUsize::new(9).unwrap(),
+            y_size: NonZeroUsize::new(4).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(500).unwrap(),
+        max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
     };
