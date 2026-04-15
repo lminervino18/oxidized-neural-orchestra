@@ -616,6 +616,35 @@ impl Adapter {
                     output_size,
                 )
             }
+            LayerConfig::Conv {
+                kernel_dim,
+                stride,
+                padding,
+                init,
+                act_fn,
+            } => {
+                let act_fn_spec = act_fn.map(|act_fn| self.adapt_act_fn(act_fn));
+
+                let (filters, channels, kernel_size) =
+                    (kernel_dim.0.get(), kernel_dim.1.get(), kernel_dim.2.get());
+
+                let layer_size = filters * channels * kernel_size * kernel_size + filters;
+                let output_size = (input_size.get() + 2 * padding - kernel_size) / stride + 1;
+                let sizes = (input_size.get(), layer_size, output_size);
+
+                (
+                    LayerSpec::Conv {
+                        kernel_dim: (filters, channels, kernel_size),
+                        stride: stride.get(),
+                        padding,
+                        act_fn: act_fn_spec,
+                    },
+                    self.adapt_param_gen(init, sizes),
+                    // TODO: el safety de esto debería ser que se validó en validator, validarlo,
+                    // de otra forma no tiene mucho sentido manejar este non zero acá adentro
+                    NonZeroUsize::new(output_size).unwrap(),
+                )
+            }
         }
     }
 
