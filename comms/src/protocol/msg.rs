@@ -18,10 +18,10 @@ pub enum Payload<'a> {
 }
 
 /// An enum of the different types of entities in the system.
-#[derive(Debug, Serialize, Deserialize)]
-pub enum SrcEntity {
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum Entity {
     Worker { id: usize },
-    ParamServer { id: usize, sparse_cabaple: bool },
+    ParamServer { id: usize },
     Orchestrator,
 }
 
@@ -29,7 +29,7 @@ pub enum SrcEntity {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Command<'a> {
-    Connect(SrcEntity),
+    Connect(Entity),
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
     ReportLoss { losses: Cow<'a, [f32]> },

@@ -1,7 +1,7 @@
 use std::io;
 
 use half::f16;
-use rand::Rng;
+use rand::{SeedableRng, rngs::StdRng};
 
 use crate::{
     protocol::{Command, Msg, Payload},
@@ -10,11 +10,11 @@ use crate::{
 };
 
 /// The handle for communicating with a `ParameterServer`.
-pub struct ParamServerHandle<T, R> {
+pub struct ParamServerHandle<T> {
     id: usize,
     transport: T,
     last_threshold: Option<f32>,
-    sparse_capability: Option<SparseMetadata<R>>,
+    sparse_capability: Option<SparseMetadata>,
     compression_buf: Vec<f16>,
 }
 
@@ -24,13 +24,13 @@ pub enum PullParamsResponse<'a> {
 }
 
 /// The necessary metadata to enable the sparse gradient capability.
-struct SparseMetadata<R> {
+struct SparseMetadata {
     r: Float01,
-    rng: R,
+    rng: StdRng,
     ser_buf: Vec<u8>,
 }
 
-impl<T> ParamServerHandle<T, _>
+impl<T> ParamServerHandle<T>
 where
     T: TransportLayer,
 {
@@ -51,35 +51,28 @@ where
             compression_buf: Vec::new(),
         }
     }
-}
 
-impl<T, R> ParamServerHandle<T, R>
-where
-    T: TransportLayer,
-    R: Rng,
-{
-    /// Creates a new `ParamServerHandle` with the sparse gradient capability.
+    /// Enables the sparse gradient capability for this handle.
     ///
     /// # Args
-    /// * `id` - The id number of the server.
-    /// * `transport` - The transport layer of the communication.
     /// * `r` - The ratio of compression for calculating the threshold value.
-    /// * `rng` - A random number generator.
-    ///
-    /// # Returns
-    /// A new `ParamServerHandle` instance.
-    pub fn with_sparse_capability(id: usize, transport: T, r: Float01, rng: R) -> Self {
-        Self {
-            id,
-            transport,
-            last_threshold: None,
-            sparse_capability: Some(SparseMetadata {
-                r,
-                rng,
-                ser_buf: Vec::new(),
-            }),
-            compression_buf: Vec::new(),
-        }
+    /// * `seed` - The seed for the random number generator.
+    pub fn enable_sparse_capabiliy<S>(&mut self, r: Float01, seed: S)
+    where
+        S: Into<Option<u64>>,
+    {
+        let rng = match seed.into() {
+            Some(seed) => StdRng::seed_from_u64(seed),
+            None => StdRng::from_os_rng(),
+        };
+
+        let sparse_metadata = SparseMetadata {
+            r,
+            rng,
+            ser_buf: Vec::new(),
+        };
+
+        self.sparse_capability = Some(sparse_metadata);
     }
 
     /// Pulls the latest parameters from the server.
