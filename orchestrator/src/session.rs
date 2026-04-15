@@ -1,11 +1,17 @@
-use futures::future;
-use log::{debug, error, info, warn};
-use std::path::PathBuf;
 use std::{
     io::{self, Cursor},
-    path::Path,
+    path::{Path, PathBuf},
     slice, thread,
 };
+
+use comms::{
+    OnoReceiver, OnoSender,
+    msg::{Command, Msg, Payload},
+    send_dataset::send_dataset,
+    specs::{server::ServerSpec, worker::WorkerSpec},
+};
+use futures::future;
+use log::{debug, error, info, warn};
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWrite},
@@ -15,13 +21,6 @@ use tokio::{
     },
     runtime::Runtime,
     sync::mpsc::{self, Receiver, Sender},
-};
-
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
-    send_dataset::send_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
 };
 
 use crate::{
@@ -66,8 +65,7 @@ impl TrainedModel {
     /// Returns an `OrchErr` if the file cannot be written or the parameter
     /// buffer does not match the model architecture.
     pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
-        use safetensors::Dtype;
-        use safetensors::tensor::TensorView;
+        use safetensors::{Dtype, tensor::TensorView};
 
         let mut tensors: Vec<(String, TensorView)> = Vec::new();
         let mut offset = 0;
@@ -80,8 +78,15 @@ impl TrainedModel {
         };
 
         for (i, layer) in self.model.layers.iter().enumerate() {
-            let LayerConfig::Dense { output_size, .. } = layer;
-            let out = output_size.get();
+            let out = match layer {
+                LayerConfig::Dense { output_size, .. } => output_size.get(),
+                LayerConfig::Conv {
+                    kernel_dim,
+                    stride,
+                    padding,
+                    ..
+                } => (prev + 2 * padding - kernel_dim.2.get()) / stride.get() + 1,
+            };
             let w_count = prev * out;
             let b_count = out;
 
