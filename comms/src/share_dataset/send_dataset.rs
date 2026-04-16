@@ -1,11 +1,8 @@
-use std::io::Result;
+use std::io::{self, Result};
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, BufReader};
 
-use crate::{
-    OnoSender,
-    msg::{Msg, Payload},
-};
+use crate::protocol::{Msg, Payload};
 
 /// Sends chunks of the dataset with `chunk` size.
 ///
