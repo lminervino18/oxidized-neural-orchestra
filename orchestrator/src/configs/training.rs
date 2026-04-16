@@ -66,6 +66,7 @@ pub enum AlgorithmConfig {
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
+    AllReduce,
 }
 
 /// The `Serializer` configuration.

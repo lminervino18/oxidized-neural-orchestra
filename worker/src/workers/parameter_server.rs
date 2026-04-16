@@ -8,14 +8,14 @@ use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::middleware::Middleware;
+use crate::middlewares::parameter_server::ParameterServerMiddleware;
 
 /// The middleman between the parameter server and the model trainer.
-pub struct Worker {
+pub struct ParameterServerWorker {
     trainer: Box<dyn Trainer>,
 }
 
-impl Worker {
+impl ParameterServerWorker {
     /// Creates a new `Worker`.
     ///
     /// # Args
@@ -41,7 +41,7 @@ impl Worker {
         self,
         mut rx: OnoReceiver<R>,
         mut tx: OnoSender<W>,
-        mut middleware: Middleware<R, W>,
+        mut middleware: ParameterServerMiddleware<R, W>,
     ) -> io::Result<()>
     where
         R: AsyncRead + Unpin,

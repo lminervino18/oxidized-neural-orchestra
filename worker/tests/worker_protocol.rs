@@ -10,7 +10,10 @@ use machine_learning::{
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
 use comms::msg::{Command, Msg, Payload};
-use worker::{middleware::Middleware, worker::Worker};
+use worker::{
+    middlewares::parameter_server::ParameterServerMiddleware,
+    workers::parameter_server::ParameterServerWorker,
+};
 
 #[allow(clippy::type_complexity)]
 fn channel_pair() -> (
@@ -118,8 +121,8 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
         rand::rng(),
     );
 
-    let worker = Worker::new(Box::new(trainer));
-    let mut middleware = Middleware::new(vec![0]);
+    let worker = ParameterServerWorker::new(Box::new(trainer));
+    let mut middleware = ParameterServerMiddleware::new(vec![0]);
     middleware.spawn(wk_rx, wk_tx, 2);
 
     let worker_fut = worker.run(wk_orch_rx, wk_orch_tx, middleware);
