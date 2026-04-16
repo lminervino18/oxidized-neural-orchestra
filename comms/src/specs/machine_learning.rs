@@ -3,14 +3,14 @@ use std::num::NonZeroUsize;
 use serde::{Deserialize, Serialize};
 
 /// The specification for the `ActFn` enum.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActFnSpec {
     Sigmoid { amp: f32 },
 }
 
 /// The specification for the `Layer` enum.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LayerSpec {
     Dense {
