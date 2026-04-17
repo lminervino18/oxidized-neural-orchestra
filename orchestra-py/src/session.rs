@@ -5,8 +5,9 @@ use std::sync::{
 };
 use std::thread::JoinHandle;
 
-use orchestrator::TrainingEvent;
+use orchestrator::{CancelHandle, TrainingEvent};
 use pyo3::prelude::*;
+use tokio::sync::mpsc;
 
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const BAR_WIDTH: usize = 40;
@@ -196,13 +197,25 @@ impl TrainedModel {
 
 #[pyclass]
 pub struct Session {
-    pub inner: Option<orchestrator::Session>,
+    pub inner: Option<(orchestrator::Session, mpsc::Receiver<()>)>,
+    pub cancel: CancelHandle,
     pub max_epochs: usize,
     pub worker_count: usize,
 }
 
 #[pymethods]
 impl Session {
+    /// Requests an orderly stop of the training session at the next epoch boundary.
+    ///
+    /// # Args
+    /// This method does not take arguments.
+    ///
+    /// # Returns
+    /// `None`. If the session was already consumed or already stopping, this is a no-op.
+    pub fn stop(&self) {
+        self.cancel.stop();
+    }
+
     /// Blocks until training completes and returns the trained model.
     ///
     /// # Args
@@ -215,7 +228,7 @@ impl Session {
     /// Raises a `RuntimeError` if the session was already consumed, if training
     /// fails, or if the background thread panics.
     pub fn wait(&mut self, py: Python<'_>) -> PyResult<TrainedModel> {
-        let session = self
+        let (session, cancel_rx) = self
             .inner
             .take()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("session already consumed"))?;
@@ -226,7 +239,7 @@ impl Session {
         let trained = py
             .detach(|| {
                 std::thread::spawn(move || {
-                    let mut rx = session.event_listener();
+                    let mut rx = session.event_listener(cancel_rx);
                     let mut reporter = ProgressReporter::new(max_epochs, worker_count);
 
                     let result = loop {
@@ -234,7 +247,9 @@ impl Session {
                             Some(TrainingEvent::Loss { worker_id, losses }) => {
                                 reporter.update(worker_id, &losses);
                             }
-                            Some(TrainingEvent::Complete(trained)) => break Ok(trained),
+                            Some(TrainingEvent::Complete { model: trained, .. }) => {
+                                break Ok(trained)
+                            }
                             Some(TrainingEvent::Error(e)) => break Err(e.to_string()),
                             Some(_) => continue,
                             None => break Err("session channel closed unexpectedly".into()),

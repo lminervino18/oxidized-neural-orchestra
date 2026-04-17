@@ -20,6 +20,7 @@ pub enum Command<'a> {
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
     ReportLoss { losses: Cow<'a, [f32]> },
+    StopAfterEpoch,
     Disconnect,
 }
 

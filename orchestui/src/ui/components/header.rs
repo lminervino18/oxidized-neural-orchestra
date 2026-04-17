@@ -6,6 +6,8 @@ use ratatui::{
     Frame,
 };
 
+use orchestrator::StopReason;
+
 use crate::ui::screens::training::{Phase, TrainingState};
 use crate::ui::theme::Theme;
 use crate::ui::utils::fmt_loss;
@@ -21,14 +23,18 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Phase::Converting => Span::styled("CONVERTING", Theme::accent_cyan()),
         Phase::Connecting => Span::styled("CONNECTING", Theme::accent_cyan()),
         Phase::Training => Span::styled("TRAINING", Theme::ok()),
-        Phase::Finished => Span::styled("FINISHED", Theme::accent_magenta()),
+        Phase::Finished => match state.finish_reason {
+            Some(StopReason::EarlyStopping) => Span::styled("FINISHED · early stop", Theme::accent_magenta()),
+            Some(StopReason::ManualStop) => Span::styled("FINISHED · stopped", Theme::accent_magenta()),
+            _ => Span::styled("FINISHED", Theme::accent_magenta()),
+        },
         Phase::Error => Span::styled("ERROR", Theme::error()),
     };
 
     let hint = if state.final_trained.is_some() {
         Span::styled("  [q] menu  [←/→] worker  [s] save", Theme::muted())
     } else if state.is_active() {
-        Span::styled("  [q] leave  [←/→] worker", Theme::muted())
+        Span::styled("  [q] leave  [←/→] worker  [x] stop", Theme::muted())
     } else {
         Span::styled("  [q] menu  [←/→] worker", Theme::muted())
     };
@@ -66,6 +72,15 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         format!("optimizer {}", state.optimizer_label),
         Theme::dim(),
     ));
+
+    if let Some(tol) = &state.early_stopping_label {
+        spans.push(Span::styled("  │  ", Theme::muted()));
+        spans.push(Span::styled(
+            format!("early stop tol {tol}"),
+            Theme::dim(),
+        ));
+    }
+
     spans.push(hint);
 
     let line = Line::from(spans);
