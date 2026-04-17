@@ -18,6 +18,8 @@ pub enum LayerSpec {
         act_fn: Option<ActFnSpec>,
     },
     Conv {
+        /// The in channels, height and width of the input.
+        input_dim: (usize, usize, usize),
         /// The filters, in channels, and size of the square kernel.
         kernel_dim: (usize, usize, usize),
         stride: usize,

@@ -35,6 +35,8 @@ pub enum LayerConfig {
         act_fn: Option<ActFnConfig>,
     },
     Conv {
+        /// The in channels, height and width of the input.
+        input_dim: (NonZeroUsize, NonZeroUsize, NonZeroUsize),
         /// The filters, in channels, and size of the square kernel.
         kernel_dim: (NonZeroUsize, NonZeroUsize, NonZeroUsize),
         stride: NonZeroUsize,

@@ -680,6 +680,7 @@ impl Adapter {
                 )
             }
             LayerConfig::Conv {
+                input_dim,
                 kernel_dim,
                 stride,
                 padding,
@@ -692,11 +693,15 @@ impl Adapter {
                     (kernel_dim.0.get(), kernel_dim.1.get(), kernel_dim.2.get());
 
                 let layer_size = filters * channels * kernel_size * kernel_size + filters;
-                let output_size = (input_size.get() + 2 * padding - kernel_size) / stride + 1;
+                let input_dim = (input_dim.0.get(), input_dim.1.get(), input_dim.2.get());
+                let output_height = (input_dim.1 + 2 * padding - kernel_size) / stride + 1;
+                let output_width = (input_dim.2 + 2 * padding - kernel_size) / stride + 1;
+                let output_size = output_height * output_width * input_dim.0;
                 let sizes = (input_size.get(), layer_size, output_size);
 
                 (
                     LayerSpec::Conv {
+                        input_dim,
                         kernel_dim: (filters, channels, kernel_size),
                         stride: stride.get(),
                         padding,
@@ -876,6 +881,11 @@ mod tests {
         let cfg = ModelConfig {
             layers: vec![
                 LayerConfig::Conv {
+                    input_dim: (
+                        NonZeroUsize::new(1).unwrap(),
+                        NonZeroUsize::new(3).unwrap(),
+                        NonZeroUsize::new(3).unwrap(),
+                    ),
                     kernel_dim: (
                         NonZeroUsize::new(1).unwrap(),
                         NonZeroUsize::new(1).unwrap(),
@@ -897,6 +907,7 @@ mod tests {
 
         let expected_specs = vec![
             LayerSpec::Conv {
+                input_dim: (1, 3, 3),
                 kernel_dim: (1, 1, 2),
                 stride: 1,
                 padding: 0,

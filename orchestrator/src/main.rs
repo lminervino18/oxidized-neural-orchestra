@@ -70,6 +70,11 @@ fn main() -> io::Result<()> {
     let model_config = ModelConfig {
         layers: vec![
             LayerConfig::Conv {
+                input_dim: (
+                    NonZeroUsize::new(1).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                ),
                 kernel_dim: (
                     NonZeroUsize::new(1).unwrap(),
                     NonZeroUsize::new(1).unwrap(),

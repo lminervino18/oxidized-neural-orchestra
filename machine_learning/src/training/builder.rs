@@ -121,13 +121,14 @@ impl TrainerBuilder {
                 act_fn
             }
             LayerSpec::Conv {
+                input_dim,
                 kernel_dim,
                 stride,
                 padding,
                 act_fn,
             } => {
                 if let Some(LayerSpec::Dense { .. }) = last {
-                    layers.push(Layer::two_d_to4d(kernel_dim.1, kernel_dim.2, kernel_dim.2))
+                    layers.push(Layer::two_d_to4d(input_dim.0, input_dim.1, input_dim.2))
                 }
 
                 layers.push(Layer::conv2d(
