@@ -1,11 +1,8 @@
 use std::io;
 
-use tokio::io::{AsyncWrite, AsyncWriteExt};
+use tokio::io::AsyncWrite;
 
-use crate::{
-    protocol::{Msg, Payload},
-    transport::TransportLayer,
-};
+use crate::{share_dataset, transport::TransportLayer};
 
 /// The handle for communicating with an `Orchestrator`.
 pub struct OrchHandle<T: TransportLayer> {
@@ -48,41 +45,6 @@ where
     where
         W: AsyncWrite + Unpin,
     {
-        self.recv_datachunks(xs, xs_size).await?;
-        self.recv_datachunks(ys, ys_size).await?;
-        Ok(())
-    }
-
-    /// Receives a dataset chunk through the transport layer and writes it's data into
-    /// the given writer.
-    ///
-    /// # Args
-    /// * `writer` - The sink for the dataset bytes.
-    /// * `size` - The amount of bytes to read.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    async fn recv_datachunks<W>(&mut self, writer: &mut W, size: usize) -> io::Result<()>
-    where
-        W: AsyncWrite + Unpin,
-    {
-        let mut received = 0;
-
-        while received < size {
-            let msg = self.transport.recv().await?;
-
-            let Msg::Data(Payload::Datachunk(chunk)) = msg else {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Expected Datachunk, got: {msg:?}"),
-                ));
-            };
-
-            let bytes = bytemuck::cast_slice(chunk);
-            writer.write_all(bytes).await?;
-            received += bytes.len();
-        }
-
-        writer.flush().await
+        share_dataset::recv_dataset(xs, ys, xs_size, ys_size, &mut self.transport).await
     }
 }

@@ -158,6 +158,18 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
     Ok(())
 }
 
+// let expected = vec![
+//     9, 0, 0, 0, 0, 0, 0, 0, // Idx
+//     7, 0, 0, 0, // ChunkLen
+//     128, 72,
+//     0, 73,
+//     128, 73,
+//     0, 74,
+//     128, 74,
+//     0, 75,
+//     128, 75
+// ];
+
 #[test]
 fn test_grad_drop() {
     let grad = vec![1.0, -1.0, 0.0, 2.0];

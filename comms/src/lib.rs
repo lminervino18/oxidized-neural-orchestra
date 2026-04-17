@@ -1,11 +1,11 @@
 mod codec;
 mod connection;
 mod handles;
-mod protocol;
+pub mod protocol;
 mod share_dataset;
 mod sparse;
 mod transport;
 mod utils;
 
-pub use share_dataset::{recv_dataset, send_dataset};
+pub use handles::{OrchHandle, ParamServerHandle, PullParamsResponse, WorkerEvent, WorkerHandle};
 pub use sparse::Float01;

@@ -79,7 +79,7 @@ where
     ///
     /// # Returns
     /// The parameters as a mutable slice or an io error if occurred.
-    pub async fn pull_params(&mut self) -> io::Result<PullParamsResponse> {
+    pub async fn pull_params(&mut self) -> io::Result<PullParamsResponse<'_>> {
         let msg = Msg::Control(Command::RequestParams);
         self.transport.send(&msg).await?;
 

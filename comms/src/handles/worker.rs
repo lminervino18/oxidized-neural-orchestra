@@ -4,7 +4,7 @@ use tokio::io::AsyncRead;
 
 use crate::{
     protocol::{Command, Msg, Payload},
-    sparse,
+    share_dataset, sparse,
     transport::TransportLayer,
     utils,
 };
@@ -43,7 +43,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
     ///
     /// # Returns
     /// A `WorkerEvent` message or an io error if occurred.
-    pub async fn recv_event(&mut self) -> io::Result<WorkerEvent> {
+    pub async fn recv_event(&mut self) -> io::Result<WorkerEvent<'_>> {
         self.grad.fill(0.0);
 
         let response = match self.transport.recv().await? {
@@ -111,30 +111,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
     where
         R: AsyncRead + Unpin,
     {
-        let mut buf = vec![0; chunk_size];
-        self.send_datachunks(xs, &mut buf).await?;
-        self.send_datachunks(ys, &mut buf).await?;
-        Ok(())
-    }
-
-    /// Reads through the reader and sends the datachunks to the worker.
-    ///
-    /// # Arsg
-    /// * `reader` - The byte source.
-    /// * `acc` - The accumulating buffer.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    async fn send_datachunks<R>(&mut self, reader: &mut R, acc: &mut [u8]) -> io::Result<()>
-    where
-        R: AsyncRead + Unpin,
-    {
-        while utils::read_all(reader, acc).await? > 0 {
-            let nums = bytemuck::cast_slice(&acc);
-            let msg = Msg::Data(Payload::Datachunk(nums));
-            self.transport.send(&msg).await?;
-        }
-
-        Ok(())
+        share_dataset::send_dataset(xs, ys, chunk_size, &mut self.transport).await
     }
 }
