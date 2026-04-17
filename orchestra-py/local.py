@@ -27,12 +27,18 @@ SAMPLES_PATH = os.environ.get("SAMPLES_PATH", "data/mnist_train_samples.bin")
 LABELS_PATH = os.environ.get("LABELS_PATH", "data/mnist_train_labels.bin")
 SAFETENSORS_PATH = os.environ.get("SAFETENSORS_PATH", "model.safetensors")
 
+EARLY_STOPPING_TOLERANCE: float | None = float(t) if (t := os.environ.get("EARLY_STOPPING_TOLERANCE")) else None
+
 
 def main() -> None:
     print(f"worker addrs: {WORKER_ADDRS}")
     print(f"server addrs: {SERVER_ADDRS}")
     print(f"samples: {SAMPLES_PATH}")
     print(f"labels: {LABELS_PATH}")
+    if EARLY_STOPPING_TOLERANCE is not None:
+        print(f"early stopping tolerance: {EARLY_STOPPING_TOLERANCE:.2e}")
+    else:
+        print("early stopping: disabled")
 
     print("\nbuilding model...")
     model = Sequential([
@@ -55,6 +61,7 @@ def main() -> None:
         batch_size=256,
         offline_epochs=1,
         seed=42,
+        early_stopping_tolerance=EARLY_STOPPING_TOLERANCE,
     )
 
     print("\nstarting training session...")
