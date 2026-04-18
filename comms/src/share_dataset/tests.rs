@@ -10,7 +10,7 @@ use crate::transport::Framer;
 #[tokio::test]
 async fn test_share_dataset() {
     unsafe { env::set_var("RUST_BACKTRACE", "1") };
-    const SIZE: usize = 128;
+    const SIZE: usize = 2 << 13;
 
     let (rx, tx) = duplex(SIZE);
     let (rx, _) = io::split(rx);

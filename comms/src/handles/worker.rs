@@ -6,7 +6,6 @@ use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
     transport::TransportLayer,
-    utils,
 };
 
 /// The handle for communicating with a `Worker`.

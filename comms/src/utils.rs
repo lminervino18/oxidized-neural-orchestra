@@ -1,6 +1,6 @@
-use std::io;
+use std::io::{self, IoSlice};
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 /// Reads through the `reader` until filling the given buffer with data.
 ///
@@ -24,4 +24,34 @@ pub async fn read_all<R: AsyncRead + Unpin>(reader: &mut R, out: &mut [u8]) -> i
     }
 
     Ok(read)
+}
+
+/// Writes all the given io slices by calling write vectored.
+///
+/// # Args
+/// * `writer` - The writer where to push the bytes.
+/// * `bufs` - The buffers to write.
+///
+/// # Returns
+/// An io error if occurred.
+pub async fn write_all_vectored<const N: usize, W: AsyncWrite + Unpin>(
+    writer: &mut W,
+    mut bufs: [IoSlice<'_>; N],
+) -> io::Result<()> {
+    let mut i = 0;
+
+    while i < N {
+        let mut written = writer.write_vectored(&bufs[i..]).await?;
+
+        while i < N && written >= bufs[i].len() {
+            written -= bufs[i].len();
+            i += 1;
+        }
+
+        if written > 0 {
+            bufs[i].advance(written);
+        }
+    }
+
+    Ok(())
 }

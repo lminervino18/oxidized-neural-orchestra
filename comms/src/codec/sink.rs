@@ -1,9 +1,9 @@
-use std::io;
+use std::io::{self, IoSlice};
 
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use super::{LEN_TYPE_SIZE, LenType};
-use crate::protocol::Msg;
+use crate::{protocol::Msg, utils};
 
 /// The sending end handle of the communication.
 pub struct Sink<W: AsyncWrite + Unpin> {
@@ -45,12 +45,12 @@ impl<W: AsyncWrite + Unpin> Sink<W> {
 
         buf[..header.len()].copy_from_slice(&header);
 
-        if !buf.is_empty() {
-            writer.write_all(buf).await?;
-        }
-
-        if let Some(data) = zero_copy_data {
-            writer.write_all(data).await?;
+        match zero_copy_data {
+            Some(data) => {
+                let bufs = [IoSlice::new(buf), IoSlice::new(data)];
+                utils::write_all_vectored(writer, bufs).await?;
+            }
+            None => writer.write_all(buf).await?,
         }
 
         writer.flush().await
