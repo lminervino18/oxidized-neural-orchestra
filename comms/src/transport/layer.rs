@@ -5,7 +5,9 @@ use crate::protocol::Msg;
 /// The trait that the different transport layers should implement
 /// following a decorator pattern to easily add capabilities to the
 /// transport.
-pub trait TransportLayer {
+#[allow(unused)]
+#[trait_variant::make(TransportLayer: Send)]
+pub trait TransportLayerTemplate {
     /// Receives a message from the inner layer.
     ///
     /// # Returns

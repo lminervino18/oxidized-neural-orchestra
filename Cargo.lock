@@ -159,6 +159,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "trait-variant",
 ]
 
 [[package]]

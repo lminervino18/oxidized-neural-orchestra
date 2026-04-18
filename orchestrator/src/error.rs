@@ -9,7 +9,7 @@ use std::{
 pub enum OrchErr {
     InvalidConfig(String),
     ConnectionFailed { addr: String, source: io::Error },
-    WorkerError { worker_id: usize, msg: String },
+    WorkerError { worker_id: usize, event: String },
     ServerError(String),
     Io(io::Error),
 }
@@ -24,7 +24,10 @@ impl Display for OrchErr {
             Self::ConnectionFailed { addr, source } => {
                 format!("failed to reach to {addr}: {source}")
             }
-            Self::WorkerError { worker_id, msg } => {
+            Self::WorkerError {
+                worker_id,
+                event: msg,
+            } => {
                 format!("worker {worker_id} error: {msg}")
             }
             Self::ServerError(msg) => format!("server error: {msg}"),

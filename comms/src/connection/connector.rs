@@ -9,6 +9,7 @@ use crate::{
 };
 
 /// Establishes connections and yields reliable transports.
+#[derive(Debug, Clone, Copy)]
 pub struct Connector {
     timeout: Duration,
     base_retry_dur: Duration,
@@ -61,8 +62,8 @@ impl Connector {
         writer: W,
     ) -> io::Result<WorkerHandle<Rtp<R, W>>>
     where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let transport_layer = self.connect(reader, writer).await?;
         Ok(WorkerHandle::new(id, transport_layer))
@@ -84,8 +85,8 @@ impl Connector {
         writer: W,
     ) -> io::Result<ParamServerHandle<Rtp<R, W>>>
     where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let transport_layer = self.connect(reader, writer).await?;
         Ok(ParamServerHandle::new(id, transport_layer))
@@ -105,8 +106,8 @@ impl Connector {
         writer: W,
     ) -> io::Result<OrchHandle<Rtp<R, W>>>
     where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let transport_layer = self.connect(reader, writer).await?;
         Ok(OrchHandle::new(transport_layer))
@@ -122,8 +123,8 @@ impl Connector {
     /// A new `ReliableTransport` or an io error if occurred.
     async fn connect<R, W>(&self, reader: R, writer: W) -> io::Result<Rtp<R, W>>
     where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let mut transport_layer = transport::build_reliable_transport(
             reader,

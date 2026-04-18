@@ -1,6 +1,6 @@
 use std::io;
 
-use comms::msg::{Command, Detail, Msg, Payload};
+use comms::{Rtp, TransportLayer, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -71,12 +71,10 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Args
-    /// * `rx` - The receiving end of the communication.
-    /// * `tx` - The sending end of the communication.
-    pub fn spawn<R, W>(&mut self, rx_raw: R, tx_raw: W)
+    /// * `worker_handle` - The handle for a worker connection.
+    pub fn spawn<T>(&mut self, mut worker_handle: WorkerHandle<T>)
     where
-        R: AsyncRead + Unpin + Send + 'static,
-        W: AsyncWrite + Unpin + Send + 'static,
+        T: TransportLayer + Send + 'static,
     {
         let id = self.tasks.len() + 1;
         let handle = self.handle.clone();
@@ -86,53 +84,38 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
             let nparams = handle.len();
             let mut params = vec![0.0; nparams];
 
-            let (mut rx, mut tx) = comms::sparse_rx_channel(rx_raw, tx_raw, nparams);
-
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
             handle.pull_params(&mut params).await.unwrap();
 
-            debug!(worker_id = id; "sending parameters");
-            let msg = Msg::Data(Payload::Params(&mut params));
-            tx.send(&msg).await?;
-
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
-                match rx.recv().await? {
-                    Msg::Data(Payload::Grad(grad)) if nparams == grad.len() => {
+
+                match worker_handle.recv_event().await? {
+                    WorkerEvent::RequestParams => {
+                        debug!(worker_id = id; "sending parameters");
+                        worker_handle.push_params(&mut params).await?;
+                    }
+                    WorkerEvent::Grad(grad) if nparams == grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
 
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
                         synchronizer.step(&handle, grad, &mut params).await.unwrap();
-
-                        debug!(worker_id = id; "sending parameters");
-                        let msg = Msg::Data(Payload::Params(&mut params));
-                        tx.send(&msg).await?;
                     }
-                    Msg::Control(Command::Disconnect) => {
+                    WorkerEvent::Disconnect => {
                         info!(worker_id = id; "gracefully disconnecting worker");
-                        let msg = Msg::Control(Command::Disconnect);
-                        tx.send(&msg).await?;
                         break;
                     }
-                    Msg::Data(Payload::Grad(grad)) => {
-                        let ngrad = grad.len();
-                        warn!(worker_id = id; "gradient size mismatch, expected {nparams}, got {ngrad}");
-
-                        let msg = Msg::Err(Detail::BufferSizeMismatch {
-                            expected: nparams,
-                            got: ngrad,
-                        });
-
-                        tx.send(&msg).await?;
+                    WorkerEvent::Grad(grad) => {
+                        // Acá eventualmente habría que ver como se redimensiona el servidor a partir
+                        // de que haya llegado otro tamaño de gradiente.
+                        //
+                        // ¿Cómo agregamos o quitamos valores al store y demás?
+                        warn!(worker_id = id; "gradient size mismatch, expected {nparams}, got {}", grad.len());
                     }
-                    msg => {
-                        error!(worker_id = id; "received an invalid message {msg:?}");
-
-                        let msg = Msg::Err(Detail::Fatal("invalid message".into()));
-                        tx.send(&msg).await?;
-
+                    event => {
+                        error!(worker_id = id; "received an invalid event {event:?}");
                         return Err(io::Error::other("invalid message"));
                     }
                 }
@@ -157,7 +140,7 @@ where
         self.run().await
     }
 
-    fn spawn(&mut self, rx_raw: R, tx_raw: W) {
-        self.spawn(rx_raw, tx_raw)
+    fn spawn(&mut self, worker_handle: WorkerHandle<Rtp<R, W>>) {
+        self.spawn(worker_handle)
     }
 }

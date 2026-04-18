@@ -4,6 +4,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::Connection;
 use crate::{
+    Rtp,
     handles::{OrchHandle, ParamServerHandle, WorkerHandle},
     protocol::{Command, Entity, Msg},
     transport::{self, TransportLayer},
@@ -12,11 +13,11 @@ use crate::{
 /// Accepts new incoming connections and assigns yields their handle types.
 pub struct Acceptor<R, W, F>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
     F: AsyncFnMut() -> io::Result<(R, W)>,
 {
-    listener: F,
+    stream_factory: F,
     timeout: Duration,
     base_retry_dur: Duration,
     retry_coef: u32,
@@ -25,14 +26,14 @@ where
 
 impl<R, W, F> Acceptor<R, W, F>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
     F: AsyncFnMut() -> io::Result<(R, W)>,
 {
     /// Creates a new `Acceptor`.
     ///
     /// # Args
-    /// * `listener` - A stream socket factory factory.
+    /// * `stream_factory` - A stream connection factory.
     /// * `timeout` - The timeout duration to declare that a message didn't reach the other end.
     /// * `base_retry_dur` - The duration that the acceptor sleeps for the first time a message timed out.
     /// * `retry_coef` - The coeficient to multiply the current timeout duration.
@@ -41,14 +42,14 @@ where
     /// # Returns
     /// A new `Acceptor` instance.
     pub fn new(
-        listener: F,
+        stream_factory: F,
         timeout: Duration,
         base_retry_dur: Duration,
         retry_coef: u32,
         retries: usize,
     ) -> Self {
         Self {
-            listener,
+            stream_factory,
             timeout,
             base_retry_dur,
             retry_coef,
@@ -61,8 +62,8 @@ where
     /// # Returns
     /// A new connection or an io error if occurred while waiting for incoming connections
     /// or receiving the type of entity from the peer.
-    pub async fn accept(&mut self) -> io::Result<Connection<impl TransportLayer>> {
-        let (reader, writer) = (self.listener)().await?;
+    pub async fn accept(&mut self) -> io::Result<Connection<Rtp<R, W>>> {
+        let (reader, writer) = (self.stream_factory)().await?;
 
         let mut transport_layer = transport::build_reliable_transport(
             reader,

@@ -2,7 +2,7 @@
 
 use std::num::NonZeroUsize;
 
-use comms::msg::{Command, Msg, Payload};
+use comms::{ParamServerHandle, PullParamsResponse, WorkerHandle};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
 use crate::{
@@ -25,31 +25,26 @@ fn channel_pair() -> (
 
 async fn mock_lineal_worker<R, W>(rx: R, tx: W, max_epochs: usize, nparams: usize) -> io::Result<()>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
 {
     let mut grad = vec![0.0; nparams];
-    let (mut rx, mut tx) = comms::channel(rx, tx);
+    let transport = comms::build_simple_transport(rx, tx);
+    let mut server_handle = ParamServerHandle::new(0, transport);
 
     for _ in 0..max_epochs {
-        match rx.recv().await? {
-            Msg::Data(Payload::Params(params)) => {
+        match server_handle.pull_params().await? {
+            PullParamsResponse::Params(params) => {
                 for (g, p) in grad.iter_mut().zip(params) {
                     *g = *p - 1.0;
                 }
 
-                let msg = Msg::Data(Payload::Grad(&grad));
-                tx.send(&msg).await?;
+                server_handle.push_grad(&grad).await?;
             }
-            _ => {}
         }
     }
 
-    let msg = Msg::Control(Command::Disconnect);
-    tx.send(&msg).await?;
-
-    while !matches!(rx.recv().await?, Msg::Control(Command::Disconnect)) {}
-
+    server_handle.disconnect().await?;
     Ok(())
 }
 
@@ -67,7 +62,10 @@ async fn test_lineal_convergence() -> io::Result<()> {
     let handle = StoreHandle::new(store);
     let synchronizer = BarrierSync::new(1);
     let mut server = ParameterServer::new(handle, synchronizer);
-    server.spawn(sv_rx, sv_tx);
+
+    let transport = comms::build_simple_transport(sv_rx, sv_tx);
+    let worker_handle = WorkerHandle::new(0, transport);
+    server.spawn(worker_handle);
 
     let worker_fut = mock_lineal_worker(wk_rx, wk_tx, MAX_EPOCHS, NPARAMS);
     let (_, params) = tokio::try_join!(worker_fut, server.run())?;

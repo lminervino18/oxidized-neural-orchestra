@@ -1,17 +1,16 @@
 pub mod configs;
-use std::path::PathBuf;
 pub mod dataset_format;
 mod error;
 mod session;
 
-use std::fs;
+use std::{fs, path::PathBuf, time::Duration};
 
+use crate::configs::{DatasetSrc, ModelConfig, TrainingConfig, Validator};
+use comms::{Connector, protocol::Entity};
 use configs::Adapter;
 use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
 pub use session::{Session, TrainedModel, TrainingEvent};
-
-use crate::configs::{DatasetSrc, ModelConfig, TrainingConfig, Validator};
 
 /// Starts the distributed training process and returns an active session.
 ///
@@ -41,7 +40,18 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     let adapter = Adapter::new();
     let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
-    let session = Session::new(workers, partitions, servers, model, input_size)?;
+    // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
+    //       configurar esto, si tenemos tiempo y vemos que viene bien lo
+    //       podemos mover y que sea parte de un `CommsConfig`.
+    let connector = Connector::new(
+        Duration::from_secs(5),
+        Duration::from_secs(2),
+        2,
+        4,
+        Entity::Orchestrator,
+    );
+
+    let session = Session::new(workers, partitions, servers, connector, model, input_size)?;
 
     if let Some((samples_bin, labels_bin)) = dataset_bin {
         remove_binary(&samples_bin);

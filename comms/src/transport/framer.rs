@@ -43,8 +43,8 @@ where
 
 impl<R, W> TransportLayer for Framer<R, W>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
 {
     /// Waits to receive a new message from the inner receiver.
     ///

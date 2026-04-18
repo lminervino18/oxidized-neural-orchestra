@@ -14,6 +14,9 @@ use tokio::io::{AsyncRead, AsyncWrite};
 /// The reliable transport.
 pub type Rtp<R, W> = Retryer<TimeOuter<Framer<R, W>>>;
 
+/// The simple transport;
+pub type Stp<R, W> = Framer<R, W>;
+
 /// Builds an uninitialized reliable transport.
 ///
 /// # Args
@@ -25,7 +28,7 @@ pub type Rtp<R, W> = Retryer<TimeOuter<Framer<R, W>>>;
 /// * `retries` - The amount of retries till declaring a dead node.
 ///
 /// # Returns
-/// An uninitialized `ReliableTransport` instance.
+/// An uninitialized `Rtp` instance.
 pub fn build_reliable_transport<R, W>(
     reader: R,
     writer: W,
@@ -35,11 +38,27 @@ pub fn build_reliable_transport<R, W>(
     retries: usize,
 ) -> Rtp<R, W>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
 {
     let framer = Framer::new(reader, writer);
     let timeouter = TimeOuter::new(timeout, framer);
     let retryer = Retryer::new(base_retry_dur, retry_coef, retries, timeouter);
     retryer
+}
+
+/// Builds an uninitialized simple transport.
+///
+/// # Args
+/// * `reader` - The reading end of the communication.
+/// * `writer` - The writing end of the communication.
+///
+/// # Returns
+/// An uninitialized `Stp` instance.
+pub fn build_simple_transport<R, W>(reader: R, writer: W) -> Stp<R, W>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    Framer::new(reader, writer)
 }

@@ -1,3 +1,6 @@
+use comms::{
+    Connector, NetRtp, ParamServerHandle, PullParamsResponse, Rtp, WorkerEvent, WorkerHandle,
+};
 use futures::future;
 use log::{debug, error, info, warn};
 use std::path::PathBuf;
@@ -6,31 +9,21 @@ use std::{
     path::Path,
     slice, thread,
 };
+use tokio::io::AsyncRead;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWrite},
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    net::TcpStream,
     runtime::Runtime,
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Msg, Payload},
-    send_dataset::send_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
-};
+use comms::specs::{server::ServerSpec, worker::WorkerSpec};
 
 use crate::{
     OrchErr, Result,
     configs::{LayerConfig, ModelConfig, Partition},
 };
-
-type NetRx = OnoReceiver<OwnedReadHalf>;
-type NetTx = OnoSender<OwnedWriteHalf>;
 
 /// The result of a completed training session.
 ///
@@ -132,8 +125,8 @@ pub enum TrainingEvent {
 /// Represents an ongoing training session.
 pub struct Session {
     runtime: Runtime,
-    servers: Vec<(NetRx, NetTx)>,
-    workers: Vec<(NetRx, NetTx)>,
+    servers: Vec<ParamServerHandle<NetRtp>>,
+    workers: Vec<WorkerHandle<NetRtp>>,
     model: ModelConfig,
     input_size: usize,
 }
@@ -145,6 +138,7 @@ impl Session {
     /// * `workers` - List of (address, spec) pairs for each worker.
     /// * `partitions` - List of dataset partitions for each worker.
     /// * `servers` - List of (address, spec) pairs for each parameter server.
+    /// * `connector` - The undrelying entity connector.
     /// * `model` - The model architecture, kept for post-training serialization.
     /// * `input_size` - The input size of the first layer, derived from the dataset.
     ///
@@ -157,6 +151,7 @@ impl Session {
         workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition>,
         servers: Vec<(String, ServerSpec)>,
+        connector: Connector,
         model: ModelConfig,
         input_size: usize,
     ) -> Result<Self> {
@@ -167,10 +162,11 @@ impl Session {
             .enable_all()
             .build()?;
 
-        let server_chans = runtime.block_on(Self::create_servers(servers))?;
+        let server_chans = runtime.block_on(Self::create_servers(servers, connector))?;
         debug!("successfully created all servers");
 
-        let worker_chans = runtime.block_on(Self::create_workers(workers, partitions))?;
+        let worker_chans =
+            runtime.block_on(Self::create_workers(workers, partitions, connector))?;
         debug!("successfully created all workers");
 
         Ok(Self {
@@ -182,42 +178,52 @@ impl Session {
         })
     }
 
-    async fn worker_listener(id: usize, mut rx: NetRx, _tx: NetTx, tx: Sender<TrainingEvent>) {
+    async fn worker_listener(
+        id: usize,
+        mut worker_handle: WorkerHandle<NetRtp>,
+        tx: Sender<TrainingEvent>,
+    ) {
         loop {
-            match rx.recv().await {
-                Ok(Msg::Control(Command::ReportLoss { losses })) => {
+            match worker_handle.recv_event().await {
+                Ok(WorkerEvent::Loss(losses)) => {
                     debug!("worker {id} reported {} losses", losses.len());
+
                     let event = TrainingEvent::Loss {
                         worker_id: id,
-                        losses: losses.into_owned(),
+                        losses,
                     };
+
                     let _ = tx.send(event).await;
                 }
-                Ok(Msg::Control(Command::Disconnect)) => {
+                Ok(WorkerEvent::Disconnect) => {
                     info!("worker {id} disconnected");
                     let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
                     return;
                 }
-                Ok(msg) => {
-                    warn!("worker {id}: unexpected message {msg:?}");
+                Ok(event) => {
+                    warn!("worker {id}: unexpected event {event:?}");
+
                     let event = TrainingEvent::Error(OrchErr::WorkerError {
                         worker_id: id,
-                        msg: format!("unexpected message {msg:?}"),
+                        event: format!("unexpected event {event:?}"),
                     });
+
                     let _ = tx.send(event).await;
                     return;
                 }
                 Err(e) if is_eof(&e) => {
-                    info!("worker {id} closed connection");
+                    info!("worker {id}'s connection closed");
                     let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
                     return;
                 }
                 Err(e) => {
                     error!("worker {id} error: {e}");
+
                     let event = TrainingEvent::Error(OrchErr::WorkerError {
                         worker_id: id,
-                        msg: e.to_string(),
+                        event: e.to_string(),
                     });
+
                     let _ = tx.send(event).await;
                     return;
                 }
@@ -239,9 +245,13 @@ impl Session {
 
         thread::spawn(move || {
             self.runtime.block_on(async move {
-                let futs = self.workers.into_iter().enumerate().map(|(i, (wrx, wtx))| {
-                    tokio::spawn(Self::worker_listener(i, wrx, wtx, tx.clone()))
-                });
+                let futs = self
+                    .workers
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, server_handle)| {
+                        tokio::spawn(Self::worker_listener(i, server_handle, tx.clone()))
+                    });
 
                 future::join_all(futs).await;
 
@@ -249,22 +259,14 @@ impl Session {
 
                 let mut model_params: Vec<f32> = Vec::new();
 
-                for (i, mut srx) in self.servers.into_iter().map(|(rx, _)| rx).enumerate() {
-                    match srx.recv().await {
-                        Ok(Msg::Data(Payload::Params(params))) => {
+                for (i, mut server_handle) in self.servers.into_iter().enumerate() {
+                    match server_handle.pull_params().await {
+                        Ok(PullParamsResponse::Params(params)) => {
                             model_params.extend_from_slice(params);
                         }
-                        Ok(msg) => {
-                            let err = OrchErr::ServerError(format!(
-                                "unexpected message from server {i}: {msg:?}"
-                            ));
-                            let _ = tx.send(TrainingEvent::Error(err)).await;
-                            return;
-                        }
                         Err(e) => {
-                            let err = OrchErr::ServerError(format!(
-                                "unexpected error from server {i}: {e}"
-                            ));
+                            let text = format!("unexpected error from server {i}: {e}");
+                            let err = OrchErr::ServerError(text);
                             let _ = tx.send(TrainingEvent::Error(err)).await;
                             return;
                         }
@@ -290,25 +292,36 @@ impl Session {
     ///
     /// # Args
     /// * `servers` - List of (address, spec) pairs for each parameter server.
+    /// * `connector` - The connector for establishing connections.
     ///
     /// # Returns
     /// A list of open (receiver, sender) channel pairs, one per server.
     ///
     /// # Errors
     /// Returns an `OrchErr` if any connection or send fails.
-    async fn create_servers(servers: Vec<(String, ServerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
-        let mut channels = Vec::with_capacity(servers.len());
+    async fn create_servers(
+        servers: Vec<(String, ServerSpec)>,
+        connector: Connector,
+    ) -> Result<Vec<ParamServerHandle<NetRtp>>> {
+        let connect_to_server = async |id, addr| {
+            let stream = TcpStream::connect(addr).await?;
+            let (rx, tx) = stream.into_split();
+            let server_handle = connector.connect_parameter_server(id, rx, tx).await?;
+            Ok(server_handle)
+        };
 
-        for (addr, spec) in servers {
-            let (rx, mut tx) = Self::open_channel(&addr)
+        let mut handles = Vec::with_capacity(servers.len());
+
+        for (i, (addr, spec)) in servers.into_iter().enumerate() {
+            let mut server_handle = connect_to_server(i, addr.clone())
                 .await
-                .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+                .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
-            tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
-            channels.push((rx, tx));
+            server_handle.create(spec).await?;
+            handles.push(server_handle);
         }
 
-        Ok(channels)
+        Ok(handles)
     }
 
     /// Connects to all workers, sends each its bootstrap spec and dataset partition.
@@ -316,6 +329,7 @@ impl Session {
     /// # Args
     /// * `workers` - List of (address, spec) pairs for each worker.
     /// * `partitions` - List of dataset partitions for each worker.
+    /// * `connector` - The connector for establishing connections.
     ///
     /// # Returns
     /// A list of open (receiver, sender) channel pairs, one per worker.
@@ -325,57 +339,68 @@ impl Session {
     async fn create_workers<'a>(
         workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
-    ) -> Result<Vec<(NetRx, NetTx)>> {
+        connector: Connector,
+    ) -> Result<Vec<WorkerHandle<NetRtp>>> {
         const CHUNK_SIZE: usize = 8192;
 
-        let futs =
-            workers
-                .into_iter()
-                .zip(partitions)
-                .map(|((addr, spec), partition)| async move {
-                    debug!("connecting to worker at {addr}");
+        let connect_to_worker = async |id, addr| {
+            let stream = TcpStream::connect(addr).await?;
+            let (rx, tx) = stream.into_split();
+            let worker_handle = connector.connect_worker(id, rx, tx).await?;
+            Ok(worker_handle)
+        };
 
-                    let (rx, mut tx) = Self::open_channel(&addr)
-                        .await
-                        .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
+        let futs = workers.into_iter().zip(partitions).enumerate().map(
+            |(i, ((addr, spec), partition))| async move {
+                debug!("connecting to worker at {addr}");
 
-                    tx.send(&Msg::Control(Command::CreateWorker(spec))).await?;
+                let mut worker_handle = connect_to_worker(i, addr.clone())
+                    .await
+                    .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
-                    match partition {
-                        Partition::Local {
+                worker_handle.create(spec).await?;
+
+                match partition {
+                    Partition::Local {
+                        samples_path,
+                        labels_path,
+                        samples_offset,
+                        labels_offset,
+                        samples_size,
+                        labels_size,
+                    } => {
+                        Self::send_local_partition(
                             samples_path,
                             labels_path,
                             samples_offset,
                             labels_offset,
                             samples_size,
                             labels_size,
-                        } => {
-                            Self::send_local_partition(
-                                samples_path,
-                                labels_path,
-                                samples_offset,
-                                labels_offset,
-                                samples_size,
-                                labels_size,
-                                CHUNK_SIZE,
-                                &mut tx,
-                            )
-                            .await?;
-                        }
-                        Partition::Inline { samples, labels } => {
-                            Self::send_inline_partition(samples, labels, CHUNK_SIZE, &mut tx)
-                                .await?;
-                        }
+                            CHUNK_SIZE,
+                            &mut worker_handle,
+                        )
+                        .await?;
                     }
+                    Partition::Inline { samples, labels } => {
+                        Self::send_inline_partition(
+                            samples,
+                            labels,
+                            CHUNK_SIZE,
+                            &mut worker_handle,
+                        )
+                        .await?;
+                    }
+                }
 
-                    Ok::<_, OrchErr>((rx, tx))
-                });
+                Ok::<_, OrchErr>(worker_handle)
+            },
+        );
 
         let channels = future::try_join_all(futs).await?;
         Ok(channels)
     }
 
-    async fn send_local_partition<W>(
+    async fn send_local_partition<R, W>(
         samples_path: &PathBuf,
         labels_path: &PathBuf,
         samples_offset: u64,
@@ -383,10 +408,11 @@ impl Session {
         samples_size: u64,
         labels_size: u64,
         chunk_size: usize,
-        tx: &mut OnoSender<W>,
+        worker_handle: &mut WorkerHandle<Rtp<R, W>>,
     ) -> Result<()>
     where
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let mut samples_fd = File::open(samples_path).await?;
         let mut labels_fd = File::open(labels_path).await?;
@@ -396,44 +422,33 @@ impl Session {
         let mut samples_fd = samples_fd.take(samples_size);
         let mut labels_fd = labels_fd.take(labels_size);
 
-        send_dataset(&mut samples_fd, &mut labels_fd, chunk_size, tx).await?;
+        worker_handle
+            .push_dataset(&mut samples_fd, &mut labels_fd, chunk_size)
+            .await?;
 
         Ok(())
     }
 
-    async fn send_inline_partition<W>(
+    async fn send_inline_partition<R, W>(
         samples: &[f32],
         labels: &[f32],
         chunk_size: usize,
-        tx: &mut OnoSender<W>,
+        worker_handle: &mut WorkerHandle<Rtp<R, W>>,
     ) -> Result<()>
     where
-        W: AsyncWrite + Unpin,
+        R: AsyncRead + Unpin + Send,
+        W: AsyncWrite + Unpin + Send,
     {
         let sample_bytes: &[u8] = bytemuck::cast_slice(samples);
         let label_bytes: &[u8] = bytemuck::cast_slice(labels);
         let mut samples_cursor = Cursor::new(sample_bytes);
         let mut labels_cursor = Cursor::new(label_bytes);
 
-        send_dataset(&mut samples_cursor, &mut labels_cursor, chunk_size, tx).await?;
+        worker_handle
+            .push_dataset(&mut samples_cursor, &mut labels_cursor, chunk_size)
+            .await?;
 
         Ok(())
-    }
-
-    /// Opens a TCP channel to the given address.
-    ///
-    /// # Args
-    /// * `addr` - The socket address to connect to.
-    ///
-    /// # Returns
-    /// A (receiver, sender) channel pair.
-    ///
-    /// # Errors
-    /// Returns an `io::Error` if the connection fails.
-    async fn open_channel(addr: &str) -> io::Result<(NetRx, NetTx)> {
-        let stream = TcpStream::connect(addr).await?;
-        let (rx, tx) = stream.into_split();
-        Ok(comms::channel(rx, tx))
     }
 }
 

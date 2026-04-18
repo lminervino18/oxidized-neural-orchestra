@@ -5,6 +5,7 @@ use tokio::io::AsyncRead;
 use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
+    specs::worker::WorkerSpec,
     transport::TransportLayer,
 };
 
@@ -16,8 +17,11 @@ pub struct WorkerHandle<T> {
 }
 
 /// A notified worker event.
+#[derive(Debug)]
 pub enum WorkerEvent<'a> {
     Grad(&'a [f32]),
+    Loss(Vec<f32>),
+    RequestParams,
     Disconnect,
 }
 
@@ -36,6 +40,18 @@ impl<T: TransportLayer> WorkerHandle<T> {
             transport,
             grad: Vec::new(),
         }
+    }
+
+    /// Sends the create spec for the worker.
+    ///
+    /// # Args
+    /// * `spec` - The worker's specification.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn create(&mut self, spec: WorkerSpec) -> io::Result<()> {
+        let msg = Msg::Control(Command::CreateWorker(spec));
+        self.transport.send(&msg).await
     }
 
     /// Blocks until receiving an event from a worker.
@@ -64,6 +80,8 @@ impl<T: TransportLayer> WorkerHandle<T> {
                 sparse::grad_lift_into(&mut self.grad, grad).map_err(io::Error::other)?;
                 WorkerEvent::Grad(&self.grad)
             }
+            Msg::Control(Command::ReportLoss { losses }) => WorkerEvent::Loss(losses.into_owned()),
+            Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
             msg => {
                 let text = format!("Expected grads from worker {}, got: {msg:?}", self.id);
@@ -80,15 +98,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// An io error if occurred.
     pub async fn push_params(&mut self, params: &mut [f32]) -> io::Result<()> {
         let msg = Msg::Data(Payload::Params(params));
-        self.transport.send(&msg).await
-    }
-
-    /// Disconnects the worker.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn disconnect(&mut self) -> io::Result<()> {
-        let msg = Msg::Control(Command::Disconnect);
         self.transport.send(&msg).await
     }
 
@@ -111,5 +120,14 @@ impl<T: TransportLayer> WorkerHandle<T> {
         R: AsyncRead + Unpin,
     {
         share_dataset::send_dataset(xs, ys, chunk_size, &mut self.transport).await
+    }
+
+    /// Disconnects the worker.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn disconnect(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Disconnect);
+        self.transport.send(&msg).await
     }
 }

@@ -5,9 +5,9 @@ mod storage;
 mod synchronization;
 mod test;
 
-use std::{env, io};
+use std::{env, io, time::Duration};
 
-use comms::msg::{Command, Msg, Payload};
+use comms::{Acceptor, Connection, PullSpecResponse};
 use log::{info, warn};
 use tokio::{net::TcpListener, signal};
 
@@ -25,18 +25,31 @@ async fn main() -> io::Result<()> {
         env::var("PORT").map_err(io::Error::other)?,
     );
 
-    let list = TcpListener::bind(&addr).await?;
+    let listener = TcpListener::bind(&addr).await?;
     info!("listening at {addr}");
 
-    let (stream, addr) = list.accept().await?;
-    let (rx, tx) = stream.into_split();
-    let (mut rx, mut tx) = comms::channel(rx, tx);
-    info!("orchestrator connected from {addr}");
+    let stream_factory = async move || {
+        let (stream, _) = listener.accept().await?;
+        info!("orchestrator connected from {addr}");
+        Ok(stream.into_split())
+    };
+
+    let mut acceptor = Acceptor::new(
+        stream_factory,
+        Duration::from_secs(5),
+        Duration::from_secs(2),
+        2,
+        5,
+    );
+
+    let Connection::Orchestrator(mut orch_handle) = acceptor.accept().await? else {
+        panic!("Received an invalid connection type, expected orchestrator");
+    };
 
     let spec = loop {
-        match rx.recv().await {
-            Ok(Msg::Control(Command::CreateServer(spec))) => break spec,
-            Ok(msg) => warn!("expected CreateServer, got {msg:?}"),
+        match orch_handle.pull_specification().await {
+            Ok(PullSpecResponse::ParameterServer(spec)) => break spec,
+            Ok(_) => warn!("expected create server, got worker instead"),
             Err(e) => warn!("io error {e}"),
         }
     };
@@ -45,18 +58,19 @@ async fn main() -> io::Result<()> {
     let mut pserver = ServerBuilder::new().build(spec).map_err(io::Error::other)?;
 
     for i in 0..nworkers {
-        let (stream, addr) = list.accept().await?;
-        info!("worker {i}/{nworkers} connected from {addr}");
-        let (rx, tx) = stream.into_split();
-        pserver.spawn(rx, tx);
+        let Connection::Worker(worker_handle) = acceptor.accept().await? else {
+            panic!("Received an invalid connectin type");
+        };
+
+        info!("worker {i}/{nworkers} connected");
+        pserver.spawn(worker_handle);
     }
 
     tokio::select! {
         ret = pserver.run() => {
             info!("wrapping up, sending parameters...");
             let mut params = ret?;
-            let msg = Msg::Data(Payload::Params(&mut params));
-            tx.send(&msg).await?;
+            orch_handle.push_params(&mut params).await?;
         },
         _ = signal::ctrl_c() => {
             info!("received SIGTERM");
