@@ -207,19 +207,12 @@ pub struct Session {
 impl Session {
     /// Requests an orderly stop of the training session at the next epoch boundary.
     ///
-    /// # Args
-    /// This method does not take arguments.
-    ///
-    /// # Returns
-    /// `None`. If the session was already consumed or already stopping, this is a no-op.
+    /// If the session was already consumed or already stopping, this is a no-op.
     pub fn stop(&self) {
         self.cancel.stop();
     }
 
     /// Blocks until training completes and returns the trained model.
-    ///
-    /// # Args
-    /// This method does not take arguments.
     ///
     /// # Returns
     /// The trained model with its final parameters.
