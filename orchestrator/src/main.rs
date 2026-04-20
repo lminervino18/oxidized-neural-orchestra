@@ -1,5 +1,5 @@
 use comms::Float01;
-use orchestrator::{configs::*, train};
+use orchestrator::{CancelHandle, configs::*, train};
 use std::{
     env, io,
     num::NonZeroUsize,
@@ -110,18 +110,21 @@ fn main() -> io::Result<()> {
         max_epochs: NonZeroUsize::new(500).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
+        early_stopping: None,
     };
 
     let session = train(model_config, training_config).unwrap();
-    let mut rx = session.event_listener();
+    let (_cancel, cancel_rx) = CancelHandle::pair();
+    let mut rx = session.event_listener(cancel_rx);
 
     loop {
         match rx.blocking_recv() {
             Some(orchestrator::TrainingEvent::Loss { losses, .. }) => {
                 println!("losses: {losses:?}")
             }
-            Some(orchestrator::TrainingEvent::Complete(trained)) => {
+            Some(orchestrator::TrainingEvent::Complete { model: trained, reason }) => {
                 println!("params: {:?}", trained.params());
+                println!("stop reason: {reason:?}");
 
                 trained
                     .save_safetensors(MODEL_OUTPUT_PATH)

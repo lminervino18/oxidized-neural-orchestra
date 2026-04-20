@@ -1,4 +1,5 @@
 pub mod confirm_quit;
+pub mod confirm_stop;
 pub mod converting;
 pub mod header;
 pub mod log_panel;

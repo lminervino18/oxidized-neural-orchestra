@@ -52,6 +52,22 @@ impl ParameterServerWorker {
 
         while should_continue {
             tokio::select! {
+                biased;
+                ret = rx.recv() => {
+                    match ret? {
+                        Msg::Control(Command::StopAfterEpoch) => {
+                            info!("received StopAfterEpoch from orchestrator");
+                            should_continue = false;
+                        }
+                        Msg::Control(Command::Disconnect) => {
+                            info!("received a Command::Disconnect from the orchestrator");
+                            break;
+                        }
+                        other => {
+                            warn!("unexpected message from orchestrator, got: {other:?}");
+                        }
+                    }
+                }
                 ret = middleware.pull_params() => {
                     debug!("received parameters from all servers, training...");
 
@@ -64,18 +80,9 @@ impl ParameterServerWorker {
                     let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
                     middleware.push_grads().await?;
 
-                    should_continue = !was_last;
+                    should_continue = should_continue && !was_last;
                     let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
                     tx.send(&msg).await?;
-                }
-                ret = rx.recv() => match ret? {
-                    Msg::Control(Command::Disconnect) => {
-                        info!("received a Command::Disconnect from the orchestrator");
-                        break;
-                    }
-                    other => {
-                        warn!("unexpected message from orchestrator, got: {other:?}");
-                    }
                 }
             }
         }
