@@ -6,8 +6,17 @@ use comms::{
 };
 use log::{info, warn};
 use parameter_server::service::ServerBuilder;
-use tokio::{net::TcpListener, signal, task};
+use tokio::{
+    net::{
+        TcpListener,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
+    signal,
+    task,
+};
 use worker::builder::WorkerBuilder;
+
+use comms::{OnoReceiver, OnoSender};
 
 const DEFAULT_HOST: &str = "0.0.0.0";
 
@@ -46,47 +55,10 @@ async fn main() -> io::Result<()> {
                             Msg::Control(Command::CreateWorker(spec)) => {
                                 info!("bootstrapping worker session for {orch_addr}");
                                 let bind_addr_clone = bind_addr.clone();
-                                task::spawn_local(async move {
-                                    let x_size_bytes = spec.dataset.x_size_bytes as usize;
-                                    let y_size_bytes = spec.dataset.y_size_bytes as usize;
-                                    let mut samples_raw =
-                                        vec![0f32; x_size_bytes / size_of::<f32>()];
-                                    let mut labels_raw =
-                                        vec![0f32; y_size_bytes / size_of::<f32>()];
-
-                                    if let Err(e) = recv_dataset(
-                                        &mut get_dataset_cursor(&mut samples_raw),
-                                        &mut get_dataset_cursor(&mut labels_raw),
-                                        x_size_bytes,
-                                        y_size_bytes,
-                                        &mut rx,
-                                    )
-                                    .await
-                                    {
-                                        warn!("failed to receive dataset: {e}");
-                                        return;
-                                    }
-
-                                    let worker = match WorkerBuilder::new()
-                                        .build(spec, bind_addr_clone, samples_raw, labels_raw)
-                                        .await
-                                    {
-                                        Ok(w) => w,
-                                        Err(e) => {
-                                            warn!("failed to build worker: {e}");
-                                            return;
-                                        }
-                                    };
-
-                                    if let Err(e) = worker.run(rx, tx).await {
-                                        warn!("worker session error: {e}");
-                                    } else {
-                                        info!("worker session complete");
-                                    }
-                                });
+                                task::spawn_local(run_worker(rx, tx, spec, bind_addr_clone));
                             }
                             Msg::Control(Command::CreateServer(spec)) => {
-                                info!("bootstrapping parameter server session for {orch_addr}");
+                                info!("bootstrapping server session for {orch_addr}");
                                 let nworkers = spec.nworkers;
                                 let mut pserver = match ServerBuilder::new()
                                     .build(spec)
@@ -102,38 +74,18 @@ async fn main() -> io::Result<()> {
                                 for i in 0..nworkers {
                                     match listener.accept().await {
                                         Ok((stream, worker_addr)) => {
-                                            info!(
-                                                "worker {i}/{nworkers} connected from {worker_addr}"
-                                            );
+                                            info!("worker {i}/{nworkers} connected from {worker_addr}");
                                             let (rx, tx) = stream.into_split();
                                             pserver.spawn(rx, tx);
                                         }
                                         Err(e) => {
-                                            warn!(
-                                                "failed to accept worker connection {i}: {e}"
-                                            );
+                                            warn!("failed to accept worker connection {i}: {e}");
                                             break;
                                         }
                                     }
                                 }
 
-                                tokio::spawn(async move {
-                                    let mut tx = tx;
-                                    match pserver.run().await {
-                                        Ok(mut params) => {
-                                            info!(
-                                                "server session complete, sending parameters"
-                                            );
-                                            let msg = Msg::Data(Payload::Params(&mut params));
-                                            if let Err(e) = tx.send(&msg).await {
-                                                warn!("failed to send parameters: {e}");
-                                            }
-                                        }
-                                        Err(e) => {
-                                            warn!("server session error: {e}");
-                                        }
-                                    }
-                                });
+                                tokio::spawn(run_server(tx, pserver));
                             }
                             msg => {
                                 warn!("unexpected first message from {orch_addr}: {msg:?}");
@@ -150,4 +102,65 @@ async fn main() -> io::Result<()> {
             Ok(())
         })
         .await
+}
+
+async fn run_worker(
+    mut rx: OnoReceiver<OwnedReadHalf>,
+    tx: OnoSender<OwnedWriteHalf>,
+    spec: comms::specs::worker::WorkerSpec,
+    bind_addr: String,
+) {
+    let x_size_bytes = spec.dataset.x_size_bytes as usize;
+    let y_size_bytes = spec.dataset.y_size_bytes as usize;
+    let mut samples_raw = vec![0f32; x_size_bytes / size_of::<f32>()];
+    let mut labels_raw = vec![0f32; y_size_bytes / size_of::<f32>()];
+
+    if let Err(e) = recv_dataset(
+        &mut get_dataset_cursor(&mut samples_raw),
+        &mut get_dataset_cursor(&mut labels_raw),
+        x_size_bytes,
+        y_size_bytes,
+        &mut rx,
+    )
+    .await
+    {
+        warn!("failed to receive dataset: {e}");
+        return;
+    }
+
+    let worker = match WorkerBuilder::new()
+        .build(spec, bind_addr, samples_raw, labels_raw)
+        .await
+    {
+        Ok(w) => w,
+        Err(e) => {
+            warn!("failed to build worker: {e}");
+            return;
+        }
+    };
+
+    if let Err(e) = worker.run(rx, tx).await {
+        warn!("worker session error: {e}");
+    } else {
+        info!("worker session complete");
+    }
+}
+
+async fn run_server(
+    tx: OnoSender<OwnedWriteHalf>,
+    mut pserver: Box<dyn parameter_server::service::Server<OwnedReadHalf, OwnedWriteHalf>>,
+) {
+    let mut tx = tx;
+    match pserver.run().await {
+        Ok(mut params) => {
+            info!("server session complete, sending parameters");
+            let msg = Msg::Data(Payload::Params(&mut params));
+            if let Err(e) = tx.send(&msg).await {
+                warn!("failed to send parameters: {e}");
+            }
+        }
+        Err(e) => {
+            warn!("server session error: {e}");
+        }
+    }
 }
