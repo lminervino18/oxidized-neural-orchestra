@@ -20,6 +20,10 @@ impl<W: AsyncWrite + Unpin> OnoSender<W> {
     ///
     /// # Returns
     /// A new `OnoSender` instance.
+    pub fn into_inner(self) -> W {
+        self.tx
+    }
+
     pub(super) fn new(tx: W, serializer: Serializer) -> Self {
         Self {
             tx,

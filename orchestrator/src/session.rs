@@ -243,8 +243,22 @@ impl Session {
             .enable_all()
             .build()?;
 
-        let server_chans = runtime.block_on(Self::create_servers(servers))?;
+        let (server_chans, session_ids) = runtime.block_on(Self::create_servers(servers))?;
         debug!("successfully created all servers");
+
+        let workers = workers
+            .into_iter()
+            .map(|(addr, mut spec)| {
+                if let AlgorithmSpec::ParameterServer {
+                    ref mut server_session_ids,
+                    ..
+                } = spec.algorithm
+                {
+                    *server_session_ids = session_ids.clone();
+                }
+                (addr, spec)
+            })
+            .collect::<Vec<_>>();
 
         let worker_chans = runtime.block_on(Self::create_workers(workers, partitions))?;
         debug!("successfully created all workers");
@@ -461,19 +475,34 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any connection or send fails.
-    async fn create_servers(servers: Vec<(String, ServerSpec)>) -> Result<Vec<(NetRx, NetTx)>> {
+    async fn create_servers(
+        servers: Vec<(String, ServerSpec)>,
+    ) -> Result<(Vec<(NetRx, NetTx)>, Vec<u64>)> {
         let mut channels = Vec::with_capacity(servers.len());
+        let mut session_ids = Vec::with_capacity(servers.len());
 
         for (addr, spec) in servers {
-            let (rx, mut tx) = Self::open_channel(&addr)
+            let (mut rx, mut tx) = Self::open_channel(&addr)
                 .await
                 .map_err(|source| OrchErr::ConnectionFailed { addr, source })?;
 
             tx.send(&Msg::Control(Command::CreateServer(spec))).await?;
+
+            match rx.recv().await? {
+                Msg::Control(Command::ServerReady { session_id }) => {
+                    session_ids.push(session_id);
+                }
+                msg => {
+                    return Err(OrchErr::ServerError(format!(
+                        "expected ServerReady, got {msg:?}"
+                    )));
+                }
+            }
+
             channels.push((rx, tx));
         }
 
-        Ok(channels)
+        Ok((channels, session_ids))
     }
 
     /// Connects to all workers, sends each its bootstrap spec and dataset partition.

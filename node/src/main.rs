@@ -1,4 +1,4 @@
-use std::{env, io};
+use std::{collections::HashMap, env, io};
 
 use comms::{
     msg::{Command, Msg, Payload},
@@ -12,6 +12,7 @@ use tokio::{
         tcp::{OwnedReadHalf, OwnedWriteHalf},
     },
     signal,
+    sync::mpsc,
     task,
 };
 use worker::builder::WorkerBuilder;
@@ -34,31 +35,40 @@ async fn main() -> io::Result<()> {
     let local = task::LocalSet::new();
     local
         .run_until(async move {
+            let mut next_session_id: u64 = 0;
+            let mut sessions: HashMap<
+                u64,
+                (usize, mpsc::Sender<(OwnedReadHalf, OwnedWriteHalf)>),
+            > = HashMap::new();
+
             loop {
                 tokio::select! {
                     accept = listener.accept() => {
-                        let (stream, orch_addr) = accept?;
-                        info!("orchestrator connected from {orch_addr}");
+                        let (stream, addr) = accept?;
+                        info!("connection from {addr}");
 
                         let (rx, tx) = stream.into_split();
-                        let (mut rx, tx) = comms::channel(rx, tx);
+                        let (mut rx, mut tx) = comms::channel(rx, tx);
 
                         let first_msg = match rx.recv().await {
                             Ok(msg) => msg,
                             Err(e) => {
-                                warn!("error reading first message from {orch_addr}: {e}");
+                                warn!("error reading first message from {addr}: {e}");
                                 continue;
                             }
                         };
 
                         match first_msg {
                             Msg::Control(Command::CreateWorker(spec)) => {
-                                info!("bootstrapping worker session for {orch_addr}");
+                                info!("bootstrapping worker session for {addr}");
                                 let bind_addr_clone = bind_addr.clone();
                                 task::spawn_local(run_worker(rx, tx, spec, bind_addr_clone));
                             }
                             Msg::Control(Command::CreateServer(spec)) => {
-                                info!("bootstrapping server session for {orch_addr}");
+                                info!("bootstrapping server session for {addr}");
+                                let session_id = next_session_id;
+                                next_session_id += 1;
+
                                 let nworkers = spec.nworkers;
                                 let mut pserver = match ServerBuilder::new()
                                     .build(spec)
@@ -71,24 +81,62 @@ async fn main() -> io::Result<()> {
                                     }
                                 };
 
-                                for i in 0..nworkers {
-                                    match listener.accept().await {
-                                        Ok((stream, worker_addr)) => {
-                                            info!("worker {i}/{nworkers} connected from {worker_addr}");
-                                            let (rx, tx) = stream.into_split();
-                                            pserver.spawn(rx, tx);
+                                if let Err(e) = tx
+                                    .send(&Msg::Control(Command::ServerReady { session_id }))
+                                    .await
+                                {
+                                    warn!("failed to send ServerReady: {e}");
+                                    continue;
+                                }
+
+                                let (conn_tx, mut conn_rx) =
+                                    mpsc::channel::<(OwnedReadHalf, OwnedWriteHalf)>(nworkers);
+                                sessions.insert(session_id, (nworkers, conn_tx));
+
+                                tokio::spawn(async move {
+                                    for _ in 0..nworkers {
+                                        match conn_rx.recv().await {
+                                            Some((raw_rx, raw_tx)) => {
+                                                pserver.spawn(raw_rx, raw_tx);
+                                            }
+                                            None => {
+                                                warn!(
+                                                    "session {session_id}: channel closed before all workers connected"
+                                                );
+                                                return;
+                                            }
                                         }
-                                        Err(e) => {
-                                            warn!("failed to accept worker connection {i}: {e}");
-                                            break;
+                                    }
+                                    run_server(tx, pserver).await;
+                                });
+                            }
+                            Msg::Control(Command::JoinServer { session_id }) => {
+                                info!("routing worker connection to session {session_id}");
+                                let mut remove = false;
+                                match sessions.get_mut(&session_id) {
+                                    None => {
+                                        warn!("unknown session id {session_id} from {addr}");
+                                    }
+                                    Some((remaining, conn_tx)) => {
+                                        let raw_rx = rx.into_inner();
+                                        let raw_tx = tx.into_inner();
+                                        if conn_tx.send((raw_rx, raw_tx)).await.is_ok() {
+                                            *remaining -= 1;
+                                            if *remaining == 0 {
+                                                remove = true;
+                                            }
+                                        } else {
+                                            warn!("session {session_id} channel closed");
+                                            remove = true;
                                         }
                                     }
                                 }
-
-                                tokio::spawn(run_server(tx, pserver));
+                                if remove {
+                                    sessions.remove(&session_id);
+                                }
                             }
                             msg => {
-                                warn!("unexpected first message from {orch_addr}: {msg:?}");
+                                warn!("unexpected first message from {addr}: {msg:?}");
                             }
                         }
                     }

@@ -20,6 +20,10 @@ impl<R: AsyncRead + Unpin> OnoReceiver<R> {
     ///
     /// # Returns
     /// A new `OnoReceiver` instance.
+    pub fn into_inner(self) -> R {
+        self.rx
+    }
+
     pub(super) fn new(rx: R, deserializer: Deserializer) -> Self {
         Self {
             rx,

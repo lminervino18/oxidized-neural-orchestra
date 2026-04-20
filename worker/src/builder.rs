@@ -82,20 +82,34 @@ impl WorkerBuilder {
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                server_session_ids,
             } => {
                 let serializer = spec.serializer.clone();
                 let worker =
                     self.build_parameter_server(spec, &server_sizes, samples_raw, labels_raw);
                 let mut middleware = ParameterServerMiddleware::new(server_ordering);
 
-                for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
+                for ((addr, size), session_id) in server_addrs
+                    .into_iter()
+                    .zip(server_sizes)
+                    .zip(server_session_ids)
+                {
                     let stream = TcpStream::connect(addr).await?;
-                    let (rx, tx) = stream.into_split();
+                    let (raw_rx, raw_tx) = stream.into_split();
+
+                    let (mut tmp_rx, mut tmp_tx) = comms::channel(raw_rx, raw_tx);
+                    tmp_tx
+                        .send(&comms::msg::Msg::Control(
+                            comms::msg::Command::JoinServer { session_id },
+                        ))
+                        .await?;
+                    let raw_rx = tmp_rx.into_inner();
+                    let raw_tx = tmp_tx.into_inner();
 
                     let (rx, tx) = match serializer {
-                        SerializerSpec::Base => comms::channel(rx, tx),
+                        SerializerSpec::Base => comms::channel(raw_rx, raw_tx),
                         SerializerSpec::SparseCapable { r, seed } => {
-                            comms::sparse_tx_channel(rx, tx, r, seed)
+                            comms::sparse_tx_channel(raw_rx, raw_tx, r, seed)
                         }
                     };
 

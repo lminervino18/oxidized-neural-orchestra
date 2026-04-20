@@ -9,4 +9,4 @@ env_logger = "0.11.8"
 log = { version = "0.4.29", features = ["kv"] }
 parameter_server = { path = "../parameter_server" }
 worker = { path = "../worker" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "sync"] }

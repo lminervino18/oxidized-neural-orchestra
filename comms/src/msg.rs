@@ -19,6 +19,8 @@ pub enum Payload<'a> {
 pub enum Command<'a> {
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
+    ServerReady { session_id: u64 },
+    JoinServer { session_id: u64 },
     ReportLoss { losses: Cow<'a, [f32]> },
     StopAfterEpoch,
     Disconnect,
