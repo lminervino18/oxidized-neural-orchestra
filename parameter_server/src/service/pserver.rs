@@ -151,7 +151,7 @@ where
     R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
     PS: Store + Send + Sync + 'static,
-    Sy: Synchronizer + 'static,
+    Sy: Synchronizer + Send + 'static,
 {
     async fn run(&mut self) -> io::Result<Vec<f32>> {
         self.run().await
