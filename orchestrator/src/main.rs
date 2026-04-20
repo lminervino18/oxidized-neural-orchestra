@@ -132,7 +132,7 @@ fn main() -> io::Result<()> {
         optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(1000).unwrap(),
+        max_epochs: NonZeroUsize::new(300).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
     };
