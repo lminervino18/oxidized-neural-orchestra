@@ -1,9 +1,10 @@
 use std::num::NonZeroUsize;
 
 use orchestrator::{
+    CancelHandle,
     configs::{
-        AlgorithmConfig, DatasetConfig, DatasetSrc, LossFnConfig, OptimizerConfig,
-        SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
+        AlgorithmConfig, DatasetConfig, DatasetSrc, EarlyStoppingConfig, LossFnConfig,
+        OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
     },
     train,
 };
@@ -21,7 +22,7 @@ use crate::{
     sync::{BarrierSync, NonBlockingSync},
 };
 
-/// Opaque training configuration produced by `parameter_server(...)`.
+/// Opaque training configuration produced by `parameter_server(...)` or `all_reduce(...)`.
 #[pyclass]
 pub struct PyTrainingConfig {
     pub inner: TrainingConfig,
@@ -44,6 +45,7 @@ pub struct PyTrainingConfig {
 /// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
 /// * `offline_epochs` - Extra local epochs per sync round. Defaults to `0`.
 /// * `seed` - Optional random seed for reproducibility.
+/// * `early_stopping_tolerance` - If set, training stops when the absolute loss improvement between sync rounds is below this value. Must be > 0. Defaults to `None`.
 ///
 /// # Returns
 /// A `PyTrainingConfig` ready to be passed to `orchestrate(...)`.
@@ -67,6 +69,7 @@ pub struct PyTrainingConfig {
     serializer = None,
     offline_epochs = 0,
     seed = None,
+    early_stopping_tolerance = None,
 ))]
 pub fn parameter_server(
     worker_addrs: Vec<String>,
@@ -81,12 +84,17 @@ pub fn parameter_server(
     serializer: Option<&Bound<'_, PyAny>>,
     offline_epochs: usize,
     seed: Option<u64>,
+    early_stopping_tolerance: Option<f32>,
 ) -> PyResult<PyTrainingConfig> {
     let max_epochs_nz = NonZeroUsize::new(max_epochs)
         .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
 
     let batch_size_nz = NonZeroUsize::new(batch_size)
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
+
+    let early_stopping = early_stopping_tolerance
+        .map(|t| EarlyStoppingConfig::new(t).map_err(PyValueError::new_err))
+        .transpose()?;
 
     let synchronizer = if sync.is_instance_of::<BarrierSync>() {
         SynchronizerConfig::Barrier
@@ -174,6 +182,7 @@ pub fn parameter_server(
             max_epochs: max_epochs_nz,
             offline_epochs,
             seed,
+            early_stopping,
         },
         max_epochs,
         worker_count,
@@ -192,6 +201,7 @@ pub fn parameter_server(
 /// * `serializer` - Gradient serializer strategy. Accepts either `BaseSerializer()` or `SparseSerializer(r=...)`. Defaults to `BaseSerializer()`.
 /// * `offline_epochs` - Extra local epochs per sync round. Defaults to `0`.
 /// * `seed` - Optional random seed for reproducibility.
+/// * `early_stopping_tolerance` - If set, training stops when the absolute loss improvement between sync rounds is below this value. Must be > 0. Defaults to `None`.
 ///
 /// # Returns
 /// A `PyTrainingConfig` ready to be passed to `orchestrate(...)`.
@@ -212,6 +222,7 @@ pub fn parameter_server(
     serializer = None,
     offline_epochs = 0,
     seed = None,
+    early_stopping_tolerance = None,
 ))]
 pub fn all_reduce(
     worker_addrs: Vec<String>,
@@ -223,12 +234,17 @@ pub fn all_reduce(
     serializer: Option<&Bound<'_, PyAny>>,
     offline_epochs: usize,
     seed: Option<u64>,
+    early_stopping_tolerance: Option<f32>,
 ) -> PyResult<PyTrainingConfig> {
     let max_epochs_nz = NonZeroUsize::new(max_epochs)
         .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
 
     let batch_size_nz = NonZeroUsize::new(batch_size)
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
+
+    let early_stopping = early_stopping_tolerance
+        .map(|t| EarlyStoppingConfig::new(t).map_err(PyValueError::new_err))
+        .transpose()?;
 
     let loss_fn_cfg = if loss_fn.is_instance_of::<Mse>() {
         LossFnConfig::Mse
@@ -292,6 +308,7 @@ pub fn all_reduce(
             max_epochs: max_epochs_nz,
             offline_epochs,
             seed,
+            early_stopping,
         },
         max_epochs,
         worker_count,
@@ -328,8 +345,11 @@ pub fn orchestrate(
         })
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
 
+    let (cancel, cancel_rx) = CancelHandle::pair();
+
     Ok(Session {
-        inner: Some(session),
+        inner: Some((session, cancel_rx)),
+        cancel,
         max_epochs,
         worker_count,
     })

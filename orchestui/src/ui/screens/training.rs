@@ -2,9 +2,10 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
+    CancelHandle,
     configs::{DatasetSrc, ModelConfig, TrainingConfig},
     dataset_format::DatasetFormat,
-    Session, TrainedModel, TrainingEvent,
+    Session, StopReason, TrainedModel, TrainingEvent,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -16,9 +17,10 @@ use ratatui::{
 use super::{Action, Screen};
 use crate::ui::{
     components::{
-        confirm_quit::draw_confirm_quit, converting::draw_converting, header::draw_header,
-        log_panel::draw_log, loss_chart::draw_charts, params_panel::draw_params,
-        save_popup::draw_save_popup, workers_table::draw_workers_table,
+        confirm_quit::draw_confirm_quit, confirm_stop::draw_confirm_stop,
+        converting::draw_converting, header::draw_header, log_panel::draw_log,
+        loss_chart::draw_charts, params_panel::draw_params, save_popup::draw_save_popup,
+        workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
     theme::Theme,
@@ -56,6 +58,13 @@ pub enum ConfirmQuit {
     Visible,
 }
 
+/// Whether the stop-confirmation popup is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmStop {
+    Hidden,
+    Visible,
+}
+
 /// Whether the save-path popup is shown.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SavePopup {
@@ -87,7 +96,6 @@ pub enum LogLevel {
     Error,
 }
 
-/// Internal startup result sent from the background thread.
 enum StartupResult {
     Ok(Session),
     Err(String),
@@ -98,6 +106,7 @@ pub struct TrainingState {
     pub workers_total: usize,
     pub servers_total: usize,
     pub optimizer_label: String,
+    pub early_stopping_label: Option<String>,
     pub max_epochs: usize,
     pub phase: Phase,
     pub started_at: Instant,
@@ -110,12 +119,14 @@ pub struct TrainingState {
     pub error: Option<String>,
     /// Active training event receiver, available once the session starts.
     pub events: Option<tokio::sync::mpsc::Receiver<TrainingEvent>>,
+    pub cancel: Option<CancelHandle>,
+    pub finish_reason: Option<StopReason>,
     pub confirm_quit: ConfirmQuit,
+    pub confirm_stop: ConfirmStop,
     pub save_popup: SavePopup,
     pub selected_worker: usize,
     /// Set when the session fails to start — shown as a full-screen error.
     pub startup_error: Option<String>,
-    /// Channel that receives the session once `train()` completes in the background.
     startup_rx: Option<std::sync::mpsc::Receiver<StartupResult>>,
 }
 
@@ -143,6 +154,8 @@ impl TrainingState {
             .next()
             .unwrap_or("unknown")
             .to_string();
+
+        let early_stopping_label = training.early_stopping.as_ref().map(|cfg| cfg.to_string());
 
         let max_epochs = training.max_epochs.get();
 
@@ -196,6 +209,7 @@ impl TrainingState {
             workers_total,
             servers_total,
             optimizer_label,
+            early_stopping_label,
             max_epochs,
             phase: initial_phase,
             started_at: Instant::now(),
@@ -205,7 +219,10 @@ impl TrainingState {
             final_trained: None,
             error: None,
             events: None,
+            cancel: None,
+            finish_reason: None,
             confirm_quit: ConfirmQuit::Hidden,
+            confirm_stop: ConfirmStop::Hidden,
             save_popup: SavePopup::Hidden,
             selected_worker: 0,
             startup_error: None,
@@ -240,7 +257,9 @@ impl TrainingState {
                         );
                     }
                     self.phase = Phase::Connecting;
-                    self.events = Some(session.event_listener());
+                    let (cancel, cancel_rx) = CancelHandle::pair();
+                    self.events = Some(session.event_listener(cancel_rx));
+                    self.cancel = Some(cancel);
                 }
                 StartupResult::Err(e) => {
                     self.phase = Phase::Error;
@@ -297,12 +316,18 @@ impl TrainingState {
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
 
-            TrainingEvent::Complete(trained) => {
+            TrainingEvent::Complete { model: trained, reason } => {
                 self.phase = Phase::Finished;
+                self.finish_reason = Some(reason);
+                let reason_str = match reason {
+                    StopReason::MaxEpochsReached => "max epochs reached",
+                    StopReason::EarlyStopping => "early stopping — loss converged",
+                    StopReason::ManualStop => "stopped manually",
+                };
                 self.push_log(
                     LogLevel::Info,
                     format!(
-                        "training complete — {} parameters received",
+                        "training complete ({reason_str}) — {} parameters received",
                         trained.params().len()
                     ),
                 );
@@ -432,6 +457,26 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
         }
     }
 
+    if state.confirm_stop == ConfirmStop::Visible {
+        match key {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                state.confirm_stop = ConfirmStop::Hidden;
+                if let Some(cancel) = &state.cancel {
+                    cancel.stop();
+                    state.push_log(
+                        LogLevel::Info,
+                        "stop requested — waiting for current epoch to finish".to_string(),
+                    );
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                state.confirm_stop = ConfirmStop::Hidden;
+            }
+            _ => {}
+        }
+        return None;
+    }
+
     match (key, state.confirm_quit, state.is_active()) {
         (KeyCode::Left, ConfirmQuit::Hidden, _) => {
             state.prev_worker();
@@ -443,6 +488,10 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
         }
         (KeyCode::Char('s'), ConfirmQuit::Hidden, false) if state.final_trained.is_some() => {
             state.save_popup = SavePopup::Visible(String::new());
+            None
+        }
+        (KeyCode::Char('x'), ConfirmQuit::Hidden, true) => {
+            state.confirm_stop = ConfirmStop::Visible;
             None
         }
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, true) => {
@@ -516,6 +565,10 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     if state.confirm_quit == ConfirmQuit::Visible {
         draw_confirm_quit(f, area);
+    }
+
+    if state.confirm_stop == ConfirmStop::Visible {
+        draw_confirm_stop(f, area);
     }
 
     if let SavePopup::Visible(ref path) = state.save_popup {
