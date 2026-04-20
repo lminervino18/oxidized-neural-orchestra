@@ -113,8 +113,17 @@ impl TrainerBuilder {
 
         let act_fn = match spec {
             LayerSpec::Dense { dim, act_fn } => {
-                if let Some(LayerSpec::Conv { kernel_dim, .. }) = last {
-                    layers.push(Layer::four_d_to2d(kernel_dim.1, kernel_dim.2, kernel_dim.2))
+                if let Some(LayerSpec::Conv {
+                    input_dim,
+                    kernel_dim,
+                    stride,
+                    padding,
+                    ..
+                }) = last
+                {
+                    let out_h = (input_dim.1 + 2 * padding - kernel_dim.2) / stride + 1;
+                    let out_w = (input_dim.2 + 2 * padding - kernel_dim.2) / stride + 1;
+                    layers.push(Layer::four_d_to2d(kernel_dim.0, out_h, out_w))
                 };
 
                 layers.push(Layer::dense(dim));
@@ -127,7 +136,7 @@ impl TrainerBuilder {
                 padding,
                 act_fn,
             } => {
-                if let Some(LayerSpec::Dense { .. }) = last {
+                if let None | Some(LayerSpec::Dense { .. }) = last {
                     layers.push(Layer::two_d_to4d(input_dim.0, input_dim.1, input_dim.2))
                 }
 
