@@ -22,5 +22,6 @@
   "batch_size": 4,
   "max_epochs": 500,
   "offline_epochs": 0,
-  "seed": 42
+  "seed": 42,
+  "early_stopping": { "tolerance": 1e-4 }
 }

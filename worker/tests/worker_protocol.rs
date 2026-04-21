@@ -11,7 +11,7 @@ use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 use comms::{
     OrchEvent, OrchHandle, ParamServerHandle, PullParamsResponse, Stp, WorkerEvent, WorkerHandle,
 };
-use worker::{cluster_manager::ServerClusterManager, worker::Worker};
+use worker::{cluster_manager::ServerClusterManager, worker::ParameterServerWorker};
 
 #[allow(clippy::type_complexity)]
 fn channel_pair() -> (
@@ -78,6 +78,7 @@ where
             OrchEvent::RequestParams => {
                 orch_handle.push_params(&mut params).await?;
             }
+            _ => unreachable!(),
         }
     }
 
@@ -115,7 +116,7 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     // Worker node.
     let transport = Stp::new(wk_orch_rx, wk_orch_tx);
     let orch_wk_handle = OrchHandle::new(transport);
-    let worker = Worker::new(Box::new(trainer));
+    let worker = ParameterServerWorker::new(Box::new(trainer));
     let transport = Stp::new(sv_rx, sv_tx);
     let server_wk_handle = ParamServerHandle::new(0, transport);
     let mut cluster_manager = ServerClusterManager::new(vec![0]);

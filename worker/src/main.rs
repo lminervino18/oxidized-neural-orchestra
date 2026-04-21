@@ -6,12 +6,9 @@ use comms::{
     specs::worker::{AlgorithmSpec, SerializerSpec},
 };
 use log::{info, warn};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    signal,
-};
+use tokio::{net::TcpListener, signal};
 
-use worker::{builder::WorkerBuilder, cluster_manager::ServerClusterManager};
+use crate::{builder::WorkerBuilder, cluster_manager::ServerClusterManager};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
@@ -19,17 +16,15 @@ const DEFAULT_HOST: &str = "127.0.0.1";
 async fn main() -> io::Result<()> {
     env_logger::init();
 
-    let addr = format!(
-        "{}:{}",
-        env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string()),
-        env::var("PORT").map_err(io::Error::other)?,
-    );
+    let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
+    let port = env::var("PORT").map_err(io::Error::other)?;
+    let addr = format!("{host}:{port}");
 
     let listener = TcpListener::bind(&addr).await?;
     info!("listening at {addr}");
 
     let stream_factory = async move || {
-        let (stream, _) = listener.accept().await?;
+        let (stream, addr) = listener.accept().await?;
         info!("new incomming connection from {addr}");
         Ok(stream.into_split())
     };
@@ -68,12 +63,6 @@ async fn main() -> io::Result<()> {
         )
         .await?;
 
-    let AlgorithmSpec::ParameterServer {
-        server_addrs,
-        server_sizes,
-        server_ordering,
-    } = spec.algorithm.clone();
-
     let connector = Connector::new(
         Duration::from_secs(5),
         Duration::from_secs(2),
@@ -82,22 +71,13 @@ async fn main() -> io::Result<()> {
         Entity::Worker { id: spec.worker_id },
     );
 
-    let serializer = spec.serializer.clone();
     let worker_builder = WorkerBuilder::new();
     let worker = worker_builder.build(spec, &server_sizes, samples_raw, labels_raw);
     let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
-    for (id, (addr, size)) in server_addrs.into_iter().zip(server_sizes).enumerate() {
-        let stream = TcpStream::connect(addr).await?;
-        let (rx, tx) = stream.into_split();
-        let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
-
-        if let SerializerSpec::SparseCapable { r, seed } = serializer {
-            server_handle.enable_sparse_capabiliy(r, seed);
-        }
-
-        cluster_manager.spawn(server_handle, size);
-    }
+    let worker = worker_builder
+        .build(spec, bind_addr.clone(), samples_raw, labels_raw)
+        .await?;
 
     tokio::select! {
         ret = worker.run(orch_handle, cluster_manager) => {

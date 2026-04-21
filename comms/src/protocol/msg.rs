@@ -34,6 +34,7 @@ pub enum Command<'a> {
     CreateWorker(WorkerSpec),
     ReportLoss { losses: Cow<'a, [f32]> },
     RequestParams,
+    StopAfterEpoch,
     Disconnect,
 }
 

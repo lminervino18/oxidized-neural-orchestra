@@ -6,6 +6,8 @@ use ratatui::{
     Frame,
 };
 
+use orchestrator::StopReason;
+
 use crate::ui::screens::training::{Phase, TrainingState};
 use crate::ui::theme::Theme;
 use crate::ui::utils::fmt_loss;
@@ -21,21 +23,25 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Phase::Converting => Span::styled("CONVERTING", Theme::accent_cyan()),
         Phase::Connecting => Span::styled("CONNECTING", Theme::accent_cyan()),
         Phase::Training => Span::styled("TRAINING", Theme::ok()),
-        Phase::Finished => Span::styled("FINISHED", Theme::accent_magenta()),
+        Phase::Finished => match state.finish_reason {
+            Some(StopReason::EarlyStopping) => Span::styled("FINISHED · early stop", Theme::accent_magenta()),
+            Some(StopReason::ManualStop) => Span::styled("FINISHED · stopped", Theme::accent_magenta()),
+            _ => Span::styled("FINISHED", Theme::accent_magenta()),
+        },
         Phase::Error => Span::styled("ERROR", Theme::error()),
     };
 
     let hint = if state.final_trained.is_some() {
         Span::styled("  [q] menu  [←/→] worker  [s] save", Theme::muted())
     } else if state.is_active() {
-        Span::styled("  [q] leave  [←/→] worker", Theme::muted())
+        Span::styled("  [q] leave  [←/→] worker  [x] stop", Theme::muted())
     } else {
         Span::styled("  [q] menu  [←/→] worker", Theme::muted())
     };
 
     let workers_done = state.workers_done();
 
-    let line = Line::from(vec![
+    let mut spans = vec![
         Span::styled(" ONO  ", Theme::title().add_modifier(Modifier::BOLD)),
         Span::styled("│  ", Theme::muted()),
         phase_span,
@@ -47,13 +53,37 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
             Theme::dim(),
         ),
         Span::styled("  │  ", Theme::muted()),
-        Span::styled(format!("servers {}", state.servers_total), Theme::dim()),
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(format!("avg loss {}", avg_loss_str(state)), Theme::dim()),
-        Span::styled("  │  ", Theme::muted()),
-        Span::styled(format!("optimizer {}", state.optimizer_label), Theme::dim()),
-        hint,
-    ]);
+    ];
+
+    if state.servers_total > 0 {
+        spans.push(Span::styled(
+            format!("servers {}", state.servers_total),
+            Theme::dim(),
+        ));
+        spans.push(Span::styled("  │  ", Theme::muted()));
+    }
+
+    spans.push(Span::styled(
+        format!("avg loss {}", avg_loss_str(state)),
+        Theme::dim(),
+    ));
+    spans.push(Span::styled("  │  ", Theme::muted()));
+    spans.push(Span::styled(
+        format!("optimizer {}", state.optimizer_label),
+        Theme::dim(),
+    ));
+
+    if let Some(tol) = &state.early_stopping_label {
+        spans.push(Span::styled("  │  ", Theme::muted()));
+        spans.push(Span::styled(
+            format!("early stop tol {tol}"),
+            Theme::dim(),
+        ));
+    }
+
+    spans.push(hint);
+
+    let line = Line::from(spans);
 
     f.render_widget(
         Paragraph::new(line).block(

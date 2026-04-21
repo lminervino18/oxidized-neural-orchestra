@@ -122,6 +122,15 @@ impl<T: TransportLayer> WorkerHandle<T> {
         share_dataset::send_dataset(xs, ys, chunk_size, &mut self.transport).await
     }
 
+    /// Tells the worker to stop it's execution.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn stop(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::StopAfterEpoch);
+        self.transport.send(&msg).await
+    }
+
     /// Disconnects the worker.
     ///
     /// # Returns

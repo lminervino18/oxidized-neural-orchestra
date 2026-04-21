@@ -10,7 +10,7 @@ use comms::{Connector, protocol::Entity};
 use configs::Adapter;
 use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
-pub use session::{Session, TrainedModel, TrainingEvent};
+pub use session::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
 
 /// Starts the distributed training process and returns an active session.
 ///
@@ -38,6 +38,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     let input_size = training.dataset.x_size.get();
 
     let adapter = Adapter::new();
+    let early_stopping = training.early_stopping.clone();
     let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
     // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
@@ -51,7 +52,15 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
         Entity::Orchestrator,
     );
 
-    let session = Session::new(workers, partitions, servers, connector, model, input_size)?;
+    let session = Session::new(
+        workers,
+        partitions,
+        servers,
+        connector,
+        model,
+        input_size,
+        early_stopping,
+    )?;
 
     if let Some((samples_bin, labels_bin)) = dataset_bin {
         remove_binary(&samples_bin);

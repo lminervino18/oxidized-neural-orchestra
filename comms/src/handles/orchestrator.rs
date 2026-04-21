@@ -21,9 +21,11 @@ pub enum PullSpecResponse {
 }
 
 /// A notified orchestrator event.
+#[derive(Debug, Clone, Copy)]
 pub enum OrchEvent {
-    RequestParams,
     Disconnect,
+    RequestParams,
+    Stop,
 }
 
 impl<T> OrchHandle<T>
@@ -117,6 +119,7 @@ where
         let event = match self.transport.recv().await? {
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
             Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
+            Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
             msg => {
                 let text = format!("Unexpected message from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));

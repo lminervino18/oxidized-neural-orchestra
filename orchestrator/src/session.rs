@@ -1,28 +1,30 @@
+use std::{
+    collections::HashMap,
+    io::{self, Cursor},
+    path::{Path, PathBuf},
+    slice, thread,
+};
+
 use comms::{
     Connector, NetRtp, ParamServerHandle, PullParamsResponse, Rtp, WorkerEvent, WorkerHandle,
+    specs::{
+        server::ServerSpec,
+        worker::{AlgorithmSpec, WorkerSpec},
+    },
 };
 use futures::future;
 use log::{debug, error, info, warn};
-use std::path::PathBuf;
-use std::{
-    io::{self, Cursor},
-    path::Path,
-    slice, thread,
-};
-use tokio::io::AsyncRead;
 use tokio::{
     fs::File,
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWrite},
+    io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite},
     net::TcpStream,
     runtime::Runtime,
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use comms::specs::{server::ServerSpec, worker::WorkerSpec};
-
 use crate::{
     OrchErr, Result,
-    configs::{LayerConfig, ModelConfig, Partition},
+    configs::{EarlyStoppingConfig, LayerConfig, ModelConfig, Partition},
 };
 
 /// The result of a completed training session.
@@ -109,6 +111,34 @@ impl TrainedModel {
     }
 }
 
+/// Why a training session ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StopReason {
+    #[default]
+    MaxEpochsReached,
+    EarlyStopping,
+    ManualStop,
+}
+
+/// A handle that lets any caller request an early stop of an ongoing training session.
+pub struct CancelHandle(Sender<()>);
+
+impl CancelHandle {
+    /// Creates a matched `(CancelHandle, Receiver)` pair.
+    ///
+    /// The caller retains the `CancelHandle` and passes the `Receiver` to
+    /// `Session::event_listener`. Calling `stop()` on the handle signals
+    /// the session to stop at the next epoch boundary.
+    pub fn pair() -> (Self, Receiver<()>) {
+        let (tx, rx) = mpsc::channel(1);
+        (Self(tx), rx)
+    }
+
+    pub fn stop(&self) {
+        let _ = self.0.try_send(());
+    }
+}
+
 /// An event produced during a training session.
 #[derive(Debug)]
 pub enum TrainingEvent {
@@ -117,9 +147,51 @@ pub enum TrainingEvent {
     /// A worker finished and disconnected.
     WorkerDone(usize),
     /// Training completed and all servers returned the final trained model.
-    Complete(TrainedModel),
+    Complete {
+        model: TrainedModel,
+        reason: StopReason,
+    },
+    /// The worker must be stopped.
+    Stop,
     /// A worker or server produced an unrecoverable error.
     Error(OrchErr),
+}
+
+struct SyncRoundSignal {
+    prev: f32,
+    curr: f32,
+}
+
+struct ConvergenceTracker {
+    n_workers: usize,
+    pending: HashMap<usize, f32>,
+    prev_avg: Option<f32>,
+}
+
+impl ConvergenceTracker {
+    fn new(n_workers: usize) -> Self {
+        Self {
+            n_workers,
+            pending: HashMap::new(),
+            prev_avg: None,
+        }
+    }
+
+    fn record(&mut self, worker_id: usize, losses: &[f32]) -> Option<SyncRoundSignal> {
+        let last = *losses.last()?;
+        self.pending.insert(worker_id, last);
+
+        if self.pending.len() < self.n_workers {
+            return None;
+        }
+
+        let curr = self.pending.values().sum::<f32>() / self.n_workers as f32;
+        self.pending.clear();
+
+        let signal = self.prev_avg.map(|prev| SyncRoundSignal { prev, curr });
+        self.prev_avg = Some(curr);
+        signal
+    }
 }
 
 /// Represents an ongoing training session.
@@ -129,6 +201,8 @@ pub struct Session {
     workers: Vec<WorkerHandle<NetRtp>>,
     model: ModelConfig,
     input_size: usize,
+    algorithm: AlgorithmSpec,
+    early_stopping: Option<EarlyStoppingConfig>,
 }
 
 impl Session {
@@ -154,7 +228,13 @@ impl Session {
         connector: Connector,
         model: ModelConfig,
         input_size: usize,
+        early_stopping: Option<EarlyStoppingConfig>,
     ) -> Result<Self> {
+        let algorithm = workers
+            .first()
+            .map(|(_, spec)| spec.algorithm.clone())
+            .ok_or_else(|| OrchErr::InvalidConfig("at least one worker is required".into()))?;
+
         let (nworkers, nservers) = (workers.len(), servers.len());
         info!("connecting to {nworkers} workers and {nservers} servers");
 
@@ -175,57 +255,69 @@ impl Session {
             workers: worker_chans,
             model,
             input_size,
+            algorithm,
+            early_stopping,
         })
     }
 
     async fn worker_listener(
         id: usize,
         mut worker_handle: WorkerHandle<NetRtp>,
+        mut rx: Receiver<TrainingEvent>,
         tx: Sender<TrainingEvent>,
     ) {
         loop {
-            match worker_handle.recv_event().await {
-                Ok(WorkerEvent::Loss(losses)) => {
-                    debug!("worker {id} reported {} losses", losses.len());
+            tokio::select! {
+                event = rx.recv() => match event {
+                    None => break,
+                    Some(TrainingEvent::Stop) => {
+                        let _ = worker_handle.stop().await;
+                    }
+                    Some(other) => unreachable!("No event other than stop should reach here: {other:?}"),
+                },
+                event = worker_handle.recv_event() => match event {
+                    Ok(WorkerEvent::Loss(losses)) => {
+                        debug!("worker {id} reported {} losses", losses.len());
 
-                    let event = TrainingEvent::Loss {
-                        worker_id: id,
-                        losses,
-                    };
+                        let event = TrainingEvent::Loss {
+                            worker_id: id,
+                            losses,
+                        };
 
-                    let _ = tx.send(event).await;
-                }
-                Ok(WorkerEvent::Disconnect) => {
-                    info!("worker {id} disconnected");
-                    let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
-                    return;
-                }
-                Ok(event) => {
-                    warn!("worker {id}: unexpected event {event:?}");
+                        let _ = tx.send(event).await;
+                    }
+                    Ok(WorkerEvent::Disconnect) => {
+                        info!("worker {id} disconnected");
+                        let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
+                        return;
+                    }
+                    Ok(event) => {
+                        warn!("worker {id}: unexpected event {event:?}");
 
-                    let event = TrainingEvent::Error(OrchErr::WorkerError {
-                        worker_id: id,
-                        event: format!("unexpected event {event:?}"),
-                    });
+                        let event = TrainingEvent::Error(OrchErr::WorkerError {
+                            worker_id: id,
+                            event: format!("unexpected event {event:?}"),
+                        });
 
-                    let _ = tx.send(event).await;
-                    return;
-                }
-                Err(e) if is_eof(&e) => {
-                    info!("worker {id}'s connection closed");
-                    let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
-                    return;
-                }
-                Err(e) => {
-                    error!("worker {id} error: {e}");
+                        let _ = tx.send(event).await;
+                        return;
+                    }
+                    Err(e) if is_eof(&e) => {
+                        info!("worker {id}'s connection closed");
+                        let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
+                        return;
+                    }
+                    Err(e) => {
+                        error!("worker {id} error: {e}");
 
-                    let event = TrainingEvent::Error(OrchErr::WorkerError {
-                        worker_id: id,
-                        event: e.to_string(),
-                    });
+                        let event = TrainingEvent::Error(OrchErr::WorkerError {
+                            worker_id: id,
+                            event: e.to_string(),
+                        });
 
-                    let _ = tx.send(event).await;
-                    return;
+                        let _ = tx.send(event).await;
+                        return;
+                    }
                 }
             }
         }
@@ -233,62 +325,147 @@ impl Session {
 
     /// Consumes `self` and creates an event listener for this training session.
     ///
-    /// Spawns a background thread that drives the session, listening to all
-    /// workers and parameter servers, and forwards events through the channel.
+    /// Spawns a background thread that drives the session. The `cancel_rx` must come
+    /// from a `CancelHandle::pair()` call; the caller retains the `CancelHandle` to
+    /// request an orderly stop at any time.
     ///
     /// # Returns
     /// A receiver that yields `TrainingEvent`s as training progresses.
-    pub fn event_listener(self) -> Receiver<TrainingEvent> {
-        let (tx, rx) = mpsc::channel(256);
+    pub fn event_listener(self, mut cancel_rx: Receiver<()>) -> Receiver<TrainingEvent> {
+        let (event_tx, event_rx) = mpsc::channel(256);
+
         let model = self.model;
         let input_size = self.input_size;
+        let algorithm = self.algorithm;
+        let early_stopping = self.early_stopping;
 
         thread::spawn(move || {
             self.runtime.block_on(async move {
-                let futs = self
-                    .workers
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, server_handle)| {
-                        tokio::spawn(Self::worker_listener(i, server_handle, tx.clone()))
-                    });
+                let (internal_tx, mut internal_rx) = mpsc::channel(256);
+                let mut wk_txs = Vec::with_capacity(self.workers.len());
+                let n_workers = self.workers.len();
 
-                future::join_all(futs).await;
+                for (i, worker_handle) in self.workers.into_iter().enumerate() {
+                    let (wk_tx, wk_rx) = mpsc::channel(256);
+                    wk_txs.push(wk_tx);
+                    tokio::spawn(Self::worker_listener(i, worker_handle, wk_rx, internal_tx.clone()));
+                }
 
-                debug!("all workers done, reading final params from all servers");
+                drop(internal_tx);
+                let mut tracker = ConvergenceTracker::new(n_workers);
+                let mut stop_reason: Option<StopReason> = None;
+                let mut workers_done = 0;
 
-                let mut model_params: Vec<f32> = Vec::new();
+                loop {
+                    tokio::select! {
+                        biased;
+                        _ = cancel_rx.recv(), if stop_reason.is_none() => {
+                            info!("manual stop requested");
+                            stop_reason = Some(StopReason::ManualStop);
 
-                for (i, mut server_handle) in self.servers.into_iter().enumerate() {
-                    match server_handle.pull_params().await {
-                        Ok(PullParamsResponse::Params(params)) => {
-                            model_params.extend_from_slice(params);
-                            if let Err(e) = server_handle.disconnect().await {
-                                error!("Failed to disconnect server {i}: {e}");
-                            };
+                            for tx in wk_txs.iter_mut() {
+                                let _ = tx.send(TrainingEvent::Stop).await;
+                            }
                         }
-                        Err(e) => {
-                            let text = format!("unexpected error from server {i}: {e}");
-                            let err = OrchErr::ServerError(text);
-                            let _ = tx.send(TrainingEvent::Error(err)).await;
-                            return;
+                        evt = internal_rx.recv() => {
+                            match evt {
+                                None => break,
+                                Some(TrainingEvent::WorkerDone(id)) => {
+                                    workers_done += 1;
+                                    let _ = event_tx.send(TrainingEvent::WorkerDone(id)).await;
+                                    if workers_done == n_workers {
+                                        break;
+                                    }
+                                }
+                                Some(TrainingEvent::Loss { worker_id, losses }) => {
+                                    if stop_reason.is_none() {
+                                        if let Some(cfg) = &early_stopping {
+                                            if let Some(sig) = tracker.record(worker_id, &losses) {
+                                                if cfg.is_converged(sig.prev, sig.curr) {
+                                                    info!(
+                                                        "early stopping triggered (prev={:.6}, curr={:.6})",
+                                                        sig.prev, sig.curr
+                                                    );
+
+                                                    stop_reason = Some(StopReason::EarlyStopping);
+
+                                                    for tx in wk_txs.iter_mut() {
+                                                        let _ = tx.send(TrainingEvent::Stop).await;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    let _ = event_tx
+                                        .send(TrainingEvent::Loss { worker_id, losses })
+                                        .await;
+                                }
+                                Some(TrainingEvent::Error(e)) => {
+                                    let _ = event_tx.send(TrainingEvent::Error(e)).await;
+                                    return;
+                                }
+                                Some(other) => {
+                                    let _ = event_tx.send(other).await;
+                                }
+                            }
                         }
                     }
                 }
 
-                info!("received {} total parameters", model_params.len());
+                let reason = stop_reason.unwrap_or_default();
 
-                let trained = TrainedModel {
-                    params: model_params,
-                    model,
-                    input_size,
-                };
+                match algorithm {
+                    AlgorithmSpec::ParameterServer { .. } => {
+                        debug!("all workers done, reading final params from all servers");
 
-                let _ = tx.send(TrainingEvent::Complete(trained)).await;
+                        let mut model_params: Vec<f32> = Vec::new();
+
+                        for (i, mut server_handle) in
+                            self.servers.into_iter().enumerate()
+                        {
+                            match server_handle.pull_params().await {
+                                Ok(PullParamsResponse::Params(params)) => {
+                                    model_params.extend_from_slice(params);
+                                    if let Err(e) = server_handle.disconnect().await {
+                                        error!("Failed to disconnect server {i}: {e}");
+                                    }
+                                }
+                                Err(e) => {
+                                    let err = OrchErr::ServerError(format!(
+                                        "unexpected error from server {i}: {e}"
+                                    ));
+                                    let _ = event_tx.send(TrainingEvent::Error(err)).await;
+                                    return;
+                                }
+                            }
+                        }
+
+                        info!("received {} total parameters", model_params.len());
+
+                        let trained = TrainedModel {
+                            params: model_params,
+                            model,
+                            input_size,
+                        };
+
+                        let _ = event_tx
+                            .send(TrainingEvent::Complete {
+                                model: trained,
+                                reason,
+                            })
+                            .await;
+                    }
+                    AlgorithmSpec::AllReduce { .. } => {
+                        let err = OrchErr::Unsupported(
+                            "all-reduce session finalization is not implemented yet".into(),
+                        );
+                        let _ = event_tx.send(TrainingEvent::Error(err)).await;
+                    }
+                }
             });
         });
 
-        rx
+        event_rx
     }
 
     /// Connects to all parameter servers and sends each its bootstrap spec.
