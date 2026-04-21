@@ -28,9 +28,10 @@ where
     R: AsyncRead + Unpin,
     T: TransportLayer,
 {
-    let mut buf = vec![0; chunk_size];
-    send_chunks_from(xs, &mut buf, transport).await?;
-    send_chunks_from(ys, &mut buf, transport).await?;
+    let mut buf: Vec<u32> = vec![0; chunk_size / size_of::<f32>()];
+    let buf_u8 = bytemuck::cast_slice_mut(&mut buf);
+    send_chunks_from(xs, buf_u8, transport).await?;
+    send_chunks_from(ys, buf_u8, transport).await?;
     Ok(())
 }
 
@@ -48,8 +49,10 @@ where
     R: AsyncRead + Unpin,
     T: TransportLayer,
 {
-    while utils::read_all(reader, acc).await? > 0 {
-        let nums = bytemuck::cast_slice(&acc);
+    while let n = utils::read_all(reader, acc).await?
+        && n > 0
+    {
+        let nums = bytemuck::cast_slice(&acc[..n]);
         let msg = Msg::Data(Payload::Datachunk(nums));
         transport.send(&msg).await?;
     }

@@ -1,14 +1,10 @@
-use std::{borrow::Cow, io};
+use std::io;
 
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Msg},
-};
-use log::{debug, info, warn};
+use comms::{OrchHandle, TransportLayer};
+use log::debug;
 use machine_learning::training::{TrainResult, Trainer};
-use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::middleware::Middleware;
+use crate::cluster_manager::ServerClusterManager;
 
 /// The middleman between the parameter server and the model trainer.
 pub struct Worker {
@@ -37,52 +33,30 @@ impl Worker {
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn run<R, W>(
+    pub async fn run<T>(
         self,
-        mut rx: OnoReceiver<R>,
-        mut tx: OnoSender<W>,
-        mut middleware: Middleware<R, W>,
+        mut orch_handle: OrchHandle<T>,
+        mut cluster_manager: ServerClusterManager<T>,
     ) -> io::Result<()>
     where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
+        T: TransportLayer,
     {
         let mut trainer = self.trainer;
         let mut should_continue = true;
 
         while should_continue {
-            tokio::select! {
-                ret = middleware.pull_params() => {
-                    debug!("received parameters from all servers, training...");
+            let mut param_manager = cluster_manager.pull_params().await?;
+            debug!("received parameters from all servers, training...");
 
-                    let mut param_manager = ret?;
+            let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
+            cluster_manager.push_grads().await?;
 
-                    // TODO: Handlear esto mejor, capaz podemos mandarle mensajes a todos los servidores
-                    //       para que reintenten de enviar el ultimo mensaje o algo asi (todavia no se
-                    //       si tiene sentido tampoco que les avisemos, despues de todo ellos mandaron
-                    //       mal el mensaje)
-                    let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
-                    middleware.push_grads().await?;
-
-                    should_continue = !was_last;
-                    let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
-                    tx.send(&msg).await?;
-                }
-                ret = rx.recv() => match ret? {
-                    Msg::Control(Command::Disconnect) => {
-                        info!("received a Command::Disconnect from the orchestrator");
-                        break;
-                    }
-                    other => {
-                        warn!("unexpected message from orchestrator, got: {other:?}");
-                    }
-                }
-            }
+            orch_handle.push_losses(losses).await?;
+            should_continue = !was_last;
         }
 
-        middleware.disconnect().await?;
-        let msg = Msg::Control(Command::Disconnect);
-        tx.send(&msg).await?;
+        cluster_manager.disconnect().await?;
+        orch_handle.disconnect().await?;
         Ok(())
     }
 }

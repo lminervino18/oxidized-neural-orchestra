@@ -158,7 +158,7 @@ where
     /// * `compression_buf`: The buffer where to write the compressed residual gradient.
     /// * `residual` - The gradient to compress.
     fn compress_dense_grad(compression_buf: &mut Vec<f16>, residual: &[f32]) {
-        let additional = compression_buf.capacity().saturating_sub(residual.len());
+        let additional = residual.len().saturating_sub(compression_buf.capacity());
         compression_buf.reserve(additional);
 
         // SAFETY: The new uninitialized bytes will be overwritten right

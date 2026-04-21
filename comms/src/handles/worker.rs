@@ -63,7 +63,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
 
         let response = match self.transport.recv().await? {
             Msg::Data(Payload::Grad(grad)) => {
-                let additional = self.grad.capacity().saturating_sub(grad.len());
+                let additional = grad.len().saturating_sub(self.grad.capacity());
                 self.grad.reserve(additional);
 
                 // SAFETY: The new uninitialized bytes will be overwritten right
@@ -84,7 +84,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
             Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
             msg => {
-                let text = format!("Expected grads from worker {}, got: {msg:?}", self.id);
+                let text = format!("Unexpected message from worker {}, got: {msg:?}", self.id);
                 return Err(io::Error::other(text));
             }
         };

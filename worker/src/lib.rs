@@ -1,3 +1,3 @@
 pub mod builder;
-pub mod middleware;
+pub mod cluster_manager;
 pub mod worker;

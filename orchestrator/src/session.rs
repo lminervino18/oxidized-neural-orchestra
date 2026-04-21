@@ -263,6 +263,9 @@ impl Session {
                     match server_handle.pull_params().await {
                         Ok(PullParamsResponse::Params(params)) => {
                             model_params.extend_from_slice(params);
+                            if let Err(e) = server_handle.disconnect().await {
+                                error!("Failed to disconnect server {i}: {e}");
+                            };
                         }
                         Err(e) => {
                             let text = format!("unexpected error from server {i}: {e}");

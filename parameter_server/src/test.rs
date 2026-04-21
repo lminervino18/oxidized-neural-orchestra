@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use std::num::NonZeroUsize;
+use std::{env, num::NonZeroUsize};
 
 use comms::{ParamServerHandle, PullParamsResponse, WorkerHandle};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
@@ -50,6 +50,8 @@ where
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_lineal_convergence() -> io::Result<()> {
+    unsafe { env::set_var("RUST_BACKTRACE", "1") };
+
     let ((wk_rx, wk_tx), (sv_rx, sv_tx)) = channel_pair();
 
     const MAX_EPOCHS: usize = 100;

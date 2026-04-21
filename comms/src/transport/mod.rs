@@ -9,13 +9,19 @@ pub use framer::Framer;
 pub use layer::TransportLayer;
 pub use retryer::Retryer;
 pub use timeouter::TimeOuter;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+};
 
 /// The reliable transport.
 pub type Rtp<R, W> = Retryer<TimeOuter<Framer<R, W>>>;
 
 /// The simple transport;
 pub type Stp<R, W> = Framer<R, W>;
+
+/// The network TCP reliable transport layer.
+pub type NetRtp = Rtp<OwnedReadHalf, OwnedWriteHalf>;
 
 /// Builds an uninitialized reliable transport.
 ///

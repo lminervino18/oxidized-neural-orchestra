@@ -1,8 +1,8 @@
-use std::{env, io};
+use std::{env, io, time::Duration};
 
 use comms::{
-    msg::{Command, Msg},
-    recv_dataset::{get_dataset_cursor, recv_dataset},
+    Acceptor, Connection, Connector, PullSpecResponse,
+    protocol::Entity,
     specs::worker::{AlgorithmSpec, SerializerSpec},
 };
 use log::{info, warn};
@@ -11,7 +11,7 @@ use tokio::{
     signal,
 };
 
-use worker::{builder::WorkerBuilder, middleware::Middleware};
+use worker::{builder::WorkerBuilder, cluster_manager::ServerClusterManager};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
@@ -25,35 +25,48 @@ async fn main() -> io::Result<()> {
         env::var("PORT").map_err(io::Error::other)?,
     );
 
-    let list = TcpListener::bind(&addr).await?;
+    let listener = TcpListener::bind(&addr).await?;
     info!("listening at {addr}");
 
-    let (stream, addr) = list.accept().await?;
-    let (rx, tx) = stream.into_split();
-    let (mut rx, tx) = comms::channel(rx, tx);
-    info!("orchestrator connected from {addr}");
+    let stream_factory = async move || {
+        let (stream, _) = listener.accept().await?;
+        info!("new incomming connection from {addr}");
+        Ok(stream.into_split())
+    };
+
+    let mut acceptor = Acceptor::new(
+        stream_factory,
+        Duration::from_secs(5),
+        Duration::from_secs(2),
+        2,
+        5,
+    );
+
+    let Connection::Orchestrator(mut orch_handle) = acceptor.accept().await? else {
+        panic!("Received an invalid connection type, expected orchestrator");
+    };
 
     let spec = loop {
-        match rx.recv().await {
-            Ok(Msg::Control(Command::CreateWorker(spec))) => break spec,
-            Ok(msg) => warn!("expected CreateWorker, got {msg:?}"),
+        match orch_handle.pull_specification().await {
+            Ok(PullSpecResponse::Worker(spec)) => break spec,
+            Ok(_) => warn!("expected CreateWorker, got server instead"),
             Err(e) => warn!("io error {e}"),
         }
     };
 
-    // TODO: esto quizás no debería estar acá...
     let x_size_bytes = spec.dataset.x_size_bytes as usize;
     let y_size_bytes = spec.dataset.y_size_bytes as usize;
     let mut samples_raw = vec![0.; x_size_bytes / size_of::<f32>()];
     let mut labels_raw = vec![0.; y_size_bytes / size_of::<f32>()];
-    recv_dataset(
-        &mut get_dataset_cursor(&mut samples_raw),
-        &mut get_dataset_cursor(&mut labels_raw),
-        x_size_bytes,
-        y_size_bytes,
-        &mut rx,
-    )
-    .await?;
+
+    orch_handle
+        .pull_dataset(
+            &mut comms::get_dataset_cursor(&mut samples_raw),
+            &mut comms::get_dataset_cursor(&mut labels_raw),
+            x_size_bytes,
+            y_size_bytes,
+        )
+        .await?;
 
     let AlgorithmSpec::ParameterServer {
         server_addrs,
@@ -61,25 +74,33 @@ async fn main() -> io::Result<()> {
         server_ordering,
     } = spec.algorithm.clone();
 
+    let connector = Connector::new(
+        Duration::from_secs(5),
+        Duration::from_secs(2),
+        2,
+        5,
+        Entity::Worker { id: spec.worker_id },
+    );
+
     let serializer = spec.serializer.clone();
     let worker_builder = WorkerBuilder::new();
     let worker = worker_builder.build(spec, &server_sizes, samples_raw, labels_raw);
-    let mut middleware = Middleware::new(server_ordering);
+    let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
-    for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
+    for (id, (addr, size)) in server_addrs.into_iter().zip(server_sizes).enumerate() {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
+        let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
 
-        let (rx, tx) = match serializer {
-            SerializerSpec::Base => comms::channel(rx, tx),
-            SerializerSpec::SparseCapable { r, seed } => comms::sparse_tx_channel(rx, tx, r, seed),
-        };
+        if let SerializerSpec::SparseCapable { r, seed } = serializer {
+            server_handle.enable_sparse_capabiliy(r, seed);
+        }
 
-        middleware.spawn(rx, tx, size);
+        cluster_manager.spawn(server_handle, size);
     }
 
     tokio::select! {
-        ret = worker.run(rx, tx, middleware) => {
+        ret = worker.run(orch_handle, cluster_manager) => {
             ret?;
             info!("wrapping up, disconnecting...");
         }

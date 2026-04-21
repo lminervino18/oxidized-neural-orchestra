@@ -20,6 +20,12 @@ pub enum PullSpecResponse {
     ParameterServer(ServerSpec),
 }
 
+/// A notified orchestrator event.
+pub enum OrchEvent {
+    RequestParams,
+    Disconnect,
+}
+
 impl<T> OrchHandle<T>
 where
     T: TransportLayer,
@@ -35,6 +41,10 @@ where
         Self { transport }
     }
 
+    /// Waits till the orchestrator sends the specification for this node.
+    ///
+    /// # Returns
+    /// The specification or an io error if occurred.
     pub async fn pull_specification(&mut self) -> io::Result<PullSpecResponse> {
         let spec = match self.transport.recv().await? {
             Msg::Control(Command::CreateServer(spec)) => PullSpecResponse::ParameterServer(spec),
@@ -97,6 +107,23 @@ where
         });
 
         self.transport.send(&msg).await
+    }
+
+    /// Blocks until receiving an event from a orchestrator.
+    ///
+    /// # Returns
+    /// A `OrchEvent` message or an io error if occurred.
+    pub async fn recv_event(&mut self) -> io::Result<OrchEvent> {
+        let event = match self.transport.recv().await? {
+            Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
+            Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
+            msg => {
+                let text = format!("Unexpected message from orchestrator, got: {msg:?}");
+                return Err(io::Error::other(text));
+            }
+        };
+
+        Ok(event)
     }
 
     /// Disconnects the orchestrator.

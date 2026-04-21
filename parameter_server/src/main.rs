@@ -7,7 +7,7 @@ mod test;
 
 use std::{env, io, time::Duration};
 
-use comms::{Acceptor, Connection, PullSpecResponse};
+use comms::{Acceptor, Connection, OrchEvent, PullSpecResponse};
 use log::{info, warn};
 use tokio::{net::TcpListener, signal};
 
@@ -29,8 +29,8 @@ async fn main() -> io::Result<()> {
     info!("listening at {addr}");
 
     let stream_factory = async move || {
-        let (stream, _) = listener.accept().await?;
-        info!("orchestrator connected from {addr}");
+        let (stream, addr) = listener.accept().await?;
+        info!("new incoming connection from {addr}");
         Ok(stream.into_split())
     };
 
@@ -70,7 +70,13 @@ async fn main() -> io::Result<()> {
         ret = pserver.run() => {
             info!("wrapping up, sending parameters...");
             let mut params = ret?;
-            orch_handle.push_params(&mut params).await?;
+
+            loop {
+                match orch_handle.recv_event().await? {
+                    OrchEvent::RequestParams => orch_handle.push_params(&mut params).await?,
+                    OrchEvent::Disconnect => orch_handle.disconnect().await?,
+                }
+            }
         },
         _ = signal::ctrl_c() => {
             info!("received SIGTERM");
