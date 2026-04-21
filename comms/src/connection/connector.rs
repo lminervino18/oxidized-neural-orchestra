@@ -1,48 +1,47 @@
-use std::{io, time::Duration};
+use std::{io, marker::PhantomData};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     handles::{OrchHandle, ParamServerHandle, WorkerHandle},
     protocol::{Command, Entity, Msg},
-    transport::{self, Rtp, TransportLayer},
+    transport::TransportLayer,
 };
 
 /// Establishes connections and yields reliable transports.
 #[derive(Debug, Clone, Copy)]
-pub struct Connector {
-    timeout: Duration,
-    base_retry_dur: Duration,
-    retry_coef: u32,
-    retries: usize,
+pub struct Connector<R, W, T, F>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer,
+    F: FnMut(R, W) -> T,
+{
+    transport_factory: F,
     src_entity: Entity,
+    _phantom: PhantomData<(R, W, T)>,
 }
 
-impl Connector {
+impl<R, W, T, F> Connector<R, W, T, F>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer,
+    F: Fn(R, W) -> T,
+{
     /// Creates a new `Connector`.
     ///
     /// # Args
-    /// * `timeout` - The timeout duration to wait for the receival of a message.
-    /// * `base_retry_dur` - The base duration for the exponential backoff retryer.
-    /// * `retry_coef` - The coefficient to which to multiply the current wait duration.
-    /// * `retries` - The amount of retries till declaring a dead node.
+    /// * `transport_factory` - A factory of transport layers.
     /// * `entity` - The callee's entity.
     ///
     /// # Returns
     /// A new `Connector` instance.
-    pub fn new(
-        timeout: Duration,
-        base_retry_dur: Duration,
-        retry_coef: u32,
-        retries: usize,
-        src_entity: Entity,
-    ) -> Self {
+    pub fn new(transport_factory: F, src_entity: Entity) -> Self {
         Self {
-            timeout,
-            base_retry_dur,
-            retry_coef,
-            retries,
+            transport_factory,
             src_entity,
+            _phantom: Default::default(),
         }
     }
 
@@ -55,15 +54,15 @@ impl Connector {
     ///
     /// # Returns
     /// A new `WorkerHandle` instance.
-    pub async fn connect_worker<R, W>(
+    pub async fn connect_worker(
         &self,
         id: usize,
         reader: R,
         writer: W,
-    ) -> io::Result<WorkerHandle<Rtp<R, W>>>
+    ) -> io::Result<WorkerHandle<T>>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
     {
         let transport_layer = self.connect(reader, writer).await?;
         Ok(WorkerHandle::new(id, transport_layer))
@@ -78,15 +77,15 @@ impl Connector {
     ///
     /// # Returns
     /// A new `ParamServerHandle` instance.
-    pub async fn connect_parameter_server<R, W>(
+    pub async fn connect_parameter_server(
         &self,
         id: usize,
         reader: R,
         writer: W,
-    ) -> io::Result<ParamServerHandle<Rtp<R, W>>>
+    ) -> io::Result<ParamServerHandle<T>>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
     {
         let transport_layer = self.connect(reader, writer).await?;
         Ok(ParamServerHandle::new(id, transport_layer))
@@ -100,14 +99,10 @@ impl Connector {
     ///
     /// # Returns
     /// A new `OrchHandle` instance.
-    pub async fn connect_orchestrator<R, W>(
-        &self,
-        reader: R,
-        writer: W,
-    ) -> io::Result<OrchHandle<Rtp<R, W>>>
+    pub async fn connect_orchestrator(&self, reader: R, writer: W) -> io::Result<OrchHandle<T>>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
     {
         let transport_layer = self.connect(reader, writer).await?;
         Ok(OrchHandle::new(transport_layer))
@@ -121,20 +116,12 @@ impl Connector {
     ///
     /// # Returns
     /// A new `ReliableTransport` or an io error if occurred.
-    async fn connect<R, W>(&self, reader: R, writer: W) -> io::Result<Rtp<R, W>>
+    async fn connect(&self, reader: R, writer: W) -> io::Result<T>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
     {
-        let mut transport_layer = transport::build_reliable_transport(
-            reader,
-            writer,
-            self.timeout,
-            self.base_retry_dur,
-            self.retry_coef,
-            self.retries,
-        );
-
+        let mut transport_layer = (self.transport_factory)(reader, writer);
         let msg = Msg::Control(Command::Connect(self.src_entity));
         transport_layer.send(&msg).await?;
         Ok(transport_layer)

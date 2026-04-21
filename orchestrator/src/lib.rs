@@ -44,14 +44,18 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
     //       configurar esto, si tenemos tiempo y vemos que viene bien lo
     //       podemos mover y que sea parte de un `CommsConfig`.
-    let connector = Connector::new(
-        Duration::from_secs(5),
-        Duration::from_secs(2),
-        2,
-        4,
-        Entity::Orchestrator,
-    );
+    let transport_factory = |rx, tx| {
+        comms::build_reliable_transport(
+            rx,
+            tx,
+            Duration::from_secs(5),
+            Duration::from_secs(2),
+            2,
+            4,
+        )
+    };
 
+    let connector = Connector::new(transport_factory, Entity::Orchestrator);
     let session = Session::new(
         workers,
         partitions,

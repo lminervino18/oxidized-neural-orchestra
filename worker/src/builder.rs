@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::{
-    Connector, OrchHandle, Rtp, TransportLayer,
+    Connector, OrchHandle, TransportLayer,
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
@@ -31,21 +31,24 @@ impl WorkerBuilder {
     ///
     /// # Args
     /// * `spec` - The specification for a worker.
-    /// * `local_addr` - The advertised address of this worker.
+    /// * `connector` - The network connector.
+    /// * `orch_handle` - The handle to communicate with the orchestrator.
     /// * `samples_raw` - The dataset samples raw data.
     /// * `labels_raw` - The dataset labels raw data.
     ///
     /// # Returns
     /// A fully initialized worker ready to start.
-    pub async fn build<T>(
+    pub async fn build<T, F>(
         &self,
         spec: WorkerSpec,
-        connector: Connector,
+        connector: Connector<OwnedReadHalf, OwnedWriteHalf, T, F>,
+        orch_handle: OrchHandle<T>,
         samples_raw: Vec<f32>,
         labels_raw: Vec<f32>,
-    ) -> io::Result<Box<dyn Worker<T>>>
+    ) -> io::Result<Box<dyn Worker>>
     where
-        T: TransportLayer,
+        T: TransportLayer + 'static,
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> T,
     {
         let dataset_builder = DatasetBuilder::new();
         let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
@@ -57,10 +60,9 @@ impl WorkerBuilder {
                 server_sizes,
                 server_ordering,
             } => {
-                let trainer = trainer_builder.build(spec.trainer, &server_sizes, dataset);
                 let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
-                for (id, (addr, size)) in server_addrs.into_iter().zip(server_sizes).enumerate() {
+                for (id, (addr, &size)) in server_addrs.into_iter().zip(&server_sizes).enumerate() {
                     let stream = TcpStream::connect(addr).await?;
                     let (rx, tx) = stream.into_split();
                     let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
@@ -72,8 +74,9 @@ impl WorkerBuilder {
                     cluster_manager.spawn(server_handle, size);
                 }
 
-                let worker = ParamServerWorker::new(trainer, cluster_manager);
-                Ok(BuiltWorker::ParameterServer(worker))
+                let trainer = trainer_builder.build(spec.trainer, &server_sizes, dataset);
+                let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
+                Ok(Box::new(worker))
             }
             AlgorithmSpec::AllReduce { .. } => {
                 unimplemented!("All Reduce is not yet implemented")

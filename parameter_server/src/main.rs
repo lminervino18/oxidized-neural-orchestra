@@ -75,6 +75,9 @@ async fn main() -> io::Result<()> {
                 match orch_handle.recv_event().await? {
                     OrchEvent::RequestParams => orch_handle.push_params(&mut params).await?,
                     OrchEvent::Disconnect => orch_handle.disconnect().await?,
+                    event => {
+                        warn!("Received an unexpected orch event: {event:?}");
+                    }
                 }
             }
         },

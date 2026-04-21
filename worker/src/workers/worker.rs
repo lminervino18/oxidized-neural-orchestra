@@ -1,18 +1,11 @@
 use std::io;
 
-use comms::{OrchHandle, TransportLayer};
-
 /// The main worker trait.
-pub trait Worker<T>
-where
-    T: TransportLayer,
-{
+#[async_trait::async_trait]
+pub trait Worker: Send {
     /// Executes the training of the model.
-    ///
-    /// # Args
-    /// * `orch_handle` - The handle to communicate to the orchestrator.
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn run(self, orch_handle: OrchHandle<T>) -> io::Result<()>;
+    async fn run(&mut self) -> io::Result<()>;
 }

@@ -185,7 +185,7 @@ impl TrainerBuilder {
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
-        L: LossFn + 'static,
+        L: LossFn + Send + 'static,
     {
         let model = Sequential::new(layers);
         let trainer = BackpropTrainer::new(

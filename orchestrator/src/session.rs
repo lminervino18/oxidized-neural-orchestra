@@ -6,7 +6,8 @@ use std::{
 };
 
 use comms::{
-    Connector, NetRtp, ParamServerHandle, PullParamsResponse, Rtp, WorkerEvent, WorkerHandle,
+    Connector, NetRtp, ParamServerHandle, PullParamsResponse, TransportLayer, WorkerEvent,
+    WorkerHandle,
     specs::{
         server::ServerSpec,
         worker::{AlgorithmSpec, WorkerSpec},
@@ -16,9 +17,12 @@ use futures::future;
 use log::{debug, error, info, warn};
 use tokio::{
     fs::File,
-    io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite},
-    net::TcpStream,
-    runtime::Runtime,
+    io::{AsyncReadExt, AsyncSeekExt},
+    net::{
+        TcpStream,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
+    runtime::{Builder, Runtime},
     sync::mpsc::{self, Receiver, Sender},
 };
 
@@ -151,8 +155,6 @@ pub enum TrainingEvent {
         model: TrainedModel,
         reason: StopReason,
     },
-    /// The worker must be stopped.
-    Stop,
     /// A worker or server produced an unrecoverable error.
     Error(OrchErr),
 }
@@ -221,15 +223,18 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
-    pub fn new(
+    pub fn new<F>(
         workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition>,
         servers: Vec<(String, ServerSpec)>,
-        connector: Connector,
+        connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
         model: ModelConfig,
         input_size: usize,
         early_stopping: Option<EarlyStoppingConfig>,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+    {
         let algorithm = workers
             .first()
             .map(|(_, spec)| spec.algorithm.clone())
@@ -238,15 +243,13 @@ impl Session {
         let (nworkers, nservers) = (workers.len(), servers.len());
         info!("connecting to {nworkers} workers and {nservers} servers");
 
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()?;
+        let runtime = Builder::new_multi_thread().enable_all().build()?;
 
-        let server_chans = runtime.block_on(Self::create_servers(servers, connector))?;
+        let server_chans = runtime.block_on(Self::create_servers(servers, &connector))?;
         debug!("successfully created all servers");
 
         let worker_chans =
-            runtime.block_on(Self::create_workers(workers, partitions, connector))?;
+            runtime.block_on(Self::create_workers(workers, partitions, &connector))?;
         debug!("successfully created all workers");
 
         Ok(Self {
@@ -263,18 +266,12 @@ impl Session {
     async fn worker_listener(
         id: usize,
         mut worker_handle: WorkerHandle<NetRtp>,
-        mut rx: Receiver<TrainingEvent>,
+        mut rx_stopper: Receiver<()>,
         tx: Sender<TrainingEvent>,
     ) {
         loop {
             tokio::select! {
-                event = rx.recv() => match event {
-                    None => break,
-                    Some(TrainingEvent::Stop) => {
-                        let _ = worker_handle.stop().await;
-                    }
-                    Some(other) => unreachable!("No event other than stop should reach here: {other:?}"),
-                },
+                _ = rx_stopper.recv() => break,
                 event = worker_handle.recv_event() => match event {
                     Ok(WorkerEvent::Loss(losses)) => {
                         debug!("worker {id} reported {} losses", losses.len());
@@ -364,7 +361,7 @@ impl Session {
                             stop_reason = Some(StopReason::ManualStop);
 
                             for tx in wk_txs.iter_mut() {
-                                let _ = tx.send(TrainingEvent::Stop).await;
+                                let _ = tx.send(()).await;
                             }
                         }
                         evt = internal_rx.recv() => {
@@ -390,7 +387,7 @@ impl Session {
                                                     stop_reason = Some(StopReason::EarlyStopping);
 
                                                     for tx in wk_txs.iter_mut() {
-                                                        let _ = tx.send(TrainingEvent::Stop).await;
+                                                        let _ = tx.send(()).await;
                                                     }
                                                 }
                                             }
@@ -479,10 +476,13 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any connection or send fails.
-    async fn create_servers(
+    async fn create_servers<F>(
         servers: Vec<(String, ServerSpec)>,
-        connector: Connector,
-    ) -> Result<Vec<ParamServerHandle<NetRtp>>> {
+        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
+    ) -> Result<Vec<ParamServerHandle<NetRtp>>>
+    where
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+    {
         let connect_to_server = async |id, addr| {
             let stream = TcpStream::connect(addr).await?;
             let (rx, tx) = stream.into_split();
@@ -516,11 +516,14 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any connection or send fails.
-    async fn create_workers<'a>(
+    async fn create_workers<'a, F>(
         workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
-        connector: Connector,
-    ) -> Result<Vec<WorkerHandle<NetRtp>>> {
+        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
+    ) -> Result<Vec<WorkerHandle<NetRtp>>>
+    where
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+    {
         const CHUNK_SIZE: usize = 8192;
 
         let connect_to_worker = async |id, addr| {
@@ -580,7 +583,7 @@ impl Session {
         Ok(channels)
     }
 
-    async fn send_local_partition<R, W>(
+    async fn send_local_partition<T>(
         samples_path: &PathBuf,
         labels_path: &PathBuf,
         samples_offset: u64,
@@ -588,11 +591,10 @@ impl Session {
         samples_size: u64,
         labels_size: u64,
         chunk_size: usize,
-        worker_handle: &mut WorkerHandle<Rtp<R, W>>,
+        worker_handle: &mut WorkerHandle<T>,
     ) -> Result<()>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        T: TransportLayer,
     {
         let mut samples_fd = File::open(samples_path).await?;
         let mut labels_fd = File::open(labels_path).await?;
@@ -609,15 +611,14 @@ impl Session {
         Ok(())
     }
 
-    async fn send_inline_partition<R, W>(
+    async fn send_inline_partition<T>(
         samples: &[f32],
         labels: &[f32],
         chunk_size: usize,
-        worker_handle: &mut WorkerHandle<Rtp<R, W>>,
+        worker_handle: &mut WorkerHandle<T>,
     ) -> Result<()>
     where
-        R: AsyncRead + Unpin + Send,
-        W: AsyncWrite + Unpin + Send,
+        T: TransportLayer,
     {
         let sample_bytes: &[u8] = bytemuck::cast_slice(samples);
         let label_bytes: &[u8] = bytemuck::cast_slice(labels);

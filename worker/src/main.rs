@@ -1,14 +1,10 @@
 use std::{env, io, time::Duration};
 
-use comms::{
-    Acceptor, Connection, Connector, PullSpecResponse,
-    protocol::Entity,
-    specs::worker::{AlgorithmSpec, SerializerSpec},
-};
+use comms::{Acceptor, Connection, Connector, PullSpecResponse, protocol::Entity};
 use log::{info, warn};
 use tokio::{net::TcpListener, signal};
 
-use crate::{builder::WorkerBuilder, cluster_manager::ServerClusterManager};
+use worker::builder::WorkerBuilder;
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 
@@ -63,24 +59,26 @@ async fn main() -> io::Result<()> {
         )
         .await?;
 
-    let connector = Connector::new(
-        Duration::from_secs(5),
-        Duration::from_secs(2),
-        2,
-        5,
-        Entity::Worker { id: spec.worker_id },
-    );
+    let transport_factory = |rx, tx| {
+        comms::build_reliable_transport(
+            rx,
+            tx,
+            Duration::from_secs(5),
+            Duration::from_secs(2),
+            2,
+            5,
+        )
+    };
 
+    let connector = Connector::new(transport_factory, Entity::Worker { id: spec.worker_id });
     let worker_builder = WorkerBuilder::new();
-    let worker = worker_builder.build(spec, &server_sizes, samples_raw, labels_raw);
-    let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
-    let worker = worker_builder
-        .build(spec, bind_addr.clone(), samples_raw, labels_raw)
+    let mut worker = worker_builder
+        .build(spec, connector, orch_handle, samples_raw, labels_raw)
         .await?;
 
     tokio::select! {
-        ret = worker.run(orch_handle, cluster_manager) => {
+        ret = worker.run() => {
             ret?;
             info!("wrapping up, disconnecting...");
         }

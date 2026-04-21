@@ -6,12 +6,16 @@ use machine_learning::{
     optimization::{GradientDescent, Optimizer},
     training::BackpropTrainer,
 };
+use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
 use comms::{
     OrchEvent, OrchHandle, ParamServerHandle, PullParamsResponse, Stp, WorkerEvent, WorkerHandle,
 };
-use worker::{cluster_manager::ServerClusterManager, worker::ParameterServerWorker};
+use worker::{
+    cluster_managers::ServerClusterManager,
+    workers::{ParamServerWorker, Worker},
+};
 
 #[allow(clippy::type_complexity)]
 fn channel_pair() -> (
@@ -110,17 +114,17 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
         0,
         NonZeroUsize::new(MAX_EPOCHS).unwrap(),
         NonZeroUsize::new(4).unwrap(),
-        rand::rng(),
+        StdRng::from_os_rng(),
     );
 
     // Worker node.
     let transport = Stp::new(wk_orch_rx, wk_orch_tx);
     let orch_wk_handle = OrchHandle::new(transport);
-    let worker = ParameterServerWorker::new(Box::new(trainer));
     let transport = Stp::new(sv_rx, sv_tx);
     let server_wk_handle = ParamServerHandle::new(0, transport);
     let mut cluster_manager = ServerClusterManager::new(vec![0]);
     cluster_manager.spawn(server_wk_handle, 2);
+    let mut worker = ParamServerWorker::new(Box::new(trainer), cluster_manager, orch_wk_handle);
 
     // Server node.
     let transport = Stp::new(wk_rx, wk_tx);
@@ -134,7 +138,7 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let transport = Stp::new(orch_sv_rx, orch_sv_tx);
     let server_orch_handle = ParamServerHandle::new(0, transport);
 
-    let worker_fut = worker.run(orch_wk_handle, cluster_manager);
+    let worker_fut = worker.run();
     let server_fut = mock_server(worker_sv_handle, orch_sv_handle, 0.1, 2);
     let orch_fut = mock_orch(worker_orch_handle, server_orch_handle);
 
