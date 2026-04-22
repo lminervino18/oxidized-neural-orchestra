@@ -27,7 +27,7 @@ impl WorkerBuilder {
         Self
     }
 
-    /// Builds a fully initialized algorithm-specific worker ready to be run.
+    /// Builds a `Worker` from a `WorkerSpec`.
     ///
     /// # Args
     /// * `spec` - The specification for a worker.

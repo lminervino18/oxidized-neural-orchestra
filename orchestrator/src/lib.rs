@@ -5,11 +5,12 @@ mod session;
 
 use std::{fs, path::PathBuf, time::Duration};
 
-use crate::configs::{DatasetSrc, ModelConfig, TrainingConfig, Validator};
 use comms::{Connector, protocol::Entity};
-use configs::Adapter;
+
+use configs::{Adapter, DatasetSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
+
 pub use session::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
 
 /// Starts the distributed training process and returns an active session.

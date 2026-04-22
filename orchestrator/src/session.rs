@@ -125,7 +125,7 @@ pub enum StopReason {
 }
 
 /// A handle that lets any caller request an early stop of an ongoing training session.
-pub struct CancelHandle(Sender<()>);
+pub struct CancelHandle(mpsc::Sender<()>);
 
 impl CancelHandle {
     /// Creates a matched `(CancelHandle, Receiver)` pair.
@@ -133,7 +133,7 @@ impl CancelHandle {
     /// The caller retains the `CancelHandle` and passes the `Receiver` to
     /// `Session::event_listener`. Calling `stop()` on the handle signals
     /// the session to stop at the next epoch boundary.
-    pub fn pair() -> (Self, Receiver<()>) {
+    pub fn pair() -> (Self, mpsc::Receiver<()>) {
         let (tx, rx) = mpsc::channel(1);
         (Self(tx), rx)
     }
@@ -328,7 +328,7 @@ impl Session {
     ///
     /// # Returns
     /// A receiver that yields `TrainingEvent`s as training progresses.
-    pub fn event_listener(self, mut cancel_rx: Receiver<()>) -> Receiver<TrainingEvent> {
+    pub fn event_listener(self, mut cancel_rx: mpsc::Receiver<()>) -> Receiver<TrainingEvent> {
         let (event_tx, event_rx) = mpsc::channel(256);
 
         let model = self.model;
