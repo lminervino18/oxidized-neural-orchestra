@@ -1,6 +1,6 @@
 use std::fs;
 
-use super::{AlgorithmConfig, DatasetConfig, ModelConfig, TrainingConfig};
+use super::{AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
 use crate::{
     configs::training::DatasetSrc,
     error::{OrchErr, Result},
@@ -46,6 +46,45 @@ impl Validator {
             return Err(OrchErr::InvalidConfig(
                 "model must have at least one layer".into(),
             ));
+        }
+
+        for layer in &model.layers {
+            if let LayerConfig::Conv {
+                input_dim,
+                kernel_dim,
+                stride,
+                padding,
+                ..
+            } = layer
+            {
+                let (in_h, in_w) = (input_dim.1.get(), input_dim.2.get());
+                let k_size = kernel_dim.2.get();
+                let stride = stride.get();
+                let padding = *padding;
+
+                let padded_h = in_h + 2 * padding;
+                let padded_w = in_w + 2 * padding;
+
+                if k_size > padded_h {
+                    return Err(OrchErr::InvalidConfig(format!(
+                        "conv kernel size ({k_size}) exceeds padded input height ({in_h} + 2*{padding} = {padded_h})"
+                    )));
+                }
+                if k_size > padded_w {
+                    return Err(OrchErr::InvalidConfig(format!(
+                        "conv kernel size ({k_size}) exceeds padded input width ({in_w} + 2*{padding} = {padded_w})"
+                    )));
+                }
+
+                let out_h = (padded_h - k_size) / stride + 1;
+                let out_w = (padded_w - k_size) / stride + 1;
+
+                if out_h == 0 || out_w == 0 {
+                    return Err(OrchErr::InvalidConfig(format!(
+                        "conv output spatial size is zero (out_h={out_h}, out_w={out_w})"
+                    )));
+                }
+            }
         }
 
         Ok(())

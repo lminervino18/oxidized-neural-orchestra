@@ -20,7 +20,7 @@ pip install -e orchestra-py/
 
 Training is split into three steps:
 
-1. **Define the model** — a `Sequential` stack of `Dense` layers.
+1. **Define the model** — a `Sequential` stack of `Dense` and/or `Conv2d` layers.
 2. **Configure training** — pick an algorithm (`parameter_server` or `all_reduce`), dataset, optimizer, and hyperparameters.
 3. **Orchestrate** — hand both to `orchestrate()`, which connects to the running workers and servers and returns a `Session`. Call `session.wait()` to block until training completes.
 
@@ -81,7 +81,7 @@ A sequential model. Layers are applied in order.
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `layers` | `list[Dense]` | At least one layer required. |
+| `layers` | `list[Dense \| Conv2d]` | At least one layer required. |
 
 ### `Dense(output_size, init, act_fn=None)`
 
@@ -92,6 +92,21 @@ A fully-connected dense layer.
 | `output_size` | `int` | — | Number of output neurons. Must be > 0. |
 | `init` | initializer | — | Weight and bias initializer. |
 | `act_fn` | activation or `None` | `None` | Optional activation applied after the linear transform. |
+
+### `Conv2d(input_dim, kernel_dim, stride, padding, init, act_fn=None)`
+
+A 2D convolutional layer. The kernel is square — `kernel_size` applies to both spatial dimensions.
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `input_dim` | `tuple[int, int, int]` | — | Input shape as `(in_channels, height, width)`. All values must be > 0. |
+| `kernel_dim` | `tuple[int, int, int]` | — | Kernel shape as `(filters, in_channels, kernel_size)`. All values must be > 0. |
+| `stride` | `int` | — | Convolution stride applied to both spatial dimensions. Must be > 0. |
+| `padding` | `int` | — | Zero-padding added to each spatial side of the input. |
+| `init` | initializer | — | Weight and bias initializer. |
+| `act_fn` | activation or `None` | `None` | Optional activation applied after the convolution. |
+
+When mixing `Conv2d` and `Dense` layers in a `Sequential`, the output of the last convolutional layer is automatically flattened into a 2D tensor before the first dense layer.
 
 ---
 
@@ -285,10 +300,10 @@ Returns the final parameters as a flat list in layer order: weights then biases 
 
 ### `trained.save_safetensors(path)`
 
-Saves the model in [safetensors](https://github.com/huggingface/safetensors) format. Each dense layer produces two tensors:
+Saves the model in [safetensors](https://github.com/huggingface/safetensors) format. Each layer produces two tensors:
 
-- `layer_N.weight` — shape `[input_size, output_size]`
-- `layer_N.bias` — shape `[output_size]`
+- Dense: `layer_N.weight` — shape `[input_size, output_size]`, `layer_N.bias` — shape `[output_size]`
+- Conv2d: `layer_N.weight` — shape `[filters, in_channels, kernel_size, kernel_size]`, `layer_N.bias` — shape `[filters]`
 
 ---
 
@@ -407,6 +422,64 @@ training = parameter_server(
 session = orchestrate(model, training)
 trained = session.wait()
 trained.save_safetensors("xor_early_stop.safetensors")
+```
+
+---
+
+### Example: image classification with Conv2d
+
+```python
+from orchestra import Sequential, orchestrate, parameter_server
+from orchestra._orchestra import (
+    Conv2d, Dense, Kaiming, Sigmoid,
+    GradientDescent, CrossEntropy,
+    LocalDataset,
+    BarrierSync, BlockingStore,
+)
+
+# Dataset of 28x28 grayscale images, 10 classes
+dataset = LocalDataset(
+    samples_path="data/images.bin",
+    labels_path="data/labels.bin",
+    x_size=784,   # 1 * 28 * 28
+    y_size=10,
+)
+
+model = Sequential([
+    Conv2d(
+        input_dim=(1, 28, 28),
+        kernel_dim=(32, 1, 3),
+        stride=1,
+        padding=1,
+        init=Kaiming(),
+        act_fn=Sigmoid(),
+    ),
+    Conv2d(
+        input_dim=(32, 28, 28),
+        kernel_dim=(64, 32, 3),
+        stride=2,
+        padding=1,
+        init=Kaiming(),
+    ),
+    Dense(10, Kaiming()),
+])
+
+training = parameter_server(
+    worker_addrs=["127.0.0.1:50000"],
+    server_addrs=["127.0.0.1:40000"],
+    dataset=dataset,
+    optimizer=GradientDescent(lr=0.01),
+    loss_fn=CrossEntropy(),
+    sync=BarrierSync(),
+    store=BlockingStore(),
+    max_epochs=20,
+    batch_size=64,
+    seed=0,
+)
+
+session = orchestrate(model, training)
+trained = session.wait()
+trained.save_safetensors("image_clf.safetensors")
 ```
 
 ---
