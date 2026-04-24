@@ -58,7 +58,7 @@ where
     /// # Args
     /// * `r` - The ratio of compression for calculating the threshold value.
     /// * `seed` - The seed for the random number generator.
-    pub fn enable_sparse_capabiliy<S>(&mut self, r: Float01, seed: S)
+    pub fn enable_sparse_capability<S>(&mut self, r: Float01, seed: S)
     where
         S: Into<Option<u64>>,
     {

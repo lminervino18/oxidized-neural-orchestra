@@ -68,7 +68,7 @@ impl WorkerBuilder {
                     let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
 
                     if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
-                        server_handle.enable_sparse_capabiliy(r, seed);
+                        server_handle.enable_sparse_capability(r, seed);
                     }
 
                     cluster_manager.spawn(server_handle, size);
