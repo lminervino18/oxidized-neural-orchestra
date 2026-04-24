@@ -63,8 +63,9 @@ impl<T: TransportLayer> WorkerHandle<T> {
 
         let response = match self.transport.recv().await? {
             Msg::Data(Payload::Grad(grad)) => {
-                let additional = grad.len().saturating_sub(self.grad.capacity());
-                self.grad.reserve(additional);
+                if let Some(additional) = grad.len().checked_sub(self.grad.capacity()) {
+                    self.grad.reserve(additional);
+                }
 
                 // SAFETY: The new uninitialized bytes will be overwritten right
                 //         after with the uncompressed 32 bit gradient values.

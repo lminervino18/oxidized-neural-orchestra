@@ -41,14 +41,14 @@ impl<L: TransportLayer> Retryer<L> {
     /// # Returns
     /// `true` if this error should be retried, `false` otherwise.
     fn is_retriable(e: &io::Error) -> bool {
-        match e.kind() {
+        matches!(
+            e.kind(),
             io::ErrorKind::ConnectionReset
-            | io::ErrorKind::ConnectionAborted
-            | io::ErrorKind::BrokenPipe
-            | io::ErrorKind::TimedOut
-            | io::ErrorKind::UnexpectedEof => true,
-            _ => false,
-        }
+                | io::ErrorKind::ConnectionAborted
+                | io::ErrorKind::BrokenPipe
+                | io::ErrorKind::TimedOut
+                | io::ErrorKind::UnexpectedEof
+        )
     }
 
     /// Given the current sleep duration, returns the next sleep duration.
@@ -75,7 +75,7 @@ impl<L: TransportLayer> TransportLayer for Retryer<L> {
             match self.inner.recv().await {
                 Ok(msg) => {
                     // SAFETY: The message's inner lifetime outlives '1.
-                    return Ok(unsafe { mem::transmute(msg) });
+                    return Ok(unsafe { mem::transmute::<Msg<'_>, Msg<'_>>(msg) });
                 }
                 Err(e) if Self::is_retriable(&e) => {
                     time::sleep(sleep_dur).await;

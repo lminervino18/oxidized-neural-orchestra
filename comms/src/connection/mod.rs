@@ -9,7 +9,8 @@ use crate::{
 pub use acceptor::Acceptor;
 pub use connector::Connector;
 
-/// The different types of connections.
+/// The different connection types.
+#[allow(clippy::large_enum_variant)]
 pub enum Connection<T: TransportLayer> {
     Worker(WorkerHandle<T>),
     ParamServer(ParamServerHandle<T>),

@@ -12,6 +12,17 @@ where
     server_handles: Vec<ParamServerHandle<T>>,
 }
 
+impl<T> Default for ParamServerCluster<T>
+where
+    T: TransportLayer,
+{
+    fn default() -> Self {
+        Self {
+            server_handles: Default::default(),
+        }
+    }
+}
+
 impl<T> ParamServerCluster<T>
 where
     T: TransportLayer,
@@ -21,9 +32,7 @@ where
     /// # Returns
     /// A new `ParamServerCluster` instance.
     pub fn new() -> Self {
-        Self {
-            server_handles: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Adds a new server communicator to the cluster.

@@ -27,7 +27,7 @@ impl Float01 {
     /// # Returns
     /// A new `Float01` instance if the given value is between `0.0` and `1.0`.
     pub fn new(value: f32) -> Option<Self> {
-        (0.0 <= value && value <= 1.0).then_some(Self { value })
+        (0.0..=1.0).contains(&value).then_some(Self { value })
     }
 }
 
@@ -145,12 +145,12 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
             return Err("Gradient chunk exceeds target vector bounds");
         }
 
-        for j in idx..idx + chunk_len {
+        for g in grad.iter_mut().skip(idx).take(chunk_len) {
             let b = buf
                 .get(i..i + size_of::<f16>())
                 .ok_or("Truncated float data")?;
 
-            grad[j] = f16::from_le_bytes([b[0], b[1]]).to_f32();
+            *g = f16::from_le_bytes([b[0], b[1]]).to_f32();
             i += size_of::<f16>();
         }
     }
