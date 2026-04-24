@@ -73,12 +73,8 @@ impl Conv2d {
 
         let (k, b) = self.view_params(params)?;
 
-        // estos errores no los vamos a estar manejando, quisiera que fuera más ergonómico
-        // sacarlos, armar uno de los que teníamos acá es medio paja para hacerlo en cada forward,
-        // si vamos a estar esperando errores frecuentes bueno este to_string evidentemente está
-        // mal, me gustaría ver qué podemos hacer para que quede cool
         let mut output = x.conv(k.no_reverse(), self.conv_mode, PaddingMode::Zeros)?;
-        output += &b.into_dyn();
+        output += &b.into_shape_with_order((1, self.filters, 1, 1))?;
 
         self.output = output;
 
@@ -186,7 +182,7 @@ impl Conv2d {
     fn view_params<'a>(
         &self,
         params: &'a [f32],
-    ) -> Result<(ArrayView4<'a, f32>, ArrayView1<'a, f32>)> {
+    ) -> Result<(ArrayView4<'a, f32>, ArrayView4<'a, f32>)> {
         let Self {
             filters,
             kernels_size,
@@ -206,7 +202,7 @@ impl Conv2d {
         // SAFETY: The if condition above checks that the size of the
         //         parameters is exactly the size of the layer.
         let weights = ArrayView4::from_shape(kernels_dim, &params[..kernels_size]).unwrap();
-        let biases = ArrayView1::from_shape(filters, &params[kernels_size..]).unwrap();
+        let biases = ArrayView4::from_shape((1, filters, 1, 1), &params[kernels_size..]).unwrap();
 
         Ok((weights, biases))
     }
