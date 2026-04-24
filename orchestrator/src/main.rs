@@ -99,7 +99,12 @@ fn main() -> io::Result<()> {
                     1., 0., //
                     1., 1., //
                 ],
-                labels: vec![0., 1., 1., 0.],
+                labels: vec![
+                    0., //
+                    1., //
+                    1., //
+                    0., //
+                ],
             },
             x_size: NonZeroUsize::new(2).unwrap(),
             y_size: NonZeroUsize::new(1).unwrap(),

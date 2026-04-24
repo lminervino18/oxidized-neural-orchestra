@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::{
-    OnoReceiver, OnoSender,
+    Connector, OrchHandle, TransportLayer,
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
@@ -11,42 +11,9 @@ use tokio::net::{
 };
 
 use crate::{
-    middlewares::{all_reduce::AllReduceMiddleware, parameter_server::ParameterServerMiddleware},
-    workers::{all_reduce::AllReduceWorker, parameter_server::ParameterServerWorker},
+    cluster_managers::ServerClusterManager,
+    workers::{Worker, parameter_server::ParamServerWorker},
 };
-
-/// A fully built worker ready to be run.
-pub enum BuiltWorker {
-    ParameterServer(
-        ParameterServerWorker,
-        ParameterServerMiddleware<OwnedReadHalf, OwnedWriteHalf>,
-    ),
-    AllReduce(
-        AllReduceWorker,
-        AllReduceMiddleware<OwnedReadHalf, OwnedWriteHalf>,
-    ),
-}
-
-impl BuiltWorker {
-    /// Runs the built worker with the orchestrator channel.
-    ///
-    /// # Args
-    /// * `rx` - The receiving end of the communication between the worker and the orchestrator.
-    /// * `tx` - The sending end of the communication between the worker and the orchestrator.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn run(
-        self,
-        rx: OnoReceiver<OwnedReadHalf>,
-        tx: OnoSender<OwnedWriteHalf>,
-    ) -> io::Result<()> {
-        match self {
-            Self::ParameterServer(worker, middleware) => worker.run(rx, tx, middleware).await,
-            Self::AllReduce(worker, middleware) => worker.run(rx, tx, middleware).await,
-        }
-    }
-}
 
 #[derive(Default)]
 pub struct WorkerBuilder;
@@ -60,114 +27,60 @@ impl WorkerBuilder {
         Self
     }
 
-    /// Builds a fully initialized algorithm-specific worker ready to be run.
+    /// Builds a `Worker` from a `WorkerSpec`.
     ///
     /// # Args
     /// * `spec` - The specification for a worker.
-    /// * `local_addr` - The advertised address of this worker.
+    /// * `connector` - The network connector.
+    /// * `orch_handle` - The handle to communicate with the orchestrator.
     /// * `samples_raw` - The dataset samples raw data.
     /// * `labels_raw` - The dataset labels raw data.
     ///
     /// # Returns
     /// A fully initialized worker ready to start.
-    pub async fn build(
+    pub async fn build<T, F>(
         &self,
         spec: WorkerSpec,
-        local_addr: String,
+        connector: Connector<OwnedReadHalf, OwnedWriteHalf, T, F>,
+        orch_handle: OrchHandle<T>,
         samples_raw: Vec<f32>,
         labels_raw: Vec<f32>,
-    ) -> io::Result<BuiltWorker> {
-        match spec.algorithm.clone() {
+    ) -> io::Result<Box<dyn Worker>>
+    where
+        T: TransportLayer + 'static,
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> T,
+    {
+        let dataset_builder = DatasetBuilder::new();
+        let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
+        let trainer_builder = TrainerBuilder::new();
+
+        match spec.algorithm {
             AlgorithmSpec::ParameterServer {
                 server_addrs,
                 server_sizes,
                 server_ordering,
             } => {
-                let serializer = spec.serializer.clone();
-                let worker =
-                    self.build_parameter_server(spec, &server_sizes, samples_raw, labels_raw);
-                let mut middleware = ParameterServerMiddleware::new(server_ordering);
+                let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
-                for (addr, size) in server_addrs.into_iter().zip(server_sizes) {
+                for (id, (addr, &size)) in server_addrs.into_iter().zip(&server_sizes).enumerate() {
                     let stream = TcpStream::connect(addr).await?;
                     let (rx, tx) = stream.into_split();
+                    let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
 
-                    let (rx, tx) = match serializer {
-                        SerializerSpec::Base => comms::channel(rx, tx),
-                        SerializerSpec::SparseCapable { r, seed } => {
-                            comms::sparse_tx_channel(rx, tx, r, seed)
-                        }
-                    };
+                    if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
+                        server_handle.enable_sparse_capability(r, seed);
+                    }
 
-                    middleware.spawn(rx, tx, size);
+                    cluster_manager.spawn(server_handle, size);
                 }
 
-                Ok(BuiltWorker::ParameterServer(worker, middleware))
+                let trainer = trainer_builder.build(spec.trainer, &server_sizes, dataset);
+                let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
+                Ok(Box::new(worker))
             }
-            AlgorithmSpec::AllReduce { worker_addrs } => {
-                let worker = self.build_all_reduce(
-                    spec,
-                    local_addr.clone(),
-                    worker_addrs.clone(),
-                    samples_raw,
-                    labels_raw,
-                );
-                let middleware = AllReduceMiddleware::new(&local_addr, worker_addrs)?;
-
-                Ok(BuiltWorker::AllReduce(worker, middleware))
+            AlgorithmSpec::AllReduce { .. } => {
+                unimplemented!("All Reduce is not yet implemented")
             }
         }
-    }
-
-    /// Builds a `Worker` from a `WorkerSpec`.
-    ///
-    /// # Args
-    /// * `spec` - The specification for a worker.
-    /// * `server_sizes` - The amount of parameters for each server.
-    /// * `samples_raw` - The dataset samples raw data.
-    /// * `labels_raw` - The dataset labels raw data.
-    ///
-    /// # Returns
-    /// A fully initialized `Worker` instance.
-    pub fn build_parameter_server(
-        &self,
-        spec: WorkerSpec,
-        server_sizes: &[usize],
-        samples_raw: Vec<f32>,
-        labels_raw: Vec<f32>,
-    ) -> ParameterServerWorker {
-        let dataset_builder = DatasetBuilder::new();
-        let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
-        let trainer_builder = TrainerBuilder::new();
-        let trainer = trainer_builder.build(spec.trainer, server_sizes, dataset);
-        ParameterServerWorker::new(trainer)
-    }
-
-    /// Builds an `AllReduceWorker` from a `WorkerSpec`.
-    ///
-    /// # Args
-    /// * `spec` - The specification for a worker.
-    /// * `worker_addr` - The advertised address of this worker.
-    /// * `worker_addrs` - The addresses of all workers participating in the ring.
-    /// * `samples_raw` - The dataset samples raw data.
-    /// * `labels_raw` - The dataset labels raw data.
-    ///
-    /// # Returns
-    /// A partially initialized `AllReduceWorker` instance.
-    pub fn build_all_reduce(
-        &self,
-        spec: WorkerSpec,
-        worker_addr: String,
-        worker_addrs: Vec<String>,
-        samples_raw: Vec<f32>,
-        labels_raw: Vec<f32>,
-    ) -> AllReduceWorker {
-        let _ = spec;
-        let _ = samples_raw;
-        let _ = labels_raw;
-
-        // TODO: Build the local ML state for all-reduce once the interaction between
-        //       the worker, the trainer and the ring synchronization is defined.
-        AllReduceWorker::new(worker_addr, worker_addrs)
     }
 }

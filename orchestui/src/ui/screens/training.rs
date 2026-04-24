@@ -2,10 +2,9 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    CancelHandle,
     configs::{DatasetSrc, ModelConfig, TrainingConfig},
     dataset_format::DatasetFormat,
-    Session, StopReason, TrainedModel, TrainingEvent,
+    CancelHandle, Session, StopReason, TrainedModel, TrainingEvent,
 };
 use ratatui::{
     layout::{Constraint, Direction, Layout},
@@ -308,15 +307,16 @@ impl TrainingState {
                     );
                 }
             }
-
             TrainingEvent::WorkerDone(worker_id) => {
                 if worker_id < self.workers.len() {
                     self.workers[worker_id].done = true;
                 }
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
-
-            TrainingEvent::Complete { model: trained, reason } => {
+            TrainingEvent::Complete {
+                model: trained,
+                reason,
+            } => {
                 self.phase = Phase::Finished;
                 self.finish_reason = Some(reason);
                 let reason_str = match reason {
@@ -333,7 +333,6 @@ impl TrainingState {
                 );
                 self.final_trained = Some(trained);
             }
-
             TrainingEvent::Error(e) => {
                 self.phase = Phase::Error;
                 let msg = e.to_string();
