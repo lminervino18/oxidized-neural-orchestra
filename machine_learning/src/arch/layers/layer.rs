@@ -174,13 +174,5 @@ where
     S: RawData<Elem = f32> + Data,
     D: Dimension,
 {
-    let size = arr.dim().ndim();
-
-    arr.into_dimensionality().map_err(|_| MlErr::DimMismatch {
-        got: size,
-        // SAFETY: This will return a number for every dimension
-        //         except for `IxDyn` which is what this function
-        //         is trying to strip, defining a concrete dimension.
-        expected: D::NDIM.expect("Target dimension must be a fixed rank"),
-    })
+    arr.into_dimensionality().map_err(|e| MlErr::MatrixError(e))
 }

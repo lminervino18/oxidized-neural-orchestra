@@ -14,13 +14,8 @@ pub enum MlErr {
         got: usize,
         expected: usize,
     },
-    DimMismatch {
-        got: usize,
-        expected: usize,
-    },
-    MatrixError {
-        error: String,
-    },
+    MatrixError(ndarray::ShapeError),
+    Conv2dError(ndarray_conv::Error<4>),
 }
 
 impl Display for MlErr {
@@ -30,12 +25,10 @@ impl Display for MlErr {
                 what,
                 got,
                 expected,
-            } => format!("shape mismatch for {what}: got {got}, expected {expected}"),
-            MlErr::DimMismatch { got, expected } => {
-                format!("dimensionality mismatch: got {got}, expected {expected}")
-            }
-            MlErr::MatrixError { error } => {
-                format!("matrix error {error:?} ")
+            } => format!("size mismatch for {what}: got {got}, expected {expected}"),
+            MlErr::MatrixError(shape_error) => format!("matrix operation failed: {shape_error}"),
+            MlErr::Conv2dError(conv2d_error) => {
+                format!("2d convolution operation failed: {conv2d_error}")
             }
         };
 
@@ -44,3 +37,15 @@ impl Display for MlErr {
 }
 
 impl Error for MlErr {}
+
+impl From<ndarray::ShapeError> for MlErr {
+    fn from(value: ndarray::ShapeError) -> Self {
+        MlErr::MatrixError(value)
+    }
+}
+
+impl From<ndarray_conv::Error<4>> for MlErr {
+    fn from(value: ndarray_conv::Error<4>) -> Self {
+        MlErr::Conv2dError(value)
+    }
+}

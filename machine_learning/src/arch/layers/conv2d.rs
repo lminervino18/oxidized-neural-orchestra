@@ -77,11 +77,7 @@ impl Conv2d {
         // sacarlos, armar uno de los que teníamos acá es medio paja para hacerlo en cada forward,
         // si vamos a estar esperando errores frecuentes bueno este to_string evidentemente está
         // mal, me gustaría ver qué podemos hacer para que quede cool
-        let mut output = x
-            .conv(k.no_reverse(), self.conv_mode, PaddingMode::Zeros)
-            .map_err(|e| MlErr::MatrixError {
-                error: e.to_string(),
-            })?;
+        let mut output = x.conv(k.no_reverse(), self.conv_mode, PaddingMode::Zeros)?;
         output += &b.into_dyn();
 
         self.output = output;
@@ -120,19 +116,15 @@ impl Conv2d {
             outward_padding..dilated_height - outward_padding
         ]);
 
-        let dw_conv = input
-            .conv(
-                unpadded_dilated.no_reverse(),
-                ConvMode::Valid,
-                PaddingMode::Zeros,
-            )
-            .unwrap();
+        let dw_conv = input.conv(
+            unpadded_dilated.no_reverse(),
+            ConvMode::Valid,
+            PaddingMode::Zeros,
+        )?;
 
         dw.assign(&dw_conv);
 
-        let delta_new = dilated
-            .conv(&w, ConvMode::Valid, PaddingMode::Zeros)
-            .unwrap();
+        let delta_new = dilated.conv(&w, ConvMode::Valid, PaddingMode::Zeros)?;
 
         delta.reshape_inplace(delta_new.dim());
         delta.assign(&delta_new);

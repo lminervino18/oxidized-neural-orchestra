@@ -1,4 +1,4 @@
-use ndarray::{ArrayD, ArrayView, ArrayViewMut, Dimension, IxDyn, ShapeBuilder, azip};
+use ndarray::{ArrayD, ArrayView, ArrayViewMut, Dimension, IxDyn, azip};
 
 use super::LossFn;
 use crate::arch::InplaceReshape;
