@@ -3,7 +3,7 @@
 use std::num::NonZeroUsize;
 
 use ndarray::ArrayView2;
-use rand::Rng;
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 use crate::{
     arch::{
@@ -49,7 +49,7 @@ fn test_ml_linear_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(0.1);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -106,7 +106,7 @@ fn test_ml_and2_gate_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -172,7 +172,7 @@ fn test_ml_and3_gate_convergence() {
     let batch_size = NonZeroUsize::new(8).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -234,7 +234,7 @@ fn test_ml_xor2_gate_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
