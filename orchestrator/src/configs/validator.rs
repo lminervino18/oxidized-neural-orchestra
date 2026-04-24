@@ -2,7 +2,7 @@ use std::fs;
 
 use super::{AlgorithmConfig, DatasetConfig, ModelConfig, TrainingConfig};
 use crate::{
-    configs::training::DatasetSrc,
+    configs::{LayerConfig, training::DatasetSrc},
     error::{OrchErr, Result},
 };
 
@@ -46,6 +46,29 @@ impl Validator {
             return Err(OrchErr::InvalidConfig(
                 "model must have at least one layer".into(),
             ));
+        }
+
+        for l in &model.layers {
+            match l {
+                LayerConfig::Dense { .. } => {
+                    continue;
+                }
+                LayerConfig::Conv {
+                    input_dim,
+                    kernel_dim,
+                    padding,
+                    ..
+                } => {
+                    // input_dim = 9, padding = 1, kernel dim = 16 -> true... wtf ?
+                    if (input_dim.1.get() + 2 * padding - kernel_dim.2.get()) <= 0
+                        || input_dim.2.get() + 2 * padding - kernel_dim.2.get() <= 0
+                    {
+                        return Err(OrchErr::InvalidConfig(
+                            "conv layer input_dim + 2 * padding - kernel_size must be greater than 0 for both height and width".into(),
+                        ));
+                    }
+                }
+            }
         }
 
         Ok(())

@@ -708,8 +708,7 @@ impl Adapter {
                         act_fn: act_fn_spec,
                     },
                     self.adapt_param_gen(init, sizes),
-                    // TODO: el safety de esto debería ser que se validó en validator, validarlo,
-                    // de otra forma no tiene mucho sentido manejar este non zero acá adentro
+                    // SAFETY: input config has already been validated at this point.
                     NonZeroUsize::new(output_size).unwrap(),
                 )
             }
