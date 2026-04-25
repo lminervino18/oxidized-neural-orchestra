@@ -1,13 +1,16 @@
+mod conv2d;
 mod dense;
 mod layer;
+mod reshape;
 mod sigmoid;
 
 use std::mem;
 
-use ndarray::{Array, Dimension, IntoDimension};
-
+pub(super) use conv2d::Conv2d;
 pub(super) use dense::Dense;
 pub use layer::Layer;
+use ndarray::{Array, Dimension, IntoDimension};
+pub(super) use reshape::Reshape;
 pub(super) use sigmoid::Sigmoid;
 
 /// A trait whose sole purpose is to give the ndarray::ArrayX

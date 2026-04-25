@@ -65,8 +65,7 @@ impl TrainedModel {
     /// Returns an `OrchErr` if the file cannot be written or the parameter
     /// buffer does not match the model architecture.
     pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
-        use safetensors::Dtype;
-        use safetensors::tensor::TensorView;
+        use safetensors::{Dtype, tensor::TensorView};
 
         let mut tensors: Vec<(String, TensorView)> = Vec::new();
         let mut offset = 0;
@@ -79,15 +78,48 @@ impl TrainedModel {
         };
 
         for (i, layer) in self.model.layers.iter().enumerate() {
-            let LayerConfig::Dense { output_size, .. } = layer;
-            let out = output_size.get();
-            let w_count = prev * out;
-            let b_count = out;
+            let (w_count, b_count, w_shape, b_shape, out) = match layer {
+                LayerConfig::Dense { output_size, .. } => {
+                    let out = output_size.get();
+                    let w_count = prev * out;
+                    let b_count = out;
+
+                    (w_count, b_count, vec![prev, out], vec![out], out)
+                }
+                LayerConfig::Conv {
+                    input_dim,
+                    kernel_dim,
+                    stride,
+                    padding,
+                    ..
+                } => {
+                    let input_height = input_dim.1.get();
+                    let input_width = input_dim.2.get();
+                    let (filters, in_channels, kernel_size) =
+                        (kernel_dim.0.get(), kernel_dim.1.get(), kernel_dim.2.get());
+                    let stride = stride.get();
+
+                    let output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
+                    let output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
+
+                    let w_count = filters * in_channels * kernel_size * kernel_size;
+                    let b_count = filters;
+                    let out = output_height * output_width * filters;
+
+                    (
+                        w_count,
+                        b_count,
+                        vec![filters, in_channels, kernel_size, kernel_size],
+                        vec![filters],
+                        out,
+                    )
+                }
+            };
 
             let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];
             tensors.push((
                 format!("layer_{i}.weight"),
-                TensorView::new(Dtype::F32, vec![prev, out], w_bytes)
+                TensorView::new(Dtype::F32, w_shape, w_bytes)
                     .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
             ));
             offset += w_count;
@@ -95,7 +127,7 @@ impl TrainedModel {
             let b_bytes = &params_bytes[offset * 4..(offset + b_count) * 4];
             tensors.push((
                 format!("layer_{i}.bias"),
-                TensorView::new(Dtype::F32, vec![out], b_bytes)
+                TensorView::new(Dtype::F32, b_shape, b_bytes)
                     .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
             ));
             offset += b_count;

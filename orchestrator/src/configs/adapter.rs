@@ -679,6 +679,39 @@ impl Adapter {
                     output_size,
                 )
             }
+            LayerConfig::Conv {
+                input_dim,
+                kernel_dim,
+                stride,
+                padding,
+                init,
+                act_fn,
+            } => {
+                let act_fn_spec = act_fn.map(|act_fn| self.adapt_act_fn(act_fn));
+
+                let (filters, channels, kernel_size) =
+                    (kernel_dim.0.get(), kernel_dim.1.get(), kernel_dim.2.get());
+
+                let layer_size = filters * channels * kernel_size * kernel_size + filters;
+                let input_dim = (input_dim.0.get(), input_dim.1.get(), input_dim.2.get());
+                let output_height = (input_dim.1 + 2 * padding - kernel_size) / stride + 1;
+                let output_width = (input_dim.2 + 2 * padding - kernel_size) / stride + 1;
+                let output_size = output_height * output_width * filters;
+                let sizes = (input_size.get(), layer_size, output_size);
+
+                (
+                    LayerSpec::Conv {
+                        input_dim,
+                        kernel_dim: (filters, channels, kernel_size),
+                        stride: stride.get(),
+                        padding,
+                        act_fn: act_fn_spec,
+                    },
+                    self.adapt_param_gen(init, sizes),
+                    // SAFETY: input config has already been validated at this point.
+                    NonZeroUsize::new(output_size).unwrap(),
+                )
+            }
         }
     }
 
@@ -840,5 +873,54 @@ mod tests {
 
         assert_eq!(specs, expected_specs);
         assert_eq!(partitions, expected_partitions);
+    }
+
+    #[test]
+    fn test_adapter_adapt_layers_returns_exepcted_layers() {
+        let cfg = ModelConfig {
+            layers: vec![
+                LayerConfig::Conv {
+                    input_dim: (
+                        NonZeroUsize::new(1).unwrap(),
+                        NonZeroUsize::new(3).unwrap(),
+                        NonZeroUsize::new(3).unwrap(),
+                    ),
+                    kernel_dim: (
+                        NonZeroUsize::new(1).unwrap(),
+                        NonZeroUsize::new(1).unwrap(),
+                        NonZeroUsize::new(2).unwrap(),
+                    ),
+                    stride: NonZeroUsize::new(1).unwrap(),
+                    padding: 0,
+                    init: ParamGenConfig::Kaiming,
+                    act_fn: None,
+                },
+                LayerConfig::Dense {
+                    output_size: NonZeroUsize::new(4).unwrap(),
+                    init: ParamGenConfig::Kaiming,
+                    act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+                },
+            ],
+        };
+        let input_size = NonZeroUsize::new(9).unwrap();
+
+        let expected_specs = vec![
+            LayerSpec::Conv {
+                input_dim: (1, 3, 3),
+                kernel_dim: (1, 1, 2),
+                stride: 1,
+                padding: 0,
+                act_fn: None,
+            },
+            LayerSpec::Dense {
+                dim: (4, 4),
+                act_fn: Some(ActFnSpec::Sigmoid { amp: 1.0 }),
+            },
+        ];
+
+        let adapter = Adapter::new();
+        let (got_specs, _) = adapter.adapt_layers(&cfg, input_size);
+
+        assert_eq!(got_specs, expected_specs);
     }
 }
