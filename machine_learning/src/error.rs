@@ -15,7 +15,8 @@ pub enum MlErr {
         expected: usize,
     },
     MatrixError(ndarray::ShapeError),
-    Conv2dError(ndarray_conv::Error<4>),
+    Conv3dError(ndarray_conv::Error<3>),
+    Conv2dError(ndarray_conv::Error<2>),
 }
 
 impl Display for MlErr {
@@ -27,8 +28,11 @@ impl Display for MlErr {
                 expected,
             } => format!("size mismatch for {what}: got {got}, expected {expected}"),
             MlErr::MatrixError(shape_error) => format!("matrix operation failed: {shape_error}"),
+            MlErr::Conv3dError(conv3d_error) => {
+                format!("convolution operation failed: {conv3d_error}")
+            }
             MlErr::Conv2dError(conv2d_error) => {
-                format!("2d convolution operation failed: {conv2d_error}")
+                format!("convolution operation failed: {conv2d_error}")
             }
         };
 
@@ -44,8 +48,14 @@ impl From<ndarray::ShapeError> for MlErr {
     }
 }
 
-impl From<ndarray_conv::Error<4>> for MlErr {
-    fn from(value: ndarray_conv::Error<4>) -> Self {
+impl From<ndarray_conv::Error<3>> for MlErr {
+    fn from(value: ndarray_conv::Error<3>) -> Self {
+        MlErr::Conv3dError(value)
+    }
+}
+
+impl From<ndarray_conv::Error<2>> for MlErr {
+    fn from(value: ndarray_conv::Error<2>) -> Self {
         MlErr::Conv2dError(value)
     }
 }

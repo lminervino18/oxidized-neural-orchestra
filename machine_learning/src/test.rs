@@ -425,7 +425,6 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     println!("loss: {loss}");
 }
 
-#[ignore = "próximo pr"]
 #[test]
 fn test_ml_3by3by2_symbols_convergence_with_convolutional3filters() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
