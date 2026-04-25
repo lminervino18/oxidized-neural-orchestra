@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use rayon::prelude::*;
 
 use crate::{MlErr, Result, optimization::Optimizer};
@@ -33,7 +35,7 @@ impl<'mw> ServerParamsMetadata<'mw> {
 /// it's layers forwards and backwards.
 pub struct ParamManager<'mw> {
     servers: Vec<ServerParamsMetadata<'mw>>,
-    server_ordering: &'mw [usize],
+    server_ordering: Cow<'mw, [usize]>,
     cursors: Vec<usize>,
 }
 
@@ -46,11 +48,35 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Returns
     /// A new `ParamManager` instance.
-    pub fn new(servers: Vec<ServerParamsMetadata<'mw>>, server_ordering: &'mw [usize]) -> Self {
+    pub fn for_servers(
+        servers: Vec<ServerParamsMetadata<'mw>>,
+        server_ordering: &'mw [usize],
+    ) -> Self {
         Self {
             cursors: vec![0; server_ordering.len()],
-            server_ordering,
+            server_ordering: Cow::Borrowed(server_ordering),
             servers,
+        }
+    }
+
+    /// Creates a new `ParamManager`.
+    ///
+    /// # Args
+    /// * `params` - The parameters of the worker.
+    /// * `grad` - The gradient buffer of the worker.
+    /// * `residual` - The accumulative gradient buffer of the worker.
+    ///
+    /// # Returns
+    /// A new `ParamManager` instance.
+    pub fn for_worker(
+        params: &'mw mut [f32],
+        grad: &'mw mut [f32],
+        residual: &'mw mut [f32],
+    ) -> Self {
+        Self {
+            cursors: vec![0],
+            server_ordering: Cow::Owned(vec![0]),
+            servers: vec![ServerParamsMetadata::new(params, grad, residual)],
         }
     }
 
@@ -65,7 +91,7 @@ impl<'mw> ParamManager<'mw> {
 
         FrontIter {
             servers: &mut self.servers,
-            server_ordering: self.server_ordering,
+            server_ordering: &self.server_ordering,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -82,7 +108,7 @@ impl<'mw> ParamManager<'mw> {
 
         BackIter {
             servers: &mut self.servers,
-            server_ordering: self.server_ordering,
+            server_ordering: &self.server_ordering,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -133,7 +159,7 @@ impl<'mw> ParamManager<'mw> {
 /// This iterator iterates the layers of a model from the front.
 pub struct FrontIter<'pm, 'mw> {
     servers: &'pm mut [ServerParamsMetadata<'mw>],
-    server_ordering: &'mw [usize],
+    server_ordering: &'pm Cow<'mw, [usize]>,
     cursors: &'pm mut [usize],
     curr: usize,
 }
@@ -177,7 +203,7 @@ impl FrontIter<'_, '_> {
 /// This iterator iterates the layers of a model from the back.
 pub struct BackIter<'pm, 'mw> {
     servers: &'pm mut [ServerParamsMetadata<'mw>],
-    server_ordering: &'mw [usize],
+    server_ordering: &'pm Cow<'mw, [usize]>,
     cursors: &'pm mut [usize],
     curr: usize,
 }
@@ -243,7 +269,7 @@ mod tests {
             .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_servers(servers, &ORDERING);
         let mut front = manager.front();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES) {
@@ -267,7 +293,7 @@ mod tests {
             .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_servers(servers, &ORDERING);
         let mut back = manager.back();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
@@ -294,7 +320,7 @@ mod tests {
             .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_servers(servers, &ORDERING);
         let mut back = manager.back();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
@@ -320,7 +346,7 @@ mod tests {
             .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_servers(servers, &ORDERING);
         let mut front = manager.front();
 
         assert_eq!(front.next(1).unwrap(), &[1.0]);

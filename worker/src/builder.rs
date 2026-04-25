@@ -11,7 +11,7 @@ use tokio::net::{
 };
 
 use crate::{
-    cluster_managers::ServerClusterManager,
+    middlewares::ServerClusterManager,
     workers::{Worker, parameter_server::ParamServerWorker},
 };
 

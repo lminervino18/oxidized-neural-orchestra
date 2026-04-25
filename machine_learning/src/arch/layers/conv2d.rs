@@ -153,7 +153,7 @@ impl Conv2d {
                         x_bc.conv(ud_bf.no_reverse(), ConvMode::Valid, PaddingMode::Zeros)?;
 
                     let mut dw_view = dw.slice_mut(s![f, c, .., ..]);
-                    dw_view += &step;
+                    dw_view.assign(&step);
 
                     // bias
                     let d_bf = dilated.slice(s![b, f, .., ..]);

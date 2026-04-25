@@ -4,7 +4,7 @@ use comms::{OrchEvent, OrchHandle, TransportLayer};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 
-use crate::{cluster_managers::ServerClusterManager, workers::Worker};
+use crate::{middlewares::ServerClusterManager, workers::Worker};
 
 /// The middleman between the parameter server and the model trainer.
 pub struct ParamServerWorker<T>

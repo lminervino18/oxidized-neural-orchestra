@@ -69,7 +69,7 @@ where
             }
         }
 
-        Ok(ParamManager::new(metadatas, &self.server_ordering))
+        Ok(ParamManager::for_servers(metadatas, &self.server_ordering))
     }
 
     /// Pushes the latest gradients to the servers.
