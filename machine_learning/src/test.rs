@@ -3,7 +3,7 @@
 use std::num::NonZeroUsize;
 
 use ndarray::ArrayView2;
-use rand::Rng;
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 use crate::{
     arch::{
@@ -49,7 +49,7 @@ fn test_ml_linear_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(0.1);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -106,7 +106,7 @@ fn test_ml_and2_gate_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -172,7 +172,7 @@ fn test_ml_and3_gate_convergence() {
     let batch_size = NonZeroUsize::new(8).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -234,7 +234,7 @@ fn test_ml_xor2_gate_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -313,7 +313,7 @@ fn test_ml_xor4_gate_convergence() {
     let batch_size = NonZeroUsize::new(16).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -393,7 +393,7 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
-    let rng = rand::rng();
+    let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -418,6 +418,117 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
 
     let x = ArrayView2::from_shape((4, 9), &symbols).unwrap();
     let y = ArrayView2::from_shape((4, 4), &labels).unwrap();
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
+
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
+    println!("loss: {loss}");
+}
+
+#[test]
+fn test_ml_3by3by2_symbols_convergence_with_convolutional3filters() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    // original symbol in the first channel and then inverted
+    let symbols = [
+        0.0, 1.0, 0.0, //
+        1.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        //
+        1.0, 0.0, 1.0, //
+        0.0, 0.0, 0.0, //
+        1.0, 0.0, 1.0, // plus sign
+        //
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, //
+        //
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, // dot
+        //
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, //
+        //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, // cross
+        //
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, //
+        //
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, // box
+    ];
+
+    let labels = [
+        1.0, 0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, 1.0, //
+    ];
+
+    let in_channels = 2;
+    let input_height = 3;
+    let input_width = 3;
+
+    let filters = 3;
+    let kernel_size = 2;
+    let stride = 1;
+    let padding = 0;
+
+    let output_height = 2;
+    let output_width = 2;
+
+    let mut model = Sequential::new(vec![
+        Layer::two_d_to4d(in_channels, input_height, input_width),
+        Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
+        Layer::four_d_to2d(filters, output_height, output_width),
+        Layer::dense((filters * output_height * output_width, 4)),
+        Layer::sigmoid(1.0),
+    ]);
+    let nparams = model.size();
+
+    let x_size = NonZeroUsize::new(input_height * input_width * in_channels).unwrap();
+    let y_size = NonZeroUsize::new(4).unwrap();
+    let dataset = Dataset::new(
+        DatasetSrc::inmem(symbols.into(), labels.into()),
+        x_size,
+        y_size,
+    );
+    let offline_epochs = 0;
+    let max_epochs = NonZeroUsize::new(1000).unwrap();
+    let batch_size = NonZeroUsize::new(4).unwrap();
+    let optimizer = GradientDescent::new(1.0);
+    let mut loss_fn = Mse::new();
+    let rng = StdRng::from_os_rng();
+
+    let mut trainer = BackpropTrainer::new(
+        model.clone(),
+        vec![optimizer],
+        dataset,
+        loss_fn.clone(),
+        offline_epochs,
+        max_epochs,
+        batch_size,
+        rng,
+    );
+
+    let ordering = [0, 0];
+    let mut params_grads = gen_params_grads(&[nparams]);
+    let servers: Vec<_> = params_grads
+        .iter_mut()
+        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .collect();
+
+    let mut param_manager = ParamManager::new(servers, &ordering);
+    while !trainer.train(&mut param_manager).unwrap().was_last {}
+
+    let x = ArrayView2::from_shape((batch_size.get(), x_size.get()), &symbols).unwrap();
+    let y = ArrayView2::from_shape((batch_size.get(), y_size.get()), &labels).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());

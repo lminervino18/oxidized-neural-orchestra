@@ -1,95 +1,91 @@
-use std::{borrow::Cow, io};
+use std::io;
 
-use comms::{
-    OnoReceiver, OnoSender,
-    msg::{Command, Msg},
-};
+use comms::{OrchEvent, OrchHandle, TransportLayer};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
-use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::middlewares::parameter_server::ParameterServerMiddleware;
+use crate::{cluster_managers::ServerClusterManager, workers::Worker};
 
 /// The middleman between the parameter server and the model trainer.
-pub struct ParameterServerWorker {
+pub struct ParamServerWorker<T>
+where
+    T: TransportLayer,
+{
     trainer: Box<dyn Trainer>,
+    cluster_manager: ServerClusterManager<T>,
+    orch_handle: OrchHandle<T>,
 }
 
-impl ParameterServerWorker {
+impl<T> ParamServerWorker<T>
+where
+    T: TransportLayer,
+{
     /// Creates a new `Worker`.
     ///
     /// # Args
     /// * `trainer` - Domain strategy used to compute gradients from weights.
+    /// * `cluster_manager` - The manager for communicating with the server cluster.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
     /// A new `Worker` instance.
-    pub fn new(trainer: Box<dyn Trainer>) -> Self {
-        Self { trainer }
+    pub fn new(
+        trainer: Box<dyn Trainer>,
+        cluster_manager: ServerClusterManager<T>,
+        orch_handle: OrchHandle<T>,
+    ) -> Self {
+        Self {
+            trainer,
+            cluster_manager,
+            orch_handle,
+        }
     }
+}
 
+#[async_trait::async_trait]
+impl<T> Worker for ParamServerWorker<T>
+where
+    T: TransportLayer,
+{
     /// Runs the worker using its configured distributed algorithm while keeping a live
     /// bidirectional channel to the orchestrator.
     ///
-    /// # Args
-    /// * `rx` - The receiving end of the communication between the worker and the orchestrator.
-    /// * `tx` - The sending end of the communication between the worker and the orchestrator.
-    /// * `middleware` - The communication manager between this worker and the parameter servers.
-    ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn run<R, W>(
-        self,
-        mut rx: OnoReceiver<R>,
-        mut tx: OnoSender<W>,
-        mut middleware: ParameterServerMiddleware<R, W>,
-    ) -> io::Result<()>
-    where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
-    {
-        let mut trainer = self.trainer;
+    async fn run(&mut self) -> io::Result<()> {
         let mut should_continue = true;
 
         while should_continue {
             tokio::select! {
                 biased;
-                ret = rx.recv() => {
-                    match ret? {
-                        Msg::Control(Command::StopAfterEpoch) => {
-                            info!("received StopAfterEpoch from orchestrator");
-                            should_continue = false;
-                        }
-                        Msg::Control(Command::Disconnect) => {
-                            info!("received a Command::Disconnect from the orchestrator");
-                            break;
-                        }
-                        other => {
-                            warn!("unexpected message from orchestrator, got: {other:?}");
-                        }
+                event = self.orch_handle.recv_event() => match event? {
+                    OrchEvent::Stop => {
+                        info!("received a stop command from orchestrator");
+                        should_continue = false;
                     }
-                }
-                ret = middleware.pull_params() => {
+                    OrchEvent::Disconnect => {
+                        info!("received a disconnect command from the orchestrator");
+                        break;
+                    }
+                    other => {
+                        warn!("unexpected message from orchestrator, got: {other:?}");
+                    }
+                },
+                response = self.cluster_manager.pull_params() => {
                     debug!("received parameters from all servers, training...");
 
-                    let mut param_manager = ret?;
+                    let mut param_manager = response?;
+                    let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
+                    self.cluster_manager.push_grads().await?;
 
-                    // TODO: Handlear esto mejor, capaz podemos mandarle mensajes a todos los servidores
-                    //       para que reintenten de enviar el ultimo mensaje o algo asi (todavia no se
-                    //       si tiene sentido tampoco que les avisemos, despues de todo ellos mandaron
-                    //       mal el mensaje)
-                    let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
-                    middleware.push_grads().await?;
-
-                    should_continue = should_continue && !was_last;
-                    let msg = Msg::Control(Command::ReportLoss { losses: Cow::Borrowed(losses) });
-                    tx.send(&msg).await?;
+                    self.orch_handle.push_losses(losses).await?;
+                    should_continue = !was_last;
                 }
             }
         }
 
-        middleware.disconnect().await?;
-        let msg = Msg::Control(Command::Disconnect);
-        tx.send(&msg).await?;
+        self.cluster_manager.disconnect().await?;
+        self.orch_handle.disconnect().await?;
         Ok(())
     }
 }

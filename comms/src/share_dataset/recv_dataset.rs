@@ -1,10 +1,10 @@
-use std::io::{Cursor, Error, ErrorKind, Result};
+use std::io::{self, Cursor, Error, ErrorKind};
 
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, BufWriter};
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    OnoReceiver,
-    msg::{Msg, Payload},
+    protocol::{Msg, Payload},
+    transport::TransportLayer,
 };
 
 /// Helper function for wrapping the dataset's source buffer in a writeable bytes cursor.
@@ -23,45 +23,51 @@ pub fn get_dataset_cursor(dataset_raw: &mut [f32]) -> Cursor<&mut [u8]> {
 /// # Args
 /// * `x_storage` - The storage for writing the sample chunks.
 /// * `y_storage` - The storage for writing the label chunks.
-/// * `x_size_bytes` - The total size of the dataset samples in bytes.
-/// * `y_size_bytes` - The total size of the dataset labels in bytes.
-/// * `rx` - An `OnoReceiver` for receiving the chunks.
+/// * `x_size` - The total size of the dataset samples in bytes.
+/// * `y_size` - The total size of the dataset labels in bytes.
+/// * `transport` - The transport layer of the communication.
 ///
 /// # Errors
 /// Returns an `io::Error` if the connection or writting to the storage fail.
-pub async fn recv_dataset<W, R>(
+pub async fn recv_dataset<W, T>(
     x_storage: &mut W,
     y_storage: &mut W,
-    x_size_bytes: usize,
-    y_size_bytes: usize,
-    rx: &mut OnoReceiver<R>,
-) -> Result<()>
+    x_size: usize,
+    y_size: usize,
+    transport: &mut T,
+) -> io::Result<()>
 where
     W: AsyncWrite + Unpin,
-    R: AsyncRead + Unpin,
+    T: TransportLayer,
 {
-    // TODO: ver si conviene configurar la capacity de writer
-    let mut x_writer = BufWriter::new(x_storage);
-    let mut y_writer = BufWriter::new(y_storage);
-
-    recv_chunks_into(&mut x_writer, rx, x_size_bytes).await?;
-    recv_chunks_into(&mut y_writer, rx, y_size_bytes).await?;
-
+    recv_chunks_into(x_storage, x_size, transport).await?;
+    recv_chunks_into(y_storage, y_size, transport).await?;
     Ok(())
 }
 
-async fn recv_chunks_into<W, R>(
-    writer: &mut BufWriter<&mut W>,
-    rx: &mut OnoReceiver<R>,
+/// Receives a dataset chunk through the transport layer and writes it's data into
+/// the given writer.
+///
+/// # Args
+/// * `writer` - The sink for the dataset bytes.
+/// * `size` - The amount of bytes to read.
+/// * `transport` - The transport layer of the communication.
+///
+/// # Returns
+/// An io error if occurred.
+async fn recv_chunks_into<W, T>(
+    writer: &mut W,
     size_bytes: usize,
-) -> Result<()>
+    transport: &mut T,
+) -> io::Result<()>
 where
     W: AsyncWrite + Unpin,
-    R: AsyncRead + Unpin,
+    T: TransportLayer,
 {
     let mut received = 0;
+
     while received < size_bytes {
-        let msg: Msg = rx.recv().await?;
+        let msg: Msg = transport.recv().await?;
 
         let Msg::Data(Payload::Datachunk(chunk)) = msg else {
             return Err(Error::new(
@@ -71,12 +77,9 @@ where
         };
 
         let bytes = bytemuck::cast_slice(chunk);
-
-        received += bytes.len();
         writer.write_all(bytes).await?;
+        received += bytes.len();
     }
 
-    writer.flush().await?;
-
-    Ok(())
+    writer.flush().await
 }

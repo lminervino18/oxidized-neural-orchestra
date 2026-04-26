@@ -21,7 +21,7 @@ pub struct Conv2d {
     // Forward metadata
     input: Array4<f32>,
     output: Array4<f32>,
-    conv_mode: ConvMode<4>,
+    conv_mode: ConvMode<3>,
 
     // Backward metadata
     delta: Array4<f32>,
@@ -42,8 +42,8 @@ impl Conv2d {
 
         let zeros4 = Array4::zeros((1, 1, 1, 1));
         let conv_mode = ConvMode::Custom {
-            padding: [0, 0, padding, padding],
-            strides: [1, 1, stride, stride],
+            padding: [0, padding, padding],
+            strides: [1, stride, stride],
         };
 
         Self {
@@ -68,25 +68,43 @@ impl Conv2d {
     }
 
     pub fn forward(&mut self, params: &[f32], x: ArrayView4<f32>) -> Result<ArrayView4<'_, f32>> {
-        self.input.reshape_inplace(x.raw_dim());
-        self.input.assign(&x);
-
         let (k, b) = self.view_params(params)?;
 
-        // estos errores no los vamos a estar manejando, quisiera que fuera más ergonómico
-        // sacarlos, armar uno de los que teníamos acá es medio paja para hacerlo en cada forward,
-        // si vamos a estar esperando errores frecuentes bueno este to_string evidentemente está
-        // mal, me gustaría ver qué podemos hacer para que quede cool
-        let mut output = x
-            .conv(k.no_reverse(), self.conv_mode, PaddingMode::Zeros)
-            .map_err(|e| MlErr::MatrixError {
-                error: e.to_string(),
-            })?;
-        output += &b.into_dyn();
+        let Self {
+            filters,
+            kernel_size,
+            stride,
+            padding,
+            ref mut input,
+            ref mut output,
+            conv_mode,
+            ..
+        } = *self;
 
-        self.output = output;
+        input.reshape_inplace(x.raw_dim());
+        input.assign(&x);
 
-        Ok(self.output.view())
+        let (batch_size, _, input_height, input_width) = x.dim();
+
+        let output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
+        let output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
+        output.reshape_inplace((batch_size, filters, output_height, output_width));
+
+        for b in 0..batch_size {
+            let input_b = x.index_axis(Axis(0), b);
+
+            for f in 0..filters {
+                let kernel_f = k.index_axis(Axis(0), f);
+                let res_3d = input_b.conv(kernel_f.no_reverse(), conv_mode, PaddingMode::Zeros)?;
+                let res_2d = res_3d.index_axis(Axis(0), 0);
+
+                output.slice_mut(s![b, f, .., ..]).assign(&res_2d);
+            }
+        }
+
+        *output += &b;
+
+        Ok(output.view())
     }
 
     pub fn backward(
@@ -96,13 +114,13 @@ impl Conv2d {
         d: ArrayViewMut4<f32>,
     ) -> Result<ArrayViewMut4<'_, f32>> {
         let (mut dw, mut db) = self.view_grad(grad)?;
-        let (w, _) = self.view_params(params)?;
+        let (k, _) = self.view_params(params)?;
 
         self.dilate_and_pad(d.view());
 
         let Self {
-            padding,
             kernel_size,
+            padding,
             ref input,
             ref mut delta,
             ref mut dilated,
@@ -110,32 +128,46 @@ impl Conv2d {
         } = *self;
 
         let outward_padding = kernel_size - padding - 1;
-        let dilated_witdh = dilated.dim().2;
-        let dilated_height = dilated.dim().3;
+        let (_, _, dilated_width, dilated_height) = dilated.dim();
 
         let unpadded_dilated = dilated.slice(s![
             ..,
             ..,
-            outward_padding..dilated_witdh - outward_padding,
+            outward_padding..dilated_width - outward_padding,
             outward_padding..dilated_height - outward_padding
         ]);
 
-        let dw_conv = input
-            .conv(
-                unpadded_dilated.no_reverse(),
-                ConvMode::Valid,
-                PaddingMode::Zeros,
-            )
-            .unwrap();
+        let (batch_size, in_channels, _, _) = input.dim();
+        let (filters, _, _, _) = k.dim();
 
-        dw.assign(&dw_conv);
+        delta.reshape_inplace(input.dim());
 
-        let delta_new = dilated
-            .conv(&w, ConvMode::Valid, PaddingMode::Zeros)
-            .unwrap();
+        for b in 0..batch_size {
+            for f in 0..filters {
+                for c in 0..in_channels {
+                    // kernel
+                    let x_bc = input.slice(s![b, c, .., ..]);
+                    let ud_bf = unpadded_dilated.slice(s![b, f, .., ..]);
 
-        delta.reshape_inplace(delta_new.dim());
-        delta.assign(&delta_new);
+                    let step =
+                        x_bc.conv(ud_bf.no_reverse(), ConvMode::Valid, PaddingMode::Zeros)?;
+
+                    let mut dw_view = dw.slice_mut(s![f, c, .., ..]);
+                    dw_view += &step;
+
+                    // bias
+                    let d_bf = dilated.slice(s![b, f, .., ..]);
+                    let w_fc = k.slice(s![f, c, .., ..]);
+
+                    let step = d_bf
+                        .conv(&w_fc, ConvMode::Valid, PaddingMode::Zeros)
+                        .unwrap();
+
+                    let mut delta_view = delta.slice_mut(s![b, c, .., ..]);
+                    delta_view += &step;
+                }
+            }
+        }
 
         let db_sum = d.sum_axis(Axis(0)).sum_axis(Axis(1)).sum_axis(Axis(1));
         db.assign(&db_sum);
@@ -194,7 +226,7 @@ impl Conv2d {
     fn view_params<'a>(
         &self,
         params: &'a [f32],
-    ) -> Result<(ArrayView4<'a, f32>, ArrayView1<'a, f32>)> {
+    ) -> Result<(ArrayView4<'a, f32>, ArrayView4<'a, f32>)> {
         let Self {
             filters,
             kernels_size,
@@ -214,7 +246,7 @@ impl Conv2d {
         // SAFETY: The if condition above checks that the size of the
         //         parameters is exactly the size of the layer.
         let weights = ArrayView4::from_shape(kernels_dim, &params[..kernels_size]).unwrap();
-        let biases = ArrayView1::from_shape(filters, &params[kernels_size..]).unwrap();
+        let biases = ArrayView4::from_shape((1, filters, 1, 1), &params[kernels_size..]).unwrap();
 
         Ok((weights, biases))
     }

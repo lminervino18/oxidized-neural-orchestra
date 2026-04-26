@@ -71,13 +71,13 @@ fn main() -> io::Result<()> {
         layers: vec![
             LayerConfig::Conv {
                 input_dim: (
-                    NonZeroUsize::new(1).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
                     NonZeroUsize::new(3).unwrap(),
                     NonZeroUsize::new(3).unwrap(),
                 ),
                 kernel_dim: (
-                    NonZeroUsize::new(1).unwrap(),
-                    NonZeroUsize::new(1).unwrap(),
+                    NonZeroUsize::new(5).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
                     NonZeroUsize::new(2).unwrap(),
                 ),
                 stride: NonZeroUsize::new(1).unwrap(),
@@ -108,25 +108,44 @@ fn main() -> io::Result<()> {
                 samples: vec![
                     0.0, 1.0, 0.0, //
                     1.0, 1.0, 1.0, //
-                    0.0, 1.0, 0.0, // plus sign
+                    0.0, 1.0, 0.0, //
+                    //
+                    1.0, 0.0, 1.0, //
+                    0.0, 0.0, 0.0, //
+                    1.0, 0.0, 1.0, // plus sign
+                    //
                     0.0, 0.0, 0.0, //
                     0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, // dot
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, // cross
+                    0.0, 0.0, 0.0, //
+                    //
                     1.0, 1.0, 1.0, //
                     1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, // box
+                    1.0, 1.0, 1.0, // dot
+                    //
+                    1.0, 0.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    1.0, 0.0, 1.0, //
+                    //
+                    0.0, 1.0, 0.0, //
+                    1.0, 0.0, 1.0, //
+                    0.0, 1.0, 0.0, // cross
+                    //
+                    1.0, 1.0, 1.0, //
+                    1.0, 0.0, 1.0, //
+                    1.0, 1.0, 1.0, //
+                    //
+                    0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, //
+                    0.0, 0.0, 0.0, // box
                 ],
                 labels: vec![
-                    1.0, 0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, 0.0, //
-                    0.0, 0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, 1.0, //
+                    1.0, 0.0, 0.0, 0.0, // plus sign
+                    0.0, 1.0, 0.0, 0.0, // dot
+                    0.0, 0.0, 1.0, 0.0, // cross
+                    0.0, 0.0, 0.0, 1.0, // box
                 ],
             },
-            x_size: NonZeroUsize::new(9).unwrap(),
+            x_size: NonZeroUsize::new(18).unwrap(),
             y_size: NonZeroUsize::new(4).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },

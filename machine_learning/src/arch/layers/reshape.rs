@@ -55,11 +55,11 @@ impl Reshape {
     pub fn forward<'a>(&self, input: ArrayViewD<'a, f32>) -> Result<ArrayViewD<'a, f32>> {
         match self {
             Self::TwoDTo4D(reshape) => {
-                let arr = input.into_dimensionality().unwrap();
+                let arr = input.into_dimensionality()?;
                 Ok(reshape.forward(arr)?.into_dyn())
             }
             Self::FourDTo2D(reshape) => {
-                let arr = input.into_dimensionality().unwrap();
+                let arr = input.into_dimensionality()?;
                 Ok(reshape.forward(arr)?.into_dyn())
             }
         }
@@ -75,11 +75,11 @@ impl Reshape {
     pub fn backward<'a>(&self, delta: ArrayViewMutD<'a, f32>) -> Result<ArrayViewMutD<'a, f32>> {
         match self {
             Self::TwoDTo4D(reshape) => {
-                let arr = delta.into_dimensionality().unwrap();
+                let arr = delta.into_dimensionality()?;
                 Ok(reshape.backward(arr)?.into_dyn())
             }
             Self::FourDTo2D(reshape) => {
-                let arr = delta.into_dimensionality().unwrap();
+                let arr = delta.into_dimensionality()?;
                 Ok(reshape.backward(arr)?.into_dyn())
             }
         }
@@ -164,8 +164,9 @@ where {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ndarray::array;
+
+    use super::*;
 
     #[test]
     fn test_reshape_two_d_to4d_forward() {
