@@ -2,7 +2,7 @@ use std::fs;
 
 use super::{AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
 use crate::{
-    configs::{LayerConfig, training::DatasetSrc},
+    configs::training::DatasetSrc,
     error::{OrchErr, Result},
 };
 

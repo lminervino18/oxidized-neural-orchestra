@@ -104,6 +104,10 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn push_losses(&mut self, losses: &[f32]) -> io::Result<()> {
+        if losses.iter().any(|l| !l.is_finite()) {
+            return Err(io::Error::other("loss diverged: NaN or Inf detected"));
+        }
+
         let msg = Msg::Control(Command::ReportLoss {
             losses: Cow::Borrowed(losses),
         });
