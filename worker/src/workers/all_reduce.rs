@@ -2,10 +2,7 @@ use std::io;
 
 use comms::{OrchEvent, OrchHandle, TransportLayer};
 use log::{debug, info, warn};
-use machine_learning::{
-    param_manager::ParamManager,
-    training::{TrainResult, Trainer},
-};
+use machine_learning::training::{TrainResult, Trainer};
 
 use crate::{middlewares::WorkerRingManager, workers::Worker};
 
@@ -17,9 +14,6 @@ where
     trainer: Box<dyn Trainer>,
     ring_manager: WorkerRingManager<T>,
     orch_handle: OrchHandle<T>,
-    params: Vec<f32>,
-    grad: Vec<f32>,
-    residual: Vec<f32>,
 }
 
 impl<T> AllReduceWorker<T>
@@ -39,15 +33,11 @@ where
         trainer: Box<dyn Trainer>,
         ring_manager: WorkerRingManager<T>,
         orch_handle: OrchHandle<T>,
-        size: usize,
     ) -> Self {
         Self {
             trainer,
             ring_manager,
             orch_handle,
-            params: vec![0.0; size],
-            grad: vec![0.0; size],
-            residual: vec![0.0; size],
         }
     }
 }
@@ -61,12 +51,8 @@ where
         let mut should_continue = true;
 
         while should_continue {
-            let mut param_manager =
-                ParamManager::for_worker(&mut self.params, &mut self.grad, &mut self.residual);
-
+            let mut param_manager = self.ring_manager.build_param_manager();
             let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
-            self.ring_manager.scatter().await?;
-
             self.orch_handle.push_losses(losses).await?;
             should_continue = !was_last;
 
@@ -85,13 +71,10 @@ where
                         warn!("unexpected message from orchestrator, got: {other:?}");
                     }
                 },
-                response = self.ring_manager.gather() => {
+                response = self.ring_manager.pull_grads() => {
                     debug!("received gradients from all workers, training...");
 
-                    let grad = response?;
-                    self.grad.copy_from_slice(grad);
-                    param_manager =
-                        ParamManager::for_worker(&mut self.params, &mut self.grad, &mut self.residual);
+                    let mut param_manager = response?;
 
                     // SAFETY: The parameter and gradient buffer have the same size.
                     self.trainer.optimize(&mut param_manager).unwrap();

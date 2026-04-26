@@ -11,8 +11,8 @@ use tokio::net::{
 };
 
 use crate::{
-    middlewares::ServerClusterManager,
-    workers::{Worker, parameter_server::ParamServerWorker},
+    middlewares::{ServerClusterManager, WorkerRingManager},
+    workers::{AllReduceWorker, Worker, parameter_server::ParamServerWorker},
 };
 
 #[derive(Default)]
@@ -76,10 +76,33 @@ impl WorkerBuilder {
 
                 let trainer = trainer_builder.build(spec.trainer, &server_sizes, dataset);
                 let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
-                Ok(Box::new(worker))
+                Ok(Box::new(worker) as Box<dyn Worker>)
             }
-            AlgorithmSpec::AllReduce { .. } => {
-                unimplemented!("All Reduce is not yet implemented")
+            AlgorithmSpec::AllReduce { worker_addrs } => {
+                let connect_to_worker = async |id| {
+                    let addr = &worker_addrs[id];
+                    let stream = TcpStream::connect(addr).await?;
+                    let (rx, tx) = stream.into_split();
+                    let mut worker_handle = connector.connect_worker(id, rx, tx).await?;
+
+                    if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
+                        worker_handle.enable_sparse_capability(r, seed);
+                    }
+
+                    Ok::<_, io::Error>(worker_handle)
+                };
+
+                let n = worker_addrs.len();
+                let id = spec.worker_id;
+
+                let prev = connect_to_worker((id + n - 1) % n).await?;
+                let next = connect_to_worker((id + 1) % n).await?;
+
+                let model_size = 1; // TODO: Somehow get the model size.
+                let ring_manager = WorkerRingManager::new(id, worker_addrs, prev, next, model_size);
+                let trainer = trainer_builder.build(spec.trainer, &[model_size], dataset);
+                let worker = AllReduceWorker::new(trainer, ring_manager, orch_handle);
+                Ok(Box::new(worker) as Box<dyn Worker>)
             }
         }
     }

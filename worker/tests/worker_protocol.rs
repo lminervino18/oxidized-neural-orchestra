@@ -13,7 +13,7 @@ use comms::{
     OrchEvent, OrchHandle, ParamServerHandle, PullParamsResponse, Stp, WorkerEvent, WorkerHandle,
 };
 use worker::{
-    cluster_managers::ServerClusterManager,
+    middlewares::ServerClusterManager,
     workers::{ParamServerWorker, Worker},
 };
 
