@@ -57,3 +57,6 @@ data/*
 
 # Generated PR description
 pr.md
+
+# Local analysis docs (not for the repo)
+notebooks/mnist/conclusion.md
