@@ -1,8 +1,11 @@
 use std::io;
 
+use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::AsyncRead;
 
+use super::{Compressor, compressor::CompressedGrad};
 use crate::{
+    Float01,
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
     specs::worker::WorkerSpec,
@@ -14,6 +17,7 @@ pub struct WorkerHandle<T> {
     id: usize,
     transport: T,
     grad: Vec<f32>,
+    compressor: Compressor<StdRng>,
 }
 
 /// A notified worker event.
@@ -39,7 +43,25 @@ impl<T: TransportLayer> WorkerHandle<T> {
             id,
             transport,
             grad: Vec::new(),
+            compressor: Compressor::new(),
         }
+    }
+
+    /// Enables the sparse gradient capability for this handle.
+    ///
+    /// # Args
+    /// * `r` - The ratio of compression for calculating the threshold value.
+    /// * `seed` - The seed for the random number generator.
+    pub fn enable_sparse_capability<S>(&mut self, r: Float01, seed: S)
+    where
+        S: Into<Option<u64>>,
+    {
+        let rng = match seed.into() {
+            Some(seed) => StdRng::seed_from_u64(seed),
+            None => StdRng::from_os_rng(),
+        };
+
+        self.compressor.enable_sparse_compression(r, rng);
     }
 
     /// Sends the create spec for the worker.
@@ -62,7 +84,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
         self.grad.fill(0.0);
 
         let response = match self.transport.recv().await? {
-            Msg::Data(Payload::Grad(grad)) => {
+            Msg::Data(Payload::DenseGrad(grad)) => {
                 if let Some(additional) = grad.len().checked_sub(self.grad.capacity()) {
                     self.grad.reserve(additional);
                 }
@@ -91,6 +113,27 @@ impl<T: TransportLayer> WorkerHandle<T> {
         };
 
         Ok(response)
+    }
+
+    /// Pushes the gradient to the worker.
+    ///
+    /// # Args
+    /// * `residual` - The gradient to send.
+    ///
+    /// # Returns
+    /// Either `Some(threshold)` if sparse gradient was used or `None` if dense gradient was used.
+    /// Or an io error if occurred.
+    pub async fn push_grad(&mut self, residual: &[f32]) -> io::Result<Option<f32>> {
+        let (payload, threshold) = match self.compressor.compress(residual) {
+            CompressedGrad::Dense { grad } => (Payload::DenseGrad(grad), None),
+            CompressedGrad::Sparse { sparse, threshold } => {
+                (Payload::SparseGrad(sparse), Some(threshold))
+            }
+        };
+
+        let msg = Msg::Data(payload);
+        self.transport.send(&msg).await?;
+        Ok(threshold)
     }
 
     /// Pushes the latest state of the parameters to the worker.

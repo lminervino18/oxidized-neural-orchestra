@@ -1,11 +1,11 @@
 use std::io;
 
-use half::f16;
 use rand::{SeedableRng, rngs::StdRng};
 
+use super::{CompressedGrad, Compressor};
 use crate::{
     protocol::{Command, Msg, Payload},
-    sparse::{self, Float01},
+    sparse::Float01,
     specs::server::ServerSpec,
     transport::TransportLayer,
 };
@@ -14,21 +14,12 @@ use crate::{
 pub struct ParamServerHandle<T> {
     id: usize,
     transport: T,
-    last_threshold: Option<f32>,
-    sparse_capability: Option<SparseMetadata>,
-    compression_buf: Vec<f16>,
+    compressor: Compressor<StdRng>,
 }
 
 /// The response to the parameter pull.
 pub enum PullParamsResponse<'a> {
     Params(&'a mut [f32]),
-}
-
-/// The necessary metadata to enable the sparse gradient capability.
-struct SparseMetadata {
-    r: Float01,
-    rng: StdRng,
-    ser_buf: Vec<u8>,
 }
 
 impl<T> ParamServerHandle<T>
@@ -47,9 +38,7 @@ where
         Self {
             id,
             transport,
-            last_threshold: None,
-            sparse_capability: None,
-            compression_buf: Vec::new(),
+            compressor: Compressor::new(),
         }
     }
 
@@ -67,13 +56,7 @@ where
             None => StdRng::from_os_rng(),
         };
 
-        let sparse_metadata = SparseMetadata {
-            r,
-            rng,
-            ser_buf: Vec::new(),
-        };
-
-        self.sparse_capability = Some(sparse_metadata);
+        self.compressor.enable_sparse_compression(r, rng);
     }
 
     /// Sends the create spec for the server.
@@ -114,27 +97,10 @@ where
     /// Either `Some(threshold)` if sparse gradient was used or `None` if dense gradient was used.
     /// Or an io error if occurred.
     pub async fn push_grad(&mut self, residual: &[f32]) -> io::Result<Option<f32>> {
-        let (payload, threshold) = match self.sparse_capability.as_mut() {
-            Some(cap) => {
-                cap.ser_buf.clear();
-
-                let threshold = sparse::calculate_threshold(residual, cap.r, &mut cap.rng);
-                sparse::grad_drop_into(&mut cap.ser_buf, residual, threshold);
-
-                if cap.ser_buf.len() <= residual.len() * size_of::<f16>() {
-                    self.last_threshold = Some(threshold);
-                    let payload = Payload::SparseGrad(&cap.ser_buf);
-                    (payload, Some(threshold))
-                } else {
-                    Self::compress_dense_grad(&mut self.compression_buf, residual);
-                    let payload = Payload::Grad(&self.compression_buf);
-                    (payload, None)
-                }
-            }
-            None => {
-                Self::compress_dense_grad(&mut self.compression_buf, residual);
-                let payload = Payload::Grad(&self.compression_buf);
-                (payload, None)
+        let (payload, threshold) = match self.compressor.compress(residual) {
+            CompressedGrad::Dense { grad } => (Payload::DenseGrad(grad), None),
+            CompressedGrad::Sparse { sparse, threshold } => {
+                (Payload::SparseGrad(sparse), Some(threshold))
             }
         };
 
@@ -150,24 +116,5 @@ where
     pub async fn disconnect(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Disconnect);
         self.transport.send(&msg).await
-    }
-
-    /// Compresses the given gradient buffer into the inner `compression_buf`.
-    ///
-    /// # Args
-    /// * `compression_buf`: The buffer where to write the compressed residual gradient.
-    /// * `residual` - The gradient to compress.
-    fn compress_dense_grad(compression_buf: &mut Vec<f16>, residual: &[f32]) {
-        if let Some(additional) = residual.len().checked_sub(compression_buf.capacity()) {
-            compression_buf.reserve(additional);
-        }
-
-        // SAFETY: The new uninitialized bytes will be overwritten right
-        //         after with the compressed 16 bit gradient values.
-        unsafe { compression_buf.set_len(residual.len()) };
-
-        for (g, r) in compression_buf.iter_mut().zip(residual) {
-            *g = f16::from_f32(*r);
-        }
     }
 }
