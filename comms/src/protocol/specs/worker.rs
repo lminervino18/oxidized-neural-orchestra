@@ -11,7 +11,6 @@ pub enum AlgorithmSpec {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-        #[serde(default)]
         server_session_ids: Vec<u64>,
     },
     AllReduce {
