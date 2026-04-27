@@ -88,6 +88,34 @@ where
         self.transport.send(&msg).await
     }
 
+    /// Waits for the server node to confirm its session ID after `create`.
+    ///
+    /// # Returns
+    /// The session ID assigned by the node, or an io error if occurred.
+    pub async fn pull_session_id(&mut self) -> io::Result<u64> {
+        let msg = self.transport.recv().await?;
+        let Msg::Control(Command::SessionReady { session_id }) = msg else {
+            let text = format!("Expected SessionReady from server {}, got: {msg:?}", self.id);
+            return Err(io::Error::other(text));
+        };
+        Ok(session_id)
+    }
+
+    /// Joins an existing server session identified by `session_id`.
+    ///
+    /// Must be called immediately after the transport connection is established,
+    /// before any training messages are exchanged.
+    ///
+    /// # Args
+    /// * `session_id` - The session to join.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn join_session(&mut self, session_id: u64) -> io::Result<()> {
+        let msg = Msg::Control(Command::JoinSession { session_id });
+        self.transport.send(&msg).await
+    }
+
     /// Pulls the latest parameters from the server.
     ///
     /// # Returns

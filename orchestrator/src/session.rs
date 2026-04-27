@@ -277,8 +277,24 @@ impl Session {
 
         let runtime = Builder::new_multi_thread().enable_all().build()?;
 
-        let server_chans = runtime.block_on(Self::create_servers(servers, &connector))?;
+        let server_results = runtime.block_on(Self::create_servers(servers, &connector))?;
         debug!("successfully created all servers");
+
+        let (server_chans, session_ids): (Vec<_>, Vec<_>) = server_results.into_iter().unzip();
+
+        let workers = workers
+            .into_iter()
+            .map(|(addr, mut spec)| {
+                if let AlgorithmSpec::ParameterServer {
+                    ref mut server_session_ids,
+                    ..
+                } = spec.algorithm
+                {
+                    *server_session_ids = session_ids.clone();
+                }
+                (addr, spec)
+            })
+            .collect::<Vec<_>>();
 
         let worker_chans =
             runtime.block_on(Self::create_workers(workers, partitions, &connector))?;
@@ -511,7 +527,7 @@ impl Session {
     async fn create_servers<F>(
         servers: Vec<(String, ServerSpec)>,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
-    ) -> Result<Vec<ParamServerHandle<NetRtp>>>
+    ) -> Result<Vec<(ParamServerHandle<NetRtp>, u64)>>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
@@ -530,7 +546,8 @@ impl Session {
                 .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
             server_handle.create(spec).await?;
-            handles.push(server_handle);
+            let session_id = server_handle.pull_session_id().await?;
+            handles.push((server_handle, session_id));
         }
 
         Ok(handles)

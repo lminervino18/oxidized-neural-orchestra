@@ -84,6 +84,18 @@ where
         share_dataset::recv_dataset(xs, ys, xs_size, ys_size, &mut self.transport).await
     }
 
+    /// Notifies the orchestrator that this server session is ready and provides its session ID.
+    ///
+    /// # Args
+    /// * `session_id` - The session identifier assigned to this server session.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn push_session_ready(&mut self, session_id: u64) -> io::Result<()> {
+        let msg = Msg::Control(Command::SessionReady { session_id });
+        self.transport.send(&msg).await
+    }
+
     /// Pushes the latest parameters to the orchestrator.
     ///
     /// # Args

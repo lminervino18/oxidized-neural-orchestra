@@ -32,6 +32,8 @@ pub enum Command<'a> {
     Connect(Entity),
     CreateServer(ServerSpec),
     CreateWorker(WorkerSpec),
+    SessionReady { session_id: u64 },
+    JoinSession { session_id: u64 },
     ReportLoss { losses: Cow<'a, [f32]> },
     RequestParams,
     StopAfterEpoch,
