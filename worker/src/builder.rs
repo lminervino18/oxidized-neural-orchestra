@@ -18,6 +18,7 @@ use crate::{
     workers::{AllReduceWorker, Worker, parameter_server::ParamServerWorker},
 };
 
+/// The worker builder, given a spec, will build a new worker ready to use.
 pub struct WorkerBuilder<R, W, T, F, G>
 where
     R: AsyncRead + Unpin + Send,
