@@ -2,13 +2,22 @@ use half::f16;
 use rand::{Rng, seq::IndexedRandom};
 use serde::{Deserialize, Deserializer, Serialize, de};
 
+/// The type for the total length of the decompressed gradient buffer.
+type TotalLen = u64;
+/// The size in bytes of the used type for the total length.
+const TOTAL_LEN_SIZE: usize = size_of::<TotalLen>();
+
+/// The type for the index starting a gradient chunk.
 type Idx = u64;
-type ChunkLen = u32;
-
+/// The size in bytes of the used type for the index.
 const IDX_SIZE: usize = size_of::<Idx>();
-const CHUNK_LEN_SIZE: usize = size_of::<ChunkLen>();
-const SAMPLE_SIZE_MAX: usize = 1 << 14;
 
+/// The type for the length of a chunk.
+type ChunkLen = u32;
+/// The size in bytes of the length of a chunk.
+const CHUNK_LEN_SIZE: usize = size_of::<ChunkLen>();
+
+const SAMPLE_SIZE_MAX: usize = 1 << 14;
 const MIN_POSITIVE_F16: f32 = f16::MIN_POSITIVE.to_f32_const();
 
 /// A float with a value between `0.0` and `1.0`.
@@ -86,9 +95,9 @@ pub fn calculate_threshold<R: Rng>(residual: &[f32], r: Float01, rng: &mut R) ->
 /// * `residual` - The residual gradient to serialize.
 /// * `threshold` - The minimum value the gradient's values have to reach to be sent.
 pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &[f32], threshold: f32) {
-    buf.reserve(residual.len() / 10);
-
+    buf.extend_from_slice(&(residual.len() as TotalLen).to_le_bytes());
     let mut i = 0;
+
     while i < residual.len() {
         if residual[i].abs() >= threshold {
             let start = i;
@@ -119,7 +128,15 @@ pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &[f32], threshold: f32) {
 ///
 /// # Returns
 /// An error if there are missing or invalid values in the input buffer.
-pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> {
+pub fn grad_lift_into(grad: &mut Vec<f32>, buf: &[u8]) -> Result<(), &'static str> {
+    let Some((total_len_bytes, buf)) = buf.split_at_checked(TOTAL_LEN_SIZE) else {
+        return Err("The given sparse buffer is smaller than TOTAL_LEN_SIZE");
+    };
+
+    // SAFETY: The slice has exactly `TOTAL_LEN_SIZE` bytes in size.
+    let total_len = TotalLen::from_le_bytes(total_len_bytes.try_into().unwrap()) as usize;
+    grad.fill(0.0);
+    grad.resize(total_len, 0.0);
     let mut i = 0;
 
     while i < buf.len() {
@@ -158,18 +175,6 @@ pub fn grad_lift_into(grad: &mut [f32], buf: &[u8]) -> Result<(), &'static str> 
     Ok(())
 }
 
-// let expected = vec![
-//     9, 0, 0, 0, 0, 0, 0, 0, // Idx
-//     7, 0, 0, 0, // ChunkLen
-//     128, 72,
-//     0, 73,
-//     128, 73,
-//     0, 74,
-//     128, 74,
-//     0, 75,
-//     128, 75
-// ];
-
 #[test]
 fn test_grad_drop() {
     let grad = vec![1.0, -1.0, 0.0, 2.0];
@@ -179,6 +184,7 @@ fn test_grad_drop() {
     grad_drop_into(&mut buf, &grad, threshold);
 
     let expected = vec![
+        4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
         0, 0, 0, 0, 0, 0, 0, 0, // Idx
         2, 0, 0, 0, // ChunkLen
         0, 60, // 1.0
@@ -194,6 +200,7 @@ fn test_grad_drop() {
 #[test]
 fn test_grad_lift() {
     let buf = vec![
+        4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
         0, 0, 0, 0, 0, 0, 0, 0, // Idx
         2, 0, 0, 0, // ChunkLen
         0, 60, // 1.0
@@ -227,36 +234,17 @@ fn test_drop_and_lift_consistency() {
 }
 
 #[test]
-fn test_drop_and_lift_consistency_with_appended_buffers() {
-    let residual = vec![1.0, -1.0, 0.0, 2.0];
-    let expected = residual.clone();
-
-    let mut buf = Vec::new();
-    let threshold = 1.0;
-
-    grad_drop_into(&mut buf, &residual, threshold);
-    grad_drop_into(&mut buf, &residual, threshold);
-
-    let expected_buf = vec![
-        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+fn test_passed_smaller_gradient_for_lift() {
+    let buf = vec![
+        3, 0, 0, 0, 0, 0, 0, 0, // TotalLen
+        1, 0, 0, 0, 0, 0, 0, 0, // Idx
         2, 0, 0, 0, // ChunkLen
         0, 60, // 1.0
         0, 188, // -1.0
-        3, 0, 0, 0, 0, 0, 0, 0, // Idx
-        1, 0, 0, 0, // ChunkLen
-        0, 64, // 2.0
-        0, 0, 0, 0, 0, 0, 0, 0, // Idx
-        2, 0, 0, 0, // ChunkLen
-        0, 60, // 1.0
-        0, 188, // -1.0
-        3, 0, 0, 0, 0, 0, 0, 0, // Idx
-        1, 0, 0, 0, // ChunkLen
-        0, 64, // 2.0
     ];
 
-    assert_eq!(buf, expected_buf);
-
-    let mut grad = vec![0.0; residual.len()];
+    let expected = vec![0.0, 1.0, -1.0];
+    let mut grad = Vec::new();
     grad_lift_into(&mut grad, &buf).unwrap();
 
     assert_eq!(grad, expected);
