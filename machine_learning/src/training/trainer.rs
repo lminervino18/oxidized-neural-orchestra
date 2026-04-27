@@ -9,7 +9,7 @@ pub struct TrainResult<'trainer> {
 }
 
 /// This trait generalizes all the different concrete `ModelTrainer` variations between optimizers, loss functions, ...
-pub trait Trainer {
+pub trait Trainer: Send {
     /// Performs a single training 'cycle'.
     ///
     /// This cycle could involve one or more epochs.

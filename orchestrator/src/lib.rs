@@ -1,17 +1,17 @@
 pub mod configs;
-use std::path::PathBuf;
 pub mod dataset_format;
 mod error;
 mod session;
 
-use std::fs;
+use std::{fs, path::PathBuf, time::Duration};
 
-use configs::Adapter;
+use comms::{Connector, protocol::Entity};
+
+use configs::{Adapter, DatasetSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
-pub use session::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
 
-use crate::configs::{DatasetSrc, ModelConfig, TrainingConfig, Validator};
+pub use session::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
 
 /// Starts the distributed training process and returns an active session.
 ///
@@ -42,10 +42,26 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     let early_stopping = training.early_stopping.clone();
     let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
+    // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
+    //       configurar esto, si tenemos tiempo y vemos que viene bien lo
+    //       podemos mover y que sea parte de un `CommsConfig`.
+    let transport_factory = |rx, tx| {
+        comms::build_reliable_transport(
+            rx,
+            tx,
+            Duration::from_secs(5),
+            Duration::from_secs(2),
+            2,
+            4,
+        )
+    };
+
+    let connector = Connector::new(transport_factory, Entity::Orchestrator);
     let session = Session::new(
         workers,
         partitions,
         servers,
+        connector,
         model,
         input_size,
         early_stopping,

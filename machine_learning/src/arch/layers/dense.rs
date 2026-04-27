@@ -64,6 +64,36 @@ impl Dense {
         Ok(self.delta.view_mut())
     }
 
+    /// Gives a view of the raw parameter slice as the weights and biases of this layer.
+    ///
+    /// # Args
+    /// * `params` - A slice of parameters.
+    ///
+    /// # Returns
+    /// A tuple containing the weights and biases or an error if there's a mismatch
+    /// between the size of the gradient and the size of the layer.
+    fn view_params<'a>(
+        &self,
+        params: &'a [f32],
+    ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
+        if params.len() != self.size {
+            return Err(MlErr::SizeMismatch {
+                what: "params",
+                got: params.len(),
+                expected: self.size,
+            });
+        }
+
+        let w_size = self.size - self.dim.1;
+
+        // SAFETY: The if condition above checks that the size of the
+        //         parameters is exactly the size of the layer.
+        let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
+        let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
+
+        Ok((weights, biases))
+    }
+
     /// Gives a view of the raw gradient slice as the delta weights and delta biases of this layer.
     ///
     /// # Args
@@ -93,36 +123,6 @@ impl Dense {
         let db = ArrayViewMut1::from_shape(self.dim.1, db_raw).unwrap();
 
         Ok((dw, db))
-    }
-
-    /// Gives a view of the raw parameter slice as the weights and biases of this layer.
-    ///
-    /// # Args
-    /// * `params` - A slice of parameters.
-    ///
-    /// # Returns
-    /// A tuple containing the weights and biases or an error if there's a mismatch
-    /// between the size of the gradient and the size of the layer.
-    fn view_params<'a>(
-        &self,
-        params: &'a [f32],
-    ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
-        if params.len() != self.size {
-            return Err(MlErr::SizeMismatch {
-                what: "params",
-                got: params.len(),
-                expected: self.size,
-            });
-        }
-
-        let w_size = self.size - self.dim.1;
-
-        // SAFETY: The if condition above checks that the size of the
-        //         parameters is exactly the size of the layer.
-        let weights = ArrayView2::from_shape(self.dim, &params[..w_size]).unwrap();
-        let biases = ArrayView1::from_shape(self.dim.1, &params[w_size..]).unwrap();
-
-        Ok((weights, biases))
     }
 }
 

@@ -17,7 +17,7 @@ pub struct BackpropTrainer<O, L, R>
 where
     O: Optimizer,
     L: LossFn,
-    R: Rng,
+    R: Rng + Send,
 {
     model: Sequential,
     optimizers: Vec<O>,
@@ -37,7 +37,7 @@ impl<O, L, R> BackpropTrainer<O, L, R>
 where
     O: Optimizer,
     L: LossFn,
-    R: Rng,
+    R: Rng + Send,
 {
     /// Returns a new `BackpropTrainer` model trainer.
     ///
@@ -82,8 +82,8 @@ where
 impl<O, L, R> Trainer for BackpropTrainer<O, L, R>
 where
     O: Optimizer + Send,
-    L: LossFn,
-    R: Rng,
+    L: LossFn + Send,
+    R: Rng + Send,
 {
     /// Performs a training cycle.
     ///

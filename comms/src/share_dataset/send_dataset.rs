@@ -1,64 +1,60 @@
-use std::io::Result;
+use std::io;
 
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, BufReader};
+use tokio::io::AsyncRead;
 
 use crate::{
-    OnoSender,
-    msg::{Msg, Payload},
+    protocol::{Msg, Payload},
+    transport::TransportLayer,
+    utils,
 };
 
 /// Sends chunks of the dataset with `chunk` size.
 ///
 /// # Args
-/// * `x_storage` - The sample's source.
-/// * `y_storage` - The label's source.
+/// * `xs` - The sample's source.
+/// * `ys` - The label's source.
 /// * `chunk_size` - The size of each chunk.
-/// * `tx` - An `OnoSender` for sending the chunks.
+/// * `transport` - The transport layer of the communication.
 ///
 /// # Errors
 /// Returns an `io::Error` if the connection or reading from the storage fail.
-pub async fn send_dataset<R, W>(
-    x_storage: &mut R,
-    y_storage: &mut R,
+pub async fn send_dataset<R, T>(
+    xs: &mut R,
+    ys: &mut R,
     chunk_size: usize,
-    tx: &mut OnoSender<W>,
-) -> Result<()>
+    transport: &mut T,
+) -> io::Result<()>
 where
     R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    T: TransportLayer,
 {
-    let mut buf = vec![0; chunk_size];
-    let mut x_reader = BufReader::new(x_storage);
-    let mut y_reader = BufReader::new(y_storage);
-
-    send_chunks_from(&mut x_reader, &mut buf, tx).await?;
-    send_chunks_from(&mut y_reader, &mut buf, tx).await?;
-
+    let mut buf: Vec<u32> = vec![0; chunk_size / size_of::<f32>()];
+    let buf_u8 = bytemuck::cast_slice_mut(&mut buf);
+    send_chunks_from(xs, buf_u8, transport).await?;
+    send_chunks_from(ys, buf_u8, transport).await?;
     Ok(())
 }
 
-async fn send_chunks_from<R, W>(
-    reader: &mut BufReader<&mut R>,
-    buf: &mut [u8],
-    tx: &mut OnoSender<W>,
-) -> Result<()>
+/// Reads through the reader and sends the datachunks to the worker.
+///
+/// # Arsg
+/// * `reader` - The byte source.
+/// * `acc` - The accumulating buffer.
+/// * `transport` - The transport layer of the communication.
+///
+/// # Returns
+/// An io error if occurred.
+async fn send_chunks_from<R, T>(reader: &mut R, acc: &mut [u8], transport: &mut T) -> io::Result<()>
 where
     R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    T: TransportLayer,
 {
-    loop {
-        let read = reader.read(buf).await?;
-
-        if read > 0 {
-            let nums = bytemuck::cast_slice(&buf[..read]);
-            let msg = Msg::Data(Payload::Datachunk(nums));
-
-            tx.send(&msg).await?;
-        }
-
-        if read == 0 {
-            break;
-        }
+    while let n = utils::read_all(reader, acc).await?
+        && n > 0
+    {
+        let nums = bytemuck::cast_slice(&acc[..n]);
+        let msg = Msg::Data(Payload::Datachunk(nums));
+        transport.send(&msg).await?;
     }
 
     Ok(())

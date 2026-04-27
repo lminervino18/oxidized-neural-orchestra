@@ -16,6 +16,7 @@ use pyo3::prelude::*;
 fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<arch::Sequential>()?;
     m.add_class::<arch::Dense>()?;
+    m.add_class::<arch::Conv2d>()?;
 
     m.add_class::<activations::Sigmoid>()?;
 

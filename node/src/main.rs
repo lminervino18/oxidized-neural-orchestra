@@ -1,23 +1,10 @@
-use std::{collections::HashMap, env, io};
+use std::{env, io, time::Duration};
 
-use comms::{
-    msg::{Command, Msg, Payload},
-    recv_dataset::{get_dataset_cursor, recv_dataset},
-};
+use comms::{Acceptor, Connection, Connector, OrchEvent, PullSpecResponse, protocol::Entity};
 use log::{info, warn};
 use parameter_server::service::ServerBuilder;
-use tokio::{
-    net::{
-        TcpListener,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
-    signal,
-    sync::mpsc,
-    task,
-};
+use tokio::{net::TcpListener, signal};
 use worker::builder::WorkerBuilder;
-
-use comms::{OnoReceiver, OnoSender};
 
 const DEFAULT_HOST: &str = "0.0.0.0";
 
@@ -27,188 +14,114 @@ async fn main() -> io::Result<()> {
 
     let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
     let port = env::var("PORT").map_err(io::Error::other)?;
-    let bind_addr = format!("{host}:{port}");
+    let addr = format!("{host}:{port}");
 
-    let listener = TcpListener::bind(&bind_addr).await?;
-    info!("listening at {bind_addr}");
+    let listener = TcpListener::bind(&addr).await?;
+    info!("listening at {addr}");
 
-    let local = task::LocalSet::new();
-    local
-        .run_until(async move {
-            let mut next_session_id: u64 = 0;
-            let mut sessions: HashMap<
-                u64,
-                (usize, mpsc::Sender<(OwnedReadHalf, OwnedWriteHalf)>),
-            > = HashMap::new();
-
-            loop {
-                tokio::select! {
-                    accept = listener.accept() => {
-                        let (stream, addr) = accept?;
-                        info!("connection from {addr}");
-
-                        let (rx, tx) = stream.into_split();
-                        let (mut rx, mut tx) = comms::channel(rx, tx);
-
-                        let first_msg = match rx.recv().await {
-                            Ok(msg) => msg,
-                            Err(e) => {
-                                warn!("error reading first message from {addr}: {e}");
-                                continue;
-                            }
-                        };
-
-                        match first_msg {
-                            Msg::Control(Command::CreateWorker(spec)) => {
-                                info!("bootstrapping worker session for {addr}");
-                                let bind_addr_clone = bind_addr.clone();
-                                task::spawn_local(run_worker(rx, tx, spec, bind_addr_clone));
-                            }
-                            Msg::Control(Command::CreateServer(spec)) => {
-                                info!("bootstrapping server session for {addr}");
-                                let session_id = next_session_id;
-                                next_session_id += 1;
-
-                                let nworkers = spec.nworkers;
-                                let mut pserver = match ServerBuilder::new()
-                                    .build(spec)
-                                    .map_err(io::Error::other)
-                                {
-                                    Ok(p) => p,
-                                    Err(e) => {
-                                        warn!("failed to build server: {e}");
-                                        continue;
-                                    }
-                                };
-
-                                if let Err(e) = tx
-                                    .send(&Msg::Control(Command::ServerReady { session_id }))
-                                    .await
-                                {
-                                    warn!("failed to send ServerReady: {e}");
-                                    continue;
-                                }
-
-                                let (conn_tx, mut conn_rx) =
-                                    mpsc::channel::<(OwnedReadHalf, OwnedWriteHalf)>(nworkers);
-                                sessions.insert(session_id, (nworkers, conn_tx));
-
-                                tokio::spawn(async move {
-                                    for _ in 0..nworkers {
-                                        match conn_rx.recv().await {
-                                            Some((raw_rx, raw_tx)) => {
-                                                pserver.spawn(raw_rx, raw_tx);
-                                            }
-                                            None => {
-                                                warn!(
-                                                    "session {session_id}: channel closed before all workers connected"
-                                                );
-                                                return;
-                                            }
-                                        }
-                                    }
-                                    run_server(tx, pserver).await;
-                                });
-                            }
-                            Msg::Control(Command::JoinServer { session_id }) => {
-                                info!("routing worker connection to session {session_id}");
-                                let mut remove = false;
-                                match sessions.get_mut(&session_id) {
-                                    None => {
-                                        warn!("unknown session id {session_id} from {addr}");
-                                    }
-                                    Some((remaining, conn_tx)) => {
-                                        let raw_rx = rx.into_inner();
-                                        let raw_tx = tx.into_inner();
-                                        if conn_tx.send((raw_rx, raw_tx)).await.is_ok() {
-                                            *remaining -= 1;
-                                            if *remaining == 0 {
-                                                remove = true;
-                                            }
-                                        } else {
-                                            warn!("session {session_id} channel closed");
-                                            remove = true;
-                                        }
-                                    }
-                                }
-                                if remove {
-                                    sessions.remove(&session_id);
-                                }
-                            }
-                            msg => {
-                                warn!("unexpected first message from {addr}: {msg:?}");
-                            }
-                        }
-                    }
-                    _ = signal::ctrl_c() => {
-                        info!("received SIGTERM");
-                        break;
-                    }
-                }
-            }
-
-            Ok(())
-        })
-        .await
-}
-
-async fn run_worker(
-    mut rx: OnoReceiver<OwnedReadHalf>,
-    tx: OnoSender<OwnedWriteHalf>,
-    spec: comms::specs::worker::WorkerSpec,
-    bind_addr: String,
-) {
-    let x_size_bytes = spec.dataset.x_size_bytes as usize;
-    let y_size_bytes = spec.dataset.y_size_bytes as usize;
-    let mut samples_raw = vec![0f32; x_size_bytes / size_of::<f32>()];
-    let mut labels_raw = vec![0f32; y_size_bytes / size_of::<f32>()];
-
-    if let Err(e) = recv_dataset(
-        &mut get_dataset_cursor(&mut samples_raw),
-        &mut get_dataset_cursor(&mut labels_raw),
-        x_size_bytes,
-        y_size_bytes,
-        &mut rx,
-    )
-    .await
-    {
-        warn!("failed to receive dataset: {e}");
-        return;
-    }
-
-    let worker = match WorkerBuilder::new()
-        .build(spec, bind_addr, samples_raw, labels_raw)
-        .await
-    {
-        Ok(w) => w,
-        Err(e) => {
-            warn!("failed to build worker: {e}");
-            return;
-        }
+    let stream_factory = async move || {
+        let (stream, peer_addr) = listener.accept().await?;
+        info!("new incoming connection from {peer_addr}");
+        Ok(stream.into_split())
     };
 
-    if let Err(e) = worker.run(rx, tx).await {
-        warn!("worker session error: {e}");
-    } else {
-        info!("worker session complete");
-    }
-}
+    let mut acceptor = Acceptor::new(
+        stream_factory,
+        Duration::from_secs(5),
+        Duration::from_secs(2),
+        2,
+        5,
+    );
 
-async fn run_server(
-    tx: OnoSender<OwnedWriteHalf>,
-    mut pserver: Box<dyn parameter_server::service::Server<OwnedReadHalf, OwnedWriteHalf>>,
-) {
-    let mut tx = tx;
-    match pserver.run().await {
-        Ok(mut params) => {
-            info!("server session complete, sending parameters");
-            let msg = Msg::Data(Payload::Params(&mut params));
-            if let Err(e) = tx.send(&msg).await {
-                warn!("failed to send parameters: {e}");
+    let Connection::Orchestrator(mut orch_handle) = acceptor.accept().await? else {
+        return Err(io::Error::other("expected orchestrator connection"));
+    };
+
+    match orch_handle.pull_specification().await? {
+        PullSpecResponse::Worker(spec) => {
+            info!("bootstrapping as worker");
+
+            let x_size_bytes = spec.dataset.x_size_bytes as usize;
+            let y_size_bytes = spec.dataset.y_size_bytes as usize;
+            let mut samples_raw = vec![0f32; x_size_bytes / size_of::<f32>()];
+            let mut labels_raw = vec![0f32; y_size_bytes / size_of::<f32>()];
+
+            orch_handle
+                .pull_dataset(
+                    &mut comms::get_dataset_cursor(&mut samples_raw),
+                    &mut comms::get_dataset_cursor(&mut labels_raw),
+                    x_size_bytes,
+                    y_size_bytes,
+                )
+                .await?;
+
+            let transport_factory = |rx, tx| {
+                comms::build_reliable_transport(
+                    rx,
+                    tx,
+                    Duration::from_secs(5),
+                    Duration::from_secs(2),
+                    2,
+                    5,
+                )
+            };
+
+            let connector = Connector::new(
+                transport_factory,
+                Entity::Worker { id: spec.worker_id },
+            );
+
+            let worker_builder = WorkerBuilder::new();
+            let mut worker = worker_builder
+                .build(spec, connector, orch_handle, samples_raw, labels_raw)
+                .await?;
+
+            tokio::select! {
+                ret = worker.run() => {
+                    ret?;
+                    info!("worker done");
+                }
+                _ = signal::ctrl_c() => {
+                    info!("received SIGTERM");
+                }
             }
         }
-        Err(e) => {
-            warn!("server session error: {e}");
+        PullSpecResponse::ParameterServer(spec) => {
+            info!("bootstrapping as parameter server");
+
+            let nworkers = spec.nworkers;
+            let mut pserver = ServerBuilder::new().build(spec).map_err(io::Error::other)?;
+
+            for i in 0..nworkers {
+                let Connection::Worker(worker_handle) = acceptor.accept().await? else {
+                    return Err(io::Error::other("expected worker connection"));
+                };
+                info!("worker {}/{nworkers} connected", i + 1);
+                pserver.spawn(worker_handle);
+            }
+
+            tokio::select! {
+                ret = pserver.run() => {
+                    info!("server done, sending parameters");
+                    let mut params = ret?;
+
+                    loop {
+                        match orch_handle.recv_event().await? {
+                            OrchEvent::RequestParams => orch_handle.push_params(&mut params).await?,
+                            OrchEvent::Disconnect => {
+                                orch_handle.disconnect().await?;
+                                break;
+                            }
+                            event => warn!("unexpected orch event: {event:?}"),
+                        }
+                    }
+                }
+                _ = signal::ctrl_c() => {
+                    info!("received SIGTERM");
+                }
+            }
         }
     }
+
+    Ok(())
 }

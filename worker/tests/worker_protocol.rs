@@ -1,105 +1,101 @@
-use std::num::NonZeroUsize;
+use std::{env, num::NonZeroUsize};
 
-use comms::{OnoReceiver, OnoSender};
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
     dataset::{Dataset, DatasetSrc},
     optimization::{GradientDescent, Optimizer},
     training::BackpropTrainer,
 };
+use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
-use comms::msg::{Command, Msg, Payload};
+use comms::{
+    OrchEvent, OrchHandle, ParamServerHandle, PullParamsResponse, Stp, WorkerEvent, WorkerHandle,
+};
 use worker::{
-    middlewares::parameter_server::ParameterServerMiddleware,
-    workers::parameter_server::ParameterServerWorker,
+    cluster_managers::ServerClusterManager,
+    workers::{ParamServerWorker, Worker},
 };
 
 #[allow(clippy::type_complexity)]
 fn channel_pair() -> (
-    (
-        OnoReceiver<ReadHalf<DuplexStream>>,
-        OnoSender<WriteHalf<DuplexStream>>,
-    ),
-    (
-        OnoReceiver<ReadHalf<DuplexStream>>,
-        OnoSender<WriteHalf<DuplexStream>>,
-    ),
+    (ReadHalf<DuplexStream>, WriteHalf<DuplexStream>),
+    (ReadHalf<DuplexStream>, WriteHalf<DuplexStream>),
 ) {
     let (stream1, stream2) = io::duplex(4096);
-    let (rx1, tx1) = io::split(stream1);
-    let (rx2, tx2) = io::split(stream2);
-    let chan1 = comms::channel(rx1, tx1);
-    let chan2 = comms::channel(rx2, tx2);
-    (chan1, chan2)
+    let rxtx1 = io::split(stream1);
+    let rxtx2 = io::split(stream2);
+    (rxtx1, rxtx2)
 }
 
-async fn mock_orch<R>(mut wk_rx: OnoReceiver<R>, mut sv_rx: OnoReceiver<R>) -> io::Result<Vec<f32>>
+async fn mock_orch<R, W>(
+    mut worker_handle: WorkerHandle<Stp<R, W>>,
+    mut server_handle: ParamServerHandle<Stp<R, W>>,
+) -> io::Result<Vec<f32>>
 where
-    R: AsyncRead + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
 {
     loop {
-        match wk_rx.recv().await? {
-            Msg::Control(Command::Disconnect) => break,
-            Msg::Control(Command::ReportLoss { losses }) => println!("loss: {losses:?}"),
+        match worker_handle.recv_event().await? {
+            WorkerEvent::Disconnect => break,
+            WorkerEvent::Loss(losses) => println!("loss: {losses:?}"),
             _ => {}
         }
     }
 
-    let Msg::Data(Payload::Params(params)) = sv_rx.recv().await? else {
-        return Err(io::Error::other(
-            "received an invalid message kind from the server",
-        ));
-    };
-
-    Ok(params.to_vec())
+    let PullParamsResponse::Params(params) = server_handle.pull_params().await?;
+    let params = params.to_vec();
+    server_handle.disconnect().await?;
+    Ok(params)
 }
 
 async fn mock_server<R, W>(
-    mut rx: OnoReceiver<R>,
-    mut tx: OnoSender<W>,
-    mut orch_tx: OnoSender<W>,
+    mut worker_handle: WorkerHandle<Stp<R, W>>,
+    mut orch_handle: OrchHandle<Stp<R, W>>,
     learning_rate: f32,
     nparams: usize,
 ) -> io::Result<()>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
 {
     let mut optimizer = GradientDescent::new(learning_rate);
     let mut params = vec![0.5; nparams];
 
-    let msg = Msg::Data(Payload::Params(&mut params));
-    tx.send(&msg).await?;
-
     loop {
-        match rx.recv().await? {
-            Msg::Control(Command::Disconnect) => {
-                break;
-            }
-            Msg::Data(Payload::Grad(grad)) => {
+        match worker_handle.recv_event().await? {
+            WorkerEvent::Disconnect => break,
+            WorkerEvent::Grad(grad) => {
                 optimizer.update_params(grad, &mut params).unwrap();
-                let msg = Msg::Data(Payload::Params(&mut params));
-                tx.send(&msg).await?;
+            }
+            WorkerEvent::RequestParams => {
+                worker_handle.push_params(&mut params).await?;
             }
             _ => {}
         }
     }
 
-    let msg = Msg::Control(Command::Disconnect);
-    tx.send(&msg).await?;
-
-    let msg = Msg::Data(Payload::Params(&mut params));
-    orch_tx.send(&msg).await?;
+    loop {
+        match orch_handle.recv_event().await? {
+            OrchEvent::Disconnect => break,
+            OrchEvent::RequestParams => {
+                orch_handle.push_params(&mut params).await?;
+            }
+            _ => unreachable!(),
+        }
+    }
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_local_lineal_model_convergence() -> io::Result<()> {
+    unsafe { env::set_var("RUST_BACKTRACE", "full") };
+
     let ((sv_rx, sv_tx), (wk_rx, wk_tx)) = channel_pair();
-    let ((wk_orch_rx, wk_orch_tx), (orch_wk_rx, _)) = channel_pair();
-    let ((_, sv_orch_tx), (orch_sv_rx, _)) = channel_pair();
+    let ((wk_orch_rx, wk_orch_tx), (orch_wk_rx, orch_wk_tx)) = channel_pair();
+    let ((sv_orch_rx, sv_orch_tx), (orch_sv_rx, orch_sv_tx)) = channel_pair();
 
     const MAX_EPOCHS: usize = 100;
 
@@ -118,17 +114,42 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
         0,
         NonZeroUsize::new(MAX_EPOCHS).unwrap(),
         NonZeroUsize::new(4).unwrap(),
-        rand::rng(),
+        StdRng::from_os_rng(),
     );
 
-    let worker = ParameterServerWorker::new(Box::new(trainer));
-    let mut middleware = ParameterServerMiddleware::new(vec![0]);
-    middleware.spawn(wk_rx, wk_tx, 2);
+    // Worker node.
+    let transport = Stp::new(wk_orch_rx, wk_orch_tx);
+    let orch_wk_handle = OrchHandle::new(transport);
+    let transport = Stp::new(sv_rx, sv_tx);
+    let server_wk_handle = ParamServerHandle::new(0, transport);
+    let mut cluster_manager = ServerClusterManager::new(vec![0]);
+    cluster_manager.spawn(server_wk_handle, 2);
+    let mut worker = ParamServerWorker::new(Box::new(trainer), cluster_manager, orch_wk_handle);
 
-    let worker_fut = worker.run(wk_orch_rx, wk_orch_tx, middleware);
-    let server_fut = mock_server(sv_rx, sv_tx, sv_orch_tx, 0.1, 2);
-    let orch_fut = mock_orch(orch_wk_rx, orch_sv_rx);
-    let (_, _, params) = tokio::try_join!(worker_fut, server_fut, orch_fut)?;
+    // Server node.
+    let transport = Stp::new(wk_rx, wk_tx);
+    let worker_sv_handle = WorkerHandle::new(0, transport);
+    let transport = Stp::new(sv_orch_rx, sv_orch_tx);
+    let orch_sv_handle = OrchHandle::new(transport);
+
+    // Orch node.
+    let transport = Stp::new(orch_wk_rx, orch_wk_tx);
+    let worker_orch_handle = WorkerHandle::new(0, transport);
+    let transport = Stp::new(orch_sv_rx, orch_sv_tx);
+    let server_orch_handle = ParamServerHandle::new(0, transport);
+
+    let worker_fut = worker.run();
+    let server_fut = mock_server(worker_sv_handle, orch_sv_handle, 0.1, 2);
+    let orch_fut = mock_orch(worker_orch_handle, server_orch_handle);
+
+    let (wk, sv, orch) = tokio::join!(worker_fut, server_fut, orch_fut);
+
+    println!("worker: {wk:?}");
+    println!("server: {sv:?}");
+    println!("orchestrator: {orch:?}");
+
+    let params = orch.unwrap();
     println!("params: {params:?}");
+
     Ok(())
 }

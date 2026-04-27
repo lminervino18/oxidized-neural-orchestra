@@ -87,10 +87,15 @@ impl TrainerBuilder {
     where
         O: Optimizer + Send + 'static,
     {
+        let mut last = None;
         let layers: Vec<_> = spec
             .layers
             .iter()
-            .flat_map(|layer_spec| self.resolve_layer(*layer_spec))
+            .flat_map(|layer_spec| {
+                let layers = self.resolve_layer(*layer_spec, last);
+                last = Some(layer_spec);
+                layers
+            })
             .collect();
 
         self.resolve_loss_fn(spec, optimizers, layers, dataset)
@@ -103,18 +108,53 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_layer(&self, spec: LayerSpec) -> Vec<Layer> {
+    fn resolve_layer(&self, spec: LayerSpec, last: Option<&LayerSpec>) -> Vec<Layer> {
         let mut layers = Vec::with_capacity(2);
 
-        match spec {
+        let act_fn = match spec {
             LayerSpec::Dense { dim, act_fn } => {
-                layers.push(Layer::dense(dim));
+                if let Some(LayerSpec::Conv {
+                    input_dim,
+                    kernel_dim,
+                    stride,
+                    padding,
+                    ..
+                }) = last
+                {
+                    let out_h = (input_dim.1 + 2 * padding - kernel_dim.2) / stride + 1;
+                    let out_w = (input_dim.2 + 2 * padding - kernel_dim.2) / stride + 1;
+                    layers.push(Layer::four_d_to2d(kernel_dim.0, out_h, out_w))
+                };
 
-                if let Some(spec) = act_fn {
-                    layers.push(self.resolve_act_fn(spec));
-                }
+                layers.push(Layer::dense(dim));
+                act_fn
             }
-        }
+            LayerSpec::Conv {
+                input_dim,
+                kernel_dim,
+                stride,
+                padding,
+                act_fn,
+            } => {
+                if let None | Some(LayerSpec::Dense { .. }) = last {
+                    layers.push(Layer::two_d_to4d(input_dim.0, input_dim.1, input_dim.2))
+                }
+
+                layers.push(Layer::conv2d(
+                    kernel_dim.0,
+                    kernel_dim.1,
+                    kernel_dim.2,
+                    stride,
+                    padding,
+                ));
+
+                act_fn
+            }
+        };
+
+        if let Some(spec) = act_fn {
+            layers.push(self.resolve_act_fn(spec));
+        };
 
         layers
     }
@@ -185,7 +225,7 @@ impl TrainerBuilder {
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
-        L: LossFn + 'static,
+        L: LossFn + Send + 'static,
     {
         let model = Sequential::new(layers);
         let trainer = BackpropTrainer::new(
