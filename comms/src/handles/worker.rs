@@ -59,8 +59,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// # Returns
     /// A `WorkerEvent` message or an io error if occurred.
     pub async fn recv_event(&mut self) -> io::Result<WorkerEvent<'_>> {
-        self.grad.fill(0.0);
-
         let response = match self.transport.recv().await? {
             Msg::Data(Payload::Grad(grad)) => {
                 if let Some(additional) = grad.len().checked_sub(self.grad.capacity()) {
