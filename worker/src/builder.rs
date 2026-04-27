@@ -1,13 +1,16 @@
 use std::io;
 
 use comms::{
-    Connector, OrchHandle, TransportLayer,
+    Acceptor, Connection, Connector, OrchHandle, TransportLayer,
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
-use tokio::net::{
-    TcpStream,
-    tcp::{OwnedReadHalf, OwnedWriteHalf},
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::{
+        TcpStream,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
 };
 
 use crate::{
@@ -15,22 +18,53 @@ use crate::{
     workers::{AllReduceWorker, Worker, parameter_server::ParamServerWorker},
 };
 
-#[derive(Default)]
-pub struct WorkerBuilder;
+pub struct WorkerBuilder<R, W, T, F, G>
+where
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
+    T: TransportLayer,
+    F: AsyncFnMut() -> io::Result<T>,
+    G: Fn(R, W) -> T,
+{
+    acceptor: Acceptor<T, F>,
+    connector: Connector<R, W, T, G>,
+}
 
-impl WorkerBuilder {
+impl<R, W, T, F, G> WorkerBuilder<R, W, T, F, G>
+where
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
+    T: TransportLayer,
+    F: AsyncFnMut() -> io::Result<T>,
+    G: Fn(R, W) -> T,
+{
     /// Creates a new `WorkerBuilder`.
+    ///
+    /// # Args
+    /// * `acceptor` - The network acceptor.
+    /// * `connector` - The network connector.
     ///
     /// # Returns
     /// A new `WorkerBuilder` instance.
-    pub fn new() -> Self {
-        Self
+    pub fn new(acceptor: Acceptor<T, F>, connector: Connector<R, W, T, G>) -> Self {
+        Self {
+            acceptor,
+            connector,
+        }
     }
+}
 
+impl<T, F, G> WorkerBuilder<OwnedReadHalf, OwnedWriteHalf, T, F, G>
+where
+    T: TransportLayer + 'static,
+    F: AsyncFnMut() -> io::Result<T>,
+    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T,
+{
     /// Builds a `Worker` from a `WorkerSpec`.
     ///
     /// # Args
     /// * `spec` - The specification for a worker.
+    /// * `acceptor` - The network acceptor.
     /// * `connector` - The network connector.
     /// * `orch_handle` - The handle to communicate with the orchestrator.
     /// * `samples_raw` - The dataset samples raw data.
@@ -38,18 +72,13 @@ impl WorkerBuilder {
     ///
     /// # Returns
     /// A fully initialized worker ready to start.
-    pub async fn build<T, F>(
-        &self,
+    pub async fn build(
+        self,
         spec: WorkerSpec,
-        connector: Connector<OwnedReadHalf, OwnedWriteHalf, T, F>,
         orch_handle: OrchHandle<T>,
         samples_raw: Vec<f32>,
         labels_raw: Vec<f32>,
-    ) -> io::Result<Box<dyn Worker>>
-    where
-        T: TransportLayer + 'static,
-        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> T,
-    {
+    ) -> io::Result<Box<dyn Worker>> {
         let dataset_builder = DatasetBuilder::new();
         let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
         let trainer_builder = TrainerBuilder::new();
@@ -60,50 +89,107 @@ impl WorkerBuilder {
                 server_sizes,
                 server_ordering,
             } => {
-                let mut cluster_manager = ServerClusterManager::new(server_ordering);
-
-                for (id, (addr, &size)) in server_addrs.into_iter().zip(&server_sizes).enumerate() {
-                    let stream = TcpStream::connect(addr).await?;
-                    let (rx, tx) = stream.into_split();
-                    let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
-
-                    if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
-                        server_handle.enable_sparse_capability(r, seed);
-                    }
-
-                    cluster_manager.spawn(server_handle, size);
-                }
+                let cluster_manager = self
+                    .connect_to_servers(
+                        &server_addrs,
+                        server_ordering,
+                        &server_sizes,
+                        spec.serializer,
+                    )
+                    .await?;
 
                 let trainer = trainer_builder.build(spec.trainer, &server_sizes, dataset);
                 let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
             AlgorithmSpec::AllReduce { worker_addrs } => {
-                let connect_to_worker = async |id| {
-                    let addr = &worker_addrs[id];
-                    let stream = TcpStream::connect(addr).await?;
-                    let (rx, tx) = stream.into_split();
-                    let mut worker_handle = connector.connect_worker(id, rx, tx).await?;
-
-                    if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
-                        worker_handle.enable_sparse_capability(r, seed);
-                    }
-
-                    Ok::<_, io::Error>(worker_handle)
-                };
-
-                let n = worker_addrs.len();
-                let id = spec.worker_id;
-
-                let prev = connect_to_worker((id + n - 1) % n).await?;
-                let next = connect_to_worker((id + 1) % n).await?;
-
                 let model_size = 1; // TODO: Somehow get the model size.
-                let ring_manager = WorkerRingManager::new(id, worker_addrs, prev, next, model_size);
+                let ring_manager = self
+                    .connect_to_workers(spec.worker_id, worker_addrs, model_size, spec.serializer)
+                    .await?;
+
                 let trainer = trainer_builder.build(spec.trainer, &[model_size], dataset);
                 let worker = AllReduceWorker::new(trainer, ring_manager, orch_handle);
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
         }
+    }
+
+    /// Connects this worker to all the servers in the network.
+    ///
+    /// # Args
+    /// * `server_addrs` - The network addresses of the servers.
+    /// * `server_ordering` - The ordering of the servers for the layers of the model.
+    /// * `server_sizes` - The sizes of the servers in amount of parameters they hold.
+    /// * `serializer_spec` - The spec of the serialization protocol.
+    ///
+    /// # Returns
+    /// A new `ServerClusterManager` instance or an io error if occurred.
+    async fn connect_to_servers(
+        self,
+        server_addrs: &[String],
+        server_ordering: Vec<usize>,
+        server_sizes: &[usize],
+        serializer_spec: SerializerSpec,
+    ) -> io::Result<ServerClusterManager<T>> {
+        let mut cluster_manager = ServerClusterManager::new(server_ordering);
+
+        for (id, (addr, &size)) in server_addrs.into_iter().zip(server_sizes).enumerate() {
+            let stream = TcpStream::connect(addr).await?;
+            let (rx, tx) = stream.into_split();
+            let mut server_handle = self.connector.connect_parameter_server(id, rx, tx).await?;
+
+            if let SerializerSpec::SparseCapable { r, seed } = serializer_spec {
+                server_handle.enable_sparse_capability(r, seed);
+            }
+
+            cluster_manager.spawn(server_handle, size);
+        }
+
+        Ok(cluster_manager)
+    }
+
+    /// Connects this worker to it's previous and next workers in the network.
+    ///
+    /// # Args
+    /// * `id` - The id of this worker.
+    /// * `worker_addrs` - The addresses of all the workers in the network.
+    /// * `model_size` - The size of the model in amount of parameters.
+    /// * `serializer_spec` - The spec of the serialization protocol.
+    ///
+    /// # Returns
+    /// A new `WorkerRingManager` instance or an error if occurred.
+    async fn connect_to_workers(
+        mut self,
+        id: usize,
+        addrs: Vec<String>,
+        model_size: usize,
+        serializer_spec: SerializerSpec,
+    ) -> io::Result<WorkerRingManager<T>> {
+        let prev_conn_fut = async {
+            loop {
+                if let Connection::Worker(worker_handle) = self.acceptor.accept().await? {
+                    return Ok::<_, io::Error>(worker_handle);
+                }
+            }
+        };
+
+        let n = addrs.len();
+        let next_conn_fut = async {
+            let addr = &addrs[(id + 1) % n];
+            let stream = TcpStream::connect(addr).await?;
+            let (rx, tx) = stream.into_split();
+            let mut worker_handle = self.connector.connect_worker(id, rx, tx).await?;
+
+            if let SerializerSpec::SparseCapable { r, seed } = serializer_spec {
+                worker_handle.enable_sparse_capability(r, seed);
+            }
+
+            Ok::<_, io::Error>(worker_handle)
+        };
+
+        let (prev, next) = tokio::try_join!(prev_conn_fut, next_conn_fut)?;
+        let ring_manager = WorkerRingManager::new(id, addrs, prev, next, model_size);
+        Ok(ring_manager)
     }
 }
