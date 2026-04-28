@@ -21,10 +21,9 @@ pub struct Conv2d {
     // Forward metadata
     input: Array4<f32>,
     output: Array4<f32>,
-    conv_mode: ConvMode<3>,
 
     // Backward metadata
-    delta: Array4<f32>,
+    delta_out: Array4<f32>,
     dilated: Array4<f32>,
 }
 
@@ -41,10 +40,6 @@ impl Conv2d {
         let size = kernels_size + filters;
 
         let zeros4 = Array4::zeros((1, 1, 1, 1));
-        let conv_mode = ConvMode::Custom {
-            padding: [0, padding, padding],
-            strides: [1, stride, stride],
-        };
 
         Self {
             filters,
@@ -55,10 +50,9 @@ impl Conv2d {
             kernels_size,
             kernels_dim,
             size,
-            conv_mode,
             input: zeros4.clone(),
             output: zeros4.clone(),
-            delta: zeros4.clone(),
+            delta_out: zeros4.clone(),
             dilated: zeros4,
         }
     }
@@ -77,7 +71,6 @@ impl Conv2d {
             padding,
             ref mut input,
             ref mut output,
-            conv_mode,
             ..
         } = *self;
 
@@ -95,7 +88,14 @@ impl Conv2d {
 
             for f in 0..filters {
                 let kernel_f = k.index_axis(Axis(0), f);
-                let res_3d = input_b.conv(kernel_f.no_reverse(), conv_mode, PaddingMode::Zeros)?;
+                let res_3d = input_b.conv(
+                    kernel_f.no_reverse(),
+                    ConvMode::Custom {
+                        padding: [0, padding, padding],
+                        strides: [1, stride, stride],
+                    },
+                    PaddingMode::Zeros,
+                )?;
                 let res_2d = res_3d.index_axis(Axis(0), 0);
 
                 output.slice_mut(s![b, f, .., ..]).assign(&res_2d);
@@ -124,53 +124,48 @@ impl Conv2d {
             kernel_size,
             padding,
             ref input,
-            delta: ref mut delta_out,
+            ref mut delta_out,
             ref mut dilated,
             ..
         } = *self;
 
-        let (batch_size, in_channels2, _, _) = input.dim();
-        assert_eq!(in_channels2, in_channels);
+        let batch_size = input.dim().0;
 
         delta_out.reshape_inplace(input.dim());
 
-        for b in 0..batch_size {
-            for f in 0..filters {
-                let dilated_bf = dilated.slice(s![b, f, .., ..]);
+        for b_idx in 0..batch_size {
+            for f_idx in 0..filters {
+                let dilated_bf = dilated.slice(s![b_idx, f_idx, .., ..]);
 
-                for c in 0..in_channels {
+                for c_idx in 0..in_channels {
                     // kernel
-                    let input_bc = input.slice(s![b, c, .., ..]);
+                    let input_bc = input.slice(s![b_idx, c_idx, .., ..]);
 
-                    let step = input_bc
-                        .conv(
-                            dilated_bf.no_reverse(),
-                            ConvMode::Custom {
-                                // TODO: is this padding right?
-                                padding: [padding; 2],
-                                strides: [1; 2],
-                            },
-                            PaddingMode::Zeros,
-                        )
-                        .unwrap();
+                    let step = input_bc.conv(
+                        dilated_bf.no_reverse(),
+                        ConvMode::Custom {
+                            padding: [padding; 2],
+                            strides: [1; 2],
+                        },
+                        PaddingMode::Zeros,
+                    )?;
 
-                    let mut dk_view = dk.slice_mut(s![f, c, .., ..]);
+                    let mut dk_view = dk.slice_mut(s![f_idx, c_idx, .., ..]);
                     dk_view += &step;
 
                     // delta
-                    let k_fc = k.slice(s![f, c, .., ..]);
+                    let k_fc = k.slice(s![f_idx, c_idx, .., ..]);
 
                     let step = dilated_bf.conv(
                         &k_fc,
                         ConvMode::Custom {
-                            // TODO: is this padding right?
                             padding: [kernel_size - padding - 1; 2],
                             strides: [1; 2],
                         },
                         PaddingMode::Zeros,
                     )?;
 
-                    let mut delta_view = delta_out.slice_mut(s![b, c, .., ..]);
+                    let mut delta_view = delta_out.slice_mut(s![b_idx, c_idx, .., ..]);
                     delta_view += &step;
                 }
             }
@@ -296,7 +291,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_conv2d_forward_backward_consistency() {
+    fn test_conv2d00_forward_backward_consistency() {
         unsafe {
             std::env::set_var("RUST_BACKTRACE", "1");
         }
@@ -329,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dilate_and_pad() {
+    fn test_conv2d01_dilate() {
         let filters = 1;
         let in_channels = 1;
         let kernel_size = 2;
@@ -345,15 +340,13 @@ mod tests {
         ]]];
 
         let expected = array![[[
-            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 1., 0., 2., 0., 3., 0., 4., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 5., 0., 6., 0., 7., 0., 8., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 9., 0., 10., 0., 11., 0., 12., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
-            [0., 13., 0., 14., 0., 15., 0., 16., 0.],
-            [0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [1., 0., 2., 0., 3., 0., 4.],
+            [0., 0., 0., 0., 0., 0., 0.],
+            [5., 0., 6., 0., 7., 0., 8.],
+            [0., 0., 0., 0., 0., 0., 0.],
+            [9., 0., 10., 0., 11., 0., 12.],
+            [0., 0., 0., 0., 0., 0., 0.],
+            [13., 0., 14., 0., 15., 0., 16.]
         ]]];
 
         conv.dilate(delta.view());
@@ -362,54 +355,24 @@ mod tests {
     }
 
     #[test]
-    fn test_dilate_and_pad00() {
+    fn test_conv2d02_dilate_with_no_stride_does_not_change_delta() {
         let filters = 1;
         let in_channels = 1;
         let kernel_size = 2;
         let stride = 1;
-        let padding = 1;
+        let padding = 0;
         let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
 
-        let input: Array4<f32> = array![[[[1., 2., 3.], [4., 5., 6.], [7., 8., 9.]]]];
         let delta: Array4<f32> = array![[[
             [1., 2., 3., 4.],
-            [1., 2., 3., 4.],
-            [1., 2., 3., 4.],
-            [1., 2., 3., 4.],
-        ]]];
-
-        let params = [1., 2., 3., 4., 5.];
-        conv.dilate(delta.view());
-        let forward = conv.forward(&params, input.view()).unwrap();
-
-        println!("{:#}", input);
-        println!("{:#}", forward);
-        println!("{:#}", conv.dilated);
-    }
-
-    #[test]
-    fn test_dilate_and_pad_padding1() {
-        let filters = 1;
-        let in_channels = 1;
-        let kernel_size = 2;
-        let stride = 1;
-        let padding = 2;
-        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
-
-        let delta: Array4<f32> = array![[[[1., 2., 3.], [4., 5., 6.], [7., 8., 9.]]]];
-
-        let expected = array![[[
-            [0., 0., 0., 0., 0.],
-            [0., 1., 2., 3., 0.],
-            [0., 4., 5., 6., 0.],
-            [0., 7., 8., 9., 0.],
-            [0., 0., 0., 0., 0.]
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
         ]]];
 
         conv.dilate(delta.view());
-        println!("{:#}", conv.dilated);
 
-        assert_eq!(conv.dilated, expected);
+        assert_eq!(conv.dilated, delta);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -430,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conv2d_00forward_one_filter_one_in_channel_kernel_size2_one_stride_no_padding() {
+    fn test_conv2d03_00forward_one_filter_one_in_channel_kernel_size2_one_stride_no_padding() {
         let params: [f32; 5] = [
             1., 2., 3., 4., // filter
             5., // bias
@@ -447,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conv2d_01forward_one_filter_one_in_channel_kernel_size2_one_stride_padding1() {
+    fn test_conv2d04_01forward_one_filter_one_in_channel_kernel_size2_one_stride_padding1() {
         let params: [f32; 5] = [
             1., 2., 3., 4., // filter
             5., // bias
@@ -475,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conv2d_02forward_filters1_in_channels1_kernel_size2_one_stride_padding1_batch_size2() {
+    fn test_conv2d05_forward_filters1_in_channels1_kernel_size2_one_stride_padding1_batch_size2() {
         let params: [f32; 5] = [
             1., 2., 3., 4., // filter
             5., // bias
@@ -502,7 +465,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conv2d_03forward_filters2_in_channels1_kernel_size2_one_stride_padding1_batch_size2() {
+    fn test_conv2d06_forward_filters2_in_channels1_kernel_size2_one_stride_padding1_batch_size2() {
         let params: [f32; 10] = [1., 2., 3., 4., 1., 2., 3., 4., 5., 5.];
         let input: Array4<f32> = array![
             [[[1., 2., 3.,], [4., 5., 6.], [7., 8., 9.]]],
@@ -542,7 +505,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conv2d_04forward_filters2_in_channels2_kernel_size2_one_stride_padding1_batch_size2() {
+    fn test_conv2d07_forward_filters2_in_channels2_kernel_size2_one_stride_padding1_batch_size2() {
         let params: [f32; 18] = [
             1., 2., 3., 4., 1., 2., 3., 4., 1., 2., 3., 4., 1., 2., 3., 4., 5., 5.,
         ];
@@ -588,14 +551,6 @@ mod tests {
         ];
         test_conv2d_forward(2, 2, 2, 1, 1, &params, &input, &expected);
     }
-    // filters: usize,
-    // in_channels: usize,
-    // kernel_size: usize,
-    // stride: usize,
-    // padding: usize,
-    // params: &[f32],
-    // input: &Array4<f32>,
-    // expected: &Array4<f32>,
 
     #[allow(clippy::too_many_arguments)]
     fn test_conv2d_backward(
@@ -621,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conv2d_05backward_filters1_in_channels1_kernel_size2_stride2_padding0() {
+    fn test_conv2d08_backward_filters1_in_channels1_kernel_size2_stride2_padding0() {
         let params: [f32; 5] = [1., 2., 3., 4., 5.];
         let input: Array4<f32> = array![[[
             [1., 2., 3., 4.],

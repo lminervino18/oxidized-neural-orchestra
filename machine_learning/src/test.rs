@@ -576,10 +576,58 @@ fn test_machine_learning07_3by3by2_symbols_convergence_with_convolutional3filter
     let input_height = 3;
     let input_width = 3;
     let labels = [
-        1.0, 0.0, 0.0, 0.0, //
-        0.0, 1.0, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, 1.0, //
+        1.0, 0.0, 0.0, 0.0, // plus sign
+        0.0, 1.0, 0.0, 0.0, // dot
+        0.0, 0.0, 1.0, 0.0, // cross
+        0.0, 0.0, 0.0, 1.0, // box
+    ];
+    let y_size = 4;
+
+    test_conv_dense(
+        filters,
+        in_channels,
+        kernel_size,
+        stride,
+        padding,
+        &symbols,
+        input_height,
+        input_width,
+        &labels,
+        y_size,
+    );
+}
+
+#[test]
+fn test_machine_learning08_3by3by2_filters1_kernel_size3_stride1_padding1() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let filters = 1;
+    let in_channels = 1;
+    let kernel_size = 3;
+    let stride = 1;
+    let padding = 1;
+    // original symbol in the first channel and then inverted
+    let symbols = [
+        0.0, 1.0, 0.0, //
+        1.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, // plus sign
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, // dot
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, // cross
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, // box
+    ];
+    let input_height = 3;
+    let input_width = 3;
+    let labels = [
+        1.0, 0.0, 0.0, 0.0, // plus sign
+        0.0, 1.0, 0.0, 0.0, // dot
+        0.0, 0.0, 1.0, 0.0, // cross
+        0.0, 0.0, 0.0, 1.0, // box
     ];
     let y_size = 4;
 
