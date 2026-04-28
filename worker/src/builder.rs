@@ -72,8 +72,8 @@ impl WorkerBuilder {
                 for (id, ((addr, size), session_id)) in server_iter {
                     let stream = TcpStream::connect(&addr).await?;
                     let (rx, tx) = stream.into_split();
-                    let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
-                    server_handle.join_session(session_id).await?;
+                    let mut server_handle =
+                        connector.join_server_session(id, rx, tx, session_id).await?;
 
                     if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
                         server_handle.enable_sparse_capability(r, seed);

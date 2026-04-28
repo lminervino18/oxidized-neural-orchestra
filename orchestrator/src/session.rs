@@ -277,27 +277,16 @@ impl Session {
 
         let runtime = Builder::new_multi_thread().enable_all().build()?;
 
-        let server_results = runtime.block_on(Self::create_servers(servers, &connector))?;
+        let (server_chans, session_ids) =
+            runtime.block_on(Self::create_servers(servers, &connector))?;
         debug!("successfully created all servers");
 
-        let (server_chans, session_ids): (Vec<_>, Vec<_>) = server_results.into_iter().unzip();
-
-        let workers = workers
-            .into_iter()
-            .map(|(addr, mut spec)| {
-                if let AlgorithmSpec::ParameterServer {
-                    ref mut server_session_ids,
-                    ..
-                } = spec.algorithm
-                {
-                    *server_session_ids = session_ids.clone();
-                }
-                (addr, spec)
-            })
-            .collect::<Vec<_>>();
-
-        let worker_chans =
-            runtime.block_on(Self::create_workers(workers, partitions, &connector))?;
+        let worker_chans = runtime.block_on(Self::create_workers(
+            workers,
+            partitions,
+            &session_ids,
+            &connector,
+        ))?;
         debug!("successfully created all workers");
 
         Ok(Self {
@@ -387,118 +376,34 @@ impl Session {
         thread::spawn(move || {
             self.runtime.block_on(async move {
                 let (internal_tx, mut internal_rx) = mpsc::channel(256);
-                let mut wk_txs = Vec::with_capacity(self.workers.len());
                 let n_workers = self.workers.len();
+                let mut wk_txs =
+                    Self::spawn_worker_listeners(self.workers, internal_tx);
 
-                for (i, worker_handle) in self.workers.into_iter().enumerate() {
-                    let (wk_tx, wk_rx) = mpsc::channel(256);
-                    wk_txs.push(wk_tx);
-                    tokio::spawn(Self::worker_listener(i, worker_handle, wk_rx, internal_tx.clone()));
-                }
-
-                drop(internal_tx);
-                let mut tracker = ConvergenceTracker::new(n_workers);
-                let mut stop_reason: Option<StopReason> = None;
-                let mut workers_done = 0;
-
-                loop {
-                    tokio::select! {
-                        biased;
-                        _ = cancel_rx.recv(), if stop_reason.is_none() => {
-                            info!("manual stop requested");
-                            stop_reason = Some(StopReason::ManualStop);
-
-                            for tx in wk_txs.iter_mut() {
-                                let _ = tx.send(()).await;
-                            }
-                        }
-                        evt = internal_rx.recv() => {
-                            match evt {
-                                None => break,
-                                Some(TrainingEvent::WorkerDone(id)) => {
-                                    workers_done += 1;
-                                    let _ = event_tx.send(TrainingEvent::WorkerDone(id)).await;
-                                    if workers_done == n_workers {
-                                        break;
-                                    }
-                                }
-                                Some(TrainingEvent::Loss { worker_id, losses }) => {
-                                    if stop_reason.is_none() {
-                                        if let Some(cfg) = &early_stopping {
-                                            if let Some(sig) = tracker.record(worker_id, &losses) {
-                                                if cfg.is_converged(sig.prev, sig.curr) {
-                                                    info!(
-                                                        "early stopping triggered (prev={:.6}, curr={:.6})",
-                                                        sig.prev, sig.curr
-                                                    );
-
-                                                    stop_reason = Some(StopReason::EarlyStopping);
-
-                                                    for tx in wk_txs.iter_mut() {
-                                                        let _ = tx.send(()).await;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    let _ = event_tx
-                                        .send(TrainingEvent::Loss { worker_id, losses })
-                                        .await;
-                                }
-                                Some(TrainingEvent::Error(e)) => {
-                                    let _ = event_tx.send(TrainingEvent::Error(e)).await;
-                                    return;
-                                }
-                                Some(other) => {
-                                    let _ = event_tx.send(other).await;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let reason = stop_reason.unwrap_or_default();
+                let reason = match Self::run_training_loop(
+                    &mut cancel_rx,
+                    &mut internal_rx,
+                    &mut wk_txs,
+                    n_workers,
+                    &early_stopping,
+                    &event_tx,
+                )
+                .await
+                {
+                    Some(r) => r,
+                    None => return,
+                };
 
                 match algorithm {
                     AlgorithmSpec::ParameterServer { .. } => {
-                        debug!("all workers done, reading final params from all servers");
-
-                        let mut model_params: Vec<f32> = Vec::new();
-
-                        for (i, mut server_handle) in
-                            self.servers.into_iter().enumerate()
-                        {
-                            match server_handle.pull_params().await {
-                                Ok(PullParamsResponse::Params(params)) => {
-                                    model_params.extend_from_slice(params);
-                                    if let Err(e) = server_handle.disconnect().await {
-                                        error!("Failed to disconnect server {i}: {e}");
-                                    }
-                                }
-                                Err(e) => {
-                                    let err = OrchErr::ServerError(format!(
-                                        "unexpected error from server {i}: {e}"
-                                    ));
-                                    let _ = event_tx.send(TrainingEvent::Error(err)).await;
-                                    return;
-                                }
-                            }
-                        }
-
-                        info!("received {} total parameters", model_params.len());
-
-                        let trained = TrainedModel {
-                            params: model_params,
+                        Self::finalize_parameter_server(
+                            self.servers,
                             model,
                             input_size,
-                        };
-
-                        let _ = event_tx
-                            .send(TrainingEvent::Complete {
-                                model: trained,
-                                reason,
-                            })
-                            .await;
+                            reason,
+                            &event_tx,
+                        )
+                        .await;
                     }
                     AlgorithmSpec::AllReduce { .. } => {
                         let err = OrchErr::Unsupported(
@@ -513,61 +418,151 @@ impl Session {
         event_rx
     }
 
-    /// Connects to all parameter servers and sends each its bootstrap spec.
+    fn spawn_worker_listeners(
+        workers: Vec<WorkerHandle<NetRtp>>,
+        internal_tx: Sender<TrainingEvent>,
+    ) -> Vec<Sender<()>> {
+        let mut wk_txs = Vec::with_capacity(workers.len());
+        for (i, worker_handle) in workers.into_iter().enumerate() {
+            let (wk_tx, wk_rx) = mpsc::channel(256);
+            wk_txs.push(wk_tx);
+            tokio::spawn(Self::worker_listener(i, worker_handle, wk_rx, internal_tx.clone()));
+        }
+        drop(internal_tx);
+        wk_txs
+    }
+
+    async fn run_training_loop(
+        cancel_rx: &mut mpsc::Receiver<()>,
+        internal_rx: &mut mpsc::Receiver<TrainingEvent>,
+        wk_txs: &mut Vec<Sender<()>>,
+        n_workers: usize,
+        early_stopping: &Option<EarlyStoppingConfig>,
+        event_tx: &Sender<TrainingEvent>,
+    ) -> Option<StopReason> {
+        let mut tracker = ConvergenceTracker::new(n_workers);
+        let mut stop_reason: Option<StopReason> = None;
+        let mut workers_done = 0;
+
+        loop {
+            tokio::select! {
+                biased;
+                _ = cancel_rx.recv(), if stop_reason.is_none() => {
+                    info!("manual stop requested");
+                    stop_reason = Some(StopReason::ManualStop);
+                    for tx in wk_txs.iter_mut() { let _ = tx.send(()).await; }
+                }
+                evt = internal_rx.recv() => {
+                    match evt {
+                        None => break,
+                        Some(TrainingEvent::WorkerDone(id)) => {
+                            workers_done += 1;
+                            let _ = event_tx.send(TrainingEvent::WorkerDone(id)).await;
+                            if workers_done == n_workers { break; }
+                        }
+                        Some(TrainingEvent::Loss { worker_id, losses }) => {
+                            if stop_reason.is_none() {
+                                if let Some(cfg) = early_stopping {
+                                    if let Some(sig) = tracker.record(worker_id, &losses) {
+                                        if cfg.is_converged(sig.prev, sig.curr) {
+                                            info!(
+                                                "early stopping triggered (prev={:.6}, curr={:.6})",
+                                                sig.prev, sig.curr
+                                            );
+                                            stop_reason = Some(StopReason::EarlyStopping);
+                                            for tx in wk_txs.iter_mut() {
+                                                let _ = tx.send(()).await;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            let _ = event_tx.send(TrainingEvent::Loss { worker_id, losses }).await;
+                        }
+                        Some(TrainingEvent::Error(e)) => {
+                            let _ = event_tx.send(TrainingEvent::Error(e)).await;
+                            return None;
+                        }
+                        Some(other) => { let _ = event_tx.send(other).await; }
+                    }
+                }
+            }
+        }
+
+        Some(stop_reason.unwrap_or_default())
+    }
+
+    async fn finalize_parameter_server(
+        servers: Vec<ParamServerHandle<NetRtp>>,
+        model: ModelConfig,
+        input_size: usize,
+        reason: StopReason,
+        event_tx: &Sender<TrainingEvent>,
+    ) {
+        debug!("all workers done, reading final params from all servers");
+        let mut model_params: Vec<f32> = Vec::new();
+
+        for (i, mut server_handle) in servers.into_iter().enumerate() {
+            match server_handle.pull_params().await {
+                Ok(PullParamsResponse::Params(params)) => {
+                    model_params.extend_from_slice(params);
+                    if let Err(e) = server_handle.disconnect().await {
+                        error!("Failed to disconnect server {i}: {e}");
+                    }
+                }
+                Err(e) => {
+                    let err =
+                        OrchErr::ServerError(format!("unexpected error from server {i}: {e}"));
+                    let _ = event_tx.send(TrainingEvent::Error(err)).await;
+                    return;
+                }
+            }
+        }
+
+        info!("received {} total parameters", model_params.len());
+        let trained = TrainedModel { params: model_params, model, input_size };
+        let _ = event_tx.send(TrainingEvent::Complete { model: trained, reason }).await;
+    }
+
+    /// Connects to all nodes, bootstraps each as a parameter server, and collects session IDs.
     ///
-    /// # Args
-    /// * `servers` - List of (address, spec) pairs for each parameter server.
-    /// * `connector` - The connector for establishing connections.
-    ///
-    /// # Returns
-    /// A list of open (receiver, sender) channel pairs, one per server.
-    ///
-    /// # Errors
-    /// Returns an `OrchErr` if any connection or send fails.
+    /// Returns a tuple of `(server_handles, session_ids)` with matching indices.
     async fn create_servers<F>(
         servers: Vec<(String, ServerSpec)>,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
-    ) -> Result<Vec<(ParamServerHandle<NetRtp>, u64)>>
+    ) -> Result<(Vec<ParamServerHandle<NetRtp>>, Vec<u64>)>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
-        let connect_to_server = async |id, addr| {
-            let stream = TcpStream::connect(addr).await?;
-            let (rx, tx) = stream.into_split();
-            let server_handle = connector.connect_parameter_server(id, rx, tx).await?;
-            Ok(server_handle)
-        };
-
         let mut handles = Vec::with_capacity(servers.len());
+        let mut session_ids = Vec::with_capacity(servers.len());
 
         for (i, (addr, spec)) in servers.into_iter().enumerate() {
-            let mut server_handle = connect_to_server(i, addr.clone())
+            let stream = TcpStream::connect(&addr)
+                .await
+                .map_err(|e| OrchErr::ConnectionFailed { addr: addr.clone(), source: e })?;
+            let (rx, tx) = stream.into_split();
+            let node_handle = connector
+                .connect_node(i, rx, tx)
                 .await
                 .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
-            server_handle.create(spec).await?;
-            let session_id = server_handle.pull_session_id().await?;
-            handles.push((server_handle, session_id));
+            let (server_handle, session_id) = node_handle.create_server(spec).await?;
+            handles.push(server_handle);
+            session_ids.push(session_id);
         }
 
-        Ok(handles)
+        Ok((handles, session_ids))
     }
 
-    /// Connects to all workers, sends each its bootstrap spec and dataset partition.
+    /// Connects to all nodes, bootstraps each as a worker, and sends its dataset partition.
     ///
-    /// # Args
-    /// * `workers` - List of (address, spec) pairs for each worker.
-    /// * `partitions` - List of dataset partitions for each worker.
-    /// * `connector` - The connector for establishing connections.
-    ///
-    /// # Returns
-    /// A list of open (receiver, sender) channel pairs, one per worker.
-    ///
-    /// # Errors
-    /// Returns an `OrchErr` if any connection or send fails.
+    /// `session_ids` carries the PS session IDs to inject into each worker's algorithm spec
+    /// before bootstrapping.
     async fn create_workers<'a, F>(
         workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
+        session_ids: &[u64],
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<WorkerHandle<NetRtp>>>
     where
@@ -575,61 +570,66 @@ impl Session {
     {
         const CHUNK_SIZE: usize = 8192;
 
-        let connect_to_worker = async |id, addr| {
-            let stream = TcpStream::connect(addr).await?;
-            let (rx, tx) = stream.into_split();
-            let worker_handle = connector.connect_worker(id, rx, tx).await?;
-            Ok(worker_handle)
-        };
-
         let futs = workers.into_iter().zip(partitions).enumerate().map(
-            |(i, ((addr, spec), partition))| async move {
+            |(i, ((addr, mut spec), partition))| async move {
                 debug!("connecting to worker at {addr}");
 
-                let mut worker_handle = connect_to_worker(i, addr.clone())
+                if let AlgorithmSpec::ParameterServer { ref mut server_session_ids, .. } =
+                    spec.algorithm
+                {
+                    *server_session_ids = session_ids.to_vec();
+                }
+
+                let stream = TcpStream::connect(&addr)
+                    .await
+                    .map_err(|e| OrchErr::ConnectionFailed { addr: addr.clone(), source: e })?;
+                let (rx, tx) = stream.into_split();
+                let node_handle = connector
+                    .connect_node(i, rx, tx)
                     .await
                     .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
-                worker_handle.create(spec).await?;
+                let mut worker_handle = node_handle.create_worker(spec).await?;
 
-                match partition {
-                    Partition::Local {
-                        samples_path,
-                        labels_path,
-                        samples_offset,
-                        labels_offset,
-                        samples_size,
-                        labels_size,
-                    } => {
-                        Self::send_local_partition(
-                            samples_path,
-                            labels_path,
-                            samples_offset,
-                            labels_offset,
-                            samples_size,
-                            labels_size,
-                            CHUNK_SIZE,
-                            &mut worker_handle,
-                        )
-                        .await?;
-                    }
-                    Partition::Inline { samples, labels } => {
-                        Self::send_inline_partition(
-                            samples,
-                            labels,
-                            CHUNK_SIZE,
-                            &mut worker_handle,
-                        )
-                        .await?;
-                    }
-                }
+                Self::send_partition(partition, CHUNK_SIZE, &mut worker_handle).await?;
 
                 Ok::<_, OrchErr>(worker_handle)
             },
         );
 
-        let channels = future::try_join_all(futs).await?;
-        Ok(channels)
+        future::try_join_all(futs).await
+    }
+
+    async fn send_partition<'a, T: TransportLayer>(
+        partition: Partition<'a>,
+        chunk_size: usize,
+        worker_handle: &mut WorkerHandle<T>,
+    ) -> Result<()> {
+        match partition {
+            Partition::Local {
+                samples_path,
+                labels_path,
+                samples_offset,
+                labels_offset,
+                samples_size,
+                labels_size,
+            } => {
+                Self::send_local_partition(
+                    samples_path,
+                    labels_path,
+                    samples_offset,
+                    labels_offset,
+                    samples_size,
+                    labels_size,
+                    chunk_size,
+                    worker_handle,
+                )
+                .await
+            }
+            Partition::Inline { samples, labels } => {
+                Self::send_inline_partition(samples, labels, chunk_size, worker_handle).await
+            }
+        }
     }
 
     async fn send_local_partition<T>(
