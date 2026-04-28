@@ -155,7 +155,7 @@ impl Conv2d {
                         .unwrap();
 
                     let mut dk_view = dk.slice_mut(s![f, c, .., ..]);
-                    dk_view.assign(&step);
+                    dk_view += &step;
 
                     // delta
                     let k_fc = k.slice(s![f, c, .., ..]);
@@ -171,7 +171,7 @@ impl Conv2d {
                     )?;
 
                     let mut delta_view = delta_out.slice_mut(s![b, c, .., ..]);
-                    delta_view.assign(&step);
+                    delta_view += &step;
                 }
             }
         }
