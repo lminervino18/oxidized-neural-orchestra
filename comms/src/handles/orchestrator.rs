@@ -5,6 +5,7 @@ use tokio::io::AsyncWrite;
 use crate::{
     protocol::{Command, Msg, NodeSpec, Payload},
     share_dataset,
+    specs::{server::ServerSpec, worker::WorkerSpec},
     transport::TransportLayer,
 };
 
