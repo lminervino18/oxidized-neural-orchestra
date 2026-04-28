@@ -5,7 +5,7 @@ use crate::{MlErr, Result, arch::layers::Reshape};
 
 /// An indirection layer to prevent leaking the
 /// inner enum representation to the upper mods.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Inner {
     Conv2d(Conv2d),
     Dense(Dense),
@@ -15,7 +15,7 @@ enum Inner {
 use Inner::*;
 
 /// Represents the different types of layers in a model.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Layer(Inner);
 
 impl Layer {

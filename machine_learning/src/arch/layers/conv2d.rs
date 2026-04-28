@@ -3,7 +3,7 @@ use ndarray_conv::{ConvExt, ConvMode, PaddingMode, ReverseKernel};
 
 use crate::{MlErr, Result, arch::InplaceReshape};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Conv2d {
     filters: usize,
     in_channels: usize,
