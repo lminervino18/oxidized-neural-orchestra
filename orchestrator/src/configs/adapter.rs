@@ -3,8 +3,11 @@ use std::{
 };
 
 use comms::specs::{
-    machine_learning::{ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec},
-    server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
+    machine_learning::{
+        ActFnSpec, DatasetSpec, DistributionSpec, LayerSpec, LossFnSpec, OptimizerSpec,
+        ParamGenSpec, TrainerSpec,
+    },
+    server::{ServerSpec, StoreSpec, SynchronizerSpec},
     worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 

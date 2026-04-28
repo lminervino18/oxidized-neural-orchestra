@@ -1,8 +1,8 @@
 use std::{cell::RefCell, num::NonZeroUsize, rc::Rc, thread};
 
 use comms::specs::{
-    machine_learning::OptimizerSpec,
-    server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
+    machine_learning::{DistributionSpec, OptimizerSpec, ParamGenSpec},
+    server::{ServerSpec, StoreSpec, SynchronizerSpec},
 };
 use machine_learning::initialization::{
     ChainedParamGen, ConstParamGen, ParamGen, RandParamGen, Result,
