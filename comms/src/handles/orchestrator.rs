@@ -3,9 +3,8 @@ use std::{borrow::Cow, io};
 use tokio::io::AsyncWrite;
 
 use crate::{
-    protocol::{Command, Msg, Payload},
+    protocol::{Command, Msg, NodeSpec, Payload},
     share_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
     transport::TransportLayer,
 };
 
@@ -49,8 +48,12 @@ where
     /// The specification or an io error if occurred.
     pub async fn pull_specification(&mut self) -> io::Result<PullSpecResponse> {
         let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateServer(spec)) => PullSpecResponse::ParameterServer(spec),
-            Msg::Control(Command::CreateWorker(spec)) => PullSpecResponse::Worker(spec),
+            Msg::Control(Command::CreateNode(NodeSpec::Server(spec))) => {
+                PullSpecResponse::ParameterServer(spec)
+            }
+            Msg::Control(Command::CreateNode(NodeSpec::Worker(spec))) => {
+                PullSpecResponse::Worker(spec)
+            }
             msg => {
                 let text = format!("Expected creation from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));

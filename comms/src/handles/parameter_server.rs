@@ -6,7 +6,6 @@ use rand::{SeedableRng, rngs::StdRng};
 use crate::{
     protocol::{Command, Msg, Payload},
     sparse::{self, Float01},
-    specs::server::ServerSpec,
     transport::TransportLayer,
 };
 
@@ -76,42 +75,11 @@ where
         self.sparse_capability = Some(sparse_metadata);
     }
 
-    /// Sends the create spec for the server.
+    /// Joins an existing server session.
     ///
-    /// # Args
-    /// * `spec` - The server's specification.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn create(&mut self, spec: ServerSpec) -> io::Result<()> {
-        let msg = Msg::Control(Command::CreateServer(spec));
-        self.transport.send(&msg).await
-    }
-
-    /// Waits for the server node to confirm its session ID after `create`.
-    ///
-    /// # Returns
-    /// The session ID assigned by the node, or an io error if occurred.
-    pub async fn pull_session_id(&mut self) -> io::Result<u64> {
-        let msg = self.transport.recv().await?;
-        let Msg::Control(Command::SessionReady { session_id }) = msg else {
-            let text = format!("Expected SessionReady from server {}, got: {msg:?}", self.id);
-            return Err(io::Error::other(text));
-        };
-        Ok(session_id)
-    }
-
-    /// Joins an existing server session identified by `session_id`.
-    ///
-    /// Must be called immediately after the transport connection is established,
-    /// before any training messages are exchanged.
-    ///
-    /// # Args
-    /// * `session_id` - The session to join.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn join_session(&mut self, session_id: u64) -> io::Result<()> {
+    /// Called internally by [`crate::Connector::join_server_session`] immediately
+    /// after the transport connection is established.
+    pub(crate) async fn join_session(&mut self, session_id: u64) -> io::Result<()> {
         let msg = Msg::Control(Command::JoinSession { session_id });
         self.transport.send(&msg).await
     }
