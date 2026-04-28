@@ -40,6 +40,25 @@ A fully-connected layer.
 { "dense": { "output_size": 8, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } }
 ```
 
+#### `conv`
+
+A 2D convolutional layer. The kernel is square — `kernel_size` applies to both height and width.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `input_dim` | `[integer, integer, integer]` | ✅ | Input shape as `[in_channels, height, width]`. |
+| `kernel_dim` | `[integer, integer, integer]` | ✅ | Kernel shape as `[filters, in_channels, kernel_size]`. |
+| `stride` | integer ≥ 1 | ✅ | Convolution stride applied to both spatial dimensions. |
+| `padding` | integer ≥ 0 | ✅ | Zero-padding added to each spatial side of the input. |
+| `init` | initializer | ✅ | Weight initialization strategy. See below. |
+| `act_fn` | activation | ❌ | Activation function applied after the convolution. Omit for no activation. |
+
+```json
+{ "conv": { "input_dim": [1, 28, 28], "kernel_dim": [32, 1, 3], "stride": 1, "padding": 1, "init": "kaiming" } }
+```
+
+When combining convolutional and dense layers, the output of the last `conv` layer is automatically flattened before the first `dense` layer.
+
 ---
 
 ### Initializers (`init`)

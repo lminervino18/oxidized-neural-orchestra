@@ -36,11 +36,17 @@ const EXAMPLE_MODEL: &str = concat!(
     "  ]\n",
     "}\n",
     "\n",
+    "layer types: dense | conv\n",
     "init values: const, uniform, uniform_inclusive,\n",
     "  xavier_uniform, lecun_uniform, normal,\n",
     "  kaiming, xavier, lecun\n",
     "act_fn values: { \"sigmoid\": { \"amp\": 1.0 } }\n",
-    "  set to null to disable",
+    "  set to null to disable\n",
+    "\n",
+    "conv example:\n",
+    "  { \"conv\": { \"input_dim\": [1, 28, 28],\n",
+    "    \"kernel_dim\": [32, 1, 3], \"stride\": 1,\n",
+    "    \"padding\": 1, \"init\": \"kaiming\" } }",
 );
 
 const EXAMPLE_TRAINING: &str = concat!(
