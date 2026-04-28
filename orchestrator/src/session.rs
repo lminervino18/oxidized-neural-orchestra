@@ -6,8 +6,7 @@ use std::{
 };
 
 use comms::{
-    Connector, NetRtp, ParamServerHandle, PullParamsResponse, TransportLayer, WorkerEvent,
-    WorkerHandle,
+    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerEvent, WorkerHandle,
     specs::{
         server::ServerSpec,
         worker::{AlgorithmSpec, WorkerSpec},
@@ -453,7 +452,7 @@ impl Session {
                             self.servers.into_iter().enumerate()
                         {
                             match server_handle.pull_params().await {
-                                Ok(PullParamsResponse::Params(params)) => {
+                                Ok(params) => {
                                     model_params.extend_from_slice(params);
                                     if let Err(e) = server_handle.disconnect().await {
                                         error!("Failed to disconnect server {i}: {e}");

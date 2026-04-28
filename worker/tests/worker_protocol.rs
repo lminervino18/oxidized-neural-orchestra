@@ -9,9 +9,7 @@ use machine_learning::{
 use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
-use comms::{
-    OrchEvent, OrchHandle, ParamServerHandle, PullParamsResponse, Stp, WorkerEvent, WorkerHandle,
-};
+use comms::{OrchEvent, OrchHandle, ParamServerHandle, Stp, WorkerEvent, WorkerHandle};
 use worker::{
     middlewares::ServerClusterManager,
     workers::{ParamServerWorker, Worker},
@@ -44,8 +42,7 @@ where
         }
     }
 
-    let PullParamsResponse::Params(params) = server_handle.pull_params().await?;
-    let params = params.to_vec();
+    let params = server_handle.pull_params().await?.to_vec();
     server_handle.disconnect().await?;
     Ok(params)
 }

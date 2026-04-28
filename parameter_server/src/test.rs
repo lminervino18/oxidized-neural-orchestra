@@ -2,7 +2,7 @@
 
 use std::{env, num::NonZeroUsize};
 
-use comms::{ParamServerHandle, PullParamsResponse, WorkerHandle};
+use comms::{ParamServerHandle, WorkerHandle};
 use machine_learning::{initialization::ConstParamGen, optimization::GradientDescent};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
@@ -32,15 +32,12 @@ where
     let mut server_handle = ParamServerHandle::new(0, transport);
 
     for _ in 0..max_epochs {
-        match server_handle.pull_params().await? {
-            PullParamsResponse::Params(params) => {
-                for (g, p) in grad.iter_mut().zip(params) {
-                    *g = *p - 1.0;
-                }
-
-                server_handle.push_grad(&grad).await?;
-            }
+        let params = server_handle.pull_params().await?;
+        for (g, p) in grad.iter_mut().zip(params) {
+            *g = *p - 1.0;
         }
+
+        server_handle.push_grad(&grad).await?;
     }
 
     server_handle.disconnect().await?;
