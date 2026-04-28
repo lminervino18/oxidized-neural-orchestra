@@ -118,6 +118,7 @@ impl TrainerBuilder {
                     kernel_dim,
                     stride,
                     padding,
+                    act_fn: None,
                     ..
                 }) = last
                 {
@@ -147,6 +148,12 @@ impl TrainerBuilder {
                     stride,
                     padding,
                 ));
+
+                if act_fn.is_some() {
+                    let out_h = (input_dim.1 + 2 * padding - kernel_dim.2) / stride + 1;
+                    let out_w = (input_dim.2 + 2 * padding - kernel_dim.2) / stride + 1;
+                    layers.push(Layer::four_d_to2d(kernel_dim.0, out_h, out_w))
+                }
 
                 act_fn
             }
