@@ -19,7 +19,7 @@ pub enum AlgorithmSpec {
 }
 
 /// Message serializer for gradient sparse compression.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SerializerSpec {
     Base,

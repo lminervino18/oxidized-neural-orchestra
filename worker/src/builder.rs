@@ -61,10 +61,6 @@ impl WorkerBuilder {
                 server_ordering,
                 server_session_ids,
             } => {
-                let sparse_cfg = match spec.serializer {
-                    SerializerSpec::SparseCapable { r, seed } => Some((r, seed)),
-                    SerializerSpec::Base => None,
-                };
                 let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
                 let server_iter = server_addrs
@@ -79,7 +75,7 @@ impl WorkerBuilder {
                     let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
                     server_handle.join_session(session_id).await?;
 
-                    if let Some((r, seed)) = sparse_cfg {
+                    if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
                         server_handle.enable_sparse_capability(r, seed);
                     }
 

@@ -79,7 +79,7 @@ async fn main() -> io::Result<()> {
                     }
                     Connection::Worker(mut worker_handle) => {
                         match worker_handle.recv_event().await {
-                            Ok(WorkerEvent::JoinSession { session_id }) => {
+                            Ok(WorkerEvent::JoinSession(session_id)) => {
                                 info!("routing worker to session {session_id}");
                                 let mut remove = false;
 
