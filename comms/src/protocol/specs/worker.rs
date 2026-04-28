@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use super::machine_learning::{DatasetSpec, TrainerSpec};
+use super::machine_learning::{
+    ParamGenSpec, {DatasetSpec, TrainerSpec},
+};
 use crate::sparse::Float01;
 
 /// Distributed training algorithm selection.
@@ -14,6 +16,7 @@ pub enum AlgorithmSpec {
     },
     AllReduce {
         worker_addrs: Vec<String>,
+        param_gen: ParamGenSpec,
     },
 }
 
@@ -22,7 +25,7 @@ pub enum AlgorithmSpec {
 #[serde(rename_all = "snake_case")]
 pub enum SerializerSpec {
     Base,
-    SparseCapable { r: Float01, seed: Option<u64> },
+    SparseCapable { r: Float01 },
 }
 
 /// The specification for the `Worker`.
@@ -33,4 +36,5 @@ pub struct WorkerSpec {
     pub dataset: DatasetSpec,
     pub algorithm: AlgorithmSpec,
     pub serializer: SerializerSpec,
+    pub seed: Option<u64>,
 }

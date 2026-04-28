@@ -4,7 +4,9 @@ use comms::{
     Acceptor, Connection, Connector, OrchHandle, TransportLayer,
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
-use machine_learning::{dataset::DatasetBuilder, training::TrainerBuilder};
+use machine_learning::{
+    dataset::DatasetBuilder, initialization::ParamGenBuilder, training::TrainerBuilder,
+};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{
@@ -80,36 +82,56 @@ where
         samples_raw: Vec<f32>,
         labels_raw: Vec<f32>,
     ) -> io::Result<Box<dyn Worker>> {
+        let WorkerSpec {
+            worker_id,
+            trainer,
+            dataset,
+            algorithm,
+            serializer,
+            seed,
+        } = spec;
+
         let dataset_builder = DatasetBuilder::new();
-        let dataset = dataset_builder.build_inmem(spec.dataset, samples_raw, labels_raw);
+        let dataset = dataset_builder.build_inmem(dataset, samples_raw, labels_raw);
         let trainer_builder = TrainerBuilder::new();
 
-        match spec.algorithm {
+        match algorithm {
             AlgorithmSpec::ParameterServer {
-                server_addrs,
-                server_sizes,
+                ref server_addrs,
+                ref server_sizes,
                 server_ordering,
             } => {
                 let cluster_manager = self
                     .connect_to_servers(
-                        &server_addrs,
+                        server_addrs,
+                        server_sizes,
                         server_ordering,
-                        &server_sizes,
-                        spec.serializer,
+                        serializer,
+                        seed,
                     )
                     .await?;
 
-                let trainer = trainer_builder.build(spec.trainer, &server_sizes, dataset);
+                let trainer = trainer_builder.build(trainer, &server_sizes, dataset);
                 let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
-            AlgorithmSpec::AllReduce { worker_addrs } => {
-                let model_size = 1; // TODO: Somehow get the model size.
+            AlgorithmSpec::AllReduce {
+                worker_addrs,
+                param_gen,
+            } => {
+                let param_gen_builder = ParamGenBuilder::new();
+
+                // TODO: Should use the param generator to initialize the parameters of the model.
+                let param_gen = param_gen_builder
+                    .build(param_gen, spec.seed)
+                    .map_err(io::Error::other)?;
+
+                let model_size = param_gen.size();
                 let ring_manager = self
-                    .connect_to_workers(spec.worker_id, worker_addrs, model_size, spec.serializer)
+                    .connect_to_workers(worker_id, worker_addrs, model_size, serializer, seed)
                     .await?;
 
-                let trainer = trainer_builder.build(spec.trainer, &[model_size], dataset);
+                let trainer = trainer_builder.build(trainer, &[model_size], dataset);
                 let worker = AllReduceWorker::new(trainer, ring_manager, orch_handle);
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
@@ -120,18 +142,20 @@ where
     ///
     /// # Args
     /// * `server_addrs` - The network addresses of the servers.
-    /// * `server_ordering` - The ordering of the servers for the layers of the model.
     /// * `server_sizes` - The sizes of the servers in amount of parameters they hold.
+    /// * `server_ordering` - The ordering of the servers for the layers of the model.
     /// * `serializer_spec` - The spec of the serialization protocol.
+    /// * `seed` - An optional seed for the serializer's random number generator.
     ///
     /// # Returns
     /// A new `ServerClusterManager` instance or an io error if occurred.
     async fn connect_to_servers(
         self,
         server_addrs: &[String],
-        server_ordering: Vec<usize>,
         server_sizes: &[usize],
+        server_ordering: Vec<usize>,
         serializer_spec: SerializerSpec,
+        seed: Option<u64>,
     ) -> io::Result<ServerClusterManager<T>> {
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
@@ -140,7 +164,7 @@ where
             let (rx, tx) = stream.into_split();
             let mut server_handle = self.connector.connect_parameter_server(id, rx, tx).await?;
 
-            if let SerializerSpec::SparseCapable { r, seed } = serializer_spec {
+            if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 server_handle.enable_sparse_capability(r, seed);
             }
 
@@ -157,6 +181,7 @@ where
     /// * `worker_addrs` - The addresses of all the workers in the network.
     /// * `model_size` - The size of the model in amount of parameters.
     /// * `serializer_spec` - The spec of the serialization protocol.
+    /// * `seed` - An optional seed for the serializer's random number generator.
     ///
     /// # Returns
     /// A new `WorkerRingManager` instance or an error if occurred.
@@ -166,6 +191,7 @@ where
         addrs: Vec<String>,
         model_size: usize,
         serializer_spec: SerializerSpec,
+        seed: Option<u64>,
     ) -> io::Result<WorkerRingManager<T>> {
         let prev_conn_fut = async {
             loop {
@@ -182,7 +208,7 @@ where
             let (rx, tx) = stream.into_split();
             let mut worker_handle = self.connector.connect_worker(id, rx, tx).await?;
 
-            if let SerializerSpec::SparseCapable { r, seed } = serializer_spec {
+            if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 worker_handle.enable_sparse_capability(r, seed);
             }
 
