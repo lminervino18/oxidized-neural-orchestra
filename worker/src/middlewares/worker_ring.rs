@@ -15,7 +15,6 @@ where
     addrs: Vec<String>,
     prev: WorkerHandle<T>,
     next: WorkerHandle<T>,
-    params: Vec<f32>,
     grad: Vec<f32>,
     residual: Vec<f32>,
 }
@@ -31,7 +30,7 @@ where
     /// * `addrs` - The addresses of every worker in the ring.
     /// * `prev` - The handle for communicating with the previous worker.
     /// * `next` - The handle for communicating with the next worker.
-    /// * `params` - The parameters of the model.
+    /// * `size` - The amount of parameters of the model.
     ///
     /// # Returns
     /// A new `WorkerRingManager` instance.
@@ -40,16 +39,13 @@ where
         addrs: Vec<String>,
         prev: WorkerHandle<T>,
         next: WorkerHandle<T>,
-        params: Vec<f32>,
+        size: usize,
     ) -> Self {
-        let size = params.len();
-
         Self {
             id,
             addrs,
             prev,
             next,
-            params,
             grad: vec![0.0; size],
             residual: vec![0.0; size],
         }
@@ -57,10 +53,13 @@ where
 
     /// Creates a new `ParameterManager` binded to this ring manager's buffers.
     ///
+    /// # Args
+    /// * `params` - The parameters to use for this param manager.
+    ///
     /// # Returns
     /// A new `ParameterManager` instance.
-    pub fn build_param_manager(&mut self) -> ParamManager<'_> {
-        ParamManager::for_worker(&mut self.params, &mut self.grad, &mut self.residual)
+    pub fn build_param_manager<'a>(&'a mut self, params: &'a mut [f32]) -> ParamManager<'a> {
+        ParamManager::for_worker(params, &mut self.grad, &mut self.residual)
     }
 
     /// Runs the all reduce algorithm to scatter the partial gradients and
@@ -68,10 +67,13 @@ where
     ///
     /// # Returns
     /// A new `ParamManager` instance or an io error if occurred.
-    pub async fn pull_grads(&mut self) -> io::Result<ParamManager<'_>> {
+    pub async fn pull_grads<'a>(
+        &'a mut self,
+        params: &'a mut [f32],
+    ) -> io::Result<ParamManager<'a>> {
         self.scatter().await?;
         self.gather().await?;
-        Ok(self.build_param_manager())
+        Ok(self.build_param_manager(params))
     }
 
     /// Disconnects this worker from the ring of workers.

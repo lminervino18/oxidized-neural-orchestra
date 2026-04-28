@@ -14,6 +14,8 @@ where
     trainer: Box<dyn Trainer>,
     ring_manager: WorkerRingManager<T>,
     orch_handle: OrchHandle<T>,
+    optimization_params: Vec<f32>,
+    params: Vec<f32>,
 }
 
 impl<T> AllReduceWorker<T>
@@ -26,6 +28,7 @@ where
     /// * `trainer` - Domain strategy used to compute gradients from weights.
     /// * `cluster_manager` - The manager for communicating with the server cluster.
     /// * `orch_handle` - The handle for communicating with the orchestrator.
+    /// * `params` - The initial parameters of the model.
     ///
     /// # Returns
     /// A new `AllReduceWorker` instance.
@@ -33,11 +36,14 @@ where
         trainer: Box<dyn Trainer>,
         ring_manager: WorkerRingManager<T>,
         orch_handle: OrchHandle<T>,
+        params: Vec<f32>,
     ) -> Self {
         Self {
             trainer,
             ring_manager,
             orch_handle,
+            optimization_params: params.clone(),
+            params,
         }
     }
 }
@@ -51,7 +57,10 @@ where
         let mut should_continue = true;
 
         while should_continue {
-            let mut param_manager = self.ring_manager.build_param_manager();
+            let mut param_manager = self
+                .ring_manager
+                .build_param_manager(&mut self.optimization_params);
+
             let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
             self.orch_handle.push_losses(losses).await?;
             should_continue = !was_last;
@@ -71,7 +80,7 @@ where
                         warn!("unexpected message from orchestrator, got: {other:?}");
                     }
                 },
-                response = self.ring_manager.pull_grads() => {
+                response = self.ring_manager.pull_grads(&mut self.params) => {
                     debug!("received gradients from all workers, training...");
 
                     let mut param_manager = response?;
@@ -80,6 +89,9 @@ where
                     self.trainer.optimize(&mut param_manager).unwrap();
                 }
             }
+
+            // SAFETY: Both slices have the same length.
+            self.optimization_params.copy_from_slice(&mut self.params);
         }
 
         self.ring_manager.disconnect().await?;
