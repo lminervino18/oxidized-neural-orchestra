@@ -6,14 +6,11 @@ use std::{
     },
 };
 
-use machine_learning::initialization::ParamGen;
+use machine_learning::{initialization::ParamGen, optimization::Optimizer};
 use rayon::prelude::*;
 
 use super::BlockingShard;
-use crate::{
-    optimization::Optimizer,
-    storage::{Result, SizeMismatchErr, Store},
-};
+use crate::storage::{ParamServerErr, Result, Store};
 
 /// Partitions the model's parameters in shards and leverages
 /// parallelization to read and write data as fast as possible.
@@ -106,7 +103,7 @@ impl<O: Optimizer + Send> Store for BlockingStore<O> {
 
     fn pull_params(&self, out: &mut [f32]) -> Result<()> {
         if self.nparams != out.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         self.shards
@@ -125,7 +122,7 @@ impl<O: Optimizer + Send> Store for BlockingStore<O> {
 mod tests {
     use std::num::NonZeroUsize;
 
-    use machine_learning::initialization::ConstParamGen;
+    use machine_learning::{Result, initialization::ConstParamGen};
 
     use super::*;
 

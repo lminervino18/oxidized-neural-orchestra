@@ -7,10 +7,13 @@ pub struct GradientDescent {
 }
 
 impl GradientDescent {
-    /// Returns a new `GradientDescent`.
+    /// Creates a new `GradientDescent` optimizer.
     ///
     /// # Args
     /// * `learning_rate` - The *length* of the steps taken on `update_params`.
+    ///
+    /// # Returns
+    /// A new `GradientDescent` instance.
     pub fn new(learning_rate: f32) -> Self {
         Self { learning_rate }
     }

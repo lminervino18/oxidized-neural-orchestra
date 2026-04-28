@@ -11,7 +11,7 @@ use crate::{
         loss::{CrossEntropy, LossFn, Mse},
     },
     dataset::Dataset,
-    optimization::{GradientDescent, Optimizer},
+    optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
 };
 
 /// Builds `Trainer`s given a specification.
@@ -66,7 +66,30 @@ impl TrainerBuilder {
 
                 self.resolve_layers(spec, optimizers, dataset)
             }
-            _ => unimplemented!(),
+            OptimizerSpec::Adam {
+                learning_rate,
+                beta1,
+                beta2,
+                epsilon,
+            } => {
+                let optimizers: Vec<_> = server_sizes
+                    .iter()
+                    .map(|&len| Adam::new(len, learning_rate, beta1, beta2, epsilon))
+                    .collect();
+
+                self.resolve_layers(spec, optimizers, dataset)
+            }
+            OptimizerSpec::GradientDescentWithMomentum {
+                learning_rate,
+                momentum,
+            } => {
+                let optimizers: Vec<_> = server_sizes
+                    .iter()
+                    .map(|&len| GradientDescentWithMomentum::new(len, learning_rate, momentum))
+                    .collect();
+
+                self.resolve_layers(spec, optimizers, dataset)
+            }
         }
     }
 

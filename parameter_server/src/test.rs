@@ -3,11 +3,10 @@
 use std::{env, num::NonZeroUsize};
 
 use comms::{ParamServerHandle, PullParamsResponse, WorkerHandle};
-use machine_learning::initialization::ConstParamGen;
+use machine_learning::{initialization::ConstParamGen, optimization::GradientDescent};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
 use crate::{
-    optimization::GradientDescent,
     service::ParameterServer,
     storage::{BlockingStore, StoreHandle},
     synchronization::BarrierSync,

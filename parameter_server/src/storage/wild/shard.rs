@@ -1,9 +1,8 @@
 use std::cell::UnsafeCell;
 
-use crate::{
-    optimization::Optimizer,
-    storage::{Result, SizeMismatchErr},
-};
+use machine_learning::optimization::Optimizer;
+
+use crate::storage::{ParamServerErr, Result};
 
 /// A buffer for accumulating parameters across multiple threads without using locks.
 ///
@@ -43,7 +42,7 @@ impl<O: Optimizer> WildShard<O> {
     /// A `SizeMismatchErr` if `grad` isn't the same size as this shard.
     pub fn update_params(&self, grad: &[f32]) -> Result<()> {
         if self.nparams != grad.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         // SAFETY: Both params and optimizer are pinned to memory during the `Shard`'s life. It will
@@ -67,7 +66,7 @@ impl<O: Optimizer> WildShard<O> {
     /// A `SizeMismatchErr` if `out` isn't the same size as this shard.
     pub fn pull_params(&self, out: &mut [f32]) -> Result<()> {
         if self.nparams != out.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         // SAFETY: Params is pinned to memory during the `Shard`'s life. It will

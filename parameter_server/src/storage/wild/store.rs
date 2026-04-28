@@ -1,13 +1,10 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
-use machine_learning::initialization::ParamGen;
+use machine_learning::{initialization::ParamGen, optimization::Optimizer};
 use rayon::prelude::*;
 
 use super::WildShard;
-use crate::{
-    optimization::Optimizer,
-    storage::{Result, SizeMismatchErr, Store},
-};
+use crate::storage::{ParamServerErr, Result, Store};
 
 /// A parameter storage with no synchronization, it embraces concurrent reads and writes.
 pub struct WildStore<O: Optimizer> {
@@ -79,7 +76,7 @@ impl<O: Optimizer> Store for WildStore<O> {
     /// A `SizeMismatchErr` if the length of `grad` and the size of the storage mismatch.
     fn accumulate(&self, grad: &[f32]) -> Result<()> {
         if self.nparams != grad.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         self.shards
@@ -98,7 +95,7 @@ impl<O: Optimizer> Store for WildStore<O> {
 
     fn pull_params(&self, out: &mut [f32]) -> Result<()> {
         if self.nparams != out.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         self.shards

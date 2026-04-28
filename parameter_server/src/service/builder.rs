@@ -4,12 +4,14 @@ use comms::specs::{
     machine_learning::OptimizerSpec,
     server::{ServerSpec, StoreSpec, SynchronizerSpec},
 };
-use machine_learning::initialization::{ParamGenBuilder, Result};
+use machine_learning::{
+    initialization::{ParamGenBuilder, Result},
+    optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::{ParameterServer, Server};
 use crate::{
-    optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
     storage::{BlockingStore, Store, StoreHandle, WildStore},
     synchronization::{BarrierSync, NoBlockingSync, Synchronizer},
 };

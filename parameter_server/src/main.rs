@@ -1,4 +1,3 @@
-mod optimization;
 mod service;
 mod storage;
 mod synchronization;
