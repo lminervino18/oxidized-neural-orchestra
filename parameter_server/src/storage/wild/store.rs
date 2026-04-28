@@ -1,14 +1,15 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
+use machine_learning::initialization::ParamGen;
 use rayon::prelude::*;
 
 use super::WildShard;
 use crate::{
-    initialization::ParamGen,
     optimization::Optimizer,
     storage::{Result, SizeMismatchErr, Store},
 };
 
+/// A parameter storage with no synchronization, it embraces concurrent reads and writes.
 pub struct WildStore<O: Optimizer> {
     nparams: usize,
     shards: Arc<[WildShard<O>]>,

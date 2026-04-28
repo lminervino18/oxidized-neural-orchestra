@@ -4,12 +4,14 @@ use comms::specs::{
     machine_learning::OptimizerSpec,
     server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
 };
+use machine_learning::initialization::{
+    ChainedParamGen, ConstParamGen, ParamGen, RandParamGen, Result,
+};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::{ParameterServer, Server};
 use crate::{
-    initialization::{ChainedParamGen, ConstParamGen, ParamGen, RandParamGen, Result},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
     storage::{BlockingStore, Store, StoreHandle, WildStore},
     synchronization::{BarrierSync, NoBlockingSync, Synchronizer},

@@ -6,11 +6,11 @@ use std::{
     },
 };
 
+use machine_learning::initialization::ParamGen;
 use rayon::prelude::*;
 
 use super::BlockingShard;
 use crate::{
-    initialization::ParamGen,
     optimization::Optimizer,
     storage::{Result, SizeMismatchErr, Store},
 };
@@ -129,8 +129,9 @@ impl<O: Optimizer + Send> Store for BlockingStore<O> {
 mod tests {
     use std::num::NonZeroUsize;
 
+    use machine_learning::initialization::ConstParamGen;
+
     use super::*;
-    use crate::initialization::ConstParamGen;
 
     struct AddOptimizer;
 
