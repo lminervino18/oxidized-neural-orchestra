@@ -48,14 +48,10 @@ impl<O: Optimizer> BlockingStore<O> {
     ///
     /// # Returns
     /// A new `BlockingStore` instance.
-    pub fn new<PG, OF>(
-        shard_size: NonZeroUsize,
-        mut param_gen: PG,
-        mut optimizer_factory: OF,
-    ) -> Self
+    pub fn new<OF, PG>(shard_size: NonZeroUsize, param_gen: &mut PG, optimizer_factory: OF) -> Self
     where
-        PG: ParamGen,
-        OF: FnMut(usize) -> O,
+        PG: ParamGen + ?Sized,
+        OF: Fn(usize) -> O,
     {
         let mut nparams = 0;
         let mut shards = Vec::new();
@@ -144,8 +140,8 @@ mod tests {
 
     fn create_test_store(params: usize, shard_size: usize) -> BlockingStore<AddOptimizer> {
         let shard_size = NonZeroUsize::new(shard_size).unwrap();
-        let param_gen = ConstParamGen::new(0., params);
-        BlockingStore::new(shard_size, param_gen, |_| AddOptimizer)
+        let mut param_gen = ConstParamGen::new(0., params);
+        BlockingStore::new(shard_size, &mut param_gen, |_| AddOptimizer)
     }
 
     #[test]

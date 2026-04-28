@@ -58,9 +58,9 @@ async fn test_lineal_convergence() -> io::Result<()> {
     const NPARAMS: usize = 2;
 
     let shard_size = NonZeroUsize::new(1).unwrap();
-    let param_gen = ConstParamGen::new(0.5, NPARAMS);
+    let mut param_gen = ConstParamGen::new(0.5, NPARAMS);
     let optimizer_factory = |_| GradientDescent::new(0.1);
-    let store = BlockingStore::new(shard_size, param_gen, optimizer_factory);
+    let store = BlockingStore::new(shard_size, &mut param_gen, optimizer_factory);
     let handle = StoreHandle::new(store);
     let synchronizer = BarrierSync::new(1);
     let mut server = ParameterServer::new(handle, synchronizer);

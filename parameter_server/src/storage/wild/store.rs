@@ -38,12 +38,12 @@ impl<O: Optimizer> WildStore<O> {
     /// A new `WildStore` instance.
     pub fn new<PG, OF>(
         shard_size: NonZeroUsize,
-        mut param_gen: PG,
+        param_gen: &mut PG,
         mut optimizer_factory: OF,
     ) -> Self
     where
         O: Optimizer,
-        PG: ParamGen,
+        PG: ParamGen + ?Sized,
         OF: FnMut(usize) -> O,
     {
         let mut nparams = 0;
