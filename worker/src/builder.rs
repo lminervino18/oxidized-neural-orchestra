@@ -5,7 +5,9 @@ use comms::{
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{
-    dataset::DatasetBuilder, initialization::ParamGenBuilder, training::TrainerBuilder,
+    dataset::DatasetBuilder,
+    initialization::{ParamGen, ParamGenBuilder},
+    training::TrainerBuilder,
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -120,15 +122,19 @@ where
                 param_gen,
             } => {
                 let param_gen_builder = ParamGenBuilder::new();
-
-                // TODO: Should use the param generator to initialize the parameters of the model.
-                let param_gen = param_gen_builder
+                let mut param_gen = param_gen_builder
                     .build(param_gen, spec.seed)
                     .map_err(io::Error::other)?;
 
                 let model_size = param_gen.size();
                 let ring_manager = self
-                    .connect_to_workers(worker_id, worker_addrs, model_size, serializer, seed)
+                    .connect_to_workers(
+                        worker_id,
+                        worker_addrs,
+                        param_gen.as_mut(),
+                        serializer,
+                        seed,
+                    )
                     .await?;
 
                 let trainer = trainer_builder.build(trainer, &[model_size], dataset);
@@ -179,20 +185,23 @@ where
     /// # Args
     /// * `id` - The id of this worker.
     /// * `worker_addrs` - The addresses of all the workers in the network.
-    /// * `model_size` - The size of the model in amount of parameters.
+    /// * `param_gen` - The parameter generator for initializing the parameters of the model.
     /// * `serializer_spec` - The spec of the serialization protocol.
     /// * `seed` - An optional seed for the serializer's random number generator.
     ///
     /// # Returns
     /// A new `WorkerRingManager` instance or an error if occurred.
-    async fn connect_to_workers(
+    async fn connect_to_workers<PG>(
         mut self,
         id: usize,
         addrs: Vec<String>,
-        model_size: usize,
+        param_gen: &mut PG,
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
-    ) -> io::Result<WorkerRingManager<T>> {
+    ) -> io::Result<WorkerRingManager<T>>
+    where
+        PG: ParamGen + ?Sized,
+    {
         let prev_conn_fut = async {
             loop {
                 if let Connection::Worker(worker_handle) = self.acceptor.accept().await? {
@@ -215,8 +224,11 @@ where
             Ok::<_, io::Error>(worker_handle)
         };
 
+        // SAFETY: The param generator was just built,
+        //         it must have parameters still.
+        let params = param_gen.sample_remaining().unwrap();
         let (prev, next) = tokio::try_join!(prev_conn_fut, next_conn_fut)?;
-        let ring_manager = WorkerRingManager::new(id, addrs, prev, next, model_size);
+        let ring_manager = WorkerRingManager::new(id, addrs, prev, next, params);
         Ok(ring_manager)
     }
 }

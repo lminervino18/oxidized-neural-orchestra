@@ -37,6 +37,10 @@ impl ParamGen for ConstParamGen {
         self.remaining -= n;
         Some(vec![self.value; n])
     }
+
+    fn sample_remaining(&mut self) -> Option<Vec<f32>> {
+        self.sample(self.remaining)
+    }
 }
 
 #[cfg(test)]

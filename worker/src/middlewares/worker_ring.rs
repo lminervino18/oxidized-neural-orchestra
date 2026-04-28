@@ -31,7 +31,7 @@ where
     /// * `addrs` - The addresses of every worker in the ring.
     /// * `prev` - The handle for communicating with the previous worker.
     /// * `next` - The handle for communicating with the next worker.
-    /// * `size` - The amount of parameters of the model.
+    /// * `params` - The parameters of the model.
     ///
     /// # Returns
     /// A new `WorkerRingManager` instance.
@@ -40,14 +40,16 @@ where
         addrs: Vec<String>,
         prev: WorkerHandle<T>,
         next: WorkerHandle<T>,
-        size: usize,
+        params: Vec<f32>,
     ) -> Self {
+        let size = params.len();
+
         Self {
             id,
             addrs,
             prev,
             next,
-            params: vec![0.0; size],
+            params,
             grad: vec![0.0; size],
             residual: vec![0.0; size],
         }

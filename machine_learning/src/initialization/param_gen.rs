@@ -12,6 +12,12 @@ pub trait ParamGen {
     /// * `n` - The upper limit of samples to generate.
     ///
     /// # Returns
-    /// An option whether the generator is exhausted.
+    /// The next `n` (at most) parameters in the generator or `None` if exhausted.
     fn sample(&mut self, n: usize) -> Option<Vec<f32>>;
+
+    /// Samples the ramaining parameters in the generator.
+    ///
+    /// # Returns
+    /// All the remaining parameters in the generator or `None` if exhausted.
+    fn sample_remaining(&mut self) -> Option<Vec<f32>>;
 }
