@@ -79,7 +79,13 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
-        todo!()
+        self.next.disconnect().await?;
+
+        if let WorkerEvent::Disconnect = self.prev.recv_event().await? {
+            return Err(io::Error::other("Expected Disconnect from previous worker"));
+        }
+
+        Ok(())
     }
 
     /// Will start the ring scattering of the gradients with the rest of
