@@ -61,6 +61,7 @@ where
                 .ring_manager
                 .build_param_manager(&mut self.optimization_params);
 
+            // SAFETY:
             let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
             self.orch_handle.push_losses(losses).await?;
             should_continue = !was_last;
