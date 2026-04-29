@@ -132,6 +132,9 @@ impl Conv2d {
         let batch_size = input.dim().0;
 
         delta_out.reshape_inplace(input.dim());
+        // TODO: delta was accumulating garbage in each itearation, zero every buffer that is being
+        // accumulated!!!!
+        delta_out.fill(0.);
 
         for b_idx in 0..batch_size {
             for f_idx in 0..filters {
