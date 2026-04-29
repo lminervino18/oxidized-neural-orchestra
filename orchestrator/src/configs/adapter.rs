@@ -107,6 +107,7 @@ impl Adapter {
             server_addrs,
             server_sizes,
             server_ordering,
+            server_session_ids: Vec::new(),
         };
         let serializer_spec = self.adapt_serializer(training);
 

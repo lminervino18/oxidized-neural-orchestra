@@ -5,7 +5,6 @@ use tokio::io::AsyncRead;
 use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
-    specs::worker::WorkerSpec,
     transport::TransportLayer,
 };
 
@@ -23,6 +22,7 @@ pub enum WorkerEvent<'a> {
     Loss(Vec<f32>),
     RequestParams,
     Disconnect,
+    JoinSession(u64),
 }
 
 impl<T: TransportLayer> WorkerHandle<T> {
@@ -40,18 +40,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
             transport,
             grad: Vec::new(),
         }
-    }
-
-    /// Sends the create spec for the worker.
-    ///
-    /// # Args
-    /// * `spec` - The worker's specification.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn create(&mut self, spec: WorkerSpec) -> io::Result<()> {
-        let msg = Msg::Control(Command::CreateWorker(spec));
-        self.transport.send(&msg).await
     }
 
     /// Blocks until receiving an event from a worker.
@@ -82,6 +70,9 @@ impl<T: TransportLayer> WorkerHandle<T> {
             Msg::Control(Command::ReportLoss { losses }) => WorkerEvent::Loss(losses.into_owned()),
             Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
+            Msg::Control(Command::JoinSession { session_id }) => {
+                WorkerEvent::JoinSession(session_id)
+            }
             msg => {
                 let text = format!("Unexpected message from worker {}, got: {msg:?}", self.id);
                 return Err(io::Error::other(text));

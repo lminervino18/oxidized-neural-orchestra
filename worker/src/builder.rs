@@ -59,13 +59,21 @@ impl WorkerBuilder {
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                server_session_ids,
             } => {
                 let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
-                for (id, (addr, &size)) in server_addrs.into_iter().zip(&server_sizes).enumerate() {
-                    let stream = TcpStream::connect(addr).await?;
+                let server_iter = server_addrs
+                    .into_iter()
+                    .zip(server_sizes.iter().copied())
+                    .zip(server_session_ids.iter().copied())
+                    .enumerate();
+
+                for (id, ((addr, size), session_id)) in server_iter {
+                    let stream = TcpStream::connect(&addr).await?;
                     let (rx, tx) = stream.into_split();
-                    let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
+                    let mut server_handle =
+                        connector.join_server_session(id, rx, tx, session_id).await?;
 
                     if let SerializerSpec::SparseCapable { r, seed } = spec.serializer {
                         server_handle.enable_sparse_capability(r, seed);

@@ -3,23 +3,30 @@
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ORCHESTUI_DIR="$ROOT/orchestui"
 
-# Parse --release flag
-RELEASE=""
-for arg in "$@"; do
-  [ "$arg" = "--release" ] && RELEASE="--release"
-done
+RELEASE="--release"
 
-# Read worker and server counts from training.json
-NWORKERS=$(python3 -c "
+# Count unique containers by deduplicating repeated addresses.
+# If the same host:port appears multiple times, only one container is launched —
+# that node handles multiple roles concurrently via the NodeRouter.
+read NWORKERS NSERVERS < <(python3 -c "
 import json
-d = json.load(open('$ORCHESTUI_DIR/training.json'))
-print(len(d['worker_addrs']))
-")
 
-NSERVERS=$(python3 -c "
-import json
 d = json.load(open('$ORCHESTUI_DIR/training.json'))
-print(len(d['algorithm']['parameter_server']['server_addrs']))
+
+worker_hosts = set(a.split(':')[0] for a in d.get('worker_addrs', []))
+ps = d.get('algorithm', {}).get('parameter_server', {})
+server_hosts = set(a.split(':')[0] for a in ps.get('server_addrs', []))
+
+all_unique = worker_hosts | server_hosts
+
+def max_idx(prefix):
+    idxs = [int(h[len(prefix):]) for h in all_unique if h.startswith(prefix) and h[len(prefix):].isdigit()]
+    return max(idxs) + 1 if idxs else 0
+
+nworkers = max_idx('worker-')
+nservers = max_idx('server-')
+
+print(nworkers, nservers)
 ")
 
 # Bring up workers and servers via Docker

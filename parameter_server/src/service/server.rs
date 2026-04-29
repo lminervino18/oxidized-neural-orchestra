@@ -6,7 +6,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 /// This trait acts as an indirection layer, allowing the `ServerBuilder` to return
 /// and manage different `ParameterServer` configurations from it's unique build method.
 #[async_trait::async_trait]
-pub trait Server<R, W>
+pub trait Server<R, W>: Send
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,

@@ -3,7 +3,7 @@ use std::{borrow::Cow, io};
 use tokio::io::AsyncWrite;
 
 use crate::{
-    protocol::{Command, Msg, Payload},
+    protocol::{Command, Msg, NodeSpec, Payload},
     share_dataset,
     specs::{server::ServerSpec, worker::WorkerSpec},
     transport::TransportLayer,
@@ -49,8 +49,12 @@ where
     /// The specification or an io error if occurred.
     pub async fn pull_specification(&mut self) -> io::Result<PullSpecResponse> {
         let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateServer(spec)) => PullSpecResponse::ParameterServer(spec),
-            Msg::Control(Command::CreateWorker(spec)) => PullSpecResponse::Worker(spec),
+            Msg::Control(Command::CreateNode(NodeSpec::Server(spec))) => {
+                PullSpecResponse::ParameterServer(spec)
+            }
+            Msg::Control(Command::CreateNode(NodeSpec::Worker(spec))) => {
+                PullSpecResponse::Worker(spec)
+            }
             msg => {
                 let text = format!("Expected creation from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));
@@ -82,6 +86,18 @@ where
         W: AsyncWrite + Unpin,
     {
         share_dataset::recv_dataset(xs, ys, xs_size, ys_size, &mut self.transport).await
+    }
+
+    /// Notifies the orchestrator that this server session is ready and provides its session ID.
+    ///
+    /// # Args
+    /// * `session_id` - The session identifier assigned to this server session.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn push_session_ready(&mut self, session_id: u64) -> io::Result<()> {
+        let msg = Msg::Control(Command::SessionReady { session_id });
+        self.transport.send(&msg).await
     }
 
     /// Pushes the latest parameters to the orchestrator.

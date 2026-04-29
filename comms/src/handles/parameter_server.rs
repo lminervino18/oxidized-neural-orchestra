@@ -6,7 +6,6 @@ use rand::{SeedableRng, rngs::StdRng};
 use crate::{
     protocol::{Command, Msg, Payload},
     sparse::{self, Float01},
-    specs::server::ServerSpec,
     transport::TransportLayer,
 };
 
@@ -76,15 +75,12 @@ where
         self.sparse_capability = Some(sparse_metadata);
     }
 
-    /// Sends the create spec for the server.
+    /// Joins an existing server session.
     ///
-    /// # Args
-    /// * `spec` - The server's specification.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn create(&mut self, spec: ServerSpec) -> io::Result<()> {
-        let msg = Msg::Control(Command::CreateServer(spec));
+    /// Called internally by [`crate::Connector::join_server_session`] immediately
+    /// after the transport connection is established.
+    pub(crate) async fn join_session(&mut self, session_id: u64) -> io::Result<()> {
+        let msg = Msg::Control(Command::JoinSession { session_id });
         self.transport.send(&msg).await
     }
 
