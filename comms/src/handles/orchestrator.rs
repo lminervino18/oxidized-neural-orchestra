@@ -115,7 +115,7 @@ where
         self.transport.send(&msg).await
     }
 
-    /// Blocks until receiving an event from a orchestrator.
+    /// Blocks until receiving an event from an orchestrator.
     ///
     /// # Returns
     /// A `OrchEvent` message or an io error if occurred.

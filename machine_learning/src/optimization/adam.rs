@@ -1,7 +1,7 @@
 use super::Optimizer;
-use crate::storage::{Result, SizeMismatchErr};
+use crate::{MlErr, Result};
 
-#[derive(Debug)]
+/// Adaptive Moment Estimation algorithm.
 pub struct Adam {
     learning_rate: f32,
     beta1: f32,
@@ -38,9 +38,22 @@ impl Adam {
 }
 
 impl Optimizer for Adam {
+    /// Updates the parameters according to the Adam algorithm's learning rule, which adapts the
+    /// learning rate for each parameter using the first and second moments of the gradients.
+    ///
+    /// # Args
+    /// * `grad` - The gradient used for taking the step.
+    /// * `params` - The parameters that are going to be modified.
+    ///
+    /// # Returns
+    /// A size mismatch error if the lengths of `grad` and `params` mismatch.
     fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
         if grad.len() != params.len() {
-            return Err(SizeMismatchErr);
+            return Err(MlErr::SizeMismatch {
+                what: "grad and params",
+                got: grad.len(),
+                expected: params.len(),
+            });
         }
 
         let Self {

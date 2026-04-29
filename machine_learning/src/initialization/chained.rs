@@ -27,7 +27,7 @@ impl ChainedParamGen {
 
 impl ParamGen for ChainedParamGen {
     fn size(&self) -> usize {
-        self.param_gens
+        self.param_gens[self.curr..]
             .iter()
             .map(|param_gen| param_gen.size())
             .sum()
@@ -54,6 +54,11 @@ impl ParamGen for ChainedParamGen {
                 self.sample(n)
             }
         }
+    }
+
+    fn sample_remaining(&mut self) -> Option<Vec<f32>> {
+        let size = self.size();
+        self.sample(size)
     }
 }
 
@@ -117,5 +122,19 @@ mod tests {
 
         assert_eq!(sample, [0., 1., 2., 3.]);
         assert!(param_gen.sample(1).is_none());
+    }
+
+    #[test]
+    fn size_returns_the_remaining_amount_of_parameters_to_generate() {
+        let param_gens: Vec<Box<dyn ParamGen>> = vec![
+            Box::new(ConstParamGen::new(0., 2)),
+            Box::new(ConstParamGen::new(1., 3)),
+        ];
+
+        let mut param_gen = ChainedParamGen::new(param_gens);
+        param_gen.sample(3);
+
+        let sample = param_gen.sample_remaining().unwrap();
+        assert_eq!(sample, [1., 1.]);
     }
 }

@@ -3,8 +3,11 @@ use std::{
 };
 
 use comms::specs::{
-    machine_learning::{ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec},
-    server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
+    machine_learning::{
+        ActFnSpec, DatasetSpec, DistributionSpec, LayerSpec, LossFnSpec, OptimizerSpec,
+        ParamGenSpec, TrainerSpec,
+    },
+    server::{ServerSpec, StoreSpec, SynchronizerSpec},
     worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 
@@ -127,6 +130,7 @@ impl Adapter {
                     dataset,
                     algorithm: algorithm_spec.clone(),
                     serializer: serializer_spec.clone(),
+                    seed: training.seed,
                 };
 
                 Ok((addr.clone(), worker_spec))
@@ -155,8 +159,12 @@ impl Adapter {
         dataset_specs: Vec<DatasetSpec>,
     ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
+        let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
         let algorithm_spec = AlgorithmSpec::AllReduce {
             worker_addrs: training.worker_addrs.clone(),
+            param_gen: ParamGenSpec::Chained {
+                specs: param_gen_specs,
+            },
         };
         let serializer_spec = self.adapt_serializer(training);
 
@@ -177,6 +185,7 @@ impl Adapter {
                     dataset,
                     algorithm: algorithm_spec.clone(),
                     serializer: serializer_spec.clone(),
+                    seed: training.seed,
                 };
 
                 Ok((addr.clone(), worker_spec))
@@ -196,10 +205,7 @@ impl Adapter {
     fn adapt_serializer(&self, training: &TrainingConfig) -> SerializerSpec {
         match training.serializer {
             SerializerConfig::Base => SerializerSpec::Base,
-            SerializerConfig::SparseCapable { r } => SerializerSpec::SparseCapable {
-                r,
-                seed: training.seed,
-            },
+            SerializerConfig::SparseCapable { r } => SerializerSpec::SparseCapable { r },
         }
     }
 

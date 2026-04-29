@@ -6,7 +6,7 @@ use tokio::{net::TcpListener, signal};
 
 use worker::builder::WorkerBuilder;
 
-const DEFAULT_HOST: &str = "127.0.0.1";
+const DEFAULT_HOST: &str = "0.0.0.0";
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -19,20 +19,25 @@ async fn main() -> io::Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     info!("listening at {addr}");
 
-    let stream_factory = async move || {
-        let (stream, addr) = listener.accept().await?;
-        info!("new incomming connection from {addr}");
-        Ok(stream.into_split())
+    let reliable_transport_factory = |rx, tx| {
+        comms::build_reliable_transport(
+            rx,
+            tx,
+            Duration::from_secs(5),
+            Duration::from_secs(2),
+            2,
+            5,
+        )
     };
 
-    let mut acceptor = Acceptor::new(
-        stream_factory,
-        Duration::from_secs(5),
-        Duration::from_secs(2),
-        2,
-        5,
-    );
+    let transport_factory = async move || {
+        let (stream, addr) = listener.accept().await?;
+        info!("new incomming connection from {addr}");
+        let (rx, tx) = stream.into_split();
+        Ok(reliable_transport_factory(rx, tx))
+    };
 
+    let mut acceptor = Acceptor::new(transport_factory);
     let Connection::Orchestrator(mut orch_handle) = acceptor.accept().await? else {
         panic!("Received an invalid connection type, expected orchestrator");
     };
@@ -59,22 +64,15 @@ async fn main() -> io::Result<()> {
         )
         .await?;
 
-    let transport_factory = |rx, tx| {
-        comms::build_reliable_transport(
-            rx,
-            tx,
-            Duration::from_secs(5),
-            Duration::from_secs(2),
-            2,
-            5,
-        )
-    };
+    let connector = Connector::new(
+        reliable_transport_factory,
+        Entity::Worker { id: spec.worker_id },
+    );
 
-    let connector = Connector::new(transport_factory, Entity::Worker { id: spec.worker_id });
-    let worker_builder = WorkerBuilder::new();
+    let worker_builder = WorkerBuilder::new(acceptor, connector);
 
     let mut worker = worker_builder
-        .build(spec, connector, orch_handle, samples_raw, labels_raw)
+        .build(spec, orch_handle, samples_raw, labels_raw)
         .await?;
 
     tokio::select! {

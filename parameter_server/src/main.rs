@@ -1,5 +1,3 @@
-mod initialization;
-mod optimization;
 mod service;
 mod storage;
 mod synchronization;
@@ -28,20 +26,24 @@ async fn main() -> io::Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     info!("listening at {addr}");
 
-    let stream_factory = async move || {
+    let transport_factory = async move || {
         let (stream, addr) = listener.accept().await?;
         info!("new incoming connection from {addr}");
-        Ok(stream.into_split())
+
+        let (rx, tx) = stream.into_split();
+        let transport_layer = comms::build_reliable_transport(
+            rx,
+            tx,
+            Duration::from_secs(5),
+            Duration::from_secs(2),
+            2,
+            5,
+        );
+
+        Ok(transport_layer)
     };
 
-    let mut acceptor = Acceptor::new(
-        stream_factory,
-        Duration::from_secs(5),
-        Duration::from_secs(2),
-        2,
-        5,
-    );
-
+    let mut acceptor = Acceptor::new(transport_factory);
     let Connection::Orchestrator(mut orch_handle) = acceptor.accept().await? else {
         panic!("Received an invalid connection type, expected orchestrator");
     };

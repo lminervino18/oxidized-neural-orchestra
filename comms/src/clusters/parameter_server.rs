@@ -2,7 +2,7 @@ use std::io;
 
 use futures::future;
 
-use crate::{ParamServerHandle, PullParamsResponse, TransportLayer};
+use crate::{ParamServerHandle, TransportLayer};
 
 /// A helper struct to manage a cluster of parameter servers.
 pub struct ParamServerCluster<T>
@@ -48,11 +48,10 @@ where
     /// # Returns
     /// The parameters from all the servers or io errors if occurred.
     pub async fn pull_params(&mut self) -> Vec<io::Result<&mut [f32]>> {
-        let futs = self.server_handles.iter_mut().map(async |server_handle| {
-            match server_handle.pull_params().await? {
-                PullParamsResponse::Params(params) => Ok::<_, io::Error>(params),
-            }
-        });
+        let futs = self
+            .server_handles
+            .iter_mut()
+            .map(async |server_handle| server_handle.pull_params().await);
 
         future::join_all(futs).await
     }

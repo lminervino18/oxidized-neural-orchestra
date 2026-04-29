@@ -15,7 +15,7 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer,
-    F: FnMut(R, W) -> T,
+    F: Fn(R, W) -> T,
 {
     transport_factory: F,
     src_entity: Entity,

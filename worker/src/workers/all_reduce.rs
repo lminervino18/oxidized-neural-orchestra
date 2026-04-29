@@ -4,58 +4,67 @@ use comms::{OrchEvent, OrchHandle, TransportLayer};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 
-use crate::{middlewares::ServerClusterManager, workers::Worker};
+use crate::{middlewares::WorkerRingManager, workers::Worker};
 
-/// The middleman between the parameter server and the model trainer.
-pub struct ParamServerWorker<T>
+/// The middleman between the workers and the model trainer.
+pub struct AllReduceWorker<T>
 where
     T: TransportLayer,
 {
     trainer: Box<dyn Trainer>,
-    cluster_manager: ServerClusterManager<T>,
+    ring_manager: WorkerRingManager<T>,
     orch_handle: OrchHandle<T>,
+    optimization_params: Vec<f32>,
+    params: Vec<f32>,
 }
 
-impl<T> ParamServerWorker<T>
+impl<T> AllReduceWorker<T>
 where
     T: TransportLayer,
 {
-    /// Creates a new `Worker`.
+    /// Creates a new `AllReduceWorker`.
     ///
     /// # Args
     /// * `trainer` - Domain strategy used to compute gradients from weights.
     /// * `cluster_manager` - The manager for communicating with the server cluster.
     /// * `orch_handle` - The handle for communicating with the orchestrator.
+    /// * `params` - The initial parameters of the model.
     ///
     /// # Returns
-    /// A new `Worker` instance.
+    /// A new `AllReduceWorker` instance.
     pub fn new(
         trainer: Box<dyn Trainer>,
-        cluster_manager: ServerClusterManager<T>,
+        ring_manager: WorkerRingManager<T>,
         orch_handle: OrchHandle<T>,
+        params: Vec<f32>,
     ) -> Self {
         Self {
             trainer,
-            cluster_manager,
+            ring_manager,
             orch_handle,
+            optimization_params: params.clone(),
+            params,
         }
     }
 }
 
 #[async_trait::async_trait]
-impl<T> Worker for ParamServerWorker<T>
+impl<T> Worker for AllReduceWorker<T>
 where
     T: TransportLayer,
 {
-    /// Runs the worker using its configured distributed algorithm while keeping a live
-    /// bidirectional channel to the orchestrator.
-    ///
-    /// # Returns
-    /// An io error if occurred.
     async fn run(&mut self) -> io::Result<()> {
         let mut should_continue = true;
 
         while should_continue {
+            let mut param_manager = self
+                .ring_manager
+                .build_param_manager(&mut self.optimization_params);
+
+            let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
+            self.orch_handle.push_losses(losses).await?;
+            should_continue = !was_last;
+
             tokio::select! {
                 biased;
                 event = self.orch_handle.recv_event() => match event? {
@@ -71,20 +80,21 @@ where
                         warn!("unexpected message from orchestrator, got: {other:?}");
                     }
                 },
-                response = self.cluster_manager.pull_params() => {
-                    debug!("received parameters from all servers, training...");
+                response = self.ring_manager.pull_grads(&mut self.params) => {
+                    debug!("received gradients from all workers, training...");
 
                     let mut param_manager = response?;
-                    let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
-                    self.cluster_manager.push_grads().await?;
 
-                    self.orch_handle.push_losses(losses).await?;
-                    should_continue = !was_last;
+                    // SAFETY: The parameter and gradient buffer have the same size.
+                    self.trainer.optimize(&mut param_manager).unwrap();
                 }
             }
+
+            // SAFETY: Both slices have the same length.
+            self.optimization_params.copy_from_slice(&mut self.params);
         }
 
-        self.cluster_manager.disconnect().await?;
+        self.ring_manager.disconnect().await?;
         self.orch_handle.disconnect().await?;
         Ok(())
     }

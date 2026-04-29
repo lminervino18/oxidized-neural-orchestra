@@ -9,7 +9,7 @@ use crate::{
     arch::{
         Sequential,
         layers::Layer,
-        loss::{CrossEntropy, LossFn, Mse},
+        loss::{LossFn, Mse},
     },
     dataset::{Dataset, DatasetSrc},
     optimization::GradientDescent,
@@ -69,7 +69,7 @@ fn test_ml_linear_convergence() {
         .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -126,7 +126,7 @@ fn test_ml_and2_gate_convergence() {
         .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -192,7 +192,7 @@ fn test_ml_and3_gate_convergence() {
         .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -254,7 +254,7 @@ fn test_ml_xor2_gate_convergence() {
         .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -333,7 +333,7 @@ fn test_ml_xor4_gate_convergence() {
         .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -413,7 +413,7 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
         .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     let x = ArrayView2::from_shape((4, 9), &symbols).unwrap();
@@ -478,7 +478,7 @@ fn test_ml_3by3by2_symbols_convergence_with_convolutional3filters() {
     let filters = 3;
     let kernel_size = 2;
     let stride = 1;
-    let padding = 0;
+    let padding = 1;
 
     let output_height = 2;
     let output_width = 2;
@@ -524,7 +524,7 @@ fn test_ml_3by3by2_symbols_convergence_with_convolutional3filters() {
         .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     let x = ArrayView2::from_shape((batch_size.get(), x_size.get()), &symbols).unwrap();

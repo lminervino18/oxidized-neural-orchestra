@@ -20,4 +20,13 @@ pub trait Trainer: Send {
     /// # Returns
     /// A training result declaring if the trianing has finished or should continue.
     fn train(&mut self, param_manager: &mut ParamManager<'_>) -> Result<TrainResult<'_>>;
+
+    /// Optimizes the parameters in the param manager.
+    ///
+    /// # Args
+    /// * `param_manager` - The manager of parameters for this optimization.
+    ///
+    /// # Returns
+    /// An error if there's a mismatch in the sizes of the grad and param buffers.
+    fn optimize<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<()>;
 }
