@@ -132,8 +132,6 @@ impl Conv2d {
         let batch_size = input.dim().0;
 
         delta_out.reshape_inplace(input.dim());
-        // TODO: delta was accumulating garbage in each itearation, zero every buffer that is being
-        // accumulated!!!!
         delta_out.fill(0.);
 
         for b_idx in 0..batch_size {
@@ -205,6 +203,10 @@ impl Conv2d {
         );
 
         dilated.reshape_inplace(dilated_dim);
+        // NOTE: this might not be needed as the assigned delta overwrites the past one if
+        // dimensions match. I leave it commented out as it's pretty expensive to fill up the whole
+        // dilated tensor with zeros.
+        // dilated.fill(0.);
         dilated
             .slice_mut(s![.., ..,
                 ..dilated_height; stride,
@@ -555,20 +557,14 @@ mod tests {
         test_conv2d_forward(2, 2, 2, 1, 1, &params, &input, &expected);
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn test_conv2d_backward(
-        filters: usize,
-        in_channels: usize,
-        kernel_size: usize,
-        stride: usize,
-        padding: usize,
+        conv: &mut Conv2d,
         params: &[f32],
         input: &Array4<f32>,
         delta_in: &mut Array4<f32>,
         expected_delta_out: &Array4<f32>,
         expected_grad: &[f32],
     ) {
-        let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
         let mut grad = vec![0.; params.len()];
         let _ = conv.forward(params, input.view()).unwrap();
         let delta_out = conv
@@ -580,6 +576,7 @@ mod tests {
 
     #[test]
     fn test_conv2d08_backward_filters1_in_channels1_kernel_size2_stride2_padding0() {
+        let mut conv = Conv2d::new(1, 1, 2, 2, 0);
         let params: [f32; 5] = [1., 2., 3., 4., 5.];
         let input: Array4<f32> = array![[[
             [1., 2., 3., 4.],
@@ -596,11 +593,43 @@ mod tests {
         ]]];
         let expected_grad = [462., 536., 758., 832., 74.];
         test_conv2d_backward(
-            1,
-            1,
-            2,
-            2,
-            0,
+            &mut conv,
+            &params,
+            &input,
+            &mut delta_in,
+            &expected_delta_out,
+            &expected_grad,
+        );
+    }
+
+    #[test]
+    fn test_conv2d09_backward_should_return_same_output_if_ran_twice() {
+        let mut conv = Conv2d::new(1, 1, 2, 2, 0);
+        let params: [f32; 5] = [1., 2., 3., 4., 5.];
+        let input: Array4<f32> = array![[[
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
+        ]]];
+        let mut delta_in: Array4<f32> = array![[[[17., 18.], [19., 20.]]]];
+        let expected_delta_out = array![[[
+            [17., 34., 18., 36.],
+            [51., 68., 54., 72.],
+            [19., 38., 20., 40.],
+            [57., 76., 60., 80.]
+        ]]];
+        let expected_grad = [462., 536., 758., 832., 74.];
+        test_conv2d_backward(
+            &mut conv,
+            &params,
+            &input,
+            &mut delta_in,
+            &expected_delta_out,
+            &expected_grad,
+        );
+        test_conv2d_backward(
+            &mut conv,
             &params,
             &input,
             &mut delta_in,
