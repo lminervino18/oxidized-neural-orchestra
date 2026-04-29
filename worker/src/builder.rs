@@ -118,6 +118,7 @@ where
             AlgorithmSpec::AllReduce {
                 worker_addrs,
                 param_gen,
+                amount_of_layers,
             } => {
                 let param_gen_builder = ParamGenBuilder::new();
                 let mut param_gen = param_gen_builder
@@ -126,7 +127,14 @@ where
 
                 let model_size = param_gen.size();
                 let ring_manager = self
-                    .connect_to_workers(worker_id, worker_addrs, model_size, serializer, seed)
+                    .connect_to_workers(
+                        worker_id,
+                        worker_addrs,
+                        model_size,
+                        serializer,
+                        seed,
+                        amount_of_layers,
+                    )
                     .await?;
 
                 // SAFETY: The parameter generator was just created.
@@ -182,6 +190,7 @@ where
     /// * `model_size` - The amount of parameters of the model.
     /// * `serializer_spec` - The spec of the serialization protocol.
     /// * `seed` - An optional seed for the serializer's random number generator.
+    /// * `amount_of_layers` - The amount of layers in the model.
     ///
     /// # Returns
     /// A new `WorkerRingManager` instance or an error if occurred.
@@ -192,6 +201,7 @@ where
         model_size: usize,
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
+        amount_of_layers: usize,
     ) -> io::Result<WorkerRingManager<T>> {
         let prev_conn_fut = async {
             loop {
@@ -216,7 +226,8 @@ where
         };
 
         let (prev, next) = tokio::try_join!(prev_conn_fut, next_conn_fut)?;
-        let ring_manager = WorkerRingManager::new(id, addrs, prev, next, model_size);
+        let ring_manager =
+            WorkerRingManager::new(id, addrs, prev, next, model_size, amount_of_layers);
         Ok(ring_manager)
     }
 }

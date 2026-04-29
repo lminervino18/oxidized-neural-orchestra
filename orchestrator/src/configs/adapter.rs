@@ -165,6 +165,7 @@ impl Adapter {
             param_gen: ParamGenSpec::Chained {
                 specs: param_gen_specs,
             },
+            amount_of_layers: model.layers.len(),
         };
         let serializer_spec = self.adapt_serializer(training);
 

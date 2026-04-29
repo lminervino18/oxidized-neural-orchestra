@@ -60,33 +60,22 @@ fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>)
 }
 
 fn main() -> io::Result<()> {
-    let workers = 3;
-    let servers = 2;
-    let release = false;
+    const WORKERS: usize = 3;
+    const SERVERS: usize = 0;
+    const RELEASE: bool = false;
 
-    setup_docker(workers, servers, release)?;
-    let (worker_addrs, server_addrs) = build_addresses(workers, servers);
+    setup_docker(WORKERS, SERVERS, RELEASE)?;
+    let (worker_addrs, _server_addrs) = build_addresses(WORKERS, SERVERS);
 
     let model_config = ModelConfig {
         layers: vec![
-            LayerConfig::Conv {
-                input_dim: (
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                ),
-                kernel_dim: (
-                    NonZeroUsize::new(5).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                ),
-                stride: NonZeroUsize::new(1).unwrap(),
-                padding: 0,
-                init: ParamGenConfig::Kaiming,
-                act_fn: None,
+            LayerConfig::Dense {
+                output_size: NonZeroUsize::new(2).unwrap(),
+                init: ParamGenConfig::XavierUniform,
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
             LayerConfig::Dense {
-                output_size: NonZeroUsize::new(4).unwrap(),
+                output_size: NonZeroUsize::new(1).unwrap(),
                 init: ParamGenConfig::Kaiming,
                 act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
@@ -95,60 +84,29 @@ fn main() -> io::Result<()> {
 
     let training_config = TrainingConfig {
         worker_addrs,
-        algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs,
-            synchronizer: SynchronizerConfig::Barrier,
-            store: StoreConfig::Blocking,
-        },
+        algorithm: AlgorithmConfig::AllReduce,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
         dataset: DatasetConfig {
             src: DatasetSrc::Inline {
                 samples: vec![
-                    0.0, 1.0, 0.0, //
-                    1.0, 1.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 0.0, 0.0, //
-                    1.0, 0.0, 1.0, // plus sign
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, //
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, // dot
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, // cross
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, //
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, // box
+                    0.0, 0.0, //
+                    0.0, 1.0, //
+                    1.0, 0.0, //
+                    1.0, 1.0, //
                 ],
                 labels: vec![
-                    1.0, 0.0, 0.0, 0.0, // plus sign
-                    0.0, 1.0, 0.0, 0.0, // dot
-                    0.0, 0.0, 1.0, 0.0, // cross
-                    0.0, 0.0, 0.0, 1.0, // box
+                    0.0, //
+                    1.0, //
+                    1.0, //
+                    1.0, //
                 ],
             },
-            x_size: NonZeroUsize::new(18).unwrap(),
-            y_size: NonZeroUsize::new(4).unwrap(),
+            x_size: NonZeroUsize::new(2).unwrap(),
+            y_size: NonZeroUsize::new(1).unwrap(),
         },
-        optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
+        optimizer: OptimizerConfig::GradientDescent { lr: 0.1 },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
         max_epochs: NonZeroUsize::new(300).unwrap(),

@@ -13,7 +13,7 @@ use crate::{
     },
     dataset::{Dataset, DatasetSrc},
     optimization::GradientDescent,
-    param_manager::{ParamManager, ServerParamsMetadata},
+    param_manager::{ParamManager, ParamsMetadata},
     training::{BackpropTrainer, Trainer},
 };
 
@@ -66,7 +66,7 @@ fn test_ml_linear_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::for_servers(servers, &ordering);
@@ -123,7 +123,7 @@ fn test_ml_and2_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::for_servers(servers, &ordering);
@@ -189,7 +189,7 @@ fn test_ml_and3_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::for_servers(servers, &ordering);
@@ -251,7 +251,7 @@ fn test_ml_xor2_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
     let mut param_manager = ParamManager::for_servers(servers, &ordering);
@@ -330,7 +330,7 @@ fn test_ml_xor4_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
     let mut param_manager = ParamManager::for_servers(servers, &ordering);
@@ -410,7 +410,7 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
     let mut param_manager = ParamManager::for_servers(servers, &ordering);
@@ -521,7 +521,7 @@ fn test_ml_3by3by2_symbols_convergence_with_convolutional3filters() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
     let mut param_manager = ParamManager::for_servers(servers, &ordering);

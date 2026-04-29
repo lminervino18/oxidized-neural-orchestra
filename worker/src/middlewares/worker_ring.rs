@@ -17,6 +17,7 @@ where
     next: WorkerHandle<T>,
     grad: Vec<f32>,
     residual: Vec<f32>,
+    amount_of_layers: usize,
 }
 
 impl<T> WorkerRingManager<T>
@@ -31,6 +32,7 @@ where
     /// * `prev` - The handle for communicating with the previous worker.
     /// * `next` - The handle for communicating with the next worker.
     /// * `size` - The amount of parameters of the model.
+    /// * `amount_of_layers` - The amount of layers in the model.
     ///
     /// # Returns
     /// A new `WorkerRingManager` instance.
@@ -40,6 +42,7 @@ where
         prev: WorkerHandle<T>,
         next: WorkerHandle<T>,
         size: usize,
+        amount_of_layers: usize,
     ) -> Self {
         Self {
             id,
@@ -48,6 +51,7 @@ where
             next,
             grad: vec![0.0; size],
             residual: vec![0.0; size],
+            amount_of_layers,
         }
     }
 
@@ -59,7 +63,12 @@ where
     /// # Returns
     /// A new `ParameterManager` instance.
     pub fn build_param_manager<'a>(&'a mut self, params: &'a mut [f32]) -> ParamManager<'a> {
-        ParamManager::for_worker(params, &mut self.grad, &mut self.residual)
+        ParamManager::for_worker(
+            params,
+            &mut self.grad,
+            &mut self.residual,
+            self.amount_of_layers,
+        )
     }
 
     /// Runs the all reduce algorithm to scatter the partial gradients and

@@ -17,6 +17,7 @@ pub enum AlgorithmSpec {
     AllReduce {
         worker_addrs: Vec<String>,
         param_gen: ParamGenSpec,
+        amount_of_layers: usize,
     },
 }
 
