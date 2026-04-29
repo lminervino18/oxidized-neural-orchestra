@@ -3,7 +3,7 @@ use ndarray::{linalg, prelude::*};
 use super::InplaceReshape;
 use crate::{MlErr, Result};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Dense {
     dim: (usize, usize),
     size: usize,

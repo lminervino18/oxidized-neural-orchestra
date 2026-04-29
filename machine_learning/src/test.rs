@@ -32,7 +32,7 @@ fn gen_params_grads(server_sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>
 }
 
 #[test]
-fn test_ml_linear_convergence() {
+fn test_machine_learning00_linear_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
     let x = [0., 1., 2., 3.];
@@ -79,12 +79,12 @@ fn test_ml_linear_convergence() {
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("{y:#?}\n\n\n{y_pred:#?}");
-    println!("loss: {loss}");
+    // println!("{y:#?}\n\n\n{y_pred:#?}");
+    // println!("loss: {loss}");
 }
 
 #[test]
-fn test_ml_and2_gate_convergence() {
+fn test_machine_learning01_and2_gate_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
     let x = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0];
@@ -136,12 +136,12 @@ fn test_ml_and2_gate_convergence() {
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("{y:#?}\n\n\n{y_pred:#?}");
-    println!("loss: {loss}");
+    // println!("{y:#?}\n\n\n{y_pred:#?}");
+    // println!("loss: {loss}");
 }
 
 #[test]
-fn test_ml_and3_gate_convergence() {
+fn test_machine_learning02_and3_gate_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
     let x = [
@@ -202,12 +202,12 @@ fn test_ml_and3_gate_convergence() {
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("{y:#?}\n\n\n{y_pred:#?}");
-    println!("loss: {loss}");
+    // println!("{y:#?}\n\n\n{y_pred:#?}");
+    // println!("loss: {loss}");
 }
 
 #[test]
-fn test_ml_xor2_gate_convergence() {
+fn test_machine_learning03_xor2_gate_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
     let x = [
@@ -264,12 +264,12 @@ fn test_ml_xor2_gate_convergence() {
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("{y:#?}\n\n\n{y_pred:#?}");
-    println!("loss: {loss}");
+    // println!("{y:#?}\n\n\n{y_pred:#?}");
+    // println!("loss: {loss}");
 }
 
 #[test]
-fn test_ml_xor4_gate_convergence() {
+fn test_machine_learning04_xor4_gate_convergence() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
     let x = [
@@ -342,54 +342,45 @@ fn test_ml_xor4_gate_convergence() {
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("{y:#?}\n\n\n{y_pred:#?}");
-    println!("loss: {loss}");
+    // println!("{y:#?}\n\n\n{y_pred:#?}");
+    // println!("loss: {loss}");
 }
 
-#[test]
-fn test_ml_3by3_symbols_convergence_with_convolutional() {
-    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
-
-    let symbols = [
-        0.0, 1.0, 0.0, //
-        1.0, 1.0, 1.0, //
-        0.0, 1.0, 0.0, // plus sign
-        0.0, 0.0, 0.0, //
-        0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, // dot
-        1.0, 0.0, 1.0, //
-        0.0, 1.0, 0.0, //
-        1.0, 0.0, 1.0, // cross
-        1.0, 1.0, 1.0, //
-        1.0, 0.0, 1.0, //
-        1.0, 1.0, 1.0, // box
-    ];
-
-    let labels = [
-        1.0, 0.0, 0.0, 0.0, //
-        0.0, 1.0, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, 1.0, //
-    ];
+#[allow(clippy::too_many_arguments)]
+fn test_conv_dense(
+    filters: usize,
+    in_channels: usize,
+    kernel_size: usize,
+    stride: usize,
+    padding: usize,
+    symbols: &[f32],
+    input_height: usize,
+    input_width: usize,
+    labels: &[f32],
+    y_size: usize,
+) {
+    let output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
+    let output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
 
     let mut model = Sequential::new(vec![
-        Layer::two_d_to4d(1, 3, 3),
-        Layer::conv2d(1, 1, 2, 1, 0),
-        Layer::four_d_to2d(1, 2, 2),
-        Layer::dense((4, 4)),
+        Layer::two_d_to4d(in_channels, input_height, input_width),
+        Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
+        Layer::four_d_to2d(filters, output_height, output_width),
+        Layer::dense((filters * output_height * output_width, y_size)),
         Layer::sigmoid(1.0),
     ]);
     let nparams = model.size();
 
-    let x_size = NonZeroUsize::new(9).unwrap();
-    let y_size = NonZeroUsize::new(4).unwrap();
+    let x_size = NonZeroUsize::new(input_height * input_width * in_channels).unwrap();
+    let y_size = NonZeroUsize::new(y_size).unwrap();
     let dataset = Dataset::new(
         DatasetSrc::inmem(symbols.into(), labels.into()),
         x_size,
         y_size,
     );
+
     let offline_epochs = 0;
-    let max_epochs = NonZeroUsize::new(1000).unwrap();
+    let max_epochs = NonZeroUsize::new(500).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
     let mut loss_fn = Mse::new();
@@ -416,19 +407,138 @@ fn test_ml_3by3_symbols_convergence_with_convolutional() {
     let mut param_manager = ParamManager::new(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
-    let x = ArrayView2::from_shape((4, 9), &symbols).unwrap();
-    let y = ArrayView2::from_shape((4, 4), &labels).unwrap();
+    let x = ArrayView2::from_shape((y_size.get(), x_size.get()), symbols).unwrap();
+    let y = ArrayView2::from_shape((y_size.get(), y_size.get()), labels).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
-    println!("loss: {loss}");
+    assert!(loss < 0.01);
+    // println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
+    // println!("loss: {loss}");
 }
 
 #[test]
-fn test_ml_3by3by2_symbols_convergence_with_convolutional3filters() {
+fn test_machine_learning05_3by3_symbols_convergence_with_convolutional() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
+    let filters = 1;
+    let in_channels = 1;
+    let kernel_size = 2;
+    let stride = 1;
+    let padding = 0;
+    let symbols = [
+        0.0, 1.0, 0.0, //
+        1.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, // plus sign
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, // dot
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, // cross
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, // box
+    ];
+    let input_height = 3;
+    let input_width = 3;
+    let labels = [
+        1.0, 0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, 1.0, //
+    ];
+    let y_size = 4;
+
+    test_conv_dense(
+        filters,
+        in_channels,
+        kernel_size,
+        stride,
+        padding,
+        &symbols,
+        input_height,
+        input_width,
+        &labels,
+        y_size,
+    );
+}
+
+#[test]
+fn test_machine_learning06_003by3by2_symbols_convergence_with_convolutional3filters() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let filters = 1;
+    let in_channels = 2;
+    let kernel_size = 2;
+    let stride = 1;
+    let padding = 0;
+    let symbols = [
+        0.0, 1.0, 0.0, //
+        1.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        //
+        1.0, 0.0, 1.0, //
+        0.0, 0.0, 0.0, //
+        1.0, 0.0, 1.0, // plus sign
+        //
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, //
+        //
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, // dot
+        //
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, //
+        //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, // cross
+        //
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, //
+        //
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, // box
+    ];
+    let input_height = 3;
+    let input_width = 3;
+    let labels = [
+        1.0, 0.0, 0.0, 0.0, // plus sign
+        0.0, 1.0, 0.0, 0.0, // dot
+        0.0, 0.0, 1.0, 0.0, // cross
+        0.0, 0.0, 0.0, 1.0, // box
+    ];
+    let y_size = 4;
+
+    test_conv_dense(
+        filters,
+        in_channels,
+        kernel_size,
+        stride,
+        padding,
+        &symbols,
+        input_height,
+        input_width,
+        &labels,
+        y_size,
+    );
+}
+
+#[test]
+fn test_machine_learning07_3by3by2_symbols_convergence_with_convolutional3filters_and_padding1() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let filters = 3;
+    let in_channels = 2;
+    let kernel_size = 2;
+    let stride = 1;
+    let padding = 1;
     // original symbol in the first channel and then inverted
     let symbols = [
         0.0, 1.0, 0.0, //
@@ -463,75 +573,74 @@ fn test_ml_3by3by2_symbols_convergence_with_convolutional3filters() {
         0.0, 1.0, 0.0, //
         0.0, 0.0, 0.0, // box
     ];
-
-    let labels = [
-        1.0, 0.0, 0.0, 0.0, //
-        0.0, 1.0, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, 1.0, //
-    ];
-
-    let in_channels = 2;
     let input_height = 3;
     let input_width = 3;
+    let labels = [
+        1.0, 0.0, 0.0, 0.0, // plus sign
+        0.0, 1.0, 0.0, 0.0, // dot
+        0.0, 0.0, 1.0, 0.0, // cross
+        0.0, 0.0, 0.0, 1.0, // box
+    ];
+    let y_size = 4;
 
-    let filters = 3;
-    let kernel_size = 2;
-    let stride = 1;
-    let padding = 0;
-
-    let output_height = 2;
-    let output_width = 2;
-
-    let mut model = Sequential::new(vec![
-        Layer::two_d_to4d(in_channels, input_height, input_width),
-        Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
-        Layer::four_d_to2d(filters, output_height, output_width),
-        Layer::dense((filters * output_height * output_width, 4)),
-        Layer::sigmoid(1.0),
-    ]);
-    let nparams = model.size();
-
-    let x_size = NonZeroUsize::new(input_height * input_width * in_channels).unwrap();
-    let y_size = NonZeroUsize::new(4).unwrap();
-    let dataset = Dataset::new(
-        DatasetSrc::inmem(symbols.into(), labels.into()),
-        x_size,
+    test_conv_dense(
+        filters,
+        in_channels,
+        kernel_size,
+        stride,
+        padding,
+        &symbols,
+        input_height,
+        input_width,
+        &labels,
         y_size,
     );
-    let offline_epochs = 0;
-    let max_epochs = NonZeroUsize::new(1000).unwrap();
-    let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
-    let mut loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+}
 
-    let mut trainer = BackpropTrainer::new(
-        model.clone(),
-        vec![optimizer],
-        dataset,
-        loss_fn.clone(),
-        offline_epochs,
-        max_epochs,
-        batch_size,
-        rng,
+#[test]
+fn test_machine_learning08_3by3by2_filters1_kernel_size3_stride1_padding1() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let filters = 1;
+    let in_channels = 1;
+    let kernel_size = 3;
+    let stride = 1;
+    let padding = 1;
+    // original symbol in the first channel and then inverted
+    let symbols = [
+        0.0, 1.0, 0.0, //
+        1.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, // plus sign
+        0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, //
+        0.0, 0.0, 0.0, // dot
+        1.0, 0.0, 1.0, //
+        0.0, 1.0, 0.0, //
+        1.0, 0.0, 1.0, // cross
+        1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, //
+        1.0, 1.0, 1.0, // box
+    ];
+    let input_height = 3;
+    let input_width = 3;
+    let labels = [
+        1.0, 0.0, 0.0, 0.0, // plus sign
+        0.0, 1.0, 0.0, 0.0, // dot
+        0.0, 0.0, 1.0, 0.0, // cross
+        0.0, 0.0, 0.0, 1.0, // box
+    ];
+    let y_size = 4;
+
+    test_conv_dense(
+        filters,
+        in_channels,
+        kernel_size,
+        stride,
+        padding,
+        &symbols,
+        input_height,
+        input_width,
+        &labels,
+        y_size,
     );
-
-    let ordering = [0, 0];
-    let mut params_grads = gen_params_grads(&[nparams]);
-    let servers: Vec<_> = params_grads
-        .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
-        .collect();
-
-    let mut param_manager = ParamManager::new(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
-
-    let x = ArrayView2::from_shape((batch_size.get(), x_size.get()), &symbols).unwrap();
-    let y = ArrayView2::from_shape((batch_size.get(), y_size.get()), &labels).unwrap();
-    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
-
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
-    println!("loss: {loss}");
 }
