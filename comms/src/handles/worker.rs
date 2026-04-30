@@ -22,7 +22,6 @@ pub enum WorkerEvent<'a> {
     Loss(Vec<f32>),
     RequestParams,
     Disconnect,
-    JoinSession(u64),
 }
 
 impl<T: TransportLayer> WorkerHandle<T> {
@@ -70,9 +69,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
             Msg::Control(Command::ReportLoss { losses }) => WorkerEvent::Loss(losses.into_owned()),
             Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
-            Msg::Control(Command::JoinSession { session_id }) => {
-                WorkerEvent::JoinSession(session_id)
-            }
             msg => {
                 let text = format!("Unexpected message from worker {}, got: {msg:?}", self.id);
                 return Err(io::Error::other(text));

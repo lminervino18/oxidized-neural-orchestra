@@ -2,7 +2,10 @@ use std::io;
 
 use super::{ParamServerHandle, WorkerHandle};
 use crate::{
-    protocol::{Command, Msg, NodeSpec, specs::{server::ServerSpec, worker::WorkerSpec}},
+    protocol::{
+        Command, Msg, NodeSpec,
+        specs::{server::ServerSpec, worker::WorkerSpec},
+    },
     transport::TransportLayer,
 };
 
@@ -28,27 +31,17 @@ impl<T: TransportLayer> NodeHandle<T> {
         Self { id, transport }
     }
 
-    /// Bootstraps the node as a parameter server and waits for session confirmation.
+    /// Bootstraps the node as a parameter server.
     ///
     /// # Args
     /// * `spec` - The specification for the parameter server.
     ///
     /// # Returns
-    /// The ready parameter server handle and the session ID assigned by the node,
-    /// or an io error if occurred.
-    pub async fn create_server(mut self, spec: ServerSpec) -> io::Result<(ParamServerHandle<T>, u64)> {
+    /// The parameter server handle or an io error if occurred.
+    pub async fn create_server(mut self, spec: ServerSpec) -> io::Result<ParamServerHandle<T>> {
         let msg = Msg::Control(Command::CreateNode(NodeSpec::Server(spec)));
         self.transport.send(&msg).await?;
-
-        let msg = self.transport.recv().await?;
-        let Msg::Control(Command::SessionReady { session_id }) = msg else {
-            return Err(io::Error::other(format!(
-                "expected SessionReady from node {}, got: {msg:?}",
-                self.id
-            )));
-        };
-
-        Ok((ParamServerHandle::new(self.id, self.transport), session_id))
+        Ok(ParamServerHandle::new(self.id, self.transport))
     }
 
     /// Bootstraps the node as a worker and returns its handle.

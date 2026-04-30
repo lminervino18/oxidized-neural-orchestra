@@ -75,15 +75,6 @@ where
         self.sparse_capability = Some(sparse_metadata);
     }
 
-    /// Joins an existing server session.
-    ///
-    /// Called internally by [`crate::Connector::join_server_session`] immediately
-    /// after the transport connection is established.
-    pub(crate) async fn join_session(&mut self, session_id: u64) -> io::Result<()> {
-        let msg = Msg::Control(Command::JoinSession { session_id });
-        self.transport.send(&msg).await
-    }
-
     /// Pulls the latest parameters from the server.
     ///
     /// # Returns

@@ -33,7 +33,7 @@ where
     ///
     /// # Args
     /// * `transport_factory` - A factory of transport layers.
-    /// * `entity` - The callee's entity.
+    /// * `src_entity` - The entity initiating the connection.
     ///
     /// # Returns
     /// A new `Connector` instance.
@@ -45,10 +45,21 @@ where
         }
     }
 
-    /// Connects to an uninitialised node and returns a [`NodeHandle`] to bootstrap it.
+    /// Connects to an uninitialised node and returns a handle to bootstrap it.
     ///
-    /// The caller decides the node's role by calling [`NodeHandle::create_server`] or
+    /// The caller assigns the node's role by calling [`NodeHandle::create_server`] or
     /// [`NodeHandle::create_worker`] on the returned handle.
+    ///
+    /// # Args
+    /// * `id` - The id number of the node.
+    /// * `reader` - The reading end of the communication.
+    /// * `writer` - The writing end of the communication.
+    ///
+    /// # Returns
+    /// A [`NodeHandle`] ready for role assignment.
+    ///
+    /// # Errors
+    /// Returns an io error if the connection handshake fails.
     pub async fn connect_node(&self, id: usize, reader: R, writer: W) -> io::Result<NodeHandle<T>>
     where
         R: AsyncRead + Unpin,
@@ -58,27 +69,43 @@ where
         Ok(NodeHandle::new(id, transport_layer))
     }
 
-    /// Connects to a running parameter server session and sends the join message.
+    /// Connects to a parameter server and returns a handle to communicate with it.
     ///
-    /// Used by workers to attach to an already-bootstrapped session identified by `session_id`.
-    pub async fn join_server_session(
+    /// # Args
+    /// * `id` - The id number of the server.
+    /// * `reader` - The reading end of the communication.
+    /// * `writer` - The writing end of the communication.
+    ///
+    /// # Returns
+    /// A [`ParamServerHandle`] ready to exchange parameters.
+    ///
+    /// # Errors
+    /// Returns an io error if the connection handshake fails.
+    pub async fn connect_parameter_server(
         &self,
         id: usize,
         reader: R,
         writer: W,
-        session_id: u64,
     ) -> io::Result<ParamServerHandle<T>>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
         let transport_layer = self.connect(reader, writer).await?;
-        let mut handle = ParamServerHandle::new(id, transport_layer);
-        handle.join_session(session_id).await?;
-        Ok(handle)
+        Ok(ParamServerHandle::new(id, transport_layer))
     }
 
-    /// Connects the given channel to an orchestrator using a reliable transport protocol layer.
+    /// Connects to an orchestrator and returns a handle to communicate with it.
+    ///
+    /// # Args
+    /// * `reader` - The reading end of the communication.
+    /// * `writer` - The writing end of the communication.
+    ///
+    /// # Returns
+    /// An [`OrchHandle`] ready to receive events.
+    ///
+    /// # Errors
+    /// Returns an io error if the connection handshake fails.
     pub async fn connect_orchestrator(&self, reader: R, writer: W) -> io::Result<OrchHandle<T>>
     where
         R: AsyncRead + Unpin,
