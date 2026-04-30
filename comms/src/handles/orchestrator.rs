@@ -3,9 +3,9 @@ use std::{borrow::Cow, io};
 use tokio::io::AsyncWrite;
 
 use crate::{
-    protocol::{Command, Msg, NodeSpec, Payload},
+    protocol::{Command, Msg, Payload},
     share_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
+    specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
     transport::TransportLayer,
 };
 
