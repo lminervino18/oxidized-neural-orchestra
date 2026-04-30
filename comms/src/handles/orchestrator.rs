@@ -5,7 +5,7 @@ use tokio::io::AsyncWrite;
 use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
+    specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
     transport::TransportLayer,
 };
 
@@ -49,8 +49,12 @@ where
     /// The specification or an io error if occurred.
     pub async fn pull_specification(&mut self) -> io::Result<PullSpecResponse> {
         let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateServer(spec)) => PullSpecResponse::ParameterServer(spec),
-            Msg::Control(Command::CreateWorker(spec)) => PullSpecResponse::Worker(spec),
+            Msg::Control(Command::CreateNode(NodeSpec::Server(spec))) => {
+                PullSpecResponse::ParameterServer(spec)
+            }
+            Msg::Control(Command::CreateNode(NodeSpec::Worker(spec))) => {
+                PullSpecResponse::Worker(spec)
+            }
             msg => {
                 let text = format!("Expected creation from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));
@@ -115,10 +119,10 @@ where
         self.transport.send(&msg).await
     }
 
-    /// Blocks until receiving an event from a orchestrator.
+    /// Blocks until receiving an event from an orchestrator.
     ///
     /// # Returns
-    /// A `OrchEvent` message or an io error if occurred.
+    /// An `OrchEvent` message or an io error if occurred.
     pub async fn recv_event(&mut self) -> io::Result<OrchEvent> {
         let event = match self.transport.recv().await? {
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,

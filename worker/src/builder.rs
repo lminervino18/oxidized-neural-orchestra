@@ -63,7 +63,7 @@ impl WorkerBuilder {
                 let mut cluster_manager = ServerClusterManager::new(server_ordering);
 
                 for (id, (addr, &size)) in server_addrs.into_iter().zip(&server_sizes).enumerate() {
-                    let stream = TcpStream::connect(addr).await?;
+                    let stream = TcpStream::connect(&addr).await?;
                     let (rx, tx) = stream.into_split();
                     let mut server_handle = connector.connect_parameter_server(id, rx, tx).await?;
 

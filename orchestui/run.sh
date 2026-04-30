@@ -3,23 +3,18 @@
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ORCHESTUI_DIR="$ROOT/orchestui"
 
-# Parse --release flag
-RELEASE=""
-for arg in "$@"; do
-  [ "$arg" = "--release" ] && RELEASE="--release"
-done
+RELEASE="--release"
 
-# Read worker and server counts from training.json
-NWORKERS=$(python3 -c "
+read NWORKERS NSERVERS < <(python3 -c "
 import json
-d = json.load(open('$ORCHESTUI_DIR/training.json'))
-print(len(d['worker_addrs']))
-")
 
-NSERVERS=$(python3 -c "
-import json
 d = json.load(open('$ORCHESTUI_DIR/training.json'))
-print(len(d['algorithm']['parameter_server']['server_addrs']))
+ps = d.get('algorithm', {}).get('parameter_server', {})
+
+nworkers = len(d.get('worker_addrs', []))
+nservers = len(ps.get('server_addrs', []))
+
+print(nworkers, nservers)
 ")
 
 # Bring up workers and servers via Docker

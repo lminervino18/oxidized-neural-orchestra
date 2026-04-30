@@ -30,7 +30,7 @@ def generate_servers(servers: int, release: bool) -> dict[str, YmlField]:
         f"server-{i}": {
             "container_name": f"server-{i}",
             "build": {
-                "dockerfile": "parameter_server/Dockerfile",
+                "dockerfile": "node/Dockerfile",
                 "args": {
                     "MODE": mode,
                 },
@@ -71,7 +71,7 @@ def generate_workers(workers: int, servers: int, release: bool) -> dict[str, Yml
         f"worker-{i}": {
             "container_name": f"worker-{i}",
             "build": {
-                "dockerfile": "worker/Dockerfile",
+                "dockerfile": "node/Dockerfile",
                 "args": {
                     "MODE": mode,
                 },

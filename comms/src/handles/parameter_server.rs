@@ -6,7 +6,6 @@ use rand::{SeedableRng, rngs::StdRng};
 use crate::{
     protocol::{Command, Msg, Payload},
     sparse::{self, Float01},
-    specs::server::ServerSpec,
     transport::TransportLayer,
 };
 
@@ -74,18 +73,6 @@ where
         };
 
         self.sparse_capability = Some(sparse_metadata);
-    }
-
-    /// Sends the create spec for the server.
-    ///
-    /// # Args
-    /// * `spec` - The server's specification.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn create(&mut self, spec: ServerSpec) -> io::Result<()> {
-        let msg = Msg::Control(Command::CreateServer(spec));
-        self.transport.send(&msg).await
     }
 
     /// Pulls the latest parameters from the server.

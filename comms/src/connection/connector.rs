@@ -3,7 +3,7 @@ use std::{io, marker::PhantomData};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
-    handles::{OrchHandle, ParamServerHandle, WorkerHandle},
+    handles::{NodeHandle, OrchHandle, ParamServerHandle},
     protocol::{Command, Entity, Msg},
     transport::TransportLayer,
 };
@@ -33,7 +33,7 @@ where
     ///
     /// # Args
     /// * `transport_factory` - A factory of transport layers.
-    /// * `entity` - The callee's entity.
+    /// * `src_entity` - The entity initiating the connection.
     ///
     /// # Returns
     /// A new `Connector` instance.
@@ -45,38 +45,42 @@ where
         }
     }
 
-    /// Connects the given channel to a worker using a reliable transport protocol layer.
+    /// Connects to an uninitialised node and returns a handle to bootstrap it.
+    ///
+    /// The caller assigns the node's role by calling [`NodeHandle::create_server`] or
+    /// [`NodeHandle::create_worker`] on the returned handle.
     ///
     /// # Args
-    /// * `id` - The id of the server.
+    /// * `id` - The id number of the node.
     /// * `reader` - The reading end of the communication.
     /// * `writer` - The writing end of the communication.
     ///
     /// # Returns
-    /// A new `WorkerHandle` instance.
-    pub async fn connect_worker(
-        &self,
-        id: usize,
-        reader: R,
-        writer: W,
-    ) -> io::Result<WorkerHandle<T>>
+    /// A [`NodeHandle`] ready for role assignment.
+    ///
+    /// # Errors
+    /// Returns an io error if the connection handshake fails.
+    pub async fn connect_node(&self, id: usize, reader: R, writer: W) -> io::Result<NodeHandle<T>>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
         let transport_layer = self.connect(reader, writer).await?;
-        Ok(WorkerHandle::new(id, transport_layer))
+        Ok(NodeHandle::new(id, transport_layer))
     }
 
-    /// Connects the given channel to a parameter server using a reliable transport protocol layer.
+    /// Connects to a parameter server and returns a handle to communicate with it.
     ///
     /// # Args
-    /// * `id` - The id of the worker.
+    /// * `id` - The id number of the server.
     /// * `reader` - The reading end of the communication.
     /// * `writer` - The writing end of the communication.
     ///
     /// # Returns
-    /// A new `ParamServerHandle` instance.
+    /// A [`ParamServerHandle`] ready to exchange parameters.
+    ///
+    /// # Errors
+    /// Returns an io error if the connection handshake fails.
     pub async fn connect_parameter_server(
         &self,
         id: usize,
@@ -91,14 +95,17 @@ where
         Ok(ParamServerHandle::new(id, transport_layer))
     }
 
-    /// Connects the given channel to an orchestrator using a reliable transport protocol layer.
+    /// Connects to an orchestrator and returns a handle to communicate with it.
     ///
     /// # Args
     /// * `reader` - The reading end of the communication.
     /// * `writer` - The writing end of the communication.
     ///
     /// # Returns
-    /// A new `OrchHandle` instance.
+    /// An [`OrchHandle`] ready to receive events.
+    ///
+    /// # Errors
+    /// Returns an io error if the connection handshake fails.
     pub async fn connect_orchestrator(&self, reader: R, writer: W) -> io::Result<OrchHandle<T>>
     where
         R: AsyncRead + Unpin,
