@@ -301,9 +301,21 @@ impl Session {
         mut rx_stopper: Receiver<()>,
         tx: Sender<TrainingEvent>,
     ) {
+        let mut stopping = false;
         loop {
             tokio::select! {
-                _ = rx_stopper.recv() => break,
+                _ = rx_stopper.recv(), if !stopping => {
+                    stopping = true;
+                    if let Err(e) = worker_handle.stop().await {
+                        error!("worker {id}: failed to send stop command: {e}");
+                        let event = TrainingEvent::Error(OrchErr::WorkerError {
+                            worker_id: id,
+                            event: format!("failed to send stop command: {e}"),
+                        });
+                        let _ = tx.send(event).await;
+                        return;
+                    }
+                }
                 event = worker_handle.recv_event() => match event {
                     Ok(WorkerEvent::Loss(losses)) => {
                         debug!("worker {id} reported {} losses", losses.len());
