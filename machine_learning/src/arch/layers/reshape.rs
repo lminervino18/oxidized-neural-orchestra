@@ -3,14 +3,14 @@ use ndarray::{ArrayView2, ArrayView4, ArrayViewD, ArrayViewMut2, ArrayViewMut4, 
 use crate::{MlErr, Result};
 
 /// The metadata of a `Reshape` layer.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TwoDTo4D {
     channels: usize,
     height: usize,
     width: usize,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FourDTo2D {
     channels: usize,
     height: usize,
@@ -18,7 +18,7 @@ pub struct FourDTo2D {
 }
 
 /// A `Reshape` layer.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Reshape {
     TwoDTo4D(TwoDTo4D),
     FourDTo2D(FourDTo2D),
