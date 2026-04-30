@@ -3,8 +3,8 @@ use std::io;
 use super::{ParamServerHandle, WorkerHandle};
 use crate::{
     protocol::{
-        Command, Msg, NodeSpec,
-        specs::{server::ServerSpec, worker::WorkerSpec},
+        Command, Msg,
+        specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
     },
     transport::TransportLayer,
 };
