@@ -3,15 +3,7 @@ use std::{borrow::Cow, io};
 use half::f16;
 use serde::{Deserialize, Serialize};
 
-use super::specs::{server::ServerSpec, worker::WorkerSpec};
-
-/// Wraps the two possible node bootstrap payloads into one command.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NodeSpec {
-    Server(ServerSpec),
-    Worker(WorkerSpec),
-}
+use super::specs::node::NodeSpec;
 
 pub type Header = u32;
 pub const HEADER_SIZE: usize = size_of::<Header>();
@@ -39,8 +31,6 @@ pub enum Entity {
 pub enum Command<'a> {
     Connect(Entity),
     CreateNode(NodeSpec),
-    SessionReady { session_id: u64 },
-    JoinSession { session_id: u64 },
     ReportLoss { losses: Cow<'a, [f32]> },
     RequestParams,
     StopAfterEpoch,
