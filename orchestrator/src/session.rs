@@ -246,7 +246,7 @@ impl Session {
     /// * `workers` - List of (address, spec) pairs for each worker.
     /// * `partitions` - List of dataset partitions for each worker.
     /// * `servers` - List of (address, spec) pairs for each parameter server.
-    /// * `connector` - The undrelying entity connector.
+    /// * `connector` - The underlying entity connector.
     /// * `model` - The model architecture, kept for post-training serialization.
     /// * `input_size` - The input size of the first layer, derived from the dataset.
     ///
@@ -277,16 +277,11 @@ impl Session {
 
         let runtime = Builder::new_multi_thread().enable_all().build()?;
 
-        let (server_chans, session_ids) =
-            runtime.block_on(Self::create_servers(servers, &connector))?;
+        let server_chans = runtime.block_on(Self::create_servers(servers, &connector))?;
         debug!("successfully created all servers");
 
-        let worker_chans = runtime.block_on(Self::create_workers(
-            workers,
-            partitions,
-            &session_ids,
-            &connector,
-        ))?;
+        let worker_chans =
+            runtime.block_on(Self::create_workers(workers, partitions, &connector))?;
         debug!("successfully created all workers");
 
         Ok(Self {
@@ -377,10 +372,10 @@ impl Session {
             self.runtime.block_on(async move {
                 let (internal_tx, mut internal_rx) = mpsc::channel(256);
                 let n_workers = self.workers.len();
-                let mut wk_txs =
-                    Self::spawn_worker_listeners(self.workers, internal_tx);
 
-                let reason = match Self::run_training_loop(
+                let mut wk_txs = Self::spawn_worker_listeners(self.workers, internal_tx);
+
+                let Some(reason) = Self::run_training_loop(
                     &mut cancel_rx,
                     &mut internal_rx,
                     &mut wk_txs,
@@ -389,9 +384,8 @@ impl Session {
                     &event_tx,
                 )
                 .await
-                {
-                    Some(r) => r,
-                    None => return,
+                else {
+                    return;
                 };
 
                 match algorithm {
@@ -426,9 +420,13 @@ impl Session {
         for (i, worker_handle) in workers.into_iter().enumerate() {
             let (wk_tx, wk_rx) = mpsc::channel(256);
             wk_txs.push(wk_tx);
-            tokio::spawn(Self::worker_listener(i, worker_handle, wk_rx, internal_tx.clone()));
+            tokio::spawn(Self::worker_listener(
+                i,
+                worker_handle,
+                wk_rx,
+                internal_tx.clone(),
+            ));
         }
-        drop(internal_tx);
         wk_txs
     }
 
@@ -453,14 +451,17 @@ impl Session {
                     for tx in wk_txs.iter_mut() { let _ = tx.send(()).await; }
                 }
                 evt = internal_rx.recv() => {
-                    match evt {
-                        None => break,
-                        Some(TrainingEvent::WorkerDone(id)) => {
+                    let Some(event) = evt else {
+                        break;
+                    };
+
+                    match event {
+                        TrainingEvent::WorkerDone(id) => {
                             workers_done += 1;
                             let _ = event_tx.send(TrainingEvent::WorkerDone(id)).await;
                             if workers_done == n_workers { break; }
                         }
-                        Some(TrainingEvent::Loss { worker_id, losses }) => {
+                        TrainingEvent::Loss { worker_id, losses } => {
                             if stop_reason.is_none() {
                                 if let Some(cfg) = early_stopping {
                                     if let Some(sig) = tracker.record(worker_id, &losses) {
@@ -479,11 +480,11 @@ impl Session {
                             }
                             let _ = event_tx.send(TrainingEvent::Loss { worker_id, losses }).await;
                         }
-                        Some(TrainingEvent::Error(e)) => {
+                        TrainingEvent::Error(e) => {
                             let _ = event_tx.send(TrainingEvent::Error(e)).await;
                             return None;
                         }
-                        Some(other) => { let _ = event_tx.send(other).await; }
+                        other => { let _ = event_tx.send(other).await; }
                     }
                 }
             }
@@ -520,49 +521,54 @@ impl Session {
         }
 
         info!("received {} total parameters", model_params.len());
-        let trained = TrainedModel { params: model_params, model, input_size };
-        let _ = event_tx.send(TrainingEvent::Complete { model: trained, reason }).await;
+        let trained = TrainedModel {
+            params: model_params,
+            model,
+            input_size,
+        };
+        let _ = event_tx
+            .send(TrainingEvent::Complete {
+                model: trained,
+                reason,
+            })
+            .await;
     }
 
-    /// Connects to all nodes, bootstraps each as a parameter server, and collects session IDs.
-    ///
-    /// Returns a tuple of `(server_handles, session_ids)` with matching indices.
+    /// Connects to all nodes and bootstraps each as a parameter server.
     async fn create_servers<F>(
         servers: Vec<(String, ServerSpec)>,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
-    ) -> Result<(Vec<ParamServerHandle<NetRtp>>, Vec<u64>)>
+    ) -> Result<Vec<ParamServerHandle<NetRtp>>>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
         let mut handles = Vec::with_capacity(servers.len());
-        let mut session_ids = Vec::with_capacity(servers.len());
 
         for (i, (addr, spec)) in servers.into_iter().enumerate() {
-            let stream = TcpStream::connect(&addr)
-                .await
-                .map_err(|e| OrchErr::ConnectionFailed { addr: addr.clone(), source: e })?;
+            let stream =
+                TcpStream::connect(&addr)
+                    .await
+                    .map_err(|e| OrchErr::ConnectionFailed {
+                        addr: addr.clone(),
+                        source: e,
+                    })?;
             let (rx, tx) = stream.into_split();
             let node_handle = connector
                 .connect_node(i, rx, tx)
                 .await
                 .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
-            let (server_handle, session_id) = node_handle.create_server(spec).await?;
+            let server_handle = node_handle.create_server(spec).await?;
             handles.push(server_handle);
-            session_ids.push(session_id);
         }
 
-        Ok((handles, session_ids))
+        Ok(handles)
     }
 
     /// Connects to all nodes, bootstraps each as a worker, and sends its dataset partition.
-    ///
-    /// `session_ids` carries the PS session IDs to inject into each worker's algorithm spec
-    /// before bootstrapping.
     async fn create_workers<'a, F>(
         workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
-        session_ids: &[u64],
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<WorkerHandle<NetRtp>>>
     where
@@ -571,18 +577,16 @@ impl Session {
         const CHUNK_SIZE: usize = 8192;
 
         let futs = workers.into_iter().zip(partitions).enumerate().map(
-            |(i, ((addr, mut spec), partition))| async move {
+            |(i, ((addr, spec), partition))| async move {
                 debug!("connecting to worker at {addr}");
 
-                if let AlgorithmSpec::ParameterServer { ref mut server_session_ids, .. } =
-                    spec.algorithm
-                {
-                    *server_session_ids = session_ids.to_vec();
-                }
-
-                let stream = TcpStream::connect(&addr)
-                    .await
-                    .map_err(|e| OrchErr::ConnectionFailed { addr: addr.clone(), source: e })?;
+                let stream =
+                    TcpStream::connect(&addr)
+                        .await
+                        .map_err(|e| OrchErr::ConnectionFailed {
+                            addr: addr.clone(),
+                            source: e,
+                        })?;
                 let (rx, tx) = stream.into_split();
                 let node_handle = connector
                     .connect_node(i, rx, tx)
@@ -590,7 +594,6 @@ impl Session {
                     .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
                 let mut worker_handle = node_handle.create_worker(spec).await?;
-
                 Self::send_partition(partition, CHUNK_SIZE, &mut worker_handle).await?;
 
                 Ok::<_, OrchErr>(worker_handle)
