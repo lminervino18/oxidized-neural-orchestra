@@ -1,3 +1,5 @@
+use std::cmp;
+
 use ndarray::prelude::*;
 use ndarray_conv::{ConvExt, ConvMode, PaddingMode, ReverseKernel};
 
@@ -19,6 +21,7 @@ pub struct Conv2d {
     size: usize,
 
     // Forward metadata
+    real_input_dim: (usize, usize),
     effective_input: Array4<f32>,
     output: Array4<f32>,
 
@@ -38,6 +41,7 @@ impl Conv2d {
         let kernels_size = filters * in_channels * kernel_size * kernel_size;
         let kernels_dim = (filters, in_channels, kernel_size, kernel_size);
         let size = kernels_size + filters;
+        let real_input_dim = (0, 0);
 
         let zeros4 = Array4::zeros((1, 1, 1, 1));
 
@@ -50,6 +54,7 @@ impl Conv2d {
             kernels_size,
             kernels_dim,
             size,
+            real_input_dim,
             effective_input: zeros4.clone(),
             output: zeros4.clone(),
             delta_out: zeros4.clone(),
@@ -69,6 +74,7 @@ impl Conv2d {
             kernel_size,
             stride,
             padding,
+            ref mut real_input_dim,
             ref mut effective_input,
             ref mut output,
             ..
@@ -76,35 +82,28 @@ impl Conv2d {
 
         let (batch_size, _, input_height, input_width) = x.dim();
 
+        *real_input_dim = (input_height, input_width);
+
         let output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
         let output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
+
         let effective_height = (output_height - 1) * stride + kernel_size;
         let effective_width = (output_width - 1) * stride + kernel_size;
-        println!("effective_height: {effective_height}");
-        println!("effective_width: {effective_width}");
-        // let output_height = (effective_height + 2 * padding - kernel_size) / stride + 1;
-        // let output_width = (effective_width + 2 * padding - kernel_size) / stride + 1;
 
         effective_input.reshape_inplace((x.dim().0, x.dim().1, effective_height, effective_width));
         effective_input.fill(0.);
-        println!("effective_input:\n{:#}", effective_input);
+
+        // dropped elements could just be padding
+        let copy_height = cmp::min(input_height, effective_height - padding);
+        let copy_width = cmp::min(input_width, effective_width - padding);
 
         let mut effective_input_view = effective_input.slice_mut(s![
             ..,
             ..,
-            padding..effective_height,
-            padding..effective_width
+            padding..padding + copy_height,
+            padding..padding + copy_width,
         ]);
-        println!("effective_input_view:\n{:#}", effective_input_view);
-
-        let input_view = &x.slice(s![
-            ..,
-            ..,
-            ..effective_height - padding,
-            ..effective_width - padding
-        ]);
-        println!("input_view:\n{:#}", input_view);
-
+        let input_view = &x.slice(s![.., .., ..copy_height, ..copy_width]);
         effective_input_view.assign(input_view);
 
         output.reshape_inplace((batch_size, filters, output_height, output_width));
@@ -130,7 +129,6 @@ impl Conv2d {
 
         *output += &b;
 
-        println!("conv2d forward done");
         Ok(output.view())
     }
 
@@ -148,8 +146,8 @@ impl Conv2d {
         let Self {
             filters,
             in_channels,
-            kernel_size,
             padding,
+            real_input_dim,
             ref effective_input,
             ref mut delta_out,
             ref mut dilated,
@@ -158,8 +156,14 @@ impl Conv2d {
 
         let batch_size = effective_input.dim().0;
 
-        // delta_out.reshape_inplace(effective_input.dim());
-        // delta_out.fill(0.);
+        dk.fill(0.);
+        delta_out.reshape_inplace((
+            effective_input.dim().0,
+            effective_input.dim().1,
+            real_input_dim.0,
+            real_input_dim.1,
+        ));
+        delta_out.fill(0.);
 
         for b_idx in 0..batch_size {
             for f_idx in 0..filters {
@@ -167,43 +171,37 @@ impl Conv2d {
 
                 for c_idx in 0..in_channels {
                     // kernel
-                    let input_bc = effective_input.slice(s![b_idx, c_idx, .., ..]);
+                    let effective_input_bc = effective_input.slice(s![b_idx, c_idx, .., ..]);
 
-                    println!("input_bc:\n{:#?}", input_bc);
-                    println!("dilated_bf:\n{:#?}", dilated_bf);
-                    let step = input_bc
-                        .conv(
-                            dilated_bf.no_reverse(),
-                            // ConvMode::Custom {
-                            //     padding: [padding; 2],
-                            //     strides: [1; 2],
-                            // },
-                            ConvMode::Valid,
-                            PaddingMode::Zeros,
-                        )
+                    let dk_step = effective_input_bc
+                        .conv(dilated_bf.no_reverse(), ConvMode::Valid, PaddingMode::Zeros)
                         .unwrap();
-                    println!("step:\n{:#?}", step);
 
                     let mut dk_view = dk.slice_mut(s![f_idx, c_idx, .., ..]);
-                    println!("dk_view:\n{:#?}", dk_view);
-                    dk_view += &step;
+                    dk_view += &dk_step;
 
                     // delta
                     let k_fc = k.slice(s![f_idx, c_idx, .., ..]);
 
-                    let step = dilated_bf
-                        .conv(
-                            &k_fc,
-                            ConvMode::Custom {
-                                padding: [kernel_size - padding - 1; 2],
-                                strides: [1; 2],
-                            },
-                            PaddingMode::Zeros,
-                        )
+                    let effective_delta_step = dilated_bf
+                        .conv(&k_fc, ConvMode::Full, PaddingMode::Zeros)
                         .unwrap();
+                    let delta_step = effective_delta_step.slice(s![
+                        padding
+                            ..padding
+                                + cmp::min(real_input_dim.0, effective_input.dim().2 - padding),
+                        padding
+                            ..padding
+                                + cmp::min(real_input_dim.1, effective_input.dim().3 - padding),
+                    ]);
 
-                    let mut delta_view = delta_out.slice_mut(s![b_idx, c_idx, .., ..]);
-                    delta_view += &step;
+                    let mut delta_view = delta_out.slice_mut(s![
+                        b_idx,
+                        c_idx,
+                        ..cmp::min(real_input_dim.0, effective_input.dim().2 - padding),
+                        ..cmp::min(real_input_dim.1, effective_input.dim().3 - padding)
+                    ]);
+                    delta_view += &delta_step;
                 }
             }
         }
@@ -211,7 +209,6 @@ impl Conv2d {
         let db_sum = d_in.sum_axis(Axis(0)).sum_axis(Axis(1)).sum_axis(Axis(1));
         db.assign(&db_sum);
 
-        println!("conv2d backward done");
         Ok(delta_out.view_mut())
     }
 
@@ -432,7 +429,7 @@ mod tests {
     ) {
         let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
         let output = conv.forward(params, input.view()).unwrap();
-        println!("output:\n{:#}", output);
+        // println!("output:\n{:#}", output);
         assert_eq!(output, expected);
     }
 
@@ -609,7 +606,7 @@ mod tests {
         let delta_out = conv
             .backward(params, &mut grad, delta_in.view_mut())
             .unwrap();
-        println!("delta_out:\n{:#}", delta_out);
+        // println!("delta_out:\n{:#}", delta_out);
         assert_eq!(delta_out, expected_delta_out);
         // println!("grad:\n{:#?}", grad);
         assert_eq!(grad, expected_grad);
@@ -715,14 +712,14 @@ mod tests {
         let input_width = 8;
         let kernel_size = 3;
         let params = vec![0.; kernel_size * kernel_size + 1];
-        let input = Array4::from_elem((1, 1, input_height, input_width), 1.);
+        let input = Array4::from_elem((1, 1, input_height, input_width), 0.);
         // the dimensionality of the upstream delta is the same that as the output
         let output_height = 4;
         let output_width = 4;
-        let mut delta_in = Array4::from_elem((1, 1, output_height, output_width), 1.);
+        let mut delta_in = Array4::from_elem((1, 1, output_height, output_width), 0.);
         let mut conv = Conv2d::new(1, 1, kernel_size, 2, 1);
 
-        let expected_delta_out = Array4::from_elem((1, 1, input_height, input_width), 1.);
+        let expected_delta_out = Array4::from_elem((1, 1, input_height, input_width), 0.);
         let expected_grad = vec![0.; kernel_size * kernel_size + 1];
 
         test_conv2d_backward(
