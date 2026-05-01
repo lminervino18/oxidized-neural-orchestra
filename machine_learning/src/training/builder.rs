@@ -176,6 +176,7 @@ impl TrainerBuilder {
     fn resolve_act_fn(&self, spec: ActFnSpec) -> Layer {
         match spec {
             ActFnSpec::Sigmoid { amp } => Layer::sigmoid(amp),
+            ActFnSpec::Softmax => Layer::softmax(),
         }
     }
 
