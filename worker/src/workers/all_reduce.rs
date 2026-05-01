@@ -61,13 +61,11 @@ where
                 .ring_manager
                 .build_param_manager(&mut self.optimization_params);
 
-            // SAFETY:
             let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
             self.orch_handle.push_losses(losses).await?;
             should_continue = !was_last;
 
             tokio::select! {
-                biased;
                 event = self.orch_handle.recv_event() => match event? {
                     OrchEvent::Stop => {
                         info!("received a stop command from orchestrator");
@@ -88,11 +86,11 @@ where
 
                     // SAFETY: The parameter and gradient buffer have the same size.
                     self.trainer.optimize(&mut param_manager).unwrap();
+                    param_manager.zero_grad();
+
+                    self.optimization_params.copy_from_slice(&mut self.params);
                 }
             }
-
-            // SAFETY: Both slices have the same length.
-            self.optimization_params.copy_from_slice(&mut self.params);
         }
 
         self.ring_manager.disconnect().await?;

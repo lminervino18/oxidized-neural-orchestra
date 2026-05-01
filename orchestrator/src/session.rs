@@ -186,8 +186,16 @@ pub enum TrainingEvent {
         model: TrainedModel,
         reason: StopReason,
     },
+    /// The parameters of the all reduce worker.
+    Params(Vec<f32>),
     /// A worker or server produced an unrecoverable error.
     Error(OrchErr),
+}
+
+#[derive(Debug)]
+enum WorkerHandleRequest {
+    PullParams,
+    Stop,
 }
 
 struct SyncRoundSignal {
@@ -297,12 +305,20 @@ impl Session {
     async fn worker_listener(
         id: usize,
         mut worker_handle: WorkerHandle<NetRtp>,
-        mut rx_stopper: Receiver<()>,
+        mut rx_stopper: Receiver<WorkerHandleRequest>,
         tx: Sender<TrainingEvent>,
     ) {
         loop {
             tokio::select! {
-                _ = rx_stopper.recv() => break,
+                req = rx_stopper.recv() => {
+                    match req {
+                        Some(WorkerHandleRequest::Stop) => break,
+                        Some(WorkerHandleRequest::PullParams) => {
+
+                        }
+                        None => {}
+                    }
+                },
                 event = worker_handle.recv_event() => match event {
                     Ok(WorkerEvent::Loss(losses)) => {
                         debug!("worker {id} reported {} losses", losses.len());
@@ -392,7 +408,7 @@ impl Session {
                             stop_reason = Some(StopReason::ManualStop);
 
                             for tx in wk_txs.iter_mut() {
-                                let _ = tx.send(()).await;
+                                let _ = tx.send(WorkerHandleRequest::Stop).await;
                             }
                         }
                         evt = internal_rx.recv() => {
@@ -418,7 +434,7 @@ impl Session {
                                                     stop_reason = Some(StopReason::EarlyStopping);
 
                                                     for tx in wk_txs.iter_mut() {
-                                                        let _ = tx.send(()).await;
+                                                        let _ = tx.send(WorkerHandleRequest::Stop).await;
                                                     }
                                                 }
                                             }
@@ -442,7 +458,7 @@ impl Session {
 
                 let reason = stop_reason.unwrap_or_default();
 
-                match algorithm {
+                let params = match algorithm {
                     AlgorithmSpec::ParameterServer { .. } => {
                         debug!("all workers done, reading final params from all servers");
 
@@ -468,28 +484,36 @@ impl Session {
                             }
                         }
 
-                        info!("received {} total parameters", model_params.len());
-
-                        let trained = TrainedModel {
-                            params: model_params,
-                            model,
-                            input_size,
-                        };
-
-                        let _ = event_tx
-                            .send(TrainingEvent::Complete {
-                                model: trained,
-                                reason,
-                            })
-                            .await;
+                        // TODO: Take the parameters from the servers and reorder by layers.
+                        model_params
                     }
                     AlgorithmSpec::AllReduce { .. } => {
-                        let err = OrchErr::Unsupported(
-                            "all-reduce session finalization is not implemented yet".into(),
-                        );
-                        let _ = event_tx.send(TrainingEvent::Error(err)).await;
+                        let mut i = 0;
+                        loop {
+                            let _ = wk_txs[i].send(WorkerHandleRequest::PullParams).await;
+                            if let Some(TrainingEvent::Params(params)) = internal_rx.recv().await {
+                                break params.to_vec();
+                            }
+
+                            i = (i + 1) % wk_txs.len();
+                        }
                     }
-                }
+                };
+
+                info!("received {} total parameters", params.len());
+
+                let trained = TrainedModel {
+                    params,
+                    model,
+                    input_size,
+                };
+
+                let _ = event_tx
+                    .send(TrainingEvent::Complete {
+                        model: trained,
+                        reason,
+                    })
+                    .await;
             });
         });
 

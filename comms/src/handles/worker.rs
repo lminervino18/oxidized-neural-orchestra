@@ -113,6 +113,23 @@ impl<T: TransportLayer> WorkerHandle<T> {
         Ok(response)
     }
 
+    /// Pulls the latest parameters from the worker.
+    ///
+    /// # Returns
+    /// The parameters as a mutable slice or an io error if occurred.
+    pub async fn pull_params(&mut self) -> io::Result<&mut [f32]> {
+        let msg = Msg::Control(Command::RequestParams);
+        self.transport.send(&msg).await?;
+
+        let msg = self.transport.recv().await?;
+        let Msg::Data(Payload::Params(params)) = msg else {
+            let text = format!("Expected params from worker {}, got: {msg:?}", self.id);
+            return Err(io::Error::other(text));
+        };
+
+        Ok(params)
+    }
+
     /// Pushes the gradient to the worker.
     ///
     /// # Args

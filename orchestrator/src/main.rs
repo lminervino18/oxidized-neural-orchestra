@@ -109,7 +109,7 @@ fn main() -> io::Result<()> {
         optimizer: OptimizerConfig::GradientDescent { lr: 0.1 },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(300).unwrap(),
+        max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
         early_stopping: None,
@@ -121,8 +121,8 @@ fn main() -> io::Result<()> {
 
     loop {
         match rx.blocking_recv() {
-            Some(orchestrator::TrainingEvent::Loss { losses, .. }) => {
-                println!("losses: {losses:?}")
+            Some(orchestrator::TrainingEvent::Loss { losses, worker_id }) => {
+                println!("losses {worker_id}: {losses:?}")
             }
             Some(orchestrator::TrainingEvent::Complete {
                 model: trained,
@@ -138,6 +138,7 @@ fn main() -> io::Result<()> {
                 println!("saved model to {MODEL_OUTPUT_PATH}");
                 break;
             }
+            None => break,
             res => println!("result: {res:?}"),
         }
     }

@@ -107,22 +107,31 @@ where
     async fn scatter(&mut self) -> io::Result<()> {
         let amount_of_workers = self.addrs.len();
 
-        // SAFETY: In the address list there's at list one
+        // SAFETY: In the address list there's at least one
         //         address, this worker's address.
         let n = NonZeroUsize::new(amount_of_workers).unwrap();
-        let mut chunks: Vec<_> = self.grad.split_chunks_mut(n).collect();
+        let mut chunks: Vec<_> = self.residual.split_chunks_mut(n).collect();
         let mut i = self.id;
 
         for _ in 0..n.get() - 1 {
-            self.next.push_grad(&chunks[i]).await?;
-            i = (i + n.get() - 1) % n.get();
+            match self.next.push_grad(chunks[i]).await? {
+                Some(threshold) => {
+                    for g in chunks[i].iter_mut() {
+                        if g.abs() >= threshold {
+                            *g = 0.0;
+                        }
+                    }
+                }
+                None => chunks[i].fill(0.0),
+            }
 
+            i = (i + n.get() - 1) % n.get();
             let WorkerEvent::Grad(grad) = self.prev.recv_event().await? else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
             for (acc, g) in chunks[i].into_iter().zip(grad) {
-                *acc += g;
+                *acc += *g;
             }
         }
 
@@ -138,16 +147,41 @@ where
     async fn gather(&mut self) -> io::Result<()> {
         let amount_of_workers = self.addrs.len();
 
-        // SAFETY: In the address list there's at list one
+        // SAFETY: In the address list there's at least one
         //         address, this worker's address.
         let n = NonZeroUsize::new(amount_of_workers).unwrap();
         let mut chunks: Vec<_> = self.grad.split_chunks_mut(n).collect();
+        let mut residual_chunks: Vec<_> = self.residual.split_chunks_mut(n).collect();
         let mut i = (self.id + 1) % n.get();
 
-        for _ in 0..n.get() - 1 {
-            self.next.push_grad(&chunks[i]).await?;
-            i = (i + n.get() - 1) % n.get();
+        // SAFETY `i` is in bounds, it's defined to be lower than `n`.
+        chunks[i].copy_from_slice(&residual_chunks[i]);
 
+        if n.get() == 1 {
+            residual_chunks[i].fill(0.0);
+            return Ok(());
+        }
+
+        for j in 0..n.get() - 1 {
+            if let Some(threshold) = self.next.push_grad(chunks[i]).await? {
+                if j == 0 {
+                    for g in residual_chunks[i].iter_mut() {
+                        if g.abs() >= threshold {
+                            *g = 0.0;
+                        }
+                    }
+                }
+
+                for g in chunks[i].iter_mut() {
+                    if g.abs() < threshold {
+                        *g = 0.0;
+                    }
+                }
+            } else if j == 0 {
+                residual_chunks[i].fill(0.0);
+            }
+
+            i = (i + n.get() - 1) % n.get();
             let WorkerEvent::Grad(grad) = self.prev.recv_event().await? else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
