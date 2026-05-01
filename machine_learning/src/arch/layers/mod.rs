@@ -3,6 +3,7 @@ mod dense;
 mod layer;
 mod reshape;
 mod sigmoid;
+mod softmax;
 
 use std::mem;
 
@@ -12,6 +13,7 @@ pub use layer::Layer;
 use ndarray::{Array, Dimension, IntoDimension};
 pub(super) use reshape::Reshape;
 pub(super) use sigmoid::Sigmoid;
+pub(super) use softmax::Softmax;
 
 /// A trait whose sole purpose is to give the ndarray::ArrayX
 /// types a way to resize their inner memory regions inplace.

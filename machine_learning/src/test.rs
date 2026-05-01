@@ -367,7 +367,7 @@ fn test_conv_dense(
         Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
         Layer::four_d_to2d(filters, output_height, output_width),
         Layer::dense((filters * output_height * output_width, y_size)),
-        Layer::sigmoid(1.0),
+        Layer::softmax(),
     ]);
     let nparams = model.size();
 
@@ -380,10 +380,10 @@ fn test_conv_dense(
     );
 
     let offline_epochs = 0;
-    let max_epochs = NonZeroUsize::new(1000).unwrap();
+    let max_epochs = NonZeroUsize::new(300).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
-    let mut loss_fn = Mse::new();
+    let mut loss_fn = CrossEntropy::new();
     let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
@@ -412,9 +412,9 @@ fn test_conv_dense(
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    assert!(loss < 0.001);
     // println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
     // println!("loss: {loss}");
+    assert!(loss < 0.001);
 }
 
 #[test]
