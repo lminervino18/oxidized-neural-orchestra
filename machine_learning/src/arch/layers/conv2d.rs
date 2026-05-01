@@ -22,6 +22,7 @@ pub struct Conv2d {
 
     // Forward metadata
     real_input_dim: (usize, usize),
+    /// The input that's actually used during the forward convolution
     effective_input: Array4<f32>,
     output: Array4<f32>,
 
@@ -173,9 +174,11 @@ impl Conv2d {
                     // kernel
                     let effective_input_bc = effective_input.slice(s![b_idx, c_idx, .., ..]);
 
-                    let dk_step = effective_input_bc
-                        .conv(dilated_bf.no_reverse(), ConvMode::Valid, PaddingMode::Zeros)
-                        .unwrap();
+                    let dk_step = effective_input_bc.conv(
+                        dilated_bf.no_reverse(),
+                        ConvMode::Valid,
+                        PaddingMode::Zeros,
+                    )?;
 
                     let mut dk_view = dk.slice_mut(s![f_idx, c_idx, .., ..]);
                     dk_view += &dk_step;
@@ -183,24 +186,18 @@ impl Conv2d {
                     // delta
                     let k_fc = k.slice(s![f_idx, c_idx, .., ..]);
 
-                    let effective_delta_step = dilated_bf
-                        .conv(&k_fc, ConvMode::Full, PaddingMode::Zeros)
-                        .unwrap();
+                    let copy_height = cmp::min(real_input_dim.0, effective_input.dim().2 - padding);
+                    let copy_width = cmp::min(real_input_dim.1, effective_input.dim().3 - padding);
+
+                    let effective_delta_step =
+                        dilated_bf.conv(&k_fc, ConvMode::Full, PaddingMode::Zeros)?;
                     let delta_step = effective_delta_step.slice(s![
-                        padding
-                            ..padding
-                                + cmp::min(real_input_dim.0, effective_input.dim().2 - padding),
-                        padding
-                            ..padding
-                                + cmp::min(real_input_dim.1, effective_input.dim().3 - padding),
+                        padding..padding + copy_height,
+                        padding..padding + copy_width
                     ]);
 
-                    let mut delta_view = delta_out.slice_mut(s![
-                        b_idx,
-                        c_idx,
-                        ..cmp::min(real_input_dim.0, effective_input.dim().2 - padding),
-                        ..cmp::min(real_input_dim.1, effective_input.dim().3 - padding)
-                    ]);
+                    let mut delta_view =
+                        delta_out.slice_mut(s![b_idx, c_idx, ..copy_height, ..copy_width]);
                     delta_view += &delta_step;
                 }
             }
@@ -238,9 +235,8 @@ impl Conv2d {
 
         dilated.reshape_inplace(dilated_dim);
         // NOTE: this might not be needed as the assigned delta overwrites the past one if
-        // dimensions match. I leave it commented out as it's pretty expensive to fill up the whole
-        // dilated tensor with zeros.
-        // dilated.fill(0.);
+        // dimensions match.
+        dilated.fill(0.);
         dilated
             .slice_mut(s![.., ..,
                 ..dilated_height; stride,
@@ -298,9 +294,8 @@ impl Conv2d {
     ) -> Result<(ArrayViewMut4<'a, f32>, ArrayViewMut1<'a, f32>)> {
         let Self {
             filters,
-            in_channels,
-            kernel_size,
             kernels_size,
+            kernels_dim,
             size,
             ..
         } = *self;
@@ -317,7 +312,6 @@ impl Conv2d {
         //         gradient is exactly the size of the layer.
         let (dw_raw, db_raw) = grad.split_at_mut(kernels_size);
 
-        let kernels_dim = (filters, in_channels, kernel_size, kernel_size);
         let dw = ArrayViewMut4::from_shape(kernels_dim, dw_raw).unwrap();
         let db = ArrayViewMut1::from_shape(filters, db_raw).unwrap();
 
