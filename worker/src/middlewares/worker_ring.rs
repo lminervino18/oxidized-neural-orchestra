@@ -92,7 +92,7 @@ where
     pub async fn disconnect(&mut self) -> io::Result<()> {
         self.next.disconnect().await?;
 
-        if let WorkerEvent::Disconnect = self.prev.recv_event().await? {
+        if !matches!(self.prev.recv_event().await?, WorkerEvent::Disconnect) {
             return Err(io::Error::other("Expected Disconnect from previous worker"));
         }
 
@@ -153,8 +153,12 @@ where
             };
 
             for (acc, g) in chunks[i].into_iter().zip(grad) {
-                *acc = *g / n.get() as f32;
+                *acc = *g;
             }
+        }
+
+        for g in self.grad.iter_mut() {
+            *g /= n.get() as f32;
         }
 
         Ok(())
