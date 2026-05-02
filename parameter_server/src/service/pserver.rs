@@ -1,11 +1,8 @@
 use std::io;
 
-use comms::{Rtp, TransportLayer, WorkerEvent, WorkerHandle};
+use comms::{TransportLayer, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    task::JoinSet,
-};
+use tokio::task::JoinSet;
 
 use super::Server;
 use crate::{
@@ -129,18 +126,17 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 }
 
 #[async_trait::async_trait]
-impl<R, W, PS, Sy> Server<R, W> for ParameterServer<PS, Sy>
+impl<T, PS, Sy> Server<T> for ParameterServer<PS, Sy>
 where
-    R: AsyncRead + Unpin + Send + 'static,
-    W: AsyncWrite + Unpin + Send + 'static,
+    T: TransportLayer + Send + 'static,
     PS: Store + Send + Sync + 'static,
-    Sy: Synchronizer + 'static,
+    Sy: Synchronizer + Send + 'static,
 {
     async fn run(&mut self) -> io::Result<Vec<f32>> {
         self.run().await
     }
 
-    fn spawn(&mut self, worker_handle: WorkerHandle<Rtp<R, W>>) {
+    fn spawn(&mut self, worker_handle: WorkerHandle<T>) {
         self.spawn(worker_handle)
     }
 }

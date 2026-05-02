@@ -9,7 +9,7 @@ use crate::{
     arch::{
         Sequential,
         layers::Layer,
-        loss::{LossFn, Mse},
+        loss::{CrossEntropy, LossFn, Mse},
     },
     dataset::{Dataset, DatasetSrc},
     optimization::GradientDescent,
@@ -78,7 +78,7 @@ fn test_machine_learning00_linear_convergence() {
     let y = ArrayView2::from_shape((4, y_size.get()), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -135,7 +135,7 @@ fn test_machine_learning01_and2_gate_convergence() {
     let y = ArrayView2::from_shape((4, y_size.get()), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -201,7 +201,7 @@ fn test_machine_learning02_and3_gate_convergence() {
     let y = ArrayView2::from_shape((8, 1), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -263,7 +263,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
     let y = ArrayView2::from_shape((4, 1), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -341,7 +341,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
     let y = ArrayView2::from_shape((16, 1), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -367,7 +367,7 @@ fn test_conv_dense(
         Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
         Layer::four_d_to2d(filters, output_height, output_width),
         Layer::dense((filters * output_height * output_width, y_size)),
-        Layer::sigmoid(1.0),
+        Layer::softmax(),
     ]);
     let nparams = model.size();
 
@@ -380,10 +380,10 @@ fn test_conv_dense(
     );
 
     let offline_epochs = 0;
-    let max_epochs = NonZeroUsize::new(500).unwrap();
+    let max_epochs = NonZeroUsize::new(300).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(1.0);
-    let mut loss_fn = Mse::new();
+    let mut loss_fn = CrossEntropy::new();
     let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
@@ -412,9 +412,9 @@ fn test_conv_dense(
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    assert!(loss < 0.01);
     // println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
     // println!("loss: {loss}");
+    assert!(loss < 0.001);
 }
 
 #[test]
@@ -643,4 +643,73 @@ fn test_machine_learning08_3by3by2_filters1_kernel_size3_stride1_padding1() {
         &labels,
         y_size,
     );
+}
+
+#[test]
+fn test_machine_learning_dimensionality_correctness() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let nsamples = 10;
+
+    let in_channels = 1;
+    let input_height = 28;
+    let input_width = 28;
+
+    let x_size = in_channels * input_height * input_width;
+    let y_size = 10;
+
+    let samples = vec![1.; nsamples * x_size];
+    let labels = vec![1.; nsamples * y_size];
+
+    let filters = 4;
+    let kernel_size = 3;
+    let stride = 2;
+    let padding = 1;
+
+    let output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
+    let output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
+
+    let model = Sequential::new(vec![
+        Layer::two_d_to4d(in_channels, input_height, input_width),
+        Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
+        Layer::four_d_to2d(filters, output_height, output_width),
+        Layer::dense((filters * output_height * output_width, y_size)),
+        Layer::sigmoid(1.0),
+    ]);
+    let nparams = model.size();
+    let nreal_layers = 2;
+    let ordering = vec![0; nreal_layers];
+
+    let dataset = Dataset::new(
+        DatasetSrc::inmem(samples, labels),
+        NonZeroUsize::new(x_size).unwrap(),
+        NonZeroUsize::new(y_size).unwrap(),
+    );
+
+    let offline_epochs = 0;
+    let max_epochs = NonZeroUsize::new(10).unwrap();
+    let batch_size = NonZeroUsize::new(4).unwrap();
+    let optimizer = GradientDescent::new(1.0);
+    let loss_fn = Mse::new();
+    let rng = StdRng::from_os_rng();
+
+    let mut trainer = BackpropTrainer::new(
+        model,
+        vec![optimizer],
+        dataset,
+        loss_fn,
+        offline_epochs,
+        max_epochs,
+        batch_size,
+        rng,
+    );
+
+    let mut params_grads = gen_params_grads(&[nparams]);
+    let servers: Vec<_> = params_grads
+        .iter_mut()
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
+        .collect();
+
+    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    assert!(trainer.train(&mut param_manager).is_ok())
 }

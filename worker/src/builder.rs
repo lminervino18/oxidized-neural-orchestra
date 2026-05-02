@@ -2,6 +2,7 @@ use std::io;
 
 use comms::{
     Acceptor, Connection, Connector, OrchHandle, TransportLayer,
+    protocol::Entity,
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{
@@ -21,24 +22,24 @@ use crate::{
 };
 
 /// The worker builder, given a spec, will build a new worker ready to use.
-pub struct WorkerBuilder<R, W, T, F, G>
+pub struct WorkerBuilder<'a, R, W, T, F, G>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
-    F: AsyncFnMut() -> io::Result<T>,
+    F: AsyncFn() -> io::Result<T>,
     G: Fn(R, W) -> T,
 {
-    acceptor: Acceptor<T, F>,
+    acceptor: &'a mut Acceptor<T, F>,
     connector: Connector<R, W, T, G>,
 }
 
-impl<R, W, T, F, G> WorkerBuilder<R, W, T, F, G>
+impl<'a, R, W, T, F, G> WorkerBuilder<'a, R, W, T, F, G>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
-    F: AsyncFnMut() -> io::Result<T>,
+    F: AsyncFn() -> io::Result<T>,
     G: Fn(R, W) -> T,
 {
     /// Creates a new `WorkerBuilder`.
@@ -49,7 +50,7 @@ where
     ///
     /// # Returns
     /// A new `WorkerBuilder` instance.
-    pub fn new(acceptor: Acceptor<T, F>, connector: Connector<R, W, T, G>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor<T, F>, connector: Connector<R, W, T, G>) -> Self {
         Self {
             acceptor,
             connector,
@@ -57,10 +58,10 @@ where
     }
 }
 
-impl<T, F, G> WorkerBuilder<OwnedReadHalf, OwnedWriteHalf, T, F, G>
+impl<T, F, G> WorkerBuilder<'_, OwnedReadHalf, OwnedWriteHalf, T, F, G>
 where
     T: TransportLayer + 'static,
-    F: AsyncFnMut() -> io::Result<T>,
+    F: AsyncFn() -> io::Result<T>,
     G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T,
 {
     /// Builds a `Worker` from a `WorkerSpec`.
@@ -103,6 +104,7 @@ where
             } => {
                 let cluster_manager = self
                     .connect_to_servers(
+                        spec.worker_id,
                         server_addrs,
                         server_sizes,
                         server_ordering,
@@ -159,6 +161,7 @@ where
     /// A new `ServerClusterManager` instance or an io error if occurred.
     async fn connect_to_servers(
         self,
+        id: usize,
         server_addrs: &[String],
         server_sizes: &[usize],
         server_ordering: Vec<usize>,
@@ -166,11 +169,15 @@ where
         seed: Option<u64>,
     ) -> io::Result<ServerClusterManager<T>> {
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
+        let src_entity = Entity::Worker { id };
 
         for (id, (addr, &size)) in server_addrs.into_iter().zip(server_sizes).enumerate() {
             let stream = TcpStream::connect(addr).await?;
             let (rx, tx) = stream.into_split();
-            let mut server_handle = self.connector.connect_parameter_server(id, rx, tx).await?;
+            let mut server_handle = self
+                .connector
+                .connect_parameter_server(id, rx, tx, src_entity)
+                .await?;
 
             if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 server_handle.enable_sparse_capability(r, seed);
@@ -195,7 +202,7 @@ where
     /// # Returns
     /// A new `WorkerRingManager` instance or an error if occurred.
     async fn connect_to_workers(
-        mut self,
+        self,
         id: usize,
         addrs: Vec<String>,
         model_size: usize,
@@ -212,11 +219,16 @@ where
         };
 
         let n = addrs.len();
+        let src_entity = Entity::Worker { id };
+
         let next_conn_fut = async {
             let addr = &addrs[(id + 1) % n];
             let stream = TcpStream::connect(addr).await?;
             let (rx, tx) = stream.into_split();
-            let mut worker_handle = self.connector.connect_worker(id, rx, tx).await?;
+            let mut worker_handle = self
+                .connector
+                .connect_worker(id, rx, tx, src_entity)
+                .await?;
 
             if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 worker_handle.enable_sparse_capability(r, seed);

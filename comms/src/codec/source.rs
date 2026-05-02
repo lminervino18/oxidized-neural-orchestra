@@ -6,6 +6,7 @@ use super::{LEN_TYPE_SIZE, LenType};
 use crate::protocol::Msg;
 
 /// The receiving end handle of the communication.
+#[derive(Clone)]
 pub struct Source<R: AsyncRead + Unpin> {
     reader: R,
     buf: Vec<u32>,

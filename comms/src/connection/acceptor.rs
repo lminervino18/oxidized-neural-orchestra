@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, marker::PhantomData};
 
 use super::Connection;
 use crate::{
@@ -11,15 +11,16 @@ use crate::{
 pub struct Acceptor<T, F>
 where
     T: TransportLayer,
-    F: AsyncFnMut() -> io::Result<T>,
+    F: AsyncFn() -> io::Result<T>,
 {
     transport_factory: F,
+    _phantom: PhantomData<T>,
 }
 
 impl<T, F> Acceptor<T, F>
 where
     T: TransportLayer,
-    F: AsyncFnMut() -> io::Result<T>,
+    F: AsyncFn() -> io::Result<T>,
 {
     /// Creates a new `Acceptor`.
     ///
@@ -29,7 +30,10 @@ where
     /// # Returns
     /// A new `Acceptor` instance.
     pub fn new(transport_factory: F) -> Self {
-        Self { transport_factory }
+        Self {
+            transport_factory,
+            _phantom: Default::default(),
+        }
     }
 
     /// Blocks the current thread until a new connection arrives.

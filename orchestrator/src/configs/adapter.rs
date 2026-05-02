@@ -732,6 +732,7 @@ impl Adapter {
     fn adapt_act_fn(&self, act_fn: ActFnConfig) -> ActFnSpec {
         match act_fn {
             ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
+            ActFnConfig::Softmax => ActFnSpec::Softmax,
         }
     }
 }

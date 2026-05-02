@@ -1,14 +1,16 @@
-use std::{num::NonZeroUsize, thread};
+use std::{io, num::NonZeroUsize, thread};
 
-use comms::specs::{
-    machine_learning::OptimizerSpec,
-    server::{ServerSpec, StoreSpec, SynchronizerSpec},
+use comms::{
+    Acceptor, Connection, TransportLayer,
+    specs::{
+        machine_learning::OptimizerSpec,
+        server::{ServerSpec, StoreSpec, SynchronizerSpec},
+    },
 };
 use machine_learning::{
     initialization::{ParamGenBuilder, Result},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
 };
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::{ParameterServer, Server};
 use crate::{
@@ -23,15 +25,25 @@ const DEFAULT_CORE_COUNT: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 const SHARD_AMOUNT_FACTOR: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 
 /// Builds `Server`s given a specification.
-pub struct ServerBuilder;
+pub struct ServerBuilder<'a, T, F>
+where
+    T: TransportLayer,
+    F: AsyncFn() -> io::Result<T>,
+{
+    acceptor: &'a mut Acceptor<T, F>,
+}
 
-impl ServerBuilder {
+impl<'a, T, F> ServerBuilder<'a, T, F>
+where
+    T: TransportLayer + 'static,
+    F: AsyncFn() -> io::Result<T>,
+{
     /// Creates a new `ServerBuilder`.
     ///
     /// # Returns
     /// A new `ServerBuilder` instance.
-    pub fn new() -> Self {
-        Self
+    pub fn new(acceptor: &'a mut Acceptor<T, F>) -> Self {
+        Self { acceptor }
     }
 
     /// Builds a new `Server` following a spec.
@@ -42,12 +54,19 @@ impl ServerBuilder {
     /// # Returns
     /// A new Server or a `RandErr` if the specification has
     /// invalid `RandParamGen` construction values.
-    pub fn build<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>>
-    where
-        R: AsyncRead + Unpin + Send + 'static,
-        W: AsyncWrite + Unpin + Send + 'static,
-    {
-        self.resolve_optimizer(spec)
+    pub async fn build(&mut self, spec: ServerSpec) -> io::Result<Box<dyn Server<T>>> {
+        let nworkers = spec.nworkers;
+        let mut server = self.resolve_optimizer(spec).map_err(io::Error::other)?;
+
+        for _ in 0..nworkers {
+            let Connection::Worker(worker_handle) = self.acceptor.accept().await? else {
+                return Err(io::Error::other("Unexpected non worker connection"));
+            };
+
+            server.spawn(worker_handle);
+        }
+
+        Ok(server)
     }
 
     /// Resolves the `Optimizer` for this server.
@@ -58,11 +77,7 @@ impl ServerBuilder {
     ///
     /// # Returns
     /// A new server.
-    fn resolve_optimizer<R, W>(&self, spec: ServerSpec) -> Result<Box<dyn Server<R, W>>>
-    where
-        R: AsyncRead + Unpin + Send + 'static,
-        W: AsyncWrite + Unpin + Send + 'static,
-    {
+    fn resolve_optimizer(&self, spec: ServerSpec) -> Result<Box<dyn Server<T>>> {
         match spec.optimizer {
             OptimizerSpec::Adam {
                 learning_rate,
@@ -97,14 +112,12 @@ impl ServerBuilder {
     ///
     /// # Returns
     /// A new server.
-    fn resolve_store<R, W, O, OF>(
+    fn resolve_store<O, OF>(
         &self,
         spec: ServerSpec,
         optimizer_factory: OF,
-    ) -> Result<Box<dyn Server<R, W>>>
+    ) -> Result<Box<dyn Server<T>>>
     where
-        R: AsyncRead + Unpin + Send + 'static,
-        W: AsyncWrite + Unpin + Send + 'static,
         O: Optimizer + Send + 'static,
         OF: Fn(usize) -> O,
     {
@@ -139,10 +152,8 @@ impl ServerBuilder {
     ///
     /// # Returns
     /// A new server.
-    fn resolve_synchronizer<R, W, PS>(&self, spec: ServerSpec, store: PS) -> Box<dyn Server<R, W>>
+    fn resolve_synchronizer<PS>(&self, spec: ServerSpec, store: PS) -> Box<dyn Server<T>>
     where
-        R: AsyncRead + Unpin + Send + 'static,
-        W: AsyncWrite + Unpin + Send + 'static,
         PS: Store + Send + Sync + 'static,
     {
         match spec.synchronizer {
@@ -165,10 +176,8 @@ impl ServerBuilder {
     ///
     /// # Returns
     /// A new server.
-    fn terminate_build<R, W, PS, Sy>(&self, store: PS, synchronizer: Sy) -> Box<dyn Server<R, W>>
+    fn terminate_build<PS, Sy>(&self, store: PS, synchronizer: Sy) -> Box<dyn Server<T>>
     where
-        R: AsyncRead + Unpin + Send + 'static,
-        W: AsyncWrite + Unpin + Send + 'static,
         PS: Store + Send + Sync + 'static,
         Sy: Synchronizer + Send + Sync + 'static,
     {

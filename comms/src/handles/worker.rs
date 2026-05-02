@@ -8,7 +8,6 @@ use crate::{
     Float01,
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
-    specs::worker::WorkerSpec,
     transport::TransportLayer,
 };
 
@@ -62,18 +61,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
         };
 
         self.compressor.enable_sparse_compression(r, rng);
-    }
-
-    /// Sends the create spec for the worker.
-    ///
-    /// # Args
-    /// * `spec` - The worker's specification.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn create(&mut self, spec: WorkerSpec) -> io::Result<()> {
-        let msg = Msg::Control(Command::CreateWorker(spec));
-        self.transport.send(&msg).await
     }
 
     /// Blocks until receiving an event from a worker.
