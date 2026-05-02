@@ -1,12 +1,12 @@
 use std::num::NonZeroUsize;
 
 use orchestrator::{
-    CancelHandle,
     configs::{
-        AlgorithmConfig, DatasetConfig, DatasetSrc, EarlyStoppingConfig, LossFnConfig,
-        OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
+        AlgorithmConfig, DatasetConfig, DatasetSrc, EarlyStoppingConfig, FloatPositive,
+        LossFnConfig, OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig,
+        TrainingConfig,
     },
-    train,
+    train, CancelHandle,
 };
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -92,9 +92,18 @@ pub fn parameter_server(
     let batch_size_nz = NonZeroUsize::new(batch_size)
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
 
-    let early_stopping = early_stopping_tolerance
-        .map(|t| EarlyStoppingConfig::new(t).map_err(PyValueError::new_err))
-        .transpose()?;
+    let early_stopping = match early_stopping_tolerance {
+        Some(tolerance) if tolerance.is_sign_negative() => {
+            return Err(PyValueError::new_err(
+                "early stopping tolerance must be a positive number",
+            ))
+        }
+        Some(tolerance) => {
+            let tolerance = FloatPositive::new(tolerance).unwrap();
+            Some(EarlyStoppingConfig { tolerance })
+        }
+        None => None,
+    };
 
     let synchronizer = if sync.is_instance_of::<BarrierSync>() {
         SynchronizerConfig::Barrier
@@ -242,9 +251,18 @@ pub fn all_reduce(
     let batch_size_nz = NonZeroUsize::new(batch_size)
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
 
-    let early_stopping = early_stopping_tolerance
-        .map(|t| EarlyStoppingConfig::new(t).map_err(PyValueError::new_err))
-        .transpose()?;
+    let early_stopping = match early_stopping_tolerance {
+        Some(tolerance) if tolerance.is_sign_negative() => {
+            return Err(PyValueError::new_err(
+                "early stopping tolerance must be a positive number",
+            ))
+        }
+        Some(tolerance) => {
+            let tolerance = FloatPositive::new(tolerance).unwrap();
+            Some(EarlyStoppingConfig { tolerance })
+        }
+        None => None,
+    };
 
     let loss_fn_cfg = if loss_fn.is_instance_of::<Mse>() {
         LossFnConfig::Mse

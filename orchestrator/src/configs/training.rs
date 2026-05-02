@@ -1,34 +1,67 @@
-use std::{fmt, num::NonZeroUsize, path::PathBuf};
+use std::{fmt, num::NonZeroUsize, ops::Deref, path::PathBuf};
 
 use comms::Float01;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
+
+#[derive(Serialize, Debug, Clone, Copy)]
+#[serde(transparent)]
+pub struct FloatPositive {
+    value: f32,
+}
+
+impl FloatPositive {
+    /// Creates a new `FloatPositive`.
+    ///
+    /// # Args
+    /// * `value` - The inner value.
+    ///
+    /// # Returns
+    /// An option with `Some` value if the given `value` is a positive number, else `None`.
+    pub fn new(value: f32) -> Option<Self> {
+        value.is_sign_positive().then_some(FloatPositive { value })
+    }
+}
+
+impl<'de> Deserialize<'de> for FloatPositive {
+    /// Deserializes a `FloatPositive` from a float value.
+    ///
+    /// # Args
+    /// * `deserializer` - The deserializer to read from.
+    ///
+    /// # Returns
+    /// A validated `Float01` instance.
+    ///
+    /// # Errors
+    /// Returns a deserialization error if the value is outside `[0.0, 1.0]`.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = f32::deserialize(deserializer)?;
+        FloatPositive::new(value)
+            .ok_or_else(|| de::Error::custom("Float01 value must be between 0.0 and 1.0"))
+    }
+}
+
+impl Deref for FloatPositive {
+    type Target = f32;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
 
 /// Criteria for stopping training early when loss improvement falls below a threshold.
 ///
 /// Guarantees that `tolerance` is strictly positive, which is enforced at construction time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EarlyStoppingConfig {
-    tolerance: f32,
-}
-
-impl EarlyStoppingConfig {
-    pub fn new(tolerance: f32) -> Result<Self, String> {
-        if tolerance <= 0.0 {
-            return Err(format!(
-                "early_stopping tolerance must be > 0, got {tolerance}"
-            ));
-        }
-        Ok(Self { tolerance })
-    }
-
-    pub fn is_converged(&self, prev: f32, curr: f32) -> bool {
-        (prev - curr).abs() < self.tolerance
-    }
+    pub tolerance: FloatPositive,
 }
 
 impl fmt::Display for EarlyStoppingConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.2e}", self.tolerance)
+        write!(f, "{:.2e}", *self.tolerance)
     }
 }
 

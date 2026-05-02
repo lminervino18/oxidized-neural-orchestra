@@ -534,7 +534,7 @@ impl Session {
                             if stop_reason.is_none() {
                                 if let Some(cfg) = early_stopping {
                                     if let Some(sig) = tracker.record(worker_id, &losses) {
-                                        if cfg.is_converged(sig.prev, sig.curr) {
+                                        if (sig.prev - sig.curr).abs() < *cfg.tolerance {
                                             info!(
                                                 "early stopping triggered (prev={:.6}, curr={:.6})",
                                                 sig.prev, sig.curr

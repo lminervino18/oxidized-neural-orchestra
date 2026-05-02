@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 use serde::{Deserialize, Deserializer, Serialize, de};
 
@@ -14,12 +14,6 @@ impl Deref for Float01 {
 
     fn deref(&self) -> &Self::Target {
         &self.value
-    }
-}
-
-impl DerefMut for Float01 {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
     }
 }
 
