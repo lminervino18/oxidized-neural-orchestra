@@ -1,11 +1,11 @@
-use comms::Float01;
+use comms::floats::{Float01, FloatPositive};
 
 use super::Optimizer;
 use crate::{MlErr, Result};
 
 /// Gradient descent optimization algorithm with momentum.
 pub struct GradientDescentWithMomentum {
-    learning_rate: f32,
+    learning_rate: FloatPositive,
     momentum: Float01,
     velocity: Box<[f32]>,
 }
@@ -20,7 +20,7 @@ impl GradientDescentWithMomentum {
     ///
     /// # Returns
     /// A new `GradientDescentWithMomentum` instance.
-    pub fn new(len: usize, learning_rate: f32, momentum: Float01) -> Self {
+    pub fn new(len: usize, learning_rate: FloatPositive, momentum: Float01) -> Self {
         Self {
             learning_rate,
             momentum,
@@ -58,7 +58,7 @@ impl Optimizer for GradientDescentWithMomentum {
             .zip(self.velocity.iter_mut())
             .for_each(|((p, g), v)| {
                 *v = (*mu * *v) + g;
-                *p -= lr * *v;
+                *p -= *lr * *v;
             });
 
         Ok(())

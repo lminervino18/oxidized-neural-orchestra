@@ -1,7 +1,7 @@
 use half::f16;
 use rand::{Rng, seq::IndexedRandom};
 
-use super::Float01;
+use crate::floats::Float01;
 
 /// The type for the total length of the decompressed gradient buffer.
 type TotalLen = u64;

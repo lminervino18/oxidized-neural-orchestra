@@ -5,7 +5,7 @@ use tokio::io::AsyncRead;
 
 use super::{Compressor, compressor::CompressedGrad};
 use crate::{
-    Float01,
+    floats::Float01,
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
     transport::TransportLayer,

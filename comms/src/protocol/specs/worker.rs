@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::machine_learning::{
     ParamGenSpec, {DatasetSpec, TrainerSpec},
 };
-use crate::sparse::Float01;
+use crate::floats::Float01;
 
 /// Distributed training algorithm selection.
 #[derive(Debug, Clone, Serialize, Deserialize)]

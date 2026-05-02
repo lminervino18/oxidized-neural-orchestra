@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
-use crate::Float01;
+use crate::floats::{Float01, FloatPositive};
 
 /// The specification for the `Distribution` trait.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -77,16 +77,16 @@ pub enum LayerSpec {
 #[serde(rename_all = "snake_case")]
 pub enum OptimizerSpec {
     Adam {
-        learning_rate: f32,
-        beta1: f32,
-        beta2: f32,
-        epsilon: f32,
+        learning_rate: FloatPositive,
+        beta1: Float01,
+        beta2: Float01,
+        epsilon: FloatPositive,
     },
     GradientDescent {
-        learning_rate: f32,
+        learning_rate: FloatPositive,
     },
     GradientDescentWithMomentum {
-        learning_rate: f32,
+        learning_rate: FloatPositive,
         momentum: Float01,
     },
 }

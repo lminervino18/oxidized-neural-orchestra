@@ -9,7 +9,9 @@ use machine_learning::{
 use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
-use comms::{OrchEvent, OrchHandle, ParamServerHandle, Stp, WorkerEvent, WorkerHandle};
+use comms::{
+    OrchEvent, OrchHandle, ParamServerHandle, Stp, WorkerEvent, WorkerHandle, floats::FloatPositive,
+};
 use worker::{
     middlewares::ServerClusterManager,
     workers::{ParamServerWorker, Worker},
@@ -50,7 +52,7 @@ where
 async fn mock_server<R, W>(
     mut worker_handle: WorkerHandle<Stp<R, W>>,
     mut orch_handle: OrchHandle<Stp<R, W>>,
-    learning_rate: f32,
+    learning_rate: FloatPositive,
     nparams: usize,
 ) -> io::Result<()>
 where
@@ -101,7 +103,7 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let y_size = NonZeroUsize::new(1).unwrap();
     let trainer = BackpropTrainer::new(
         model,
-        vec![GradientDescent::new(0.1)],
+        vec![GradientDescent::new(FloatPositive::new(0.1).unwrap())],
         Dataset::new(
             DatasetSrc::inmem(vec![0., 1., 2., 3.], vec![1., 2., 3., 4.]),
             x_size,
@@ -136,7 +138,12 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let server_orch_handle = ParamServerHandle::new(0, transport);
 
     let worker_fut = worker.run();
-    let server_fut = mock_server(worker_sv_handle, orch_sv_handle, 0.1, 2);
+    let server_fut = mock_server(
+        worker_sv_handle,
+        orch_sv_handle,
+        FloatPositive::new(0.1).unwrap(),
+        2,
+    );
     let orch_fut = mock_orch(worker_orch_handle, server_orch_handle);
 
     let (wk, sv, orch) = tokio::join!(worker_fut, server_fut, orch_fut);

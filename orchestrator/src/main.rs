@@ -4,7 +4,7 @@ use std::{
     process::{Command, ExitStatus},
 };
 
-use comms::Float01;
+use comms::floats::{Float01, FloatPositive};
 use orchestrator::{CancelHandle, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
@@ -155,7 +155,7 @@ fn main() -> io::Result<()> {
             y_size: NonZeroUsize::new(4).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
-            lr: 1.0,
+            lr: FloatPositive::new(1.0).unwrap(),
             mu: Float01::new(0.9).unwrap(),
         },
         loss_fn: LossFnConfig::Mse,

@@ -1,9 +1,11 @@
+use comms::floats::FloatPositive;
+
 use super::Optimizer;
 use crate::{MlErr, Result};
 
 /// Gradient descent optimization algorithm.
 pub struct GradientDescent {
-    learning_rate: f32,
+    learning_rate: FloatPositive,
 }
 
 impl GradientDescent {
@@ -14,7 +16,7 @@ impl GradientDescent {
     ///
     /// # Returns
     /// A new `GradientDescent` instance.
-    pub fn new(learning_rate: f32) -> Self {
+    pub fn new(learning_rate: FloatPositive) -> Self {
         Self { learning_rate }
     }
 }
@@ -41,7 +43,7 @@ impl Optimizer for GradientDescent {
         let lr = self.learning_rate;
 
         for (w, g) in params.iter_mut().zip(grad) {
-            *w -= lr * g;
+            *w -= *lr * g;
         }
 
         Ok(())

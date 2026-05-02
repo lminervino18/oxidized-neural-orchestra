@@ -1,16 +1,18 @@
+use comms::floats::{Float01, FloatPositive};
+
 use super::Optimizer;
 use crate::{MlErr, Result};
 
 /// Adaptive Moment Estimation algorithm.
 pub struct Adam {
-    learning_rate: f32,
-    beta1: f32,
-    beta2: f32,
+    learning_rate: FloatPositive,
+    beta1: Float01,
+    beta2: Float01,
     beta1_t: f32,
     beta2_t: f32,
     v: Box<[f32]>,
     s: Box<[f32]>,
-    epsilon: f32,
+    epsilon: FloatPositive,
 }
 
 impl Adam {
@@ -23,7 +25,13 @@ impl Adam {
     ///
     /// # Returns
     /// A new `Adam` instance.
-    pub fn new(len: usize, learning_rate: f32, beta1: f32, beta2: f32, epsilon: f32) -> Self {
+    pub fn new(
+        len: usize,
+        learning_rate: FloatPositive,
+        beta1: Float01,
+        beta2: Float01,
+        epsilon: FloatPositive,
+    ) -> Self {
         Self {
             learning_rate,
             beta1,
@@ -64,12 +72,12 @@ impl Optimizer for Adam {
             ..
         } = *self;
 
-        self.beta1_t *= b1;
-        self.beta2_t *= b2;
+        self.beta1_t *= *b1;
+        self.beta2_t *= *b2;
 
         let bc1 = 1. - self.beta1_t;
         let bc2 = 1. - self.beta2_t;
-        let step_size = lr * (bc2.sqrt() / bc1);
+        let step_size = *lr * (bc2.sqrt() / bc1);
 
         params
             .iter_mut()
@@ -77,9 +85,9 @@ impl Optimizer for Adam {
             .zip(self.v.iter_mut())
             .zip(self.s.iter_mut())
             .for_each(|(((p, g), v), s)| {
-                *v = b1 * *v + (1. - b1) * g;
-                *s = b2 * *s + (1. - b2) * g.powi(2);
-                *p -= step_size * *v / (s.sqrt() + eps);
+                *v = *b1 * *v + (1. - *b1) * g;
+                *s = *b2 * *s + (1. - *b2) * g.powi(2);
+                *p -= step_size * *v / (s.sqrt() + *eps);
             });
 
         Ok(())

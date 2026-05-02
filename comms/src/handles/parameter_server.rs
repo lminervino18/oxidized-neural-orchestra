@@ -4,8 +4,8 @@ use rand::{SeedableRng, rngs::StdRng};
 
 use super::{CompressedGrad, Compressor};
 use crate::{
+    floats::Float01,
     protocol::{Command, Msg, Payload},
-    sparse::Float01,
     transport::TransportLayer,
 };
 

@@ -1,62 +1,14 @@
-use std::{fmt, num::NonZeroUsize, ops::Deref, path::PathBuf};
+use std::{fmt, num::NonZeroUsize, path::PathBuf};
 
-use comms::Float01;
-use serde::{Deserialize, Deserializer, Serialize, de};
-
-#[derive(Serialize, Debug, Clone, Copy)]
-#[serde(transparent)]
-pub struct FloatPositive {
-    value: f32,
-}
-
-impl FloatPositive {
-    /// Creates a new `FloatPositive`.
-    ///
-    /// # Args
-    /// * `value` - The inner value.
-    ///
-    /// # Returns
-    /// An option with `Some` value if the given `value` is a positive number, else `None`.
-    pub fn new(value: f32) -> Option<Self> {
-        value.is_sign_positive().then_some(FloatPositive { value })
-    }
-}
-
-impl<'de> Deserialize<'de> for FloatPositive {
-    /// Deserializes a `FloatPositive` from a float value.
-    ///
-    /// # Args
-    /// * `deserializer` - The deserializer to read from.
-    ///
-    /// # Returns
-    /// A validated `Float01` instance.
-    ///
-    /// # Errors
-    /// Returns a deserialization error if the value is outside `[0.0, 1.0]`.
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = f32::deserialize(deserializer)?;
-        FloatPositive::new(value)
-            .ok_or_else(|| de::Error::custom("Float01 value must be between 0.0 and 1.0"))
-    }
-}
-
-impl Deref for FloatPositive {
-    type Target = f32;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
+use comms::floats::{Float01, FloatNonNegative, FloatPositive};
+use serde::{Deserialize, Serialize};
 
 /// Criteria for stopping training early when loss improvement falls below a threshold.
 ///
 /// Guarantees that `tolerance` is strictly positive, which is enforced at construction time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EarlyStoppingConfig {
-    pub tolerance: FloatPositive,
+    pub tolerance: FloatNonNegative,
 }
 
 impl fmt::Display for EarlyStoppingConfig {
@@ -77,9 +29,19 @@ pub enum LossFnConfig {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OptimizerConfig {
-    GradientDescent { lr: f32 },
-    GradientDescentWithMomentum { lr: f32, mu: Float01 },
-    Adam { lr: f32, b1: f32, b2: f32, eps: f32 },
+    GradientDescent {
+        lr: FloatPositive,
+    },
+    GradientDescentWithMomentum {
+        lr: FloatPositive,
+        mu: Float01,
+    },
+    Adam {
+        lr: FloatPositive,
+        b1: Float01,
+        b2: Float01,
+        eps: FloatPositive,
+    },
 }
 
 /// The dataset's data source.

@@ -1,7 +1,7 @@
 use half::f16;
 use rand::Rng;
 
-use crate::{Float01, sparse};
+use crate::{floats::Float01, sparse};
 
 /// A compressed gradient.
 pub enum CompressedGrad<'a> {

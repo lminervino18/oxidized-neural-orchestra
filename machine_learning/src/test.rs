@@ -2,6 +2,7 @@
 
 use std::num::NonZeroUsize;
 
+use comms::floats::FloatPositive;
 use ndarray::ArrayView2;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 
@@ -47,7 +48,7 @@ fn test_machine_learning00_linear_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(100).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(0.1);
+    let optimizer = GradientDescent::new(FloatPositive::new(0.1).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -104,7 +105,7 @@ fn test_machine_learning01_and2_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -170,7 +171,7 @@ fn test_machine_learning02_and3_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(2000).unwrap();
     let batch_size = NonZeroUsize::new(8).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -232,7 +233,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -311,7 +312,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(16).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -382,7 +383,7 @@ fn test_conv_dense(
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(300).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = CrossEntropy::new();
     let rng = StdRng::from_os_rng();
 
@@ -689,7 +690,7 @@ fn test_machine_learning_dimensionality_correctness() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(10).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 

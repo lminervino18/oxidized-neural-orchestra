@@ -1,10 +1,10 @@
 use std::num::NonZeroUsize;
 
+use comms::floats::{FloatNonNegative, FloatPositive};
 use orchestrator::{
     configs::{
-        AlgorithmConfig, DatasetConfig, DatasetSrc, EarlyStoppingConfig, FloatPositive,
-        LossFnConfig, OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig,
-        TrainingConfig,
+        AlgorithmConfig, DatasetConfig, DatasetSrc, EarlyStoppingConfig, LossFnConfig,
+        OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
     },
     train, CancelHandle,
 };
@@ -93,13 +93,13 @@ pub fn parameter_server(
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
 
     let early_stopping = match early_stopping_tolerance {
-        Some(tolerance) if tolerance.is_sign_negative() => {
+        Some(tolerance) if tolerance.is_sign_negative() || tolerance == 0.0 => {
             return Err(PyValueError::new_err(
-                "early stopping tolerance must be a positive number",
+                "early stopping tolerance must be a non negative number",
             ))
         }
         Some(tolerance) => {
-            let tolerance = FloatPositive::new(tolerance).unwrap();
+            let tolerance = FloatNonNegative::new(tolerance).unwrap();
             Some(EarlyStoppingConfig { tolerance })
         }
         None => None,
@@ -175,6 +175,12 @@ pub fn parameter_server(
 
     let worker_count = worker_addrs.len();
 
+    if optimizer.lr <= 0.0 {
+        return Err(PyValueError::new_err(
+            "learning rate must be a positive number",
+        ));
+    }
+
     Ok(PyTrainingConfig {
         inner: TrainingConfig {
             worker_addrs,
@@ -185,7 +191,9 @@ pub fn parameter_server(
             },
             serializer: serializer_cfg,
             dataset: dataset_config,
-            optimizer: OptimizerConfig::GradientDescent { lr: optimizer.lr },
+            optimizer: OptimizerConfig::GradientDescent {
+                lr: FloatPositive::new(optimizer.lr).unwrap(),
+            },
             loss_fn: loss_fn_cfg,
             batch_size: batch_size_nz,
             max_epochs: max_epochs_nz,
@@ -252,13 +260,13 @@ pub fn all_reduce(
         .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
 
     let early_stopping = match early_stopping_tolerance {
-        Some(tolerance) if tolerance.is_sign_negative() => {
+        Some(tolerance) if tolerance.is_sign_negative() || tolerance == 0.0 => {
             return Err(PyValueError::new_err(
-                "early stopping tolerance must be a positive number",
+                "early stopping tolerance must be a non negative number",
             ))
         }
         Some(tolerance) => {
-            let tolerance = FloatPositive::new(tolerance).unwrap();
+            let tolerance = FloatNonNegative::new(tolerance).unwrap();
             Some(EarlyStoppingConfig { tolerance })
         }
         None => None,
@@ -314,13 +322,21 @@ pub fn all_reduce(
 
     let worker_count = worker_addrs.len();
 
+    if optimizer.lr <= 0.0 {
+        return Err(PyValueError::new_err(
+            "learning rate must be a positive number",
+        ));
+    }
+
     Ok(PyTrainingConfig {
         inner: TrainingConfig {
             worker_addrs,
             algorithm: AlgorithmConfig::AllReduce,
             serializer: serializer_cfg,
             dataset: dataset_config,
-            optimizer: OptimizerConfig::GradientDescent { lr: optimizer.lr },
+            optimizer: OptimizerConfig::GradientDescent {
+                lr: FloatPositive::new(optimizer.lr).unwrap(),
+            },
             loss_fn: loss_fn_cfg,
             batch_size: batch_size_nz,
             max_epochs: max_epochs_nz,
