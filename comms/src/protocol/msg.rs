@@ -35,6 +35,7 @@ pub enum Command<'a> {
     RequestParams,
     StopAfterEpoch,
     Disconnect,
+    Done,
 }
 
 /// The application layer message for the entire system.

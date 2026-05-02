@@ -330,7 +330,9 @@ impl Session {
                         },
                         Some(WorkerHandleRequest::PullParams) => {
                             match worker_handle.pull_params().await {
-                                Ok(params) => {let _ = tx.send(TrainingEvent::Params(params.to_vec())).await;},
+                                Ok(params) => {
+                                    let _ = tx.send(TrainingEvent::Params(params.to_vec())).await;
+                                },
                                 Err(e) => {
                                     error!("worker {id}: failed to pull params command: {e}");
 
@@ -358,9 +360,12 @@ impl Session {
 
                         let _ = tx.send(event).await;
                     }
+                    Ok(WorkerEvent::Done) => {
+                        info!("worker {id} done");
+                        let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
+                    }
                     Ok(WorkerEvent::Disconnect) => {
                         info!("worker {id} disconnected");
-                        let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
                         return;
                     }
                     Ok(event) => {
@@ -477,6 +482,7 @@ impl Session {
         for (i, worker_handle) in workers.into_iter().enumerate() {
             let (wk_tx, wk_rx) = mpsc::channel(256);
             wk_txs.push(wk_tx);
+
             tokio::spawn(Self::worker_listener(
                 i,
                 worker_handle,
@@ -507,7 +513,9 @@ impl Session {
                     info!("manual stop requested");
                     stop_reason = Some(StopReason::ManualStop);
 
-                    for tx in wk_txs.iter_mut() { let _ = tx.send(WorkerHandleRequest::Stop).await; }
+                    for tx in wk_txs.iter_mut() {
+                        let _ = tx.send(WorkerHandleRequest::Stop).await;
+                    }
                 }
                 evt = internal_rx.recv() => {
                     let Some(event) = evt else {
@@ -518,7 +526,9 @@ impl Session {
                         TrainingEvent::WorkerDone(id) => {
                             workers_done += 1;
                             let _ = event_tx.send(TrainingEvent::WorkerDone(id)).await;
-                            if workers_done == n_workers {  break; }
+                            if workers_done == n_workers {
+                                break;
+                            }
                         }
                         TrainingEvent::Loss { worker_id, losses } => {
                             if stop_reason.is_none() {

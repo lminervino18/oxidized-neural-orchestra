@@ -94,6 +94,12 @@ where
         }
 
         self.ring_manager.disconnect().await?;
+        self.orch_handle.done().await?;
+
+        if let OrchEvent::RequestParams = self.orch_handle.recv_event().await? {
+            self.orch_handle.push_params(&mut self.params).await?;
+        }
+
         self.orch_handle.disconnect().await?;
         Ok(())
     }

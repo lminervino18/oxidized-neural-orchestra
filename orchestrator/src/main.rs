@@ -65,7 +65,7 @@ fn main() -> io::Result<()> {
     const RELEASE: bool = false;
 
     setup_docker(WORKERS, SERVERS, RELEASE)?;
-    let (worker_addrs, _server_addrs) = build_addresses(WORKERS, SERVERS);
+    let (worker_addrs, server_addrs) = build_addresses(WORKERS, SERVERS);
 
     let model_config = ModelConfig {
         layers: vec![
@@ -76,15 +76,25 @@ fn main() -> io::Result<()> {
             },
             LayerConfig::Dense {
                 output_size: NonZeroUsize::new(1).unwrap(),
-                init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Softmax),
+                init: ParamGenConfig::XavierUniform,
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
         ],
     };
 
+    let algorithm_config = if !server_addrs.is_empty() {
+        AlgorithmConfig::ParameterServer {
+            server_addrs,
+            synchronizer: SynchronizerConfig::NonBlocking,
+            store: StoreConfig::Wild,
+        }
+    } else {
+        AlgorithmConfig::AllReduce
+    };
+
     let training_config = TrainingConfig {
         worker_addrs,
-        algorithm: AlgorithmConfig::AllReduce,
+        algorithm: algorithm_config,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
@@ -100,15 +110,15 @@ fn main() -> io::Result<()> {
                     0.0, //
                     1.0, //
                     1.0, //
-                    1.0, //
+                    0.0, //
                 ],
             },
             x_size: NonZeroUsize::new(2).unwrap(),
             y_size: NonZeroUsize::new(1).unwrap(),
         },
-        optimizer: OptimizerConfig::GradientDescent { lr: 0.1 },
+        optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
         loss_fn: LossFnConfig::Mse,
-        batch_size: NonZeroUsize::new(4).unwrap(),
+        batch_size: NonZeroUsize::new(1).unwrap(),
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
