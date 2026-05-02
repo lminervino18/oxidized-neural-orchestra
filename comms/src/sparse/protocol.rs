@@ -1,6 +1,7 @@
 use half::f16;
 use rand::{Rng, seq::IndexedRandom};
-use serde::{Deserialize, Deserializer, Serialize, de};
+
+use super::Float01;
 
 /// The type for the total length of the decompressed gradient buffer.
 type TotalLen = u64;
@@ -19,47 +20,6 @@ const CHUNK_LEN_SIZE: usize = size_of::<ChunkLen>();
 
 const SAMPLE_SIZE_MAX: usize = 1 << 14;
 const MIN_POSITIVE_F16: f32 = f16::MIN_POSITIVE.to_f32_const();
-
-/// A float with a value between `0.0` and `1.0`.
-#[derive(Debug, Clone, Copy, Serialize)]
-#[serde(transparent)]
-pub struct Float01 {
-    value: f32,
-}
-
-impl Float01 {
-    /// Creates a new `Float01`.
-    ///
-    /// # Args
-    /// * `value` - The value to store.
-    ///
-    /// # Returns
-    /// A new `Float01` instance if the given value is between `0.0` and `1.0`.
-    pub fn new(value: f32) -> Option<Self> {
-        (0.0..=1.0).contains(&value).then_some(Self { value })
-    }
-}
-
-impl<'de> Deserialize<'de> for Float01 {
-    /// Deserializes a `Float01` from a float value.
-    ///
-    /// # Args
-    /// * `deserializer` - The deserializer to read from.
-    ///
-    /// # Returns
-    /// A validated `Float01` instance.
-    ///
-    /// # Errors
-    /// Returns a deserialization error if the value is outside `[0.0, 1.0]`.
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = f32::deserialize(deserializer)?;
-        Float01::new(value)
-            .ok_or_else(|| de::Error::custom("Float01 value must be between 0.0 and 1.0"))
-    }
-}
 
 /// Calculates the gradient's threshold approximately by sampling it's values.
 ///
@@ -81,7 +41,7 @@ pub fn calculate_threshold<R: Rng>(residual: &[f32], r: Float01, rng: &mut R) ->
         .map(|x| x.abs())
         .collect();
 
-    let k = (sample_size as f32 * (1.0 - r.value)) as usize;
+    let k = (sample_size as f32 * (1.0 - *r)) as usize;
     let k = k.clamp(0, sample_size - 1);
     sample.select_nth_unstable_by(k, |a, b| a.total_cmp(b));
 

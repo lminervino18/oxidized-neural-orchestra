@@ -45,7 +45,7 @@ pub enum LossFnConfig {
 #[serde(rename_all = "snake_case")]
 pub enum OptimizerConfig {
     GradientDescent { lr: f32 },
-    GradientDescentWithMomentum { lr: f32, mu: f32 },
+    GradientDescentWithMomentum { lr: f32, mu: Float01 },
     Adam { lr: f32, b1: f32, b2: f32, eps: f32 },
 }
 

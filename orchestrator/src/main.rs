@@ -69,15 +69,26 @@ fn main() -> io::Result<()> {
 
     let model_config = ModelConfig {
         layers: vec![
-            LayerConfig::Dense {
-                output_size: NonZeroUsize::new(2).unwrap(),
-                init: ParamGenConfig::XavierUniform,
-                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+            LayerConfig::Conv {
+                input_dim: (
+                    NonZeroUsize::new(2).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                ),
+                kernel_dim: (
+                    NonZeroUsize::new(5).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
+                ),
+                stride: NonZeroUsize::new(1).unwrap(),
+                padding: 0,
+                init: ParamGenConfig::Kaiming,
+                act_fn: None,
             },
             LayerConfig::Dense {
-                output_size: NonZeroUsize::new(1).unwrap(),
-                init: ParamGenConfig::XavierUniform,
-                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+                output_size: NonZeroUsize::new(4).unwrap(),
+                init: ParamGenConfig::Kaiming,
+                act_fn: Some(ActFnConfig::Softmax),
             },
         ],
     };
@@ -101,24 +112,54 @@ fn main() -> io::Result<()> {
         dataset: DatasetConfig {
             src: DatasetSrc::Inline {
                 samples: vec![
-                    0.0, 0.0, //
-                    0.0, 1.0, //
-                    1.0, 0.0, //
-                    1.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    1.0, 1.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    //
+                    1.0, 0.0, 1.0, //
+                    0.0, 0.0, 0.0, //
+                    1.0, 0.0, 1.0, // plus sign
+                    //
+                    0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, //
+                    0.0, 0.0, 0.0, //
+                    //
+                    1.0, 1.0, 1.0, //
+                    1.0, 0.0, 1.0, //
+                    1.0, 1.0, 1.0, // dot
+                    //
+                    1.0, 0.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    1.0, 0.0, 1.0, //
+                    //
+                    0.0, 1.0, 0.0, //
+                    1.0, 0.0, 1.0, //
+                    0.0, 1.0, 0.0, // cross
+                    //
+                    1.0, 1.0, 1.0, //
+                    1.0, 0.0, 1.0, //
+                    1.0, 1.0, 1.0, //
+                    //
+                    0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, //
+                    0.0, 0.0, 0.0, // box
                 ],
                 labels: vec![
-                    0.0, //
-                    1.0, //
-                    1.0, //
-                    0.0, //
+                    1.0, 0.0, 0.0, 0.0, // plus sign
+                    0.0, 1.0, 0.0, 0.0, // dot
+                    0.0, 0.0, 1.0, 0.0, // cross
+                    0.0, 0.0, 0.0, 1.0, // box
                 ],
             },
-            x_size: NonZeroUsize::new(2).unwrap(),
-            y_size: NonZeroUsize::new(1).unwrap(),
+            x_size: NonZeroUsize::new(18).unwrap(),
+            y_size: NonZeroUsize::new(4).unwrap(),
         },
-        optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
+        optimizer: OptimizerConfig::GradientDescentWithMomentum {
+            lr: 1.0,
+            mu: Float01::new(0.9).unwrap(),
+        },
         loss_fn: LossFnConfig::Mse,
-        batch_size: NonZeroUsize::new(1).unwrap(),
+        batch_size: NonZeroUsize::new(4).unwrap(),
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),

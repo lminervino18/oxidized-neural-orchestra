@@ -2,6 +2,8 @@ use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
+use crate::Float01;
+
 /// The specification for the `Distribution` trait.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -85,7 +87,7 @@ pub enum OptimizerSpec {
     },
     GradientDescentWithMomentum {
         learning_rate: f32,
-        momentum: f32,
+        momentum: Float01,
     },
 }
 
