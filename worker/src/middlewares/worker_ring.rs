@@ -191,10 +191,6 @@ where
             }
         }
 
-        for g in self.grad.iter_mut() {
-            *g /= n.get() as f32;
-        }
-
         Ok(())
     }
 }
