@@ -44,7 +44,7 @@ pip install torch safetensors matplotlib  # or use the existing .venv
 
 ### Smoke
 
-![Smoke Results](results/latest/smoke_results.png)
+![Smoke Results](plots/smoke_results.png)
 
 ### Benchmark
 
@@ -112,16 +112,14 @@ Dense-only. Conv2d configs are excluded until that implementation is stable.
 
 ## Training Configs
 
-| Name | Workers | Servers | Serializer | Sync | Early stop |
-|---|---|---|---|---|---|
-| `ps_1w_1s_base_barrier` | 1 | 1 | Base | Barrier | — |
-| `ps_2w_1s_base_barrier` | 2 | 1 | Base | Barrier | — |
-| `ps_3w_1s_base_barrier` | 3 | 1 | Base | Barrier | — |
-| `ps_3w_2s_base_barrier` | 3 | 2 | Base | Barrier | — |
-| `ps_2w_1s_base_barrier` + `early_stopping_tolerance` | 2 | 1 | Base | Barrier | 0.001 |
-| `ps_3w_2s_base_barrier` + `early_stopping_tolerance` | 3 | 2 | Base | Barrier | 0.001 |
+| Name | Workers | Servers | Serializer | Sync |
+|---|---|---|---|---|
+| `ps_1w_1s_base_barrier` | 1 | 1 | Base | Barrier |
+| `ps_2w_1s_base_barrier` | 2 | 1 | Base | Barrier |
+| `ps_3w_1s_base_barrier` | 3 | 1 | Base | Barrier |
+| `ps_3w_2s_base_barrier` | 3 | 2 | Base | Barrier |
 
-The `3w_1s` vs `3w_2s` comparison reveals whether a single parameter server becomes a bottleneck with 3 workers. The early-stopping variants (benchmark only) run up to 100 epochs but stop automatically when epoch-to-epoch MSE improvement drops below the tolerance.
+The `3w_1s` vs `3w_2s` comparison reveals whether a single parameter server becomes a bottleneck with 3 workers.
 
 ## Customizing
 
@@ -153,7 +151,6 @@ Edit `mnist_configs.json` to add runs, change epochs, thresholds, or lr. The str
 
 ## Notes
 
-- `early_stopping_tolerance` is always `None` — per-worker early stop deadlocks with BarrierSync
 - `/etc/hosts` needs `worker-*`/`server-*` entries; managed automatically via `docker/fill_hosts.py` (requires sudo once if missing)
 - Subset dataset files are cached in `results/data/` after first run — not recreated on subsequent runs
-- Results files (`*.jsonl`) and plots (`results/latest/`) are gitignored; only the script and config are tracked
+- Results files (`*.jsonl`) and plots are gitignored; only the script, config, and committed plot PNGs are tracked

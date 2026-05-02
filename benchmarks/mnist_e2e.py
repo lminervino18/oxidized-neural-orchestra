@@ -33,7 +33,7 @@ COMPOSE_FILE  = REPO_ROOT / "compose.yaml"
 NB_DATA_DIR   = REPO_ROOT / "notebooks" / "mnist" / "data"
 BENCH_DIR     = Path(__file__).resolve().parent
 RESULTS_DIR   = BENCH_DIR / "results"
-LATEST_DIR    = RESULTS_DIR / "latest"
+PLOTS_DIR     = BENCH_DIR / "plots"
 ARTIFACTS_DIR = RESULTS_DIR / "artifacts"
 SUBSET_DIR    = RESULTS_DIR / "data"
 
@@ -300,8 +300,9 @@ def docker_up(workers: int, servers: int, rebuild: bool, release: bool = True) -
     cmd += ["--build", "--no-cache"] if rebuild else ["--build"]
     cmd += ["-d", "--remove-orphans"]
     subprocess.run(cmd, check=True)
-    time.sleep(3)
+    time.sleep(3)  # build step (COPY context) already provides ~15-20s; 3s covers node startup
     return time.perf_counter() - t0
+
 
 
 def docker_down():
@@ -654,7 +655,7 @@ def plot_results(results: list, profile: str, run_ts: str):
     ax_acc.set_xticks(x)
     ax_acc.set_xticklabels(labels, fontsize=9)
     ax_acc.set_ylabel("Accuracy")
-    ax_acc.set_ylim(0, max(max(accuracies) * 1.3, min_acc_thresh * 2.5, 0.4))
+    ax_acc.set_ylim(0, 1.0)
     ax_acc.set_title("Test Accuracy")
     ax_acc.legend(fontsize=8)
     ax_acc.grid(axis="y", alpha=0.3)
@@ -689,8 +690,8 @@ def plot_results(results: list, profile: str, run_ts: str):
     )
 
     fig.tight_layout()
-    LATEST_DIR.mkdir(parents=True, exist_ok=True)
-    out = LATEST_DIR / f"{profile}_results.png"
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    out = PLOTS_DIR / f"{profile}_results.png"
     fig.savefig(out, dpi=130, bbox_inches="tight")
     plt.close(fig)
     print(f"  plots → {out.relative_to(BENCH_DIR)}")
@@ -791,7 +792,14 @@ def main():
             continue
 
         try:
-            for run in topo_runs:
+            for i, run in enumerate(topo_runs):
+                # node binary exits after each session; full down+up ensures clean state
+                if i > 0:
+                    print("  recycling containers for next run...")
+                    docker_down()
+                    docker_start_s = docker_up(workers, servers, rebuild=False)
+                    ensure_hosts(workers, servers, sudo_pw)
+
                 print(f"\n  [{run['name']}]")
                 result = run_single(run, profile_cfg, args.profile)
                 result["docker_start_seconds"] = docker_start_s

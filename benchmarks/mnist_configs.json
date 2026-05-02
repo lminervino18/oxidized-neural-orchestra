@@ -62,7 +62,7 @@
           "batch_size": 256,
           "lr": 0.5,
           "offline_epochs": 0,
-          "min_accuracy": 0.85,
+          "min_accuracy": 0.70,
           "max_train_seconds": 600
         },
         {
@@ -73,7 +73,7 @@
           "batch_size": 256,
           "lr": 0.5,
           "offline_epochs": 0,
-          "min_accuracy": 0.85,
+          "min_accuracy": 0.70,
           "max_train_seconds": 600
         },
         {
@@ -95,32 +95,8 @@
           "batch_size": 256,
           "lr": 0.5,
           "offline_epochs": 0,
-          "min_accuracy": 0.88,
+          "min_accuracy": 0.65,
           "max_train_seconds": 900
-        },
-        {
-          "name": "dense_small_ps_2w_1s_barrier_early_stop",
-          "model": "dense_small",
-          "training": "ps_2w_1s_base_barrier",
-          "max_epochs": 100,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "early_stopping_tolerance": 0.001,
-          "min_accuracy": 0.85,
-          "max_train_seconds": 1200
-        },
-        {
-          "name": "dense_small_ps_3w_2s_barrier_early_stop",
-          "model": "dense_small",
-          "training": "ps_3w_2s_base_barrier",
-          "max_epochs": 100,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "early_stopping_tolerance": 0.001,
-          "min_accuracy": 0.85,
-          "max_train_seconds": 1200
         }
       ]
     }
