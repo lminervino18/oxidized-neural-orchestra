@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum ActFnSpec {
     Sigmoid { amp: f32 },
+    Softmax,
 }
 
 /// The specification for the `Layer` enum.

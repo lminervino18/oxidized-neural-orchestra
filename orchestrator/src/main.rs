@@ -88,7 +88,7 @@ fn main() -> io::Result<()> {
             LayerConfig::Dense {
                 output_size: NonZeroUsize::new(4).unwrap(),
                 init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+                act_fn: Some(ActFnConfig::Softmax),
             },
         ],
     };
