@@ -96,17 +96,14 @@ pub enum AlgorithmConfig {
 }
 
 /// The `Serializer` configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SerializerConfig {
+    #[default]
     Base,
-    SparseCapable { r: Float01 },
-}
-
-impl Default for SerializerConfig {
-    fn default() -> Self {
-        Self::Base
-    }
+    SparseCapable {
+        r: Float01,
+    },
 }
 
 /// The `Training` configuration.

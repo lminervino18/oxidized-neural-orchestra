@@ -32,7 +32,7 @@ where
     fn clone(&self) -> Self {
         Self {
             transport_factory: self.transport_factory.clone(),
-            _phantom: self._phantom.clone(),
+            _phantom: self._phantom,
         }
     }
 }
@@ -60,8 +60,8 @@ where
 
     /// Connects to an uninitialised node and returns a handle to bootstrap it.
     ///
-    /// The caller assigns the node's role by calling [`NodeHandle::create_server`] or
-    /// [`NodeHandle::create_worker`] on the returned handle.
+    /// The caller assigns the node's role by calling `NodeHandle::create_server` or
+    /// `NodeHandle::create_worker` on the returned handle.
     ///
     /// # Args
     /// * `id` - The id number of the node.
@@ -70,10 +70,7 @@ where
     /// * `src_entity` - The entity initiating the connection.
     ///
     /// # Returns
-    /// A [`NodeHandle`] ready for role assignment.
-    ///
-    /// # Errors
-    /// Returns an io error if the connection handshake fails.
+    /// A new `NodeHandle` or an io error if occurred.
     pub async fn connect_node(
         &self,
         id: usize,
@@ -98,10 +95,7 @@ where
     /// * `src_entity` - The entity initiating the connection.
     ///
     /// # Returns
-    /// A [`ParamServerHandle`] ready to start training.
-    ///
-    /// # Errors
-    /// Returns an io error if the connection handshake fails.
+    /// A `WorkerHandle` ready to start training.
     pub async fn connect_worker(
         &self,
         id: usize,
@@ -126,10 +120,7 @@ where
     /// * `src_entity` - The entity initiating the connection.
     ///
     /// # Returns
-    /// A [`ParamServerHandle`] ready to exchange parameters.
-    ///
-    /// # Errors
-    /// Returns an io error if the connection handshake fails.
+    /// A new `ParamServerHandle` or an io error if occurred.
     pub async fn connect_parameter_server(
         &self,
         id: usize,
@@ -153,10 +144,7 @@ where
     /// * `src_entity` - The entity initiating the connection.
     ///
     /// # Returns
-    /// An [`OrchHandle`] ready to receive events.
-    ///
-    /// # Errors
-    /// Returns an io error if the connection handshake fails.
+    /// A new `OrchHandle` or an io error if occurred.
     pub async fn connect_orchestrator(
         &self,
         reader: R,
@@ -179,7 +167,7 @@ where
     /// * `src_entity` - The entity initiating the connection.
     ///
     /// # Returns
-    /// A new `ReliableTransport` or an io error if occurred.
+    /// A new `TransportLayer` or an io error if occurred.
     async fn connect(&self, reader: R, writer: W, src_entity: Entity) -> io::Result<T>
     where
         R: AsyncRead + Unpin,

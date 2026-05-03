@@ -88,7 +88,7 @@ where
                     self.trainer.optimize(&mut param_manager).unwrap();
                     param_manager.zero_grad();
 
-                    self.optimization_params.copy_from_slice(&mut self.params);
+                    self.optimization_params.copy_from_slice(&self.params);
                 }
             }
         }

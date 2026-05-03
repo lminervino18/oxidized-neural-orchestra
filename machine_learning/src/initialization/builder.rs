@@ -68,7 +68,7 @@ impl ParamGenBuilder {
     /// # Returns
     /// A new `ParamGenBuilder` instance.
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     /// Resolves the `ParamGen` for this server.

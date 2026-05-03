@@ -71,7 +71,10 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Returns
     /// A new `ParamManager` instance.
-    pub fn for_servers(servers: Vec<ParamsMetadata<'mw>>, layer_ordering: &'mw [usize]) -> Self {
+    pub fn for_parameter_server(
+        servers: Vec<ParamsMetadata<'mw>>,
+        layer_ordering: &'mw [usize],
+    ) -> Self {
         Self {
             cursors: vec![0; layer_ordering.len()],
             layer_ordering: LayerOrdering::Seq(layer_ordering),
@@ -89,7 +92,7 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Returns
     /// A new `ParamManager` instance.
-    pub fn for_worker(
+    pub fn for_all_reduce(
         params: &'mw mut [f32],
         grad: &'mw mut [f32],
         residual: &'mw mut [f32],
@@ -297,7 +300,7 @@ mod tests {
             .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::for_servers(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut front = manager.front();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES) {
@@ -321,7 +324,7 @@ mod tests {
             .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::for_servers(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut back = manager.back();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
@@ -348,7 +351,7 @@ mod tests {
             .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::for_servers(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut back = manager.back();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
@@ -374,7 +377,7 @@ mod tests {
             .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::for_servers(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut front = manager.front();
 
         assert_eq!(front.next(1).unwrap(), &[1.0]);

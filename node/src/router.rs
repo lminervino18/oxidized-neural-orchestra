@@ -16,8 +16,8 @@ use worker::builder::WorkerBuilder;
 /// Routes the first orchestrator connection to the appropriate runtime role.
 ///
 /// A single `NodeRouter` represents one process lifecycle. After receiving a
-/// [`comms::protocol::NodeSpec`] from the orchestrator, the process commits to
-/// either the parameter-server or worker role for the duration of its run.
+/// `comms::protocol::NodeSpec` from the orchestrator, the process commits to
+/// either a parameter server or worker role for the entire training's duration.
 pub struct NodeRouter<R, W, T, F, G>
 where
     R: AsyncRead + Unpin,

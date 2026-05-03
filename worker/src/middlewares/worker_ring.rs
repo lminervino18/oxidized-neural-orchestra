@@ -63,7 +63,7 @@ where
     /// # Returns
     /// A new `ParameterManager` instance.
     pub fn build_param_manager<'a>(&'a mut self, params: &'a mut [f32]) -> ParamManager<'a> {
-        ParamManager::for_worker(
+        ParamManager::for_all_reduce(
             params,
             &mut self.grad,
             &mut self.residual,
@@ -126,11 +126,11 @@ where
             }
 
             i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(grad) = self.prev.recv_event().await? else {
+            let WorkerEvent::Grad(agg_grad) = self.prev.recv_event().await? else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
-            for (acc, g) in chunks[i].into_iter().zip(grad) {
+            for (acc, g) in chunks[i].iter_mut().zip(agg_grad) {
                 *acc += *g;
             }
         }
@@ -155,7 +155,7 @@ where
         let mut i = (self.id + 1) % n.get();
 
         // SAFETY `i` is in bounds, it's defined to be lower than `n`.
-        chunks[i].copy_from_slice(&residual_chunks[i]);
+        chunks[i].copy_from_slice(residual_chunks[i]);
 
         if n.get() == 1 {
             residual_chunks[i].fill(0.0);
@@ -182,13 +182,11 @@ where
             }
 
             i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(grad) = self.prev.recv_event().await? else {
+            let WorkerEvent::Grad(acc_grad) = self.prev.recv_event().await? else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
-            for (acc, g) in chunks[i].into_iter().zip(grad) {
-                *acc = *g;
-            }
+            chunks[i].copy_from_slice(acc_grad);
         }
 
         Ok(())

@@ -29,13 +29,11 @@ impl Display for ParamServerErr {
 
 impl Error for ParamServerErr {}
 
-impl TryInto<ParamServerErr> for MlErr {
-    type Error = ParamServerErr;
-
-    fn try_into(self) -> std::result::Result<ParamServerErr, Self::Error> {
-        match self {
-            Self::SizeMismatch { .. } => Ok(ParamServerErr::SizeMismatch),
-            _ => Err(ParamServerErr::Other),
+impl From<MlErr> for ParamServerErr {
+    fn from(value: MlErr) -> Self {
+        match value {
+            MlErr::SizeMismatch { .. } => Self::SizeMismatch,
+            _ => Self::Other,
         }
     }
 }

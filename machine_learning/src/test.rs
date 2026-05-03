@@ -70,7 +70,7 @@ fn test_machine_learning00_linear_convergence() {
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -127,7 +127,7 @@ fn test_machine_learning01_and2_gate_convergence() {
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -193,7 +193,7 @@ fn test_machine_learning02_and3_gate_convergence() {
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -255,7 +255,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -334,7 +334,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -405,7 +405,7 @@ fn test_conv_dense(
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     let x = ArrayView2::from_shape((y_size.get(), x_size.get()), symbols).unwrap();
@@ -711,6 +711,6 @@ fn test_machine_learning_dimensionality_correctness() {
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::for_servers(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     assert!(trainer.train(&mut param_manager).is_ok())
 }

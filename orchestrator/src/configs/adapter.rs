@@ -129,7 +129,7 @@ impl Adapter {
                     trainer: trainer_spec.clone(),
                     dataset,
                     algorithm: algorithm_spec.clone(),
-                    serializer: serializer_spec.clone(),
+                    serializer: serializer_spec,
                     seed: training.seed,
                 };
 
@@ -185,7 +185,7 @@ impl Adapter {
                     trainer: trainer_spec.clone(),
                     dataset,
                     algorithm: algorithm_spec.clone(),
-                    serializer: serializer_spec.clone(),
+                    serializer: serializer_spec,
                     seed: training.seed,
                 };
 

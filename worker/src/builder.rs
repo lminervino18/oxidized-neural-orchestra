@@ -113,7 +113,7 @@ where
                     )
                     .await?;
 
-                let trainer = trainer_builder.build(trainer, &server_sizes, dataset);
+                let trainer = trainer_builder.build(trainer, server_sizes, dataset);
                 let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
@@ -171,7 +171,7 @@ where
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
         let src_entity = Entity::Worker { id };
 
-        for (id, (addr, &size)) in server_addrs.into_iter().zip(server_sizes).enumerate() {
+        for (id, (addr, &size)) in server_addrs.iter().zip(server_sizes).enumerate() {
             let stream = TcpStream::connect(addr).await?;
             let (rx, tx) = stream.into_split();
             let mut server_handle = self
