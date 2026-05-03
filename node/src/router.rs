@@ -11,11 +11,12 @@ use parameter_server::service::ServerBuilder;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use worker::builder::WorkerBuilder;
 
-/// Routes the first orchestrator connection to the appropriate runtime role.
+/// Routes incoming orchestrator connections to the appropriate runtime role,
+/// keeping the process alive across sequential sessions.
 ///
-/// A single `NodeRouter` represents one process lifecycle. After receiving a
-/// [`comms::protocol::NodeSpec`] from the orchestrator, the process commits to
-/// either the parameter-server or worker role for the duration of its run.
+/// Each session is isolated: state is owned within the session stack frame and
+/// dropped naturally when the session ends. The process then loops back to
+/// accept the next session.
 pub struct NodeRouter<F>
 where
     F: AsyncFnMut() -> io::Result<(OwnedReadHalf, OwnedWriteHalf)>,
@@ -38,28 +39,62 @@ where
         Self { acceptor }
     }
 
-    /// Accepts the orchestrator connection, reads the bootstrap spec, and runs the assigned role.
+    /// Runs the sequential session loop.
     ///
-    /// # Returns
-    /// An io error if occurred.
+    /// Blocks indefinitely, accepting one orchestrator connection per iteration.
+    /// Session-level errors are logged and the loop continues. Returns only if
+    /// the listener itself fails with a fatal error.
+    ///
+    /// # Errors
+    /// Returns an io error if the underlying listener fails.
     pub async fn run(mut self) -> io::Result<()> {
-        let Connection::Orchestrator(mut orch_handle) = self.acceptor.accept().await? else {
-            return Err(io::Error::other(
-                "expected orchestrator as first connection",
-            ));
-        };
+        loop {
+            info!("waiting for next session");
 
-        match orch_handle.pull_specification().await? {
-            PullSpecResponse::ParameterServer(spec) => {
-                run_server(self.acceptor, orch_handle, spec).await
+            let conn = self.acceptor.accept().await?;
+
+            let Connection::Orchestrator(orch_handle) = conn else {
+                warn!(
+                    "expected orchestrator as first connection, got unexpected connection type; skipping"
+                );
+                continue;
+            };
+
+            info!("accepted orchestrator connection");
+
+            match run_session(&mut self.acceptor, orch_handle).await {
+                Ok(()) => info!("session finished, waiting for next session"),
+                Err(e) => warn!("session failed: {e}, resetting and waiting for next session"),
             }
-            PullSpecResponse::Worker(spec) => run_worker(orch_handle, spec).await,
+        }
+    }
+}
+
+async fn run_session<F>(
+    acceptor: &mut Acceptor<OwnedReadHalf, OwnedWriteHalf, F>,
+    mut orch_handle: OrchHandle<NetRtp>,
+) -> io::Result<()>
+where
+    F: AsyncFnMut() -> io::Result<(OwnedReadHalf, OwnedWriteHalf)>,
+{
+    match orch_handle.pull_specification().await? {
+        PullSpecResponse::ParameterServer(spec) => {
+            info!("starting parameter server session server_id={}", spec.id);
+            run_server(acceptor, orch_handle, spec).await?;
+            info!("parameter server session finished");
+            Ok(())
+        }
+        PullSpecResponse::Worker(spec) => {
+            info!("starting worker session worker_id={}", spec.worker_id);
+            run_worker(orch_handle, spec).await?;
+            info!("worker session finished");
+            Ok(())
         }
     }
 }
 
 async fn run_server<F>(
-    mut acceptor: Acceptor<OwnedReadHalf, OwnedWriteHalf, F>,
+    acceptor: &mut Acceptor<OwnedReadHalf, OwnedWriteHalf, F>,
     mut orch_handle: OrchHandle<NetRtp>,
     spec: ServerSpec,
 ) -> io::Result<()>
