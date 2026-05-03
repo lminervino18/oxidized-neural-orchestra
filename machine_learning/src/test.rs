@@ -2,6 +2,7 @@
 
 use std::num::NonZeroUsize;
 
+use comms::floats::FloatPositive;
 use ndarray::ArrayView2;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 
@@ -13,7 +14,7 @@ use crate::{
     },
     dataset::{Dataset, DatasetSrc},
     optimization::GradientDescent,
-    param_manager::{ParamManager, ServerParamsMetadata},
+    param_manager::{ParamManager, ParamsMetadata},
     training::{BackpropTrainer, Trainer},
 };
 
@@ -47,7 +48,7 @@ fn test_machine_learning00_linear_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(100).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(0.1);
+    let optimizer = GradientDescent::new(FloatPositive::new(0.1).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -66,10 +67,10 @@ fn test_machine_learning00_linear_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -78,7 +79,7 @@ fn test_machine_learning00_linear_convergence() {
     let y = ArrayView2::from_shape((4, y_size.get()), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -104,7 +105,7 @@ fn test_machine_learning01_and2_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -123,10 +124,10 @@ fn test_machine_learning01_and2_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -135,7 +136,7 @@ fn test_machine_learning01_and2_gate_convergence() {
     let y = ArrayView2::from_shape((4, y_size.get()), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -170,7 +171,7 @@ fn test_machine_learning02_and3_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(2000).unwrap();
     let batch_size = NonZeroUsize::new(8).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -189,10 +190,10 @@ fn test_machine_learning02_and3_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -201,7 +202,7 @@ fn test_machine_learning02_and3_gate_convergence() {
     let y = ArrayView2::from_shape((8, 1), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -232,7 +233,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -251,10 +252,10 @@ fn test_machine_learning03_xor2_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+        .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -263,7 +264,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
     let y = ArrayView2::from_shape((4, 1), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -311,7 +312,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(16).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -330,10 +331,10 @@ fn test_machine_learning04_xor4_gate_convergence() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     // 2
@@ -341,7 +342,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
     let y = ArrayView2::from_shape((16, 1), &y).unwrap();
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
-    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    let _loss = loss_fn.loss(y_pred.view(), y.into_dyn());
     // println!("{y:#?}\n\n\n{y_pred:#?}");
     // println!("loss: {loss}");
 }
@@ -382,7 +383,7 @@ fn test_conv_dense(
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(300).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let mut loss_fn = CrossEntropy::new();
     let rng = StdRng::from_os_rng();
 
@@ -401,10 +402,10 @@ fn test_conv_dense(
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     while !trainer.train(&mut param_manager).unwrap().was_last {}
 
     let x = ArrayView2::from_shape((y_size.get(), x_size.get()), symbols).unwrap();
@@ -689,7 +690,7 @@ fn test_machine_learning_dimensionality_correctness() {
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(10).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
-    let optimizer = GradientDescent::new(1.0);
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
     let loss_fn = Mse::new();
     let rng = StdRng::from_os_rng();
 
@@ -707,10 +708,9 @@ fn test_machine_learning_dimensionality_correctness() {
     let mut params_grads = gen_params_grads(&[nparams]);
     let servers: Vec<_> = params_grads
         .iter_mut()
-        .map(|(params, grad, acc_grad_buf)| ServerParamsMetadata::new(params, grad, acc_grad_buf))
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let mut param_manager = ParamManager::new(servers, &ordering);
-
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     assert!(trainer.train(&mut param_manager).is_ok())
 }

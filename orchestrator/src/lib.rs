@@ -5,7 +5,7 @@ mod session;
 
 use std::{fs, path::PathBuf, time::Duration};
 
-use comms::{Connector, protocol::Entity};
+use comms::Connector;
 
 use configs::{Adapter, DatasetSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
@@ -56,7 +56,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
         )
     };
 
-    let connector = Connector::new(transport_factory, Entity::Orchestrator);
+    let connector = Connector::new(transport_factory);
     let session = Session::new(
         workers,
         partitions,

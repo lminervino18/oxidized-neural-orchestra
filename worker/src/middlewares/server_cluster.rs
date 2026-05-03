@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::{ParamServerCluster, ParamServerHandle, TransportLayer};
-use machine_learning::param_manager::{ParamManager, ServerParamsMetadata};
+use machine_learning::param_manager::{ParamManager, ParamsMetadata};
 
 // The communication manager between the worker process and the many servers.
 pub struct ServerClusterManager<T>
@@ -60,7 +60,7 @@ where
         {
             match res {
                 Ok(params) => {
-                    let metadata = ServerParamsMetadata::new(params, grad, residual);
+                    let metadata = ParamsMetadata::new(params, grad, residual);
                     metadatas.push(metadata);
                 }
                 Err(_) => {
@@ -69,7 +69,10 @@ where
             }
         }
 
-        Ok(ParamManager::new(metadatas, &self.server_ordering))
+        Ok(ParamManager::for_parameter_server(
+            metadatas,
+            &self.server_ordering,
+        ))
     }
 
     /// Pushes the latest gradients to the servers.

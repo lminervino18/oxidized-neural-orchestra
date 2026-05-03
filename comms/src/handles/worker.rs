@@ -1,8 +1,11 @@
 use std::io;
 
+use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::AsyncRead;
 
+use super::{Compressor, compressor::CompressedGrad};
 use crate::{
+    floats::Float01,
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
     transport::TransportLayer,
@@ -13,6 +16,7 @@ pub struct WorkerHandle<T> {
     id: usize,
     transport: T,
     grad: Vec<f32>,
+    compressor: Compressor<StdRng>,
 }
 
 /// A notified worker event.
@@ -22,6 +26,7 @@ pub enum WorkerEvent<'a> {
     Loss(Vec<f32>),
     RequestParams,
     Disconnect,
+    Done,
 }
 
 impl<T: TransportLayer> WorkerHandle<T> {
@@ -38,7 +43,25 @@ impl<T: TransportLayer> WorkerHandle<T> {
             id,
             transport,
             grad: Vec::new(),
+            compressor: Compressor::new(),
         }
+    }
+
+    /// Enables the sparse gradient capability for this handle.
+    ///
+    /// # Args
+    /// * `r` - The ratio of compression for calculating the threshold value.
+    /// * `seed` - The seed for the random number generator.
+    pub fn enable_sparse_capability<S>(&mut self, r: Float01, seed: S)
+    where
+        S: Into<Option<u64>>,
+    {
+        let rng = match seed.into() {
+            Some(seed) => StdRng::seed_from_u64(seed),
+            None => StdRng::from_os_rng(),
+        };
+
+        self.compressor.enable_sparse_compression(r, rng);
     }
 
     /// Blocks until receiving an event from a worker.
@@ -47,7 +70,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// A `WorkerEvent` message or an io error if occurred.
     pub async fn recv_event(&mut self) -> io::Result<WorkerEvent<'_>> {
         let response = match self.transport.recv().await? {
-            Msg::Data(Payload::Grad(grad)) => {
+            Msg::Data(Payload::DenseGrad(grad)) => {
                 if let Some(additional) = grad.len().checked_sub(self.grad.capacity()) {
                     self.grad.reserve(additional);
                 }
@@ -69,6 +92,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
             Msg::Control(Command::ReportLoss { losses }) => WorkerEvent::Loss(losses.into_owned()),
             Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
+            Msg::Control(Command::Done) => WorkerEvent::Done,
             msg => {
                 let text = format!("Unexpected message from worker {}, got: {msg:?}", self.id);
                 return Err(io::Error::other(text));
@@ -76,6 +100,44 @@ impl<T: TransportLayer> WorkerHandle<T> {
         };
 
         Ok(response)
+    }
+
+    /// Pulls the latest parameters from the worker.
+    ///
+    /// # Returns
+    /// The parameters as a mutable slice or an io error if occurred.
+    pub async fn pull_params(&mut self) -> io::Result<&mut [f32]> {
+        let msg = Msg::Control(Command::RequestParams);
+        self.transport.send(&msg).await?;
+
+        let msg = self.transport.recv().await?;
+        let Msg::Data(Payload::Params(params)) = msg else {
+            let text = format!("Expected params from worker {}, got: {msg:?}", self.id);
+            return Err(io::Error::other(text));
+        };
+
+        Ok(params)
+    }
+
+    /// Pushes the gradient to the worker.
+    ///
+    /// # Args
+    /// * `residual` - The gradient to send.
+    ///
+    /// # Returns
+    /// Either `Some(threshold)` if sparse gradient was used or `None` if dense gradient was used.
+    /// Or an io error if occurred.
+    pub async fn push_grad(&mut self, residual: &[f32]) -> io::Result<Option<f32>> {
+        let (payload, threshold) = match self.compressor.compress(residual) {
+            CompressedGrad::Dense { grad } => (Payload::DenseGrad(grad), None),
+            CompressedGrad::Sparse { sparse, threshold } => {
+                (Payload::SparseGrad(sparse), Some(threshold))
+            }
+        };
+
+        let msg = Msg::Data(payload);
+        self.transport.send(&msg).await?;
+        Ok(threshold)
     }
 
     /// Pushes the latest state of the parameters to the worker.

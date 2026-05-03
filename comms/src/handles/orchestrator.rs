@@ -137,6 +137,16 @@ where
         Ok(event)
     }
 
+    /// Tells the orchestrator that an entity has ended it's processing.
+    /// This message is used exclusively by workers.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn done(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Done);
+        self.transport.send(&msg).await
+    }
+
     /// Disconnects the orchestrator.
     ///
     /// # Returns

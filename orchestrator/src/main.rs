@@ -4,7 +4,7 @@ use std::{
     process::{Command, ExitStatus},
 };
 
-use comms::Float01;
+use comms::floats::{Float01, FloatPositive};
 use orchestrator::{CancelHandle, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
@@ -60,12 +60,12 @@ fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>)
 }
 
 fn main() -> io::Result<()> {
-    let workers = 3;
-    let servers = 2;
-    let release = false;
+    const WORKERS: usize = 3;
+    const SERVERS: usize = 0;
+    const RELEASE: bool = false;
 
-    setup_docker(workers, servers, release)?;
-    let (worker_addrs, server_addrs) = build_addresses(workers, servers);
+    setup_docker(WORKERS, SERVERS, RELEASE)?;
+    let (worker_addrs, server_addrs) = build_addresses(WORKERS, SERVERS);
 
     let model_config = ModelConfig {
         layers: vec![
@@ -93,13 +93,19 @@ fn main() -> io::Result<()> {
         ],
     };
 
+    let algorithm_config = if !server_addrs.is_empty() {
+        AlgorithmConfig::ParameterServer {
+            server_addrs,
+            synchronizer: SynchronizerConfig::NonBlocking,
+            store: StoreConfig::Wild,
+        }
+    } else {
+        AlgorithmConfig::AllReduce
+    };
+
     let training_config = TrainingConfig {
         worker_addrs,
-        algorithm: AlgorithmConfig::ParameterServer {
-            server_addrs,
-            synchronizer: SynchronizerConfig::Barrier,
-            store: StoreConfig::Blocking,
-        },
+        algorithm: algorithm_config,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
@@ -148,10 +154,13 @@ fn main() -> io::Result<()> {
             x_size: NonZeroUsize::new(18).unwrap(),
             y_size: NonZeroUsize::new(4).unwrap(),
         },
-        optimizer: OptimizerConfig::GradientDescent { lr: 1.0 },
+        optimizer: OptimizerConfig::GradientDescentWithMomentum {
+            lr: FloatPositive::new(1.0).unwrap(),
+            mu: Float01::new(0.9).unwrap(),
+        },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(300).unwrap(),
+        max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
         early_stopping: None,
@@ -163,8 +172,8 @@ fn main() -> io::Result<()> {
 
     loop {
         match rx.blocking_recv() {
-            Some(orchestrator::TrainingEvent::Loss { losses, .. }) => {
-                println!("losses: {losses:?}")
+            Some(orchestrator::TrainingEvent::Loss { losses, worker_id }) => {
+                println!("losses {worker_id}: {losses:?}")
             }
             Some(orchestrator::TrainingEvent::Complete {
                 model: trained,
@@ -180,6 +189,7 @@ fn main() -> io::Result<()> {
                 println!("saved model to {MODEL_OUTPUT_PATH}");
                 break;
             }
+            None => break,
             res => println!("result: {res:?}"),
         }
     }

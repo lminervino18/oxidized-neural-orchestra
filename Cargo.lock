@@ -532,6 +532,7 @@ dependencies = [
  "ndarray-conv",
  "ndarray-rand",
  "rand",
+ "rand_distr",
  "rayon",
  "tokio",
 ]
@@ -772,9 +773,9 @@ dependencies = [
  "comms",
  "env_logger",
  "log",
+ "machine_learning",
  "parking_lot",
  "rand",
- "rand_distr",
  "rayon",
  "tokio",
  "trait-variant",

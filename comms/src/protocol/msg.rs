@@ -11,7 +11,7 @@ pub const HEADER_SIZE: usize = size_of::<Header>();
 /// The payload data for the `Data` variant of the `Msg` enum.
 #[derive(Debug)]
 pub enum Payload<'a> {
-    Grad(&'a [f16]),
+    DenseGrad(&'a [f16]),
     SparseGrad(&'a [u8]),
     Params(&'a mut [f32]),
     Datachunk(&'a [f32]),
@@ -35,6 +35,7 @@ pub enum Command<'a> {
     RequestParams,
     StopAfterEpoch,
     Disconnect,
+    Done,
 }
 
 /// The application layer message for the entire system.
@@ -80,7 +81,7 @@ impl<'a> Msg<'a> {
             }
             Msg::Data(payload) => {
                 let (kind, data): (Header, &[_]) = match payload {
-                    Payload::Grad(grad) => (1, bytemuck::cast_slice(grad)),
+                    Payload::DenseGrad(grad) => (1, bytemuck::cast_slice(grad)),
                     Payload::SparseGrad(sparse) => (2, sparse),
                     Payload::Params(params) => (3, bytemuck::cast_slice(params)),
                     Payload::Datachunk(chunk) => (4, bytemuck::cast_slice(chunk)),
@@ -114,7 +115,7 @@ impl<'a> Msg<'a> {
             0 => Ok(Msg::Control(serde_json::from_slice(rest)?)),
             1..5 => {
                 let payload = match kind {
-                    1 => Payload::Grad(bytemuck::cast_slice(rest)),
+                    1 => Payload::DenseGrad(bytemuck::cast_slice(rest)),
                     2 => Payload::SparseGrad(rest),
                     3 => Payload::Params(bytemuck::cast_slice_mut(rest)),
                     4 => Payload::Datachunk(bytemuck::cast_slice(rest)),

@@ -27,9 +27,9 @@ RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
 
   # Extra dependencies.
   COPY comms            ./comms
-  COPY machine_learning ./machine_learning
   COPY worker           ./worker
   COPY parameter_server ./parameter_server
+  COPY machine_learning ./machine_learning
 
 RUN if [ "$MODE" = "release" ]; then export FLAG="--release"; fi && \
   cargo build $FLAG --bin $PKG

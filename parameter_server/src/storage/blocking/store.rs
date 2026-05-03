@@ -6,14 +6,11 @@ use std::{
     },
 };
 
+use machine_learning::{initialization::ParamGen, optimization::Optimizer};
 use rayon::prelude::*;
 
 use super::BlockingShard;
-use crate::{
-    initialization::ParamGen,
-    optimization::Optimizer,
-    storage::{Result, SizeMismatchErr, Store},
-};
+use crate::storage::{ParamServerErr, Result, Store};
 
 /// Partitions the model's parameters in shards and leverages
 /// parallelization to read and write data as fast as possible.
@@ -48,14 +45,10 @@ impl<O: Optimizer> BlockingStore<O> {
     ///
     /// # Returns
     /// A new `BlockingStore` instance.
-    pub fn new<PG, OF>(
-        shard_size: NonZeroUsize,
-        mut param_gen: PG,
-        mut optimizer_factory: OF,
-    ) -> Self
+    pub fn new<OF, PG>(shard_size: NonZeroUsize, param_gen: &mut PG, optimizer_factory: OF) -> Self
     where
-        PG: ParamGen,
-        OF: FnMut(usize) -> O,
+        PG: ParamGen + ?Sized,
+        OF: Fn(usize) -> O,
     {
         let mut nparams = 0;
         let mut shards = Vec::new();
@@ -110,7 +103,7 @@ impl<O: Optimizer + Send> Store for BlockingStore<O> {
 
     fn pull_params(&self, out: &mut [f32]) -> Result<()> {
         if self.nparams != out.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         self.shards
@@ -129,8 +122,9 @@ impl<O: Optimizer + Send> Store for BlockingStore<O> {
 mod tests {
     use std::num::NonZeroUsize;
 
+    use machine_learning::{Result, initialization::ConstParamGen};
+
     use super::*;
-    use crate::initialization::ConstParamGen;
 
     struct AddOptimizer;
 
@@ -143,8 +137,8 @@ mod tests {
 
     fn create_test_store(params: usize, shard_size: usize) -> BlockingStore<AddOptimizer> {
         let shard_size = NonZeroUsize::new(shard_size).unwrap();
-        let param_gen = ConstParamGen::new(0., params);
-        BlockingStore::new(shard_size, param_gen, |_| AddOptimizer)
+        let mut param_gen = ConstParamGen::new(0., params);
+        BlockingStore::new(shard_size, &mut param_gen, |_| AddOptimizer)
     }
 
     #[test]

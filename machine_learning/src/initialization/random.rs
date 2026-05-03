@@ -177,6 +177,10 @@ impl<R: Rng, D: Distribution<f32>> ParamGen for RandParamGen<R, D> {
         let sample = (0..n).map(|_| self.distribution.sample(&mut rng)).collect();
         Some(sample)
     }
+
+    fn sample_remaining(&mut self) -> Option<Vec<f32>> {
+        self.sample(self.remaining)
+    }
 }
 
 #[cfg(test)]
