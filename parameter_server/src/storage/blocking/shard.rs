@@ -100,6 +100,7 @@ impl<O: Optimizer> BlockingShard<O> {
 mod tests {
     use super::*;
 
+    use comms::floats::FloatPositive;
     use machine_learning::Result;
 
     struct AddOptimizer;
@@ -108,6 +109,10 @@ mod tests {
         fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
             params.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
             Ok(())
+        }
+
+        fn learning_rate(&self) -> FloatPositive {
+            todo!()
         }
     }
 

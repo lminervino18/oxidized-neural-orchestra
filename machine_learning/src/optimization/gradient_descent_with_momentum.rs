@@ -63,4 +63,8 @@ impl Optimizer for GradientDescentWithMomentum {
 
         Ok(())
     }
+
+    fn learning_rate(&self) -> FloatPositive {
+        self.learning_rate
+    }
 }
