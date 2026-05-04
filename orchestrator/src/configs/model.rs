@@ -22,6 +22,7 @@ pub enum ParamGenConfig {
 #[serde(rename_all = "snake_case")]
 pub enum ActFnConfig {
     Sigmoid { amp: f32 },
+    Softmax,
 }
 
 /// The `Layer` configuration.

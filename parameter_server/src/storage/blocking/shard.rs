@@ -1,9 +1,7 @@
+use machine_learning::optimization::Optimizer;
 use parking_lot::{Mutex, RwLock};
 
-use crate::{
-    optimization::Optimizer,
-    storage::{Result, SizeMismatchErr},
-};
+use crate::storage::{Result, error::ParamServerErr};
 
 /// A buffer for accumulating gradients and parameters across multiple threads using locks.
 ///
@@ -51,7 +49,7 @@ impl<O: Optimizer> BlockingShard<O> {
     /// A `SizeMismatchErr` if `grad` isn't the same size as this shard.
     pub fn accumulate(&self, active_idx: usize, grad: &[f32]) -> Result<()> {
         if self.nparams != grad.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         self.grads[active_idx]
@@ -89,7 +87,7 @@ impl<O: Optimizer> BlockingShard<O> {
     /// A `SizeMismatchErr` if `out` isn't the same size as this shard.
     pub fn pull_params(&self, out: &mut [f32]) -> Result<()> {
         if self.nparams != out.len() {
-            return Err(SizeMismatchErr);
+            return Err(ParamServerErr::SizeMismatch);
         }
 
         let params = self.params.read();
@@ -101,6 +99,8 @@ impl<O: Optimizer> BlockingShard<O> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use machine_learning::Result;
 
     struct AddOptimizer;
 

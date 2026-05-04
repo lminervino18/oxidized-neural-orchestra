@@ -1,47 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::machine_learning::OptimizerSpec;
-
-/// The specification for the `Distribution` trait.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DistributionSpec {
-    Uniform { low: f32, high: f32 },
-    UniformInclusive { low: f32, high: f32 },
-    XavierUniform { fan_in: usize, fan_out: usize },
-    LecunUniform { fan_in: usize },
-    Normal { mean: f32, std_dev: f32 },
-    Kaiming { fan_in: usize },
-    Xavier { fan_in: usize, fan_out: usize },
-    Lecun { fan_in: usize },
-}
-
-/// The specification for the `ParamGen` trait.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ParamGenSpec {
-    Const {
-        value: f32,
-        limit: usize,
-    },
-    Rand {
-        distribution: DistributionSpec,
-        limit: usize,
-    },
-    Chained {
-        specs: Vec<ParamGenSpec>,
-    },
-}
-
-impl ParamGenSpec {
-    pub fn size(&self) -> usize {
-        match self {
-            ParamGenSpec::Const { limit, .. } => *limit,
-            ParamGenSpec::Rand { limit, .. } => *limit,
-            ParamGenSpec::Chained { specs } => specs.iter().map(|spec| spec.size()).sum(),
-        }
-    }
-}
+use super::machine_learning::{OptimizerSpec, ParamGenSpec};
 
 /// The specification for the `Synchronizer` trait.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

@@ -120,4 +120,8 @@ where
 
         Ok(res)
     }
+
+    fn optimize<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<()> {
+        param_manager.optimize(&mut self.optimizers)
+    }
 }

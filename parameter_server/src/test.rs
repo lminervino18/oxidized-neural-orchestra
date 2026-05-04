@@ -2,12 +2,11 @@
 
 use std::{env, num::NonZeroUsize};
 
-use comms::{ParamServerHandle, PullParamsResponse, WorkerHandle};
+use comms::{ParamServerHandle, WorkerHandle, floats::FloatPositive};
+use machine_learning::{initialization::ConstParamGen, optimization::GradientDescent};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
 use crate::{
-    initialization::ConstParamGen,
-    optimization::GradientDescent,
     service::ParameterServer,
     storage::{BlockingStore, StoreHandle},
     synchronization::BarrierSync,
@@ -33,15 +32,12 @@ where
     let mut server_handle = ParamServerHandle::new(0, transport);
 
     for _ in 0..max_epochs {
-        match server_handle.pull_params().await? {
-            PullParamsResponse::Params(params) => {
-                for (g, p) in grad.iter_mut().zip(params) {
-                    *g = *p - 1.0;
-                }
-
-                server_handle.push_grad(&grad).await?;
-            }
+        let params = server_handle.pull_params().await?;
+        for (g, p) in grad.iter_mut().zip(params) {
+            *g = *p - 1.0;
         }
+
+        server_handle.push_grad(&grad).await?;
     }
 
     server_handle.disconnect().await?;
@@ -58,9 +54,9 @@ async fn test_lineal_convergence() -> io::Result<()> {
     const NPARAMS: usize = 2;
 
     let shard_size = NonZeroUsize::new(1).unwrap();
-    let param_gen = ConstParamGen::new(0.5, NPARAMS);
-    let optimizer_factory = |_| GradientDescent::new(0.1);
-    let store = BlockingStore::new(shard_size, param_gen, optimizer_factory);
+    let mut param_gen = ConstParamGen::new(0.5, NPARAMS);
+    let optimizer_factory = |_| GradientDescent::new(FloatPositive::new(0.1).unwrap());
+    let store = BlockingStore::new(shard_size, &mut param_gen, optimizer_factory);
     let handle = StoreHandle::new(store);
     let synchronizer = BarrierSync::new(1);
     let mut server = ParameterServer::new(handle, synchronizer);

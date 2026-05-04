@@ -1,6 +1,6 @@
 use std::{fmt, num::NonZeroUsize, path::PathBuf};
 
-use comms::Float01;
+use comms::floats::{Float01, FloatNonNegative, FloatPositive};
 use serde::{Deserialize, Serialize};
 
 /// Criteria for stopping training early when loss improvement falls below a threshold.
@@ -8,27 +8,12 @@ use serde::{Deserialize, Serialize};
 /// Guarantees that `tolerance` is strictly positive, which is enforced at construction time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EarlyStoppingConfig {
-    tolerance: f32,
-}
-
-impl EarlyStoppingConfig {
-    pub fn new(tolerance: f32) -> Result<Self, String> {
-        if tolerance <= 0.0 {
-            return Err(format!(
-                "early_stopping tolerance must be > 0, got {tolerance}"
-            ));
-        }
-        Ok(Self { tolerance })
-    }
-
-    pub fn is_converged(&self, prev: f32, curr: f32) -> bool {
-        (prev - curr).abs() < self.tolerance
-    }
+    pub tolerance: FloatNonNegative,
 }
 
 impl fmt::Display for EarlyStoppingConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:.2e}", self.tolerance)
+        write!(f, "{:.2e}", *self.tolerance)
     }
 }
 
@@ -44,7 +29,19 @@ pub enum LossFnConfig {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OptimizerConfig {
-    GradientDescent { lr: f32 },
+    GradientDescent {
+        lr: FloatPositive,
+    },
+    GradientDescentWithMomentum {
+        lr: FloatPositive,
+        mu: Float01,
+    },
+    Adam {
+        lr: FloatPositive,
+        b1: Float01,
+        b2: Float01,
+        eps: FloatPositive,
+    },
 }
 
 /// The dataset's data source.
@@ -99,17 +96,14 @@ pub enum AlgorithmConfig {
 }
 
 /// The `Serializer` configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SerializerConfig {
+    #[default]
     Base,
-    SparseCapable { r: Float01 },
-}
-
-impl Default for SerializerConfig {
-    fn default() -> Self {
-        Self::Base
-    }
+    SparseCapable {
+        r: Float01,
+    },
 }
 
 /// The `Training` configuration.

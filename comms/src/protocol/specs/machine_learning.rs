@@ -2,11 +2,55 @@ use std::num::NonZeroUsize;
 
 use serde::{Deserialize, Serialize};
 
+use crate::floats::{Float01, FloatPositive};
+
+/// The specification for the `Distribution` trait.
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistributionSpec {
+    Uniform { low: f32, high: f32 },
+    UniformInclusive { low: f32, high: f32 },
+    XavierUniform { fan_in: usize, fan_out: usize },
+    LecunUniform { fan_in: usize },
+    Normal { mean: f32, std_dev: f32 },
+    Kaiming { fan_in: usize },
+    Xavier { fan_in: usize, fan_out: usize },
+    Lecun { fan_in: usize },
+}
+
+/// The specification for the `ParamGen` trait.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParamGenSpec {
+    Const {
+        value: f32,
+        limit: usize,
+    },
+    Rand {
+        distribution: DistributionSpec,
+        limit: usize,
+    },
+    Chained {
+        specs: Vec<ParamGenSpec>,
+    },
+}
+
+impl ParamGenSpec {
+    pub fn size(&self) -> usize {
+        match self {
+            ParamGenSpec::Const { limit, .. } => *limit,
+            ParamGenSpec::Rand { limit, .. } => *limit,
+            ParamGenSpec::Chained { specs } => specs.iter().map(|spec| spec.size()).sum(),
+        }
+    }
+}
+
 /// The specification for the `ActFn` enum.
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActFnSpec {
     Sigmoid { amp: f32 },
+    Softmax,
 }
 
 /// The specification for the `Layer` enum.
@@ -33,17 +77,17 @@ pub enum LayerSpec {
 #[serde(rename_all = "snake_case")]
 pub enum OptimizerSpec {
     Adam {
-        learning_rate: f32,
-        beta1: f32,
-        beta2: f32,
-        epsilon: f32,
+        learning_rate: FloatPositive,
+        beta1: Float01,
+        beta2: Float01,
+        epsilon: FloatPositive,
     },
     GradientDescent {
-        learning_rate: f32,
+        learning_rate: FloatPositive,
     },
     GradientDescentWithMomentum {
-        learning_rate: f32,
-        momentum: f32,
+        learning_rate: FloatPositive,
+        momentum: Float01,
     },
 }
 

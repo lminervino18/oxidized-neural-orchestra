@@ -2,14 +2,39 @@ use rayon::prelude::*;
 
 use crate::{MlErr, Result, optimization::Optimizer};
 
+/// The different variants of ordering the layers.
+/// Either have different ids per layer or a constant owner for all of them.
+#[derive(Clone, Copy)]
+enum LayerOrdering<'a> {
+    Seq(&'a [usize]),
+    Const(usize, usize),
+}
+
+impl<'a> LayerOrdering<'a> {
+    fn len(&self) -> usize {
+        match self {
+            Self::Seq(items) => items.len(),
+            Self::Const(.., n) => *n,
+        }
+    }
+
+    fn nth(&self, i: usize) -> Option<usize> {
+        match self {
+            Self::Seq(items) => items.get(i).copied(),
+            Self::Const(x, n) if i < *n => Some(*x),
+            Self::Const(..) => None,
+        }
+    }
+}
+
 /// The state necessary to make forward and backward passes through the network.
-pub struct ServerParamsMetadata<'mw> {
+pub struct ParamsMetadata<'mw> {
     params: &'mw mut [f32],
     grad: &'mw mut [f32],
     residual: &'mw mut [f32],
 }
 
-impl<'mw> ServerParamsMetadata<'mw> {
+impl<'mw> ParamsMetadata<'mw> {
     /// Creates a new `ServerParamsMetadata`.
     ///
     /// # Args
@@ -32,8 +57,8 @@ impl<'mw> ServerParamsMetadata<'mw> {
 /// servers and selects which set of parameters to use for each layer of the model's trining when traversing
 /// it's layers forwards and backwards.
 pub struct ParamManager<'mw> {
-    servers: Vec<ServerParamsMetadata<'mw>>,
-    server_ordering: &'mw [usize],
+    metadatas: Vec<ParamsMetadata<'mw>>,
+    layer_ordering: LayerOrdering<'mw>,
     cursors: Vec<usize>,
 }
 
@@ -42,15 +67,41 @@ impl<'mw> ParamManager<'mw> {
     ///
     /// # Args
     /// * `servers` - A list of the necessary server metadata to have to iterate through the layers' parameters.
-    /// * `server_ordering` - The ordering of the servers to know which layer corresponds to which server.
+    /// * `layer_ordering` - The ordering of the layers to know which entity holds which layer.
     ///
     /// # Returns
     /// A new `ParamManager` instance.
-    pub fn new(servers: Vec<ServerParamsMetadata<'mw>>, server_ordering: &'mw [usize]) -> Self {
+    pub fn for_parameter_server(
+        servers: Vec<ParamsMetadata<'mw>>,
+        layer_ordering: &'mw [usize],
+    ) -> Self {
         Self {
-            cursors: vec![0; server_ordering.len()],
-            server_ordering,
-            servers,
+            cursors: vec![0; layer_ordering.len()],
+            layer_ordering: LayerOrdering::Seq(layer_ordering),
+            metadatas: servers,
+        }
+    }
+
+    /// Creates a new `ParamManager`.
+    ///
+    /// # Args
+    /// * `params` - The parameters of the worker.
+    /// * `grad` - The gradient buffer of the worker.
+    /// * `residual` - The accumulative gradient buffer of the worker.
+    /// * `amount_of_layers` - The amount of layers in the model.
+    ///
+    /// # Returns
+    /// A new `ParamManager` instance.
+    pub fn for_all_reduce(
+        params: &'mw mut [f32],
+        grad: &'mw mut [f32],
+        residual: &'mw mut [f32],
+        amount_of_layers: usize,
+    ) -> Self {
+        Self {
+            cursors: vec![0],
+            layer_ordering: LayerOrdering::Const(0, amount_of_layers),
+            metadatas: vec![ParamsMetadata::new(params, grad, residual)],
         }
     }
 
@@ -64,8 +115,8 @@ impl<'mw> ParamManager<'mw> {
         self.cursors.fill(0);
 
         FrontIter {
-            servers: &mut self.servers,
-            server_ordering: self.server_ordering,
+            metadatas: &mut self.metadatas,
+            layer_ordering: self.layer_ordering,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -81,8 +132,8 @@ impl<'mw> ParamManager<'mw> {
         self.cursors.fill(0);
 
         BackIter {
-            servers: &mut self.servers,
-            server_ordering: self.server_ordering,
+            metadatas: &mut self.metadatas,
+            layer_ordering: self.layer_ordering,
             cursors: &mut self.cursors,
             curr: 0,
         }
@@ -91,37 +142,37 @@ impl<'mw> ParamManager<'mw> {
     /// Applies the gradients onto the parameters of the model.
     ///
     /// # Args
-    /// * `optimizers` - A list of optimizers, one per server.
+    /// * `optimizers` - A list of optimizers, one per entity.
     pub fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) -> Result<()> {
-        if optimizers.len() != self.servers.len() {
+        if optimizers.len() != self.metadatas.len() {
             return Err(MlErr::SizeMismatch {
                 what: "optimizers",
                 got: optimizers.len(),
-                expected: self.servers.len(),
+                expected: self.metadatas.len(),
             });
         }
 
         optimizers
             .par_iter_mut()
-            .zip(&mut self.servers)
-            .try_for_each(|(optimizer, server)| {
-                optimizer.update_params(server.grad, server.params)
+            .zip(&mut self.metadatas)
+            .try_for_each(|(optimizer, metadata)| {
+                optimizer.update_params(metadata.grad, metadata.params)
             })?;
 
         Ok(())
     }
 
-    /// Zeroes out the gradients of every server.
+    /// Zeroes out the gradients of every entity.
     pub fn zero_grad(&mut self) {
-        self.servers
+        self.metadatas
             .par_iter_mut()
-            .for_each(|server| server.grad.fill(0.0));
+            .for_each(|metadata| metadata.grad.fill(0.0));
     }
 
     /// Accumulates the current gradient onto the inner accumulated residual buffer.
     pub fn acc_residual(&mut self) {
-        self.servers.par_iter_mut().for_each(|server| {
-            for (acc, g) in server.residual.iter_mut().zip(server.grad.iter()) {
+        self.metadatas.par_iter_mut().for_each(|metadata| {
+            for (acc, g) in metadata.residual.iter_mut().zip(metadata.grad.iter()) {
                 *acc += *g;
             }
         });
@@ -132,8 +183,8 @@ impl<'mw> ParamManager<'mw> {
 ///
 /// This iterator iterates the layers of a model from the front.
 pub struct FrontIter<'pm, 'mw> {
-    servers: &'pm mut [ServerParamsMetadata<'mw>],
-    server_ordering: &'mw [usize],
+    metadatas: &'pm mut [ParamsMetadata<'mw>],
+    layer_ordering: LayerOrdering<'mw>,
     cursors: &'pm mut [usize],
     curr: usize,
 }
@@ -147,7 +198,7 @@ impl FrontIter<'_, '_> {
     /// of parameters) layer.
     ///
     /// # Args
-    /// * `n` - The amount of parameters to take from the inner storage of the next server.
+    /// * `n` - The amount of parameters to take from the inner storage of the next entity.
     ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
@@ -156,19 +207,20 @@ impl FrontIter<'_, '_> {
             return Some(&mut []);
         }
 
-        if self.curr == self.server_ordering.len() {
+        if self.curr >= self.layer_ordering.len() {
             return None;
         }
 
-        let server_id = self.server_ordering[self.curr];
-        let server = &mut self.servers[server_id];
-        let start = self.cursors[server_id];
-        let end = (start + n).min(server.params.len());
+        // SAFETY: curr must be smaller than layer_ordering's length.
+        let id = self.layer_ordering.nth(self.curr).unwrap();
+        let metadata = &mut self.metadatas[id];
+        let start = self.cursors[id];
+        let end = (start + n).min(metadata.params.len());
 
-        self.cursors[server_id] = end;
+        self.cursors[id] = end;
         self.curr += 1;
 
-        Some(&mut server.params[start..end])
+        Some(&mut metadata.params[start..end])
     }
 }
 
@@ -176,8 +228,8 @@ impl FrontIter<'_, '_> {
 ///
 /// This iterator iterates the layers of a model from the back.
 pub struct BackIter<'pm, 'mw> {
-    servers: &'pm mut [ServerParamsMetadata<'mw>],
-    server_ordering: &'mw [usize],
+    metadatas: &'pm mut [ParamsMetadata<'mw>],
+    layer_ordering: LayerOrdering<'mw>,
     cursors: &'pm mut [usize],
     curr: usize,
 }
@@ -191,7 +243,7 @@ impl BackIter<'_, '_> {
     /// of parameters) layer.
     ///
     /// # Args
-    /// * `n` - The amount of parameters to take from the inner storage of the next server.
+    /// * `n` - The amount of parameters to take from the inner storage of the next entity.
     ///
     /// # Returns
     /// An option denoting if there still are more parameters and gradients.
@@ -200,20 +252,25 @@ impl BackIter<'_, '_> {
             return Some((&mut [], &mut []));
         }
 
-        if self.curr == self.server_ordering.len() {
+        if self.curr >= self.layer_ordering.len() {
             return None;
         }
 
-        let idx = self.server_ordering.len() - self.curr - 1;
-        let server_id = self.server_ordering[idx];
-        let server = &mut self.servers[server_id];
-        let end = server.params.len() - self.cursors[server_id];
+        let idx = self.layer_ordering.len() - self.curr - 1;
+
+        // SAFETY: idx must be inside the valid range.
+        let id = self.layer_ordering.nth(idx).unwrap();
+        let metadata = &mut self.metadatas[id];
+        let end = metadata.params.len() - self.cursors[id];
         let start = end.saturating_sub(n);
 
-        self.cursors[server_id] += end - start;
+        self.cursors[id] += end - start;
         self.curr += 1;
 
-        Some((&mut server.params[start..end], &mut server.grad[start..end]))
+        Some((
+            &mut metadata.params[start..end],
+            &mut metadata.grad[start..end],
+        ))
     }
 }
 
@@ -221,8 +278,8 @@ impl BackIter<'_, '_> {
 mod tests {
     use super::*;
 
-    fn gen_params_grads(server_sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> {
-        server_sizes
+    fn gen_params_grads(sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> {
+        sizes
             .iter()
             .enumerate()
             .map(|(i, &size)| (vec![i as f32; size], vec![i as f32; size], vec![0.0; size]))
@@ -240,10 +297,10 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+            .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut front = manager.front();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES) {
@@ -264,10 +321,10 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+            .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut back = manager.back();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
@@ -291,10 +348,10 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+            .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut back = manager.back();
 
         for (i, size) in (0..LAYER_SIZES.len()).zip(LAYER_SIZES).rev() {
@@ -317,10 +374,10 @@ mod tests {
         let mut params_grads = gen_params_grads(&SERVER_SIZES);
         let servers: Vec<_> = params_grads
             .iter_mut()
-            .map(|(params, grad, residual)| ServerParamsMetadata::new(params, grad, residual))
+            .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
             .collect();
 
-        let mut manager = ParamManager::new(servers, &ORDERING);
+        let mut manager = ParamManager::for_parameter_server(servers, &ORDERING);
         let mut front = manager.front();
 
         assert_eq!(front.next(1).unwrap(), &[1.0]);

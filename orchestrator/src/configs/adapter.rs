@@ -3,8 +3,11 @@ use std::{
 };
 
 use comms::specs::{
-    machine_learning::{ActFnSpec, DatasetSpec, LayerSpec, LossFnSpec, OptimizerSpec, TrainerSpec},
-    server::{DistributionSpec, ParamGenSpec, ServerSpec, StoreSpec, SynchronizerSpec},
+    machine_learning::{
+        ActFnSpec, DatasetSpec, DistributionSpec, LayerSpec, LossFnSpec, OptimizerSpec,
+        ParamGenSpec, TrainerSpec,
+    },
+    server::{ServerSpec, StoreSpec, SynchronizerSpec},
     worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 
@@ -126,7 +129,8 @@ impl Adapter {
                     trainer: trainer_spec.clone(),
                     dataset,
                     algorithm: algorithm_spec.clone(),
-                    serializer: serializer_spec.clone(),
+                    serializer: serializer_spec,
+                    seed: training.seed,
                 };
 
                 Ok((addr.clone(), worker_spec))
@@ -155,8 +159,13 @@ impl Adapter {
         dataset_specs: Vec<DatasetSpec>,
     ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
+        let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
         let algorithm_spec = AlgorithmSpec::AllReduce {
             worker_addrs: training.worker_addrs.clone(),
+            param_gen: ParamGenSpec::Chained {
+                specs: param_gen_specs,
+            },
+            amount_of_layers: model.layers.len(),
         };
         let serializer_spec = self.adapt_serializer(training);
 
@@ -176,7 +185,8 @@ impl Adapter {
                     trainer: trainer_spec.clone(),
                     dataset,
                     algorithm: algorithm_spec.clone(),
-                    serializer: serializer_spec.clone(),
+                    serializer: serializer_spec,
+                    seed: training.seed,
                 };
 
                 Ok((addr.clone(), worker_spec))
@@ -196,10 +206,7 @@ impl Adapter {
     fn adapt_serializer(&self, training: &TrainingConfig) -> SerializerSpec {
         match training.serializer {
             SerializerConfig::Base => SerializerSpec::Base,
-            SerializerConfig::SparseCapable { r } => SerializerSpec::SparseCapable {
-                r,
-                seed: training.seed,
-            },
+            SerializerConfig::SparseCapable { r } => SerializerSpec::SparseCapable { r },
         }
     }
 
@@ -346,8 +353,13 @@ impl Adapter {
     /// The trainer's specification.
     fn adapt_trainer(&self, model: &ModelConfig, training: &TrainingConfig) -> TrainerSpec {
         let (layers, _) = self.adapt_layers(model, training.dataset.x_size);
-        let optimizer_spec = self.adapt_optimizer(training.optimizer);
         let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);
+        let optimizer_spec =
+            if matches!(training.algorithm, AlgorithmConfig::ParameterServer { .. }) {
+                self.adapt_optimizer_to_gradient_descent(training.optimizer)
+            } else {
+                self.adapt_optimizer(training.optimizer)
+            };
 
         TrainerSpec {
             layers,
@@ -567,6 +579,39 @@ impl Adapter {
             OptimizerConfig::GradientDescent { lr } => {
                 OptimizerSpec::GradientDescent { learning_rate: lr }
             }
+            OptimizerConfig::GradientDescentWithMomentum { lr, mu } => {
+                OptimizerSpec::GradientDescentWithMomentum {
+                    learning_rate: lr,
+                    momentum: mu,
+                }
+            }
+            OptimizerConfig::Adam { lr, b1, b2, eps } => OptimizerSpec::Adam {
+                learning_rate: lr,
+                beta1: b1,
+                beta2: b2,
+                epsilon: eps,
+            },
+        }
+    }
+
+    /// Adapts an `OptimizerConfig` into an `OptimizerSpec::GradientDescent`.
+    ///
+    /// # Args
+    /// * `optimizer` - A optimizer's configuration.
+    ///
+    /// # Returns
+    /// The optimizer specification.
+    fn adapt_optimizer_to_gradient_descent(&self, optimizer: OptimizerConfig) -> OptimizerSpec {
+        match optimizer {
+            OptimizerConfig::GradientDescent { lr } => {
+                OptimizerSpec::GradientDescent { learning_rate: lr }
+            }
+            OptimizerConfig::GradientDescentWithMomentum { lr, .. } => {
+                OptimizerSpec::GradientDescent { learning_rate: lr }
+            }
+            OptimizerConfig::Adam { lr, .. } => {
+                OptimizerSpec::GradientDescent { learning_rate: lr }
+            }
         }
     }
 
@@ -725,6 +770,7 @@ impl Adapter {
     fn adapt_act_fn(&self, act_fn: ActFnConfig) -> ActFnSpec {
         match act_fn {
             ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
+            ActFnConfig::Softmax => ActFnSpec::Softmax,
         }
     }
 }

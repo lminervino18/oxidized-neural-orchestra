@@ -4,7 +4,7 @@ use rand::{SeedableRng, rngs::StdRng};
 use tokio::io;
 
 use crate::{
-    Float01,
+    floats::Float01,
     protocol::{Msg, Payload},
     sparse,
     transport::{Framer, TransportLayer},

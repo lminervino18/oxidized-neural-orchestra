@@ -1,4 +1,4 @@
-use comms::Float01;
+use comms::floats::Float01;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 

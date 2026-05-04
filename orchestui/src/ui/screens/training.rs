@@ -339,6 +339,7 @@ impl TrainingState {
                 self.error = Some(msg.clone());
                 self.push_log(LogLevel::Error, msg);
             }
+            _ => unreachable!(),
         }
     }
 

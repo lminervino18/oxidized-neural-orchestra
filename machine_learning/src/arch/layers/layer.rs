@@ -1,15 +1,16 @@
 use ndarray::{Data, RawData, prelude::*};
 
-use super::{Conv2d, Dense, Sigmoid};
+use super::{Conv2d, Dense, Sigmoid, Softmax};
 use crate::{MlErr, Result, arch::layers::Reshape};
 
 /// An indirection layer to prevent leaking the
 /// inner enum representation to the upper mods.
 #[derive(Clone, Debug)]
 enum Inner {
-    Conv2d(Conv2d),
     Dense(Dense),
     Sigmoid(Sigmoid),
+    Conv2d(Conv2d),
+    Softmax(Softmax),
     Reshape(Reshape),
 }
 use Inner::*;
@@ -68,6 +69,14 @@ impl Layer {
         )))
     }
 
+    /// Creates a new `Layer::Softmax` layer.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
+    pub fn softmax() -> Self {
+        Self(Inner::Softmax(Softmax::new()))
+    }
+
     /// Creates a new `Layer::Reshape` layer that reshapes 2D tensors into 4D ones.
     ///
     /// # Arguments
@@ -105,6 +114,7 @@ impl Layer {
             Dense(layer) => layer.size(),
             Sigmoid(layer) => layer.size(),
             Conv2d(layer) => layer.size(),
+            Softmax(layer) => layer.size(),
             Reshape(layer) => layer.size(),
         }
     }
@@ -123,9 +133,10 @@ impl Layer {
         x: ArrayViewD<'a, f32>,
     ) -> Result<ArrayViewD<'a, f32>> {
         let y = match &mut self.0 {
-            Conv2d(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
             Dense(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
             Sigmoid(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
+            Conv2d(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
+            Softmax(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
             Reshape(layer) => layer.forward(x)?,
         };
 
@@ -152,6 +163,7 @@ impl Layer {
             Conv2d(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
             Dense(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
             Sigmoid(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
+            Softmax(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
             Reshape(layer) => layer.backward(try_cast_dim(d)?)?,
         };
 
@@ -174,5 +186,5 @@ where
     S: RawData<Elem = f32> + Data,
     D: Dimension,
 {
-    arr.into_dimensionality().map_err(|e| MlErr::MatrixError(e))
+    arr.into_dimensionality().map_err(MlErr::MatrixError)
 }
