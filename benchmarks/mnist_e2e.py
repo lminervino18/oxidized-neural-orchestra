@@ -86,34 +86,39 @@ MODEL_DEFS = {
     },
 }
 
-# ── Training presets ──────────────────────────────────────────────────────────
+# ── Run generation ────────────────────────────────────────────────────────────
 
-TRAINING_PRESETS = {
-    "ps_1w_1s_base_barrier": {
-        "workers": 1, "servers": 1,
-        "serializer": "base", "sync": "barrier", "store": "blocking",
-    },
-    "ps_2w_1s_base_barrier": {
-        "workers": 2, "servers": 1,
-        "serializer": "base", "sync": "barrier", "store": "blocking",
-    },
-    "ps_3w_1s_base_barrier": {
-        "workers": 3, "servers": 1,
-        "serializer": "base", "sync": "barrier", "store": "blocking",
-    },
-    "ps_3w_2s_base_barrier": {
-        "workers": 3, "servers": 2,
-        "serializer": "base", "sync": "barrier", "store": "blocking",
-    },
-    "ps_2w_1s_sparse_barrier": {
-        "workers": 2, "servers": 1,
-        "serializer": "sparse", "sync": "barrier", "store": "blocking",
-    },
-    "ps_2w_1s_nonblocking": {
-        "workers": 2, "servers": 1,
-        "serializer": "base", "sync": "nonblocking", "store": "wild",
-    },
-}
+
+def build_runs(profile_cfg: dict, all_presets: dict) -> list:
+    """
+    Generate the run list as a cartesian product of models × training_presets.
+
+    Override priority (highest wins): combo (model+preset) > model > preset > defaults.
+    """
+    defaults  = profile_cfg["defaults"]
+    overrides = profile_cfg.get("overrides", {})
+
+    runs = []
+    for preset_name in profile_cfg["training_presets"]:
+        preset = all_presets[preset_name]
+        for model in profile_cfg["models"]:
+            cfg = dict(defaults)
+            cfg.update(overrides.get(preset_name, {}))
+            cfg.update(overrides.get(model, {}))
+            cfg.update(overrides.get(f"{model}+{preset_name}", {}))
+
+            cfg["name"]       = f"{model}_{preset_name}"
+            cfg["model"]      = model
+            cfg["training"]   = preset_name
+            cfg["workers"]    = preset["workers"]
+            cfg["servers"]    = preset["servers"]
+            cfg["serializer"] = preset["serializer"]
+            cfg["sync"]       = preset["sync"]
+            cfg["store"]      = preset["store"]
+            runs.append(cfg)
+
+    return runs
+
 
 # ── Orchestra import ──────────────────────────────────────────────────────────
 
@@ -326,6 +331,16 @@ def containers_running(workers: int, servers: int) -> bool:
     return True
 
 
+def wait_nodes_ready(workers: int, servers: int, timeout: float = 30.0) -> bool:
+    """Wait until all node containers are Running, up to ``timeout`` seconds."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if containers_running(workers, servers):
+            return True
+        time.sleep(1.0)
+    return False
+
+
 # ── Model building ────────────────────────────────────────────────────────────
 
 
@@ -357,7 +372,7 @@ def build_model(model_name: str):
     return Sequential(layers)
 
 
-def build_training(run_cfg: dict, preset: dict, train_s: Path, train_l: Path):
+def build_training(run_cfg: dict, train_s: Path, train_l: Path):
     import orchestra
     from orchestra.datasets import LocalDataset
     from orchestra.loss_fns import Mse
@@ -366,13 +381,13 @@ def build_training(run_cfg: dict, preset: dict, train_s: Path, train_l: Path):
     from orchestra.store import BlockingStore, WildStore
     from orchestra.sync import BarrierSync, NonBlockingSync
 
-    w, s = preset["workers"], preset["servers"]
+    w, s = run_cfg["workers"], run_cfg["servers"]
     worker_addrs = [f"worker-{i}:{50000 + i}" for i in range(w)]
     server_addrs = [f"server-{i}:{40000 + i}" for i in range(s)]
 
-    sync  = BarrierSync()    if preset["sync"]       == "barrier"  else NonBlockingSync()
-    store = BlockingStore()  if preset["store"]      == "blocking" else WildStore()
-    ser   = BaseSerializer() if preset["serializer"] == "base"     else SparseSerializer(r=0.9)
+    sync  = BarrierSync()    if run_cfg["sync"]       == "barrier"  else NonBlockingSync()
+    store = BlockingStore()  if run_cfg["store"]      == "blocking" else WildStore()
+    ser   = BaseSerializer() if run_cfg["serializer"] == "base"     else SparseSerializer(r=0.9)
 
     return orchestra.parameter_server(
         worker_addrs=worker_addrs,
@@ -504,7 +519,6 @@ def run_single(run_cfg: dict, profile_cfg: dict, profile_name: str) -> dict:
     """Execute one benchmark run. docker_start_seconds is filled by the caller."""
     model_name    = run_cfg["model"]
     training_name = run_cfg["training"]
-    preset        = TRAINING_PRESETS[training_name]
     train_n       = profile_cfg.get("train_samples")
     test_n        = profile_cfg.get("test_samples")
 
@@ -518,11 +532,11 @@ def run_single(run_cfg: dict, profile_cfg: dict, profile_name: str) -> dict:
         "profile":              profile_name,
         "model_name":           model_name,
         "training_name":        training_name,
-        "workers":              preset["workers"],
-        "servers":              preset["servers"],
-        "serializer":           preset["serializer"],
-        "sync":                 preset["sync"],
-        "store":                preset["store"],
+        "workers":              run_cfg["workers"],
+        "servers":              run_cfg["servers"],
+        "serializer":           run_cfg["serializer"],
+        "sync":                 run_cfg["sync"],
+        "store":                run_cfg["store"],
         "max_epochs":           run_cfg["max_epochs"],
         "batch_size":           run_cfg["batch_size"],
         "lr":                   run_cfg.get("lr", 0.5),
@@ -543,7 +557,7 @@ def run_single(run_cfg: dict, profile_cfg: dict, profile_name: str) -> dict:
         train_s, train_l, test_s, test_l = prepare_dataset(train_n, test_n)
 
         model    = build_model(model_name)
-        training = build_training(run_cfg, preset, train_s, train_l)
+        training = build_training(run_cfg, train_s, train_l)
 
         # ── Training (measured) ───────────────────────────────────────────────
         import orchestra
@@ -720,8 +734,9 @@ def main():
     with open(args.config) as f:
         config = json.load(f)
 
-    profile_cfg = config["profiles"][args.profile]
-    runs        = profile_cfg["runs"]
+    profile_cfg  = config["profiles"][args.profile]
+    all_presets  = config["training_presets"]
+    runs         = build_runs(profile_cfg, all_presets)
 
     if args.output is None:
         ts = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -730,8 +745,7 @@ def main():
     # Group runs by topology so we can reuse Docker containers
     by_topo: dict = {}
     for run in runs:
-        preset = TRAINING_PRESETS[run["training"]]
-        key    = (preset["workers"], preset["servers"])
+        key = (run["workers"], run["servers"])
         by_topo.setdefault(key, []).append(run)
 
     # Determine if /etc/hosts needs updating (ask for sudo once, upfront)
@@ -756,6 +770,7 @@ def main():
     all_results = []
 
     for (workers, servers), topo_runs in sorted(by_topo.items()):
+        topology_id = f"{workers}w_{servers}s"
         print(f"\n── {workers}w / {servers}s " + "─" * 50)
 
         docker_start_s = 0.0
@@ -774,42 +789,63 @@ def main():
             print(f"  ERROR: Docker setup failed: {e}")
             for run in topo_runs:
                 result = {
-                    "run_id":               run["name"],
-                    "profile":              args.profile,
-                    "model_name":           run["model"],
-                    "training_name":        run["training"],
-                    "workers":              workers,
-                    "servers":              servers,
-                    "docker_start_seconds": None,
-                    "train_seconds":        None,
-                    "eval_seconds":         None,
-                    "accuracy":             None,
-                    "passed":               False,
-                    "error":                str(e),
+                    "run_id":                 run["name"],
+                    "profile":                args.profile,
+                    "model_name":             run["model"],
+                    "training_name":          run["training"],
+                    "workers":                workers,
+                    "servers":                servers,
+                    "topology_id":            topology_id,
+                    "reused_topology":        False,
+                    "docker_restarted_for_run": False,
+                    "node_reuse_enabled":     True,
+                    "docker_start_seconds":   None,
+                    "train_seconds":          None,
+                    "eval_seconds":           None,
+                    "accuracy":               None,
+                    "passed":                 False,
+                    "error":                  str(e),
                 }
                 all_results.append(result)
                 save_result(result, args.output)
             continue
 
+        save_result({
+            "event":                "topology_started",
+            "topology_id":         topology_id,
+            "docker_start_seconds": docker_start_s,
+        }, args.output)
+
         try:
             for i, run in enumerate(topo_runs):
-                # node binary exits after each session; full down+up ensures clean state
-                if i > 0:
-                    print("  recycling containers for next run...")
-                    docker_down()
+                docker_restarted = False
+                if i > 0 and not wait_nodes_ready(workers, servers, timeout=30.0):
+                    print("  WARNING: nodes not ready after previous session — restarting Docker (fallback)")
+                    try:
+                        docker_down()
+                    except Exception:
+                        pass
                     docker_start_s = docker_up(workers, servers, rebuild=False)
                     ensure_hosts(workers, servers, sudo_pw)
+                    docker_restarted = True
+                    print(f"  Docker restarted in {docker_start_s:.1f}s (fallback recovery)")
 
                 print(f"\n  [{run['name']}]")
                 result = run_single(run, profile_cfg, args.profile)
-                result["docker_start_seconds"] = docker_start_s
+                result["docker_start_seconds"]    = docker_start_s if (i == 0 or docker_restarted) else 0.0
+                result["topology_id"]             = topology_id
+                result["reused_topology"]         = i > 0 and not docker_restarted
+                result["docker_restarted_for_run"] = docker_restarted
+                result["node_reuse_enabled"]      = True
                 all_results.append(result)
                 save_result(result, args.output)
 
                 status = "PASS" if result["passed"] else "FAIL"
                 ts_str = f"{result['train_seconds']:.2f}s" if result["train_seconds"] else "ERROR"
                 ac_str = f"{result['accuracy']:.3f}"       if result["accuracy"] is not None else "N/A"
-                print(f"  → {status}  train={ts_str}  acc={ac_str}")
+                reuse_tag   = " [reused]"           if result["reused_topology"]          else ""
+                restart_tag = " [fallback-restart]" if result["docker_restarted_for_run"] else ""
+                print(f"  → {status}  train={ts_str}  acc={ac_str}{reuse_tag}{restart_tag}")
 
                 # In smoke mode, abort the topology group on first errored run
                 if args.profile == "smoke" and not result["passed"] and result["error"]:
