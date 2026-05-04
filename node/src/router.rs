@@ -109,7 +109,7 @@ where
 
             let conn = self.acceptor.accept().await?;
 
-            let Connection::Orchestrator(orch_handle) = conn else {
+            let Connection::Orchestrator(mut orch_handle) = conn else {
                 warn!(
                     "expected orchestrator as first connection, got unexpected connection type; skipping"
                 );
