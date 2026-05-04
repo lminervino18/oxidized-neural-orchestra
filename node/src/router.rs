@@ -134,7 +134,7 @@ where
 async fn run_worker<T, F, G>(
     acceptor: &mut Acceptor<T, F>,
     connector: &Connector<OwnedReadHalf, OwnedWriteHalf, T, G>,
-    orch_handle: OrchHandle<T>,
+    mut orch_handle: OrchHandle<T>,
     spec: WorkerSpec,
 ) -> io::Result<()>
 where
