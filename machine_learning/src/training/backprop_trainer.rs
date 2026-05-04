@@ -7,7 +7,7 @@ use crate::{
     Result,
     arch::{Sequential, loss::LossFn},
     dataset::Dataset,
-    optimization::Optimizer,
+    optimization::{GradientDescent, Optimizer},
     param_manager::ParamManager,
 };
 
@@ -21,6 +21,7 @@ where
 {
     model: Sequential,
     optimizers: Vec<O>,
+    stateless_optimizers: Vec<GradientDescent>,
     dataset: Dataset,
     loss_fn: L,
 
@@ -64,8 +65,14 @@ where
         batch_size: NonZeroUsize,
         rng: R,
     ) -> Self {
+        let stateless_optimizers = optimizers
+            .iter()
+            .map(|optimizer| GradientDescent::new(optimizer.learning_rate()))
+            .collect();
+
         Self {
             model,
+            stateless_optimizers,
             optimizers,
             dataset,
             loss_fn,
@@ -104,7 +111,7 @@ where
 
             let loss = self.model.backprop(
                 param_manager,
-                &mut self.optimizers,
+                &mut self.stateless_optimizers,
                 &mut self.loss_fn,
                 batches,
             )?;

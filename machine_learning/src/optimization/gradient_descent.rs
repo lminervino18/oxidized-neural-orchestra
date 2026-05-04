@@ -48,4 +48,8 @@ impl Optimizer for GradientDescent {
 
         Ok(())
     }
+
+    fn learning_rate(&self) -> FloatPositive {
+        self.learning_rate
+    }
 }

@@ -122,6 +122,7 @@ impl<O: Optimizer + Send> Store for BlockingStore<O> {
 mod tests {
     use std::num::NonZeroUsize;
 
+    use comms::floats::FloatPositive;
     use machine_learning::{Result, initialization::ConstParamGen};
 
     use super::*;
@@ -132,6 +133,10 @@ mod tests {
         fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
             params.iter_mut().zip(grad).for_each(|(w, g)| *w += g);
             Ok(())
+        }
+
+        fn learning_rate(&self) -> FloatPositive {
+            panic!()
         }
     }
 
