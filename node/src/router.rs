@@ -7,7 +7,10 @@ use comms::{
 };
 use log::{info, warn};
 use parameter_server::service::ServerBuilder;
-use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+};
 use worker::builder::WorkerBuilder;
 
 /// Routes incoming orchestrator connections to the appropriate runtime role,
@@ -16,21 +19,25 @@ use worker::builder::WorkerBuilder;
 /// Each session is isolated: state is owned within the session stack frame and
 /// dropped naturally when the session ends. The process then loops back to
 /// accept the next session.
-pub struct NodeRouter<T, F, G>
+pub struct NodeRouter<R, W, T, F, G>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: AsyncFn() -> io::Result<T>,
-    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T,
+    G: Fn(R, W) -> T,
 {
     acceptor: Acceptor<T, F>,
-    connector: Connector<OwnedReadHalf, OwnedWriteHalf, T, G>,
+    connector: Connector<R, W, T, G>,
 }
 
-impl<T, F, G> NodeRouter<T, F, G>
+impl<R, W, T, F, G> NodeRouter<R, W, T, F, G>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
     T: TransportLayer + 'static,
     F: AsyncFn() -> io::Result<T>,
-    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T + Clone,
+    G: Fn(R, W) -> T + Clone,
 {
     /// Creates a new `NodeRouter`.
     ///
@@ -40,16 +47,54 @@ where
     ///
     /// # Returns
     /// A new `NodeRouter` instance.
-    pub fn new(
-        acceptor: Acceptor<T, F>,
-        connector: Connector<OwnedReadHalf, OwnedWriteHalf, T, G>,
-    ) -> Self {
+    pub fn new(acceptor: Acceptor<T, F>, connector: Connector<R, W, T, G>) -> Self {
         Self {
             acceptor,
             connector,
         }
     }
 
+    /// Runs the node as a server instance for a training session.
+    ///
+    /// # Args
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    /// * `spec` - The specification for building the server.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    async fn run_server(
+        &mut self,
+        mut orch_handle: OrchHandle<T>,
+        spec: ServerSpec,
+    ) -> io::Result<()> {
+        info!("starting parameter server session");
+
+        let mut server_builder = ServerBuilder::new(&mut self.acceptor);
+        let mut pserver = server_builder.build(spec).await?;
+
+        let mut params = pserver.run().await?;
+        loop {
+            match orch_handle.recv_event().await? {
+                OrchEvent::Disconnect => {
+                    orch_handle.disconnect().await?;
+                    break;
+                }
+                OrchEvent::RequestParams => orch_handle.push_params(&mut params).await?,
+                event => warn!("Unexpected OrchEvent: {event:?}"),
+            }
+        }
+
+        info!("parameter server session finished");
+        Ok(())
+    }
+}
+
+impl<T, F, G> NodeRouter<OwnedReadHalf, OwnedWriteHalf, T, F, G>
+where
+    T: TransportLayer + 'static,
+    F: AsyncFn() -> io::Result<T>,
+    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T + Clone,
+{
     /// Runs the sequential session loop.
     ///
     /// Blocks indefinitely, accepting one orchestrator connection per iteration.
@@ -73,95 +118,59 @@ where
 
             info!("accepted orchestrator connection");
 
-            match run_session(&mut self.acceptor, &self.connector, orch_handle).await {
+            let result = match orch_handle.pull_specification().await {
+                Err(e) => Err(e),
+                Ok(PullSpecResponse::ParameterServer(spec)) => {
+                    self.run_server(orch_handle, spec).await
+                }
+                Ok(PullSpecResponse::Worker(spec)) => self.run_worker(orch_handle, spec).await,
+            };
+
+            match result {
                 Ok(()) => info!("session finished, waiting for next session"),
                 Err(e) => warn!("session failed: {e}, resetting and waiting for next session"),
             }
         }
     }
-}
 
-async fn run_session<T, F, G>(
-    acceptor: &mut Acceptor<T, F>,
-    connector: &Connector<OwnedReadHalf, OwnedWriteHalf, T, G>,
-    mut orch_handle: OrchHandle<T>,
-) -> io::Result<()>
-where
-    T: TransportLayer + 'static,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T + Clone,
-{
-    match orch_handle.pull_specification().await? {
-        PullSpecResponse::ParameterServer(spec) => {
-            info!("starting parameter server session");
-            run_server(acceptor, orch_handle, spec).await?;
-            info!("parameter server session finished");
-            Ok(())
-        }
-        PullSpecResponse::Worker(spec) => {
-            info!("starting worker session");
-            run_worker(acceptor, connector, orch_handle, spec).await?;
-            info!("worker session finished");
-            Ok(())
-        }
+    /// Runs the node as a worker instance for a training session.
+    ///
+    /// # Args
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    /// * `spec` - The specification for building the worker.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    async fn run_worker(
+        &mut self,
+        mut orch_handle: OrchHandle<T>,
+        spec: WorkerSpec,
+    ) -> io::Result<()>
+    where
+        T: TransportLayer + 'static,
+    {
+        info!("starting worker session");
+
+        let x_size_bytes = spec.dataset.x_size_bytes as usize;
+        let y_size_bytes = spec.dataset.y_size_bytes as usize;
+        let mut samples_raw = vec![0.0; x_size_bytes / size_of::<f32>()];
+        let mut labels_raw = vec![0.0; y_size_bytes / size_of::<f32>()];
+
+        orch_handle
+            .pull_dataset(
+                &mut get_dataset_cursor(&mut samples_raw),
+                &mut get_dataset_cursor(&mut labels_raw),
+                x_size_bytes,
+                y_size_bytes,
+            )
+            .await?;
+
+        let mut worker = WorkerBuilder::new(&mut self.acceptor, self.connector.clone())
+            .build(spec, orch_handle, samples_raw, labels_raw)
+            .await?;
+
+        worker.run().await?;
+        info!("worker session finished");
+        Ok(())
     }
-}
-
-async fn run_server<T, F>(
-    acceptor: &mut Acceptor<T, F>,
-    mut orch_handle: OrchHandle<T>,
-    spec: ServerSpec,
-) -> io::Result<()>
-where
-    T: TransportLayer + 'static,
-    F: AsyncFn() -> io::Result<T>,
-{
-    let mut server_builder = ServerBuilder::new(acceptor);
-    let mut pserver = server_builder.build(spec).await?;
-
-    let mut params = pserver.run().await?;
-    loop {
-        match orch_handle.recv_event().await? {
-            OrchEvent::Disconnect => {
-                orch_handle.disconnect().await?;
-                break;
-            }
-            OrchEvent::RequestParams => orch_handle.push_params(&mut params).await?,
-            event => warn!("Unexpected OrchEvent: {event:?}"),
-        }
-    }
-
-    Ok(())
-}
-
-async fn run_worker<T, F, G>(
-    acceptor: &mut Acceptor<T, F>,
-    connector: &Connector<OwnedReadHalf, OwnedWriteHalf, T, G>,
-    mut orch_handle: OrchHandle<T>,
-    spec: WorkerSpec,
-) -> io::Result<()>
-where
-    T: TransportLayer + 'static,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T + Clone,
-{
-    let x_size_bytes = spec.dataset.x_size_bytes as usize;
-    let y_size_bytes = spec.dataset.y_size_bytes as usize;
-    let mut samples_raw = vec![0f32; x_size_bytes / size_of::<f32>()];
-    let mut labels_raw = vec![0f32; y_size_bytes / size_of::<f32>()];
-
-    orch_handle
-        .pull_dataset(
-            &mut get_dataset_cursor(&mut samples_raw),
-            &mut get_dataset_cursor(&mut labels_raw),
-            x_size_bytes,
-            y_size_bytes,
-        )
-        .await?;
-
-    let mut worker = WorkerBuilder::new(acceptor, connector.clone())
-        .build(spec, orch_handle, samples_raw, labels_raw)
-        .await?;
-
-    worker.run().await
 }
