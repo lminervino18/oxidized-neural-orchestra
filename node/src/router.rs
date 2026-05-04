@@ -44,7 +44,10 @@ where
         acceptor: Acceptor<T, F>,
         connector: Connector<OwnedReadHalf, OwnedWriteHalf, T, G>,
     ) -> Self {
-        Self { acceptor, connector }
+        Self {
+            acceptor,
+            connector,
+        }
     }
 
     /// Runs the sequential session loop.
