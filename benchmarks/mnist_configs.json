@@ -1,104 +1,73 @@
 {
+  "training_presets": {
+    "ps_1w_1s_base_barrier": {
+      "workers": 1, "servers": 1,
+      "serializer": "base", "sync": "barrier", "store": "blocking"
+    },
+    "ps_2w_1s_base_barrier": {
+      "workers": 2, "servers": 1,
+      "serializer": "base", "sync": "barrier", "store": "blocking"
+    },
+    "ps_3w_1s_base_barrier": {
+      "workers": 3, "servers": 1,
+      "serializer": "base", "sync": "barrier", "store": "blocking"
+    },
+    "ps_3w_2s_base_barrier": {
+      "workers": 3, "servers": 2,
+      "serializer": "base", "sync": "barrier", "store": "blocking"
+    },
+    "ps_2w_1s_sparse_barrier": {
+      "workers": 2, "servers": 1,
+      "serializer": "sparse", "sync": "barrier", "store": "blocking"
+    },
+    "ps_2w_1s_nonblocking": {
+      "workers": 2, "servers": 1,
+      "serializer": "base", "sync": "nonblocking", "store": "wild"
+    }
+  },
   "profiles": {
     "smoke": {
       "train_samples": null,
       "test_samples": null,
-      "runs": [
-        {
-          "name": "dense_tiny_ps_1w_1s_base_barrier",
-          "model": "dense_tiny",
-          "training": "ps_1w_1s_base_barrier",
-          "max_epochs": 15,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.75,
-          "max_train_seconds": 300
-        },
-        {
-          "name": "dense_tiny_ps_2w_1s_base_barrier",
-          "model": "dense_tiny",
-          "training": "ps_2w_1s_base_barrier",
-          "max_epochs": 15,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.75,
-          "max_train_seconds": 300
-        }
-      ]
+      "models": ["dense_tiny", "dense_small"],
+      "training_presets": ["ps_1w_1s_base_barrier", "ps_2w_1s_base_barrier"],
+      "defaults": {
+        "max_epochs": 15,
+        "batch_size": 256,
+        "lr": 0.5,
+        "offline_epochs": 0,
+        "min_accuracy": 0.80,
+        "max_train_seconds": 300
+      },
+      "overrides": {
+        "dense_small": { "max_epochs": 40 }
+      }
     },
     "benchmark": {
       "train_samples": null,
       "test_samples": null,
-      "runs": [
-        {
-          "name": "dense_tiny_ps_1w_1s_base_barrier",
-          "model": "dense_tiny",
-          "training": "ps_1w_1s_base_barrier",
-          "max_epochs": 30,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.85,
-          "max_train_seconds": 600
-        },
-        {
-          "name": "dense_tiny_ps_2w_1s_base_barrier",
-          "model": "dense_tiny",
-          "training": "ps_2w_1s_base_barrier",
-          "max_epochs": 30,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.85,
-          "max_train_seconds": 600
-        },
-        {
-          "name": "dense_tiny_ps_3w_1s_base_barrier",
-          "model": "dense_tiny",
-          "training": "ps_3w_1s_base_barrier",
-          "max_epochs": 50,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.80,
-          "max_train_seconds": 900
-        },
-        {
-          "name": "dense_tiny_ps_3w_2s_base_barrier",
-          "model": "dense_tiny",
-          "training": "ps_3w_2s_base_barrier",
-          "max_epochs": 50,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.80,
-          "max_train_seconds": 900
-        },
-        {
-          "name": "dense_small_ps_2w_1s_base_barrier",
-          "model": "dense_small",
-          "training": "ps_2w_1s_base_barrier",
-          "max_epochs": 50,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.88,
-          "max_train_seconds": 900
-        },
-        {
-          "name": "dense_small_ps_3w_2s_base_barrier",
-          "model": "dense_small",
-          "training": "ps_3w_2s_base_barrier",
-          "max_epochs": 80,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.80,
-          "max_train_seconds": 1500
-        }
-      ]
+      "models": ["dense_tiny", "dense_small"],
+      "training_presets": [
+        "ps_1w_1s_base_barrier",
+        "ps_2w_1s_base_barrier",
+        "ps_3w_1s_base_barrier",
+        "ps_3w_2s_base_barrier"
+      ],
+      "defaults": {
+        "max_epochs": 30,
+        "batch_size": 256,
+        "lr": 0.5,
+        "offline_epochs": 0,
+        "min_accuracy": 0.85,
+        "max_train_seconds": 600
+      },
+      "overrides": {
+        "ps_3w_1s_base_barrier":             { "max_epochs": 50, "min_accuracy": 0.80, "max_train_seconds": 900 },
+        "ps_3w_2s_base_barrier":             { "max_epochs": 50, "min_accuracy": 0.80, "max_train_seconds": 900 },
+        "dense_small":                       { "max_epochs": 50, "min_accuracy": 0.88, "max_train_seconds": 900 },
+        "dense_small+ps_3w_1s_base_barrier": { "max_epochs": 80, "min_accuracy": 0.80 },
+        "dense_small+ps_3w_2s_base_barrier": { "max_epochs": 80, "min_accuracy": 0.80, "max_train_seconds": 1500 }
+      }
     }
   }
 }

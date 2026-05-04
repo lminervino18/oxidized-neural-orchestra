@@ -1,3 +1,5 @@
+use comms::floats::FloatPositive;
+
 use crate::Result;
 
 /// Defines the strategy for updating model parameters based on calculated gradients.
@@ -11,4 +13,10 @@ pub trait Optimizer {
     /// # Returns
     /// An error if there's a mismatch in the sizes of `grad` and `params`.
     fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()>;
+
+    /// Gets the inner learning rate from the optimizer.
+    ///
+    /// # Returns
+    /// It's learning rate.
+    fn learning_rate(&self) -> FloatPositive;
 }

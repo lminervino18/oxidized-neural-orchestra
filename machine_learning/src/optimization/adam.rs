@@ -92,4 +92,8 @@ impl Optimizer for Adam {
 
         Ok(())
     }
+
+    fn learning_rate(&self) -> FloatPositive {
+        self.learning_rate
+    }
 }

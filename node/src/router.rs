@@ -5,7 +5,7 @@ use comms::{
     get_dataset_cursor,
     specs::{server::ServerSpec, worker::WorkerSpec},
 };
-use log::warn;
+use log::{info, warn};
 use parameter_server::service::ServerBuilder;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -13,11 +13,12 @@ use tokio::{
 };
 use worker::builder::WorkerBuilder;
 
-/// Routes the first orchestrator connection to the appropriate runtime role.
+/// Routes incoming orchestrator connections to the appropriate runtime role,
+/// keeping the process alive across sequential sessions.
 ///
-/// A single `NodeRouter` represents one process lifecycle. After receiving a
-/// `comms::protocol::NodeSpec` from the orchestrator, the process commits to
-/// either a parameter server or worker role for the entire training's duration.
+/// Each session is isolated: state is owned within the session stack frame and
+/// dropped naturally when the session ends. The process then loops back to
+/// accept the next session.
 pub struct NodeRouter<R, W, T, F, G>
 where
     R: AsyncRead + Unpin,
@@ -42,6 +43,7 @@ where
     ///
     /// # Args
     /// * `acceptor` - The acceptor used to receive incoming connections.
+    /// * `connector` - The connector used by workers to reach parameter servers.
     ///
     /// # Returns
     /// A new `NodeRouter` instance.
@@ -65,6 +67,8 @@ where
         mut orch_handle: OrchHandle<T>,
         spec: ServerSpec,
     ) -> io::Result<()> {
+        info!("starting parameter server session");
+
         let mut server_builder = ServerBuilder::new(&mut self.acceptor);
         let mut pserver = server_builder.build(spec).await?;
 
@@ -80,6 +84,7 @@ where
             }
         }
 
+        info!("parameter server session finished");
         Ok(())
     }
 }
@@ -90,20 +95,41 @@ where
     F: AsyncFn() -> io::Result<T>,
     G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T + Clone,
 {
-    /// Accepts the orchestrator connection, reads the bootstrap spec, and runs the assigned role.
+    /// Runs the sequential session loop.
     ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn run(&mut self) -> io::Result<()> {
-        let Connection::Orchestrator(mut orch_handle) = self.acceptor.accept().await? else {
-            return Err(io::Error::other(
-                "expected orchestrator as first connection",
-            ));
-        };
+    /// Blocks indefinitely, accepting one orchestrator connection per iteration.
+    /// Session-level errors are logged and the loop continues. Returns only if
+    /// the listener itself fails with a fatal error.
+    ///
+    /// # Errors
+    /// Returns an io error if the underlying listener fails.
+    pub async fn run(mut self) -> io::Result<()> {
+        loop {
+            info!("waiting for next session");
 
-        match orch_handle.pull_specification().await? {
-            PullSpecResponse::ParameterServer(spec) => self.run_server(orch_handle, spec).await,
-            PullSpecResponse::Worker(spec) => self.run_worker(orch_handle, spec).await,
+            let conn = self.acceptor.accept().await?;
+
+            let Connection::Orchestrator(mut orch_handle) = conn else {
+                warn!(
+                    "expected orchestrator as first connection, got unexpected connection type; skipping"
+                );
+                continue;
+            };
+
+            info!("accepted orchestrator connection");
+
+            let result = match orch_handle.pull_specification().await {
+                Err(e) => Err(e),
+                Ok(PullSpecResponse::ParameterServer(spec)) => {
+                    self.run_server(orch_handle, spec).await
+                }
+                Ok(PullSpecResponse::Worker(spec)) => self.run_worker(orch_handle, spec).await,
+            };
+
+            match result {
+                Ok(()) => info!("session finished, waiting for next session"),
+                Err(e) => warn!("session failed: {e}, resetting and waiting for next session"),
+            }
         }
     }
 
@@ -123,6 +149,8 @@ where
     where
         T: TransportLayer + 'static,
     {
+        info!("starting worker session");
+
         let x_size_bytes = spec.dataset.x_size_bytes as usize;
         let y_size_bytes = spec.dataset.y_size_bytes as usize;
         let mut samples_raw = vec![0.0; x_size_bytes / size_of::<f32>()];
@@ -141,6 +169,8 @@ where
             .build(spec, orch_handle, samples_raw, labels_raw)
             .await?;
 
-        worker.run().await
+        worker.run().await?;
+        info!("worker session finished");
+        Ok(())
     }
 }
