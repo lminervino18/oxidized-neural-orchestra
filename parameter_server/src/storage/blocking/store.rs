@@ -136,7 +136,7 @@ mod tests {
         }
 
         fn learning_rate(&self) -> FloatPositive {
-            todo!()
+            panic!()
         }
     }
 
