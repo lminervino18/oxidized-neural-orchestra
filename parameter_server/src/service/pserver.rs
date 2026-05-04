@@ -98,10 +98,16 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
-                        synchronizer.step(&handle, grad, &mut params).await.unwrap();
+                        synchronizer
+                            .step(&handle, grad, &mut params)
+                            .await
+                            .map_err(io::Error::other)?;
                     }
                     WorkerEvent::Disconnect => {
                         info!(worker_id = id; "gracefully disconnecting worker");
+                        // Release any peer tasks blocked inside a barrier step so they
+                        // are not left waiting for a contribution that will never arrive.
+                        synchronizer.drain();
                         break;
                     }
                     WorkerEvent::Grad(grad) => {
