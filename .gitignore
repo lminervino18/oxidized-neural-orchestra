@@ -55,8 +55,9 @@ data/*
 # Safetensors model
 *.safetensors
 
-# Generated PR description
+# IA md generated files
 pr.md
+issue.md
 
 # Local analysis docs (not for the repo)
 notebooks/mnist/conclusion.md
