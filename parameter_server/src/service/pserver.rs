@@ -98,7 +98,10 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
-                        synchronizer.step(&handle, grad, &mut params).await.unwrap();
+                        synchronizer
+                            .step(&handle, grad, &mut params)
+                            .await
+                            .map_err(io::Error::other)?;
                     }
                     WorkerEvent::Disconnect => {
                         info!(worker_id = id; "gracefully disconnecting worker");
