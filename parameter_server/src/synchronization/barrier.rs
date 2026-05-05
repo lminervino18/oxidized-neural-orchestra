@@ -5,6 +5,7 @@ use tokio::sync::watch;
 use super::Synchronizer;
 use crate::storage::{Result, Store, StoreHandle};
 
+/// Tracks connected workers, remaining arrivals, and the current generation for a [`DrainableBarrier`].
 struct BarrierState {
     /// Workers still expected to contribute (decremented on disconnect).
     connected: usize,
@@ -26,6 +27,13 @@ struct DrainableBarrier {
 }
 
 impl DrainableBarrier {
+    /// Creates a new `DrainableBarrier`.
+    ///
+    /// # Args
+    /// * `n` - The initial number of workers expected to synchronize.
+    ///
+    /// # Returns
+    /// A new `DrainableBarrier` instance.
     fn new(n: usize) -> Self {
         let (release_tx, _) = watch::channel(0u64);
         Self {
@@ -66,8 +74,9 @@ impl DrainableBarrier {
 
     /// Waits until all connected workers have arrived at this barrier step.
     ///
-    /// Returns `true` if this caller is the designated leader and should
-    /// perform the parameter update, `false` otherwise.
+    /// # Returns
+    /// `true` if this caller is the designated leader and should perform
+    /// the parameter update, `false` otherwise.
     async fn wait(&self) -> bool {
         let (target_generation, is_leader, maybe_release) = {
             let mut state = self.state.lock().unwrap();
