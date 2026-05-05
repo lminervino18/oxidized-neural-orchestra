@@ -23,11 +23,4 @@ pub trait SynchronizerTemplate: Clone {
     ) -> Result<()>
     where
         S: Store + Send + Sync;
-
-    /// Called when a connected worker disconnects before contributing to the current step.
-    ///
-    /// Barrier-based synchronizers use this to decrement the expected participant count
-    /// so remaining workers are not left waiting indefinitely. Non-blocking synchronizers
-    /// ignore this signal.
-    fn drain(&self) {}
 }

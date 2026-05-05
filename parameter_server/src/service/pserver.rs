@@ -105,9 +105,6 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
                     }
                     WorkerEvent::Disconnect => {
                         info!(worker_id = id; "gracefully disconnecting worker");
-                        // Release any peer tasks blocked inside a barrier step so they
-                        // are not left waiting for a contribution that will never arrive.
-                        synchronizer.drain();
                         break;
                     }
                     WorkerEvent::Grad(grad) => {

@@ -6,10 +6,10 @@ use super::Synchronizer;
 use crate::storage::{Result, Store, StoreHandle};
 
 struct BarrierState {
-    /// Workers still expected to contribute to each barrier step.
+    /// Workers still expected to contribute (decremented on disconnect).
     connected: usize,
-    /// Workers currently blocked inside `wait`.
-    arrived: usize,
+    /// Workers still expected to arrive at this step; reset to `connected` after each release.
+    remaining: usize,
     /// Monotone counter; incremented each time the barrier releases.
     generation: u64,
 }
@@ -19,23 +19,22 @@ struct BarrierState {
 /// Each time a worker exits without contributing to the current step, it calls
 /// [`DrainableBarrier::drain`]. If all remaining connected workers are already
 /// waiting, the barrier releases immediately so they are not stuck indefinitely.
+#[derive(Clone)]
 struct DrainableBarrier {
     state: Arc<Mutex<BarrierState>>,
     release_tx: Arc<watch::Sender<u64>>,
-    release_rx: watch::Receiver<u64>,
 }
 
 impl DrainableBarrier {
     fn new(n: usize) -> Self {
-        let (release_tx, release_rx) = watch::channel(0u64);
+        let (release_tx, _) = watch::channel(0u64);
         Self {
             state: Arc::new(Mutex::new(BarrierState {
                 connected: n,
-                arrived: 0,
+                remaining: n,
                 generation: 0,
             })),
             release_tx: Arc::new(release_tx),
-            release_rx,
         }
     }
 
@@ -50,10 +49,10 @@ impl DrainableBarrier {
                 return;
             }
             state.connected -= 1;
-            // If every remaining connected worker is already waiting, release now.
-            if state.connected > 0 && state.arrived >= state.connected {
+            state.remaining -= 1;
+            if state.connected > 0 && state.remaining == 0 {
                 state.generation += 1;
-                state.arrived = 0;
+                state.remaining = state.connected;
                 Some(state.generation)
             } else {
                 None
@@ -72,13 +71,13 @@ impl DrainableBarrier {
     async fn wait(&self) -> bool {
         let (target_generation, is_leader, maybe_release) = {
             let mut state = self.state.lock().unwrap();
-            state.arrived += 1;
+            state.remaining -= 1;
             let target_generation = state.generation;
-            let is_leader = state.arrived >= state.connected;
+            let is_leader = state.remaining == 0;
 
             let maybe_release = if is_leader {
                 state.generation += 1;
-                state.arrived = 0;
+                state.remaining = state.connected;
                 Some(state.generation)
             } else {
                 None
@@ -92,20 +91,9 @@ impl DrainableBarrier {
             return is_leader;
         }
 
-        // Wait until the watch value moves past the generation we started in.
-        let mut rx = self.release_rx.clone();
+        let mut rx = self.release_tx.subscribe();
         let _ = rx.wait_for(|&v| v > target_generation).await;
         false
-    }
-}
-
-impl Clone for DrainableBarrier {
-    fn clone(&self) -> Self {
-        Self {
-            state: self.state.clone(),
-            release_tx: self.release_tx.clone(),
-            release_rx: self.release_rx.clone(),
-        }
     }
 }
 
@@ -113,9 +101,10 @@ impl Clone for DrainableBarrier {
 ///
 /// When all N connected workers push their gradients, the barrier releases, one
 /// leader applies the accumulated gradients, and all workers receive the updated
-/// parameters before the next epoch. If a worker disconnects mid-training, calling
-/// [`BarrierSync::drain`] decrements the expected count so remaining workers are
-/// never left waiting indefinitely.
+/// parameters before the next epoch. If a worker disconnects mid-training, the
+/// barrier drains automatically on drop so remaining workers are not left waiting
+/// indefinitely.
+#[derive(Clone)]
 pub struct BarrierSync {
     barrier: DrainableBarrier,
 }
@@ -135,19 +124,13 @@ impl BarrierSync {
     }
 }
 
-impl Clone for BarrierSync {
-    fn clone(&self) -> Self {
-        Self {
-            barrier: self.barrier.clone(),
-        }
+impl Drop for BarrierSync {
+    fn drop(&mut self) {
+        self.barrier.drain();
     }
 }
 
 impl Synchronizer for BarrierSync {
-    fn drain(&self) {
-        self.barrier.drain();
-    }
-
     async fn step<S>(&self, handle: &StoreHandle<S>, grad: &[f32], params: &mut [f32]) -> Result<()>
     where
         S: Store + Send + Sync,
