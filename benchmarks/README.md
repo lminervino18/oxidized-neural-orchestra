@@ -81,14 +81,14 @@ Each run appends one line to a `.jsonl` file in `results/` (gitignored):
   "max_epochs": 5,
   "batch_size": 256,
   "lr": 0.5,
-  "train_samples": 1000,
-  "test_samples": 500,
+  "train_samples": 60000,
+  "test_samples": 10000,
   "docker_start_seconds": 21.6,
   "train_seconds": 0.06,
   "eval_seconds": 1.2,
   "accuracy": 0.204,
-  "min_accuracy": 0.15,
-  "max_train_seconds": 180,
+  "min_accuracy": 0.80,
+  "max_train_seconds": 300,
   "passed": true,
   "error": null
 }
@@ -98,56 +98,63 @@ Each run appends one line to a `.jsonl` file in `results/` (gitignored):
 
 | Profile | Train | Test | Purpose | Expected time |
 |---|---|---|---|---|
-| `smoke` | full (60 k) | full (10 k) | Pipeline validation — 15 epochs, min 75% accuracy | ~5–10 min |
-| `benchmark` | full (60 k) | full (10 k) | Scaling + convergence comparison, 30–100 epochs | ~30–90 min |
+| `smoke` | full (60 k) | full (10 k) | Pipeline validation — min 80% accuracy; `dense_tiny` 15 epochs, `dense_small` 40 epochs | ~5–15 min |
+| `benchmark` | full (60 k) | full (10 k) | Scaling + convergence comparison, 30–80 epochs depending on config | ~30–90 min |
 
 ## Models
-
-Dense-only. Conv2d configs are excluded until that implementation is stable.
 
 | Name | Architecture | Used in |
 |---|---|---|
 | `dense_tiny` | 784 → 64 → 10 (Sigmoid) | smoke + benchmark |
-| `dense_small` | 784 → 128 → 64 → 10 (Sigmoid) | benchmark |
+| `dense_small` | 784 → 128 → 64 → 10 (Sigmoid) | smoke + benchmark |
 
 ## Training Configs
 
-| Name | Workers | Servers | Serializer | Sync |
-|---|---|---|---|---|
-| `ps_1w_1s_base_barrier` | 1 | 1 | Base | Barrier |
-| `ps_2w_1s_base_barrier` | 2 | 1 | Base | Barrier |
-| `ps_3w_1s_base_barrier` | 3 | 1 | Base | Barrier |
-| `ps_3w_2s_base_barrier` | 3 | 2 | Base | Barrier |
+All defined presets (referenced by name in profile `training_presets` arrays):
+
+| Name | Workers | Servers | Serializer | Sync | Store |
+|---|---|---|---|---|---|
+| `ps_1w_1s_base_barrier` | 1 | 1 | Base | Barrier | Blocking |
+| `ps_2w_1s_base_barrier` | 2 | 1 | Base | Barrier | Blocking |
+| `ps_3w_1s_base_barrier` | 3 | 1 | Base | Barrier | Blocking |
+| `ps_3w_2s_base_barrier` | 3 | 2 | Base | Barrier | Blocking |
+| `ps_2w_1s_sparse_barrier` | 2 | 1 | Sparse (r=0.01) | Barrier | Blocking |
+| `ps_2w_1s_nonblocking` | 2 | 1 | Base | Non-blocking | Wild |
 
 The `3w_1s` vs `3w_2s` comparison reveals whether a single parameter server becomes a bottleneck with 3 workers.
 
 ## Customizing
 
-Edit `mnist_configs.json` to add runs, change epochs, thresholds, or lr. The structure:
+Edit `mnist_configs.json` to add models, training presets, or change per-run defaults and overrides. The structure:
 
 ```json
 {
+  "training_presets": {
+    "my_preset": { "workers": 2, "servers": 1, "serializer": "base", "sync": "barrier", "store": "blocking" }
+  },
   "profiles": {
     "smoke": {
-      "train_samples": 1000,
-      "test_samples": 500,
-      "runs": [
-        {
-          "name": "my_run",
-          "model": "dense_tiny",
-          "training": "ps_1w_1s_base_barrier",
-          "max_epochs": 5,
-          "batch_size": 256,
-          "lr": 0.5,
-          "offline_epochs": 0,
-          "min_accuracy": 0.15,
-          "max_train_seconds": 180
-        }
-      ]
+      "train_samples": null,
+      "test_samples": null,
+      "models": ["dense_tiny"],
+      "training_presets": ["my_preset"],
+      "defaults": {
+        "max_epochs": 15,
+        "batch_size": 256,
+        "lr": 0.5,
+        "offline_epochs": 0,
+        "min_accuracy": 0.80,
+        "max_train_seconds": 300
+      },
+      "overrides": {
+        "dense_small": { "max_epochs": 40 }
+      }
     }
   }
 }
 ```
+
+`overrides` keys can be a model name, a training preset name, or `"model+preset"` for a specific combination.
 
 ## Notes
 
