@@ -132,7 +132,11 @@ Training stops at the next epoch boundary when `|prev_avg_loss - curr_avg_loss| 
 
 ### Algorithm (`algorithm`)
 
+Two options:
+
 #### `parameter_server`
+
+Workers push gradients to centralized servers, which apply updates and return new parameters. Model parameters are sharded across servers.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -150,19 +154,29 @@ Training stops at the next epoch boundary when `|prev_avg_loss - curr_avg_loss| 
 }
 ```
 
-#### Synchronizers
+##### Synchronizers
 
 | Value | Description |
 |---|---|
 | `"barrier"` | All workers synchronize gradients at the end of each epoch before proceeding. Ensures consistent updates. |
 | `"non_blocking"` | Workers send gradients and continue without waiting for others. Higher throughput, less consistency. |
 
-#### Stores
+##### Stores
 
 | Value | Description |
 |---|---|
 | `"blocking"` | Parameter reads block until the latest update is applied. Consistent reads. |
 | `"wild"` | Parameter reads may return stale values. Better throughput under high concurrency. |
+
+#### `all_reduce`
+
+Workers exchange and reduce gradients directly with each other — no parameter server required. Each worker ends up with the same averaged gradient and applies it locally.
+
+```json
+"algorithm": "all_reduce"
+```
+
+No additional fields. Workers are identified solely by `worker_addrs`.
 
 ---
 

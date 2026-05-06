@@ -15,7 +15,10 @@
 
 ## Overview
 
-**O.N.O** is a fully distributed system for training neural networks, built from scratch in Rust. It implements a Parameter Server architecture where workers train local models in parallel and synchronize gradients through centralized parameter servers.
+**O.N.O** is a fully distributed system for training neural networks, built from scratch in Rust. It supports two distributed training algorithms:
+
+- **Parameter Server** — workers push gradients to centralized parameter servers, which apply updates and return the new parameters.
+- **All-Reduce** — workers exchange and reduce gradients directly with each other, with no central server.
 
 The system exposes three interfaces:
 - **`orchestui`** — an interactive TUI to configure and monitor training in real time
@@ -25,6 +28,10 @@ The system exposes three interfaces:
 ---
 
 ## Architecture
+
+The **orchestrator** connects to all nodes, sends each one its configuration spec, and waits for training to complete. All nodes run the same `node` binary — the spec received at connection time determines whether a node acts as a worker or a parameter server.
+
+### Parameter Server
 
 ```
          Orchestrator
@@ -36,11 +43,23 @@ The system exposes three interfaces:
    (N nodes)       (M nodes)
 ```
 
-- The **orchestrator** connects to all workers and servers, sends each node its configuration spec, and waits for training to complete.
-- Each **worker** trains a local copy of the model on its data partition and synchronizes gradients with the parameter servers.
-- Each **parameter server** holds a partition of the model parameters and applies gradient updates.
+Workers train locally on their data partition and push gradients to the parameter servers. Servers apply updates and return the new parameters. Model parameters are sharded across servers.
 
-Both workers and servers run the same `node` binary. The orchestrator sends a spec at connection time that determines which role the node takes for that session.
+### All-Reduce
+
+```
+        Orchestrator
+             |
+    +--------+--------+
+    |        |        |
+    v        v        v
+ Worker  Worker  Worker
+    |        |        |
+    +--------+--------+
+         (ring reduce)
+```
+
+Workers exchange and reduce gradients directly with each other — no parameter server needed. Each worker ends up with the same averaged gradient and applies it locally.
 
 ---
 
@@ -126,6 +145,10 @@ All containers use the same `node/Dockerfile`. Server addresses start at port `4
 ```
 
 ### `training.json`
+
+Two algorithm options — pick one:
+
+**Parameter Server:**
 ```json
 {
   "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
@@ -156,14 +179,30 @@ All containers use the same `node/Dockerfile`. Server addresses start at port `4
 }
 ```
 
-Synchronizer options: `"barrier"` | `"non_blocking"`  
-Store options: `"blocking"` | `"wild"`  
+**All-Reduce:**
+```json
+{
+  "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+  "algorithm": "all_reduce",
+  "dataset": { ... },
+  "optimizer": { "gradient_descent": { "lr": 0.01 } },
+  "loss_fn": "mse",
+  "batch_size": 4,
+  "max_epochs": 500,
+  "offline_epochs": 0
+}
+```
+
+Synchronizer options (PS only): `"barrier"` | `"non_blocking"`  
+Store options (PS only): `"blocking"` | `"wild"`  
 `seed`, `serializer`, `early_stopping`, and `act_fn` are optional — omit them to use defaults.  
 For a local dataset use `"src": { "local": { "samples_path": "...", "labels_path": "..." } }` instead of `inline`.
 
 ---
 
 ## Python API
+
+### Parameter Server
 ```python
 from orchestra import Sequential, orchestrate, parameter_server
 from orchestra.arch import Dense
@@ -192,6 +231,31 @@ training = parameter_server(
     loss_fn=Mse(),
     sync=BarrierSync(),
     store=BlockingStore(),
+    max_epochs=500,
+    batch_size=4,
+)
+
+session = orchestrate(model, training)
+trained = session.wait()
+trained.save_safetensors("weights.safetensors")
+```
+
+### All-Reduce
+```python
+from orchestra import Sequential, orchestrate, all_reduce
+from orchestra.arch import Dense
+from orchestra.initialization import Kaiming
+from orchestra.datasets import InlineDataset
+from orchestra.optimizers import GradientDescent
+from orchestra.loss_fns import Mse
+
+model = Sequential([Dense(8, Kaiming()), Dense(1, Kaiming())])
+
+training = all_reduce(
+    worker_addrs=["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+    dataset=InlineDataset(samples, labels, x_size=1, y_size=1),
+    optimizer=GradientDescent(lr=0.01),
+    loss_fn=Mse(),
     max_epochs=500,
     batch_size=4,
 )

@@ -228,7 +228,7 @@ training = parameter_server(
 
 ### `all_reduce(...)`
 
-Distributed training via all-reduce collective — workers exchange gradients directly without a parameter server.
+Distributed training via all-reduce collective — workers exchange gradients directly without a parameter server. Each worker ends up with the same averaged gradient and applies it locally.
 
 ```python
 training = all_reduce(
@@ -244,8 +244,6 @@ training = all_reduce(
     early_stopping_tolerance=None,
 )
 ```
-
-> **Note:** All-reduce session finalization is not yet implemented. Training will start but the final model cannot be retrieved at the end of the session.
 
 ---
 
