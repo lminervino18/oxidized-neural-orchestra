@@ -207,17 +207,10 @@ trained.save_safetensors("weights.safetensors")
 
 | Feature | Status |
 |---|---|
-| Neural network library (dense layers, activations, optimizers) | ✅ |
-| Conv2d convolutional layers | ✅ |
-| Parameter Server distributed training | ✅ |
-| Barrier and non-blocking synchronization | ✅ |
-| Early stopping | ✅ |
-| Sparse gradient compression | ✅ |
-| Manual session stop (`session.stop()`) | ✅ |
-| TUI dashboard (`orchestui`) | ✅ |
-| Python FFI via PyO3 (`orchestra-py`) | ✅ |
-| Docker deployment | ✅ |
-| All-Reduce strategy (training runs; final model retrieval not implemented) | 🔲 |
+| Global architecture | ✅ |
+| Parameter Server | ✅ |
+| All-Reduce | ✅ |
+| Strategy Switch | 🔲 |
 
 ---
 
