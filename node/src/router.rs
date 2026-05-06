@@ -1,11 +1,11 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchEvent, OrchHandle, PullSpecResponse, TransportLayer,
+    Acceptor, Connection, Connector, OrchHandle, PullSpecResponse, TransportLayer,
     get_dataset_cursor,
     specs::{server::ServerSpec, worker::WorkerSpec},
 };
-use log::{info, warn};
+use log::{error, info, warn};
 use parameter_server::service::ServerBuilder;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -62,27 +62,12 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn run_server(
-        &mut self,
-        mut orch_handle: OrchHandle<T>,
-        spec: ServerSpec,
-    ) -> io::Result<()> {
+    async fn run_server(&mut self, orch_handle: OrchHandle<T>, spec: ServerSpec) -> io::Result<()> {
         info!("starting parameter server session");
 
         let mut server_builder = ServerBuilder::new(&mut self.acceptor);
-        let mut pserver = server_builder.build(spec).await?;
-
-        let mut params = pserver.run().await?;
-        loop {
-            match orch_handle.recv_event().await? {
-                OrchEvent::Disconnect => {
-                    orch_handle.disconnect().await?;
-                    break;
-                }
-                OrchEvent::RequestParams => orch_handle.push_params(&mut params).await?,
-                event => warn!("Unexpected OrchEvent: {event:?}"),
-            }
-        }
+        let mut pserver = server_builder.build(spec, orch_handle).await?;
+        pserver.run().await?;
 
         info!("parameter server session finished");
         Ok(())
@@ -105,30 +90,26 @@ where
     /// Returns an io error if the underlying listener fails.
     pub async fn run(mut self) -> io::Result<()> {
         loop {
-            info!("waiting for next session");
-
+            info!("awaiting connection");
             let conn = self.acceptor.accept().await?;
 
             let Connection::Orchestrator(mut orch_handle) = conn else {
-                warn!(
-                    "expected orchestrator as first connection, got unexpected connection type; skipping"
-                );
+                warn!("expected an orchestrator connection, got something else");
                 continue;
             };
 
-            info!("accepted orchestrator connection");
-
-            let result = match orch_handle.pull_specification().await {
-                Err(e) => Err(e),
-                Ok(PullSpecResponse::ParameterServer(spec)) => {
-                    self.run_server(orch_handle, spec).await
-                }
-                Ok(PullSpecResponse::Worker(spec)) => self.run_worker(orch_handle, spec).await,
+            let Ok(spec) = orch_handle.pull_specification().await else {
+                warn!("failed to get node specification");
+                continue;
             };
 
-            match result {
-                Ok(()) => info!("session finished, waiting for next session"),
-                Err(e) => warn!("session failed: {e}, resetting and waiting for next session"),
+            let result = match spec {
+                PullSpecResponse::ParameterServer(spec) => self.run_server(orch_handle, spec).await,
+                PullSpecResponse::Worker(spec) => self.run_worker(orch_handle, spec).await,
+            };
+
+            if let Err(e) = result {
+                error!("session failed with an error: {e}");
             }
         }
     }

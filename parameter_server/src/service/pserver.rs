@@ -1,6 +1,6 @@
 use std::io;
 
-use comms::{TransportLayer, WorkerEvent, WorkerHandle};
+use comms::{OrchEvent, OrchHandle, TransportLayer, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
 use tokio::task::JoinSet;
 
@@ -11,13 +11,24 @@ use crate::{
 };
 
 /// The central server structure, it handles task management and io between workers.
-pub struct ParameterServer<PS: Store, Sy: Synchronizer> {
+pub struct ParameterServer<PS, Sy, T>
+where
+    PS: Store,
+    Sy: Synchronizer,
+    T: TransportLayer,
+{
     tasks: JoinSet<io::Result<()>>,
     handle: StoreHandle<PS>,
     synchronizer: Sy,
+    orch_handle: OrchHandle<T>,
 }
 
-impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
+impl<PS, Sy, T> ParameterServer<PS, Sy, T>
+where
+    PS: Store,
+    Sy: Synchronizer,
+    T: TransportLayer,
+{
     /// Creates a new `ParameterServer`.
     ///
     /// # Args
@@ -26,21 +37,27 @@ impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
     ///
     /// # Returns
     /// A new `ParameterServer` instance.
-    pub fn new(handle: StoreHandle<PS>, synchronizer: Sy) -> Self {
+    pub fn new(handle: StoreHandle<PS>, synchronizer: Sy, orch_handle: OrchHandle<T>) -> Self {
         Self {
             tasks: JoinSet::new(),
             handle,
             synchronizer,
+            orch_handle,
         }
     }
 }
 
-impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
+impl<PS, Sy, T> ParameterServer<PS, Sy, T>
+where
+    PS: Store,
+    Sy: Synchronizer,
+    T: TransportLayer,
+{
     /// Starts the training process with the spawned workers.
     ///
     /// # Returns
     /// The trained parameters of the model.
-    pub async fn run(&mut self) -> io::Result<Vec<f32>> {
+    pub async fn run(&mut self) -> io::Result<()> {
         while let Some(ret) = self.tasks.join_next().await {
             match ret {
                 Ok(Err(e)) => {
@@ -60,16 +77,30 @@ impl<PS: Store, Sy: Synchronizer> ParameterServer<PS, Sy> {
         let nparams = self.handle.len();
         let mut params = vec![0.; nparams];
         self.handle.pull_params(&mut params).await.unwrap();
-        Ok(params)
+
+        loop {
+            match self.orch_handle.recv_event().await? {
+                OrchEvent::Disconnect => break,
+                OrchEvent::RequestParams => self.orch_handle.push_params(&mut params).await?,
+                event => warn!("Unexpected OrchEvent: {event:?}"),
+            }
+        }
+
+        Ok(())
     }
 }
 
-impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterServer<PS, Sy> {
+impl<PS, Sy, T> ParameterServer<PS, Sy, T>
+where
+    PS: Store + Send + Sync + 'static,
+    Sy: Synchronizer + 'static,
+    T: TransportLayer,
+{
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Args
     /// * `worker_handle` - The handle for a worker connection.
-    pub fn spawn<T>(&mut self, mut worker_handle: WorkerHandle<T>)
+    pub fn spawn(&mut self, mut worker_handle: WorkerHandle<T>)
     where
         T: TransportLayer + Send + 'static,
     {
@@ -126,13 +157,13 @@ impl<PS: Store + Send + Sync + 'static, Sy: Synchronizer + 'static> ParameterSer
 }
 
 #[async_trait::async_trait]
-impl<T, PS, Sy> Server<T> for ParameterServer<PS, Sy>
+impl<T, PS, Sy> Server<T> for ParameterServer<PS, Sy, T>
 where
-    T: TransportLayer + Send + 'static,
     PS: Store + Send + Sync + 'static,
     Sy: Synchronizer + Send + 'static,
+    T: TransportLayer + Send + 'static,
 {
-    async fn run(&mut self) -> io::Result<Vec<f32>> {
+    async fn run(&mut self) -> io::Result<()> {
         self.run().await
     }
 

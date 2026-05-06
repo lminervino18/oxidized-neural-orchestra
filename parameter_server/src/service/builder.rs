@@ -1,7 +1,7 @@
 use std::{io, num::NonZeroUsize, thread};
 
 use comms::{
-    Acceptor, Connection, TransportLayer,
+    Acceptor, Connection, OrchHandle, TransportLayer,
     specs::{
         machine_learning::OptimizerSpec,
         server::{ServerSpec, StoreSpec, SynchronizerSpec},
@@ -50,13 +50,23 @@ where
     ///
     /// # Args
     /// * `spec` - The specification of the parameter server.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
     /// A new Server or a `RandErr` if the specification has
     /// invalid `RandParamGen` construction values.
-    pub async fn build(&mut self, spec: ServerSpec) -> io::Result<Box<dyn Server<T>>> {
+    pub async fn build(
+        &mut self,
+        spec: ServerSpec,
+        orch_handle: OrchHandle<T>,
+    ) -> io::Result<Box<dyn Server<T>>>
+    where
+        T: TransportLayer,
+    {
         let nworkers = spec.nworkers;
-        let mut server = self.resolve_optimizer(spec).map_err(io::Error::other)?;
+        let mut server = self
+            .resolve_optimizer(spec, orch_handle)
+            .map_err(io::Error::other)?;
 
         for _ in 0..nworkers {
             let Connection::Worker(worker_handle) = self.acceptor.accept().await? else {
@@ -73,11 +83,15 @@ where
     ///
     /// # Args
     /// * `spec` - The specification for the parameter server.
-    /// * `param_gen` - A resolved parameter generator.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
     /// A new server.
-    fn resolve_optimizer(&self, spec: ServerSpec) -> Result<Box<dyn Server<T>>> {
+    fn resolve_optimizer(
+        &self,
+        spec: ServerSpec,
+        orch_handle: OrchHandle<T>,
+    ) -> Result<Box<dyn Server<T>>> {
         match spec.optimizer {
             OptimizerSpec::Adam {
                 learning_rate,
@@ -86,18 +100,18 @@ where
                 epsilon,
             } => {
                 let factory = |len| Adam::new(len, learning_rate, beta1, beta2, epsilon);
-                self.resolve_store(spec, factory)
+                self.resolve_store(spec, orch_handle, factory)
             }
             OptimizerSpec::GradientDescent { learning_rate } => {
                 let factory = |_| GradientDescent::new(learning_rate);
-                self.resolve_store(spec, factory)
+                self.resolve_store(spec, orch_handle, factory)
             }
             OptimizerSpec::GradientDescentWithMomentum {
                 learning_rate,
                 momentum,
             } => {
                 let factory = |len| GradientDescentWithMomentum::new(len, learning_rate, momentum);
-                self.resolve_store(spec, factory)
+                self.resolve_store(spec, orch_handle, factory)
             }
         }
     }
@@ -106,15 +120,15 @@ where
     ///
     /// # Args
     /// * `spec` - The specification for the parameter server.
-    /// * `param_gen` - A resolved parameter generator.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
     /// * `optimizer_factory` - A factory of optimizers.
-    /// * `synchronizer` - A resolved synchronizer.
     ///
     /// # Returns
     /// A new server.
     fn resolve_store<O, OF>(
         &self,
         spec: ServerSpec,
+        orch_handle: OrchHandle<T>,
         optimizer_factory: OF,
     ) -> Result<Box<dyn Server<T>>>
     where
@@ -134,11 +148,11 @@ where
         match spec.store {
             StoreSpec::Blocking => {
                 let store = BlockingStore::new(shard_size, param_gen.as_mut(), optimizer_factory);
-                Ok(self.resolve_synchronizer(spec, store))
+                Ok(self.resolve_synchronizer(spec, orch_handle, store))
             }
             StoreSpec::Wild => {
                 let store = WildStore::new(shard_size, param_gen.as_mut(), optimizer_factory);
-                Ok(self.resolve_synchronizer(spec, store))
+                Ok(self.resolve_synchronizer(spec, orch_handle, store))
             }
         }
     }
@@ -147,23 +161,28 @@ where
     ///
     /// # Args
     /// * `spec` - The specification for the parameter server.
-    /// * `param_gen` - A resolved parameter generator.
-    /// * `optimizer_factory` - A factory of optimizers.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    /// * `store` - A resolved store.
     ///
     /// # Returns
     /// A new server.
-    fn resolve_synchronizer<PS>(&self, spec: ServerSpec, store: PS) -> Box<dyn Server<T>>
+    fn resolve_synchronizer<PS>(
+        &self,
+        spec: ServerSpec,
+        orch_handle: OrchHandle<T>,
+        store: PS,
+    ) -> Box<dyn Server<T>>
     where
         PS: Store + Send + Sync + 'static,
     {
         match spec.synchronizer {
             SynchronizerSpec::Barrier { barrier_size } => {
                 let synchronizer = BarrierSync::new(barrier_size);
-                self.terminate_build(store, synchronizer)
+                self.terminate_build(orch_handle, store, synchronizer)
             }
             SynchronizerSpec::NonBlocking => {
                 let synchronizer = NoBlockingSync::new();
-                self.terminate_build(store, synchronizer)
+                self.terminate_build(orch_handle, store, synchronizer)
             }
         }
     }
@@ -171,18 +190,24 @@ where
     /// Terminates the entire build for this session and finally instanciates all the entities.
     ///
     /// # Args
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
     /// * `store` - A resolved store.
     /// * `synchronizer` - A resolved synchronizer.
     ///
     /// # Returns
     /// A new server.
-    fn terminate_build<PS, Sy>(&self, store: PS, synchronizer: Sy) -> Box<dyn Server<T>>
+    fn terminate_build<PS, Sy>(
+        &self,
+        orch_handle: OrchHandle<T>,
+        store: PS,
+        synchronizer: Sy,
+    ) -> Box<dyn Server<T>>
     where
         PS: Store + Send + Sync + 'static,
         Sy: Synchronizer + Send + Sync + 'static,
     {
         let handle = StoreHandle::new(store);
-        let pserver = ParameterServer::new(handle, synchronizer);
+        let pserver = ParameterServer::new(handle, synchronizer, orch_handle);
         Box::new(pserver)
     }
 }

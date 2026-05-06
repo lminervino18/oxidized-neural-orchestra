@@ -4,7 +4,7 @@ use std::{
     process::{Command, ExitStatus},
 };
 
-use comms::floats::{Float01, FloatPositive};
+use comms::floats::{Float01, FloatNonNegative, FloatPositive};
 use orchestrator::{CancelHandle, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
@@ -61,7 +61,7 @@ fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>)
 
 fn main() -> io::Result<()> {
     const WORKERS: usize = 3;
-    const SERVERS: usize = 0;
+    const SERVERS: usize = 2;
     const RELEASE: bool = false;
 
     setup_docker(WORKERS, SERVERS, RELEASE)?;
@@ -163,7 +163,9 @@ fn main() -> io::Result<()> {
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
-        early_stopping: None,
+        early_stopping: Some(EarlyStoppingConfig {
+            tolerance: FloatNonNegative::new(0.5).unwrap(),
+        }),
     };
 
     let session = train(model_config, training_config).unwrap();
