@@ -91,11 +91,7 @@ where
     /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
         self.next.disconnect().await?;
-
-        if !matches!(self.prev.recv_event().await?, WorkerEvent::Disconnect) {
-            return Err(io::Error::other("Expected Disconnect from previous worker"));
-        }
-
+        while !matches!(self.prev.recv_event().await?, WorkerEvent::Disconnect) {}
         Ok(())
     }
 

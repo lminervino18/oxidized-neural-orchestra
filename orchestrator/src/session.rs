@@ -157,7 +157,7 @@ pub enum StopReason {
 }
 
 /// A handle that lets any caller request an early stop of an ongoing training session.
-pub struct CancelHandle(mpsc::Sender<()>);
+pub struct CancelHandle(Sender<()>);
 
 impl CancelHandle {
     /// Creates a matched `(CancelHandle, Receiver)` pair.
@@ -165,7 +165,7 @@ impl CancelHandle {
     /// The caller retains the `CancelHandle` and passes the `Receiver` to
     /// `Session::event_listener`. Calling `stop()` on the handle signals
     /// the session to stop at the next epoch boundary.
-    pub fn pair() -> (Self, mpsc::Receiver<()>) {
+    pub fn pair() -> (Self, Receiver<()>) {
         let (tx, rx) = mpsc::channel(1);
         (Self(tx), rx)
     }
@@ -196,6 +196,7 @@ pub enum TrainingEvent {
 #[derive(Debug)]
 enum WorkerHandleRequest {
     PullParams,
+    Disconnect,
     Stop,
 }
 
@@ -306,16 +307,18 @@ impl Session {
     async fn worker_listener(
         id: usize,
         mut worker_handle: WorkerHandle<NetRtp>,
-        mut rx_stopper: Receiver<WorkerHandleRequest>,
+        mut wk_rx: Receiver<WorkerHandleRequest>,
         tx: Sender<TrainingEvent>,
     ) {
         let mut stopping = false;
         loop {
             tokio::select! {
-                req = rx_stopper.recv() => {
+                req = wk_rx.recv() => {
                     match req {
-                        Some(WorkerHandleRequest::Stop) if !stopping => {
+                        Some(WorkerHandleRequest::Stop) if stopping => {}
+                        Some(WorkerHandleRequest::Stop) => {
                             stopping = true;
+
                             if let Err(e) = worker_handle.stop().await {
                                 error!("worker {id}: failed to send stop command: {e}");
 
@@ -334,11 +337,11 @@ impl Session {
                                     let _ = tx.send(TrainingEvent::Params(params.to_vec())).await;
                                 },
                                 Err(e) => {
-                                    error!("worker {id}: failed to pull params command: {e}");
+                                    error!("worker {id}: failed to send pull params command: {e}");
 
                                     let event = TrainingEvent::Error(OrchErr::WorkerError {
                                         worker_id: id,
-                                        event: format!("failed to pull params command: {e}"),
+                                        event: format!("failed to send pull params command: {e}"),
                                     });
 
                                     let _ = tx.send(event).await;
@@ -346,7 +349,20 @@ impl Session {
                                 },
                             }
                         }
-                        _ => {}
+                        Some(WorkerHandleRequest::Disconnect) => {
+                            if let Err(e) = worker_handle.disconnect().await {
+                                error!("worker {id}: failed to send disconnect command: {e}");
+
+                                let event = TrainingEvent::Error(OrchErr::WorkerError {
+                                    worker_id: id,
+                                    event: format!("failed to send disconnect command: {e}"),
+                                });
+
+                                let _ = tx.send(event).await;
+                            }
+                            return;
+                        }
+                        None => {}
                     }
                 },
                 event = worker_handle.recv_event() => match event {
@@ -408,7 +424,7 @@ impl Session {
     ///
     /// # Returns
     /// A receiver that yields `TrainingEvent`s as training progresses.
-    pub fn event_listener(self, mut cancel_rx: mpsc::Receiver<()>) -> Receiver<TrainingEvent> {
+    pub fn event_listener(self, mut cancel_rx: Receiver<()>) -> Receiver<TrainingEvent> {
         let (event_tx, event_rx) = mpsc::channel(256);
 
         let model = self.model;
@@ -441,15 +457,7 @@ impl Session {
                         Self::finalize_parameter_server(self.servers, &event_tx).await
                     }
                     AlgorithmSpec::AllReduce { .. } => {
-                        let mut i = 0;
-                        loop {
-                            let _ = wk_txs[i].send(WorkerHandleRequest::PullParams).await;
-                            if let Some(TrainingEvent::Params(params)) = internal_rx.recv().await {
-                                break params.to_vec();
-                            }
-
-                            i = (i + 1) % wk_txs.len();
-                        }
+                        Self::finalize_all_reduce(&mut wk_txs, &mut internal_rx).await
                     }
                 };
 
@@ -495,9 +503,9 @@ impl Session {
     }
 
     async fn run_training_loop(
-        cancel_rx: &mut mpsc::Receiver<()>,
-        internal_rx: &mut mpsc::Receiver<TrainingEvent>,
-        wk_txs: &mut Vec<Sender<WorkerHandleRequest>>,
+        cancel_rx: &mut Receiver<()>,
+        internal_rx: &mut Receiver<TrainingEvent>,
+        wk_txs: &mut [Sender<WorkerHandleRequest>],
         n_workers: usize,
         early_stopping: &Option<EarlyStoppingConfig>,
         event_tx: &Sender<TrainingEvent>,
@@ -555,7 +563,9 @@ impl Session {
                             let _ = event_tx.send(TrainingEvent::Error(e)).await;
                             return None;
                         }
-                        other => { let _ = event_tx.send(other).await; }
+                        other => {
+                            let _ = event_tx.send(other).await;
+                        }
                     }
                 }
             }
@@ -588,6 +598,29 @@ impl Session {
         }
 
         model_params
+    }
+
+    async fn finalize_all_reduce(
+        wk_txs: &mut Vec<Sender<WorkerHandleRequest>>,
+        internal_rx: &mut Receiver<TrainingEvent>,
+    ) -> Vec<f32> {
+        let mut i = 0;
+
+        let params = loop {
+            let _ = wk_txs[i].send(WorkerHandleRequest::PullParams).await;
+
+            if let Some(TrainingEvent::Params(params)) = internal_rx.recv().await {
+                break params.to_vec();
+            }
+
+            i = (i + 1) % wk_txs.len();
+        };
+
+        for tx in wk_txs {
+            let _ = tx.send(WorkerHandleRequest::Disconnect).await;
+        }
+
+        params
     }
 
     /// Connects to all nodes and bootstraps each as a parameter server.
