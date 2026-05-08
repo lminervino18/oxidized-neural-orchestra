@@ -70,6 +70,15 @@ MODEL_DEFS = {
             {"size": 10,  "act": "sigmoid"},
         ],
     },
+    "dense_large": {
+        "type": "dense",
+        "dense": [
+            {"size": 256, "act": "sigmoid"},
+            {"size": 128, "act": "sigmoid"},
+            {"size": 64,  "act": "sigmoid"},
+            {"size": 10,  "act": "sigmoid"},
+        ],
+    },
     "conv_tiny": {
         "type": "conv",
         "conv": [
@@ -83,6 +92,42 @@ MODEL_DEFS = {
         ],
         "dense": [{"size": 10, "act": "sigmoid"}],
         "flat_size": 8 * 13 * 13,
+    },
+    # kernel=4 stride=2: (28-4)%2==0 → backward pass safe
+    "conv_small": {
+        "type": "conv",
+        "conv": [
+            {
+                "input_dim": (1, 28, 28),
+                "kernel_dim": (16, 1, 4),
+                "stride": 2,
+                "padding": 0,
+                "act": "sigmoid",
+            },
+        ],
+        "dense": [
+            {"size": 64, "act": "sigmoid"},
+            {"size": 10, "act": "sigmoid"},
+        ],
+        "flat_size": 16 * 13 * 13,
+    },
+    "conv_large": {
+        "type": "conv",
+        "conv": [
+            {
+                "input_dim": (1, 28, 28),
+                "kernel_dim": (32, 1, 4),
+                "stride": 2,
+                "padding": 0,
+                "act": "sigmoid",
+            },
+        ],
+        "dense": [
+            {"size": 128, "act": "sigmoid"},
+            {"size": 64,  "act": "sigmoid"},
+            {"size": 10,  "act": "sigmoid"},
+        ],
+        "flat_size": 32 * 13 * 13,
     },
 }
 
@@ -112,9 +157,10 @@ def build_runs(profile_cfg: dict, all_presets: dict) -> list:
             cfg["training"]   = preset_name
             cfg["workers"]    = preset["workers"]
             cfg["servers"]    = preset["servers"]
+            cfg["algorithm"]  = preset.get("algorithm", "parameter_server")
             cfg["serializer"] = preset["serializer"]
-            cfg["sync"]       = preset["sync"]
-            cfg["store"]      = preset["store"]
+            cfg["sync"]       = preset.get("sync")
+            cfg["store"]      = preset.get("store")
             runs.append(cfg)
 
     return runs
@@ -381,28 +427,36 @@ def build_training(run_cfg: dict, train_s: Path, train_l: Path):
     from orchestra.store import BlockingStore, WildStore
     from orchestra.sync import BarrierSync, NonBlockingSync
 
-    w, s = run_cfg["workers"], run_cfg["servers"]
+    w, s  = run_cfg["workers"], run_cfg["servers"]
     worker_addrs = [f"worker-{i}:{50000 + i}" for i in range(w)]
     server_addrs = [f"server-{i}:{40000 + i}" for i in range(s)]
 
-    sync  = BarrierSync()    if run_cfg["sync"]       == "barrier"  else NonBlockingSync()
-    store = BlockingStore()  if run_cfg["store"]      == "blocking" else WildStore()
-    ser   = BaseSerializer() if run_cfg["serializer"] == "base"     else SparseSerializer(r=0.9)
+    ser   = BaseSerializer() if run_cfg["serializer"] == "base" else SparseSerializer(r=0.9)
+    algo  = run_cfg.get("algorithm", "parameter_server")
 
-    return orchestra.parameter_server(
+    common = dict(
         worker_addrs=worker_addrs,
-        server_addrs=server_addrs,
         dataset=LocalDataset(str(train_s), str(train_l), x_size=X_SIZE, y_size=Y_SIZE),
         optimizer=GradientDescent(lr=run_cfg.get("lr", 0.5)),
         loss_fn=Mse(),
-        sync=sync,
-        store=store,
         serializer=ser,
         max_epochs=run_cfg["max_epochs"],
         batch_size=run_cfg["batch_size"],
         offline_epochs=run_cfg.get("offline_epochs", 0),
         seed=42,
         early_stopping_tolerance=run_cfg.get("early_stopping_tolerance"),
+    )
+
+    if algo == "all_reduce":
+        return orchestra.all_reduce(**common)
+
+    sync  = BarrierSync()   if run_cfg.get("sync")  == "barrier"  else NonBlockingSync()
+    store = BlockingStore() if run_cfg.get("store") == "blocking" else WildStore()
+    return orchestra.parameter_server(
+        **common,
+        server_addrs=server_addrs,
+        sync=sync,
+        store=store,
     )
 
 
@@ -534,9 +588,10 @@ def run_single(run_cfg: dict, profile_cfg: dict, profile_name: str) -> dict:
         "training_name":        training_name,
         "workers":              run_cfg["workers"],
         "servers":              run_cfg["servers"],
+        "algorithm":            run_cfg.get("algorithm", "parameter_server"),
         "serializer":           run_cfg["serializer"],
-        "sync":                 run_cfg["sync"],
-        "store":                run_cfg["store"],
+        "sync":                 run_cfg.get("sync"),
+        "store":                run_cfg.get("store"),
         "max_epochs":           run_cfg["max_epochs"],
         "batch_size":           run_cfg["batch_size"],
         "lr":                   run_cfg.get("lr", 0.5),
