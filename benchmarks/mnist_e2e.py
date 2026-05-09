@@ -36,6 +36,7 @@ RESULTS_DIR   = BENCH_DIR / "results"
 PLOTS_DIR     = BENCH_DIR / "plots"
 ARTIFACTS_DIR = RESULTS_DIR / "artifacts"
 SUBSET_DIR    = RESULTS_DIR / "data"
+DOCKER_LOGS_DIR = RESULTS_DIR / "docker_logs"
 
 X_SIZE = 784
 Y_SIZE = 10
@@ -354,6 +355,21 @@ def docker_up(workers: int, servers: int, rebuild: bool, release: bool = True) -
     time.sleep(3)  # build step (COPY context) already provides ~15-20s; 3s covers node startup
     return time.perf_counter() - t0
 
+
+
+def capture_docker_logs(workers: int, servers: int, label: str):
+    """Save logs from all containers to DOCKER_LOGS_DIR/<label>/<container>.log."""
+    DOCKER_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    run_dir = DOCKER_LOGS_DIR / label
+    run_dir.mkdir(exist_ok=True)
+    names = [f"worker-{i}" for i in range(workers)] + [f"server-{i}" for i in range(servers)]
+    for name in names:
+        r = subprocess.run(
+            ["docker", "logs", name],
+            capture_output=True,
+            text=True,
+        )
+        (run_dir / f"{name}.log").write_text(r.stdout + r.stderr)
 
 
 def docker_down():
@@ -771,7 +787,7 @@ def plot_results(results: list, profile: str, run_ts: str):
 
 def parse_args():
     p = argparse.ArgumentParser(description="MNIST end-to-end benchmark for O.N.O")
-    p.add_argument("--profile",         choices=["smoke", "benchmark"], default="smoke")
+    p.add_argument("--profile",         choices=["smoke", "benchmark", "allreduce", "conv_investigation"], default="smoke")
     p.add_argument("--config",          type=Path,
                    default=Path(__file__).parent / "mnist_configs.json")
     p.add_argument("--output",          type=Path)
@@ -908,6 +924,12 @@ def main():
                     break
 
         finally:
+            log_label = f"{topology_id}_{datetime.datetime.now().strftime('%H-%M-%S')}"
+            try:
+                capture_docker_logs(workers, servers, log_label)
+                print(f"  docker logs saved → results/docker_logs/{log_label}/")
+            except Exception as ex:
+                print(f"  WARNING: log capture failed: {ex}")
             if not args.keep_containers:
                 print("\n  stopping containers...")
                 try:

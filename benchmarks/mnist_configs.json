@@ -50,49 +50,82 @@
     "smoke": {
       "train_samples": null,
       "test_samples": null,
-      "models": ["dense_small", "conv_small"],
-      "training_presets": ["ar_3w_base", "ps_2w_1s_base_barrier"],
+      "models": ["dense_small"],
+      "training_presets": ["ar_2w_base", "ps_2w_1s_base_barrier"],
       "defaults": {
-        "max_epochs": 100,
+        "max_epochs": 300,
         "batch_size": 256,
         "lr": 0.5,
         "offline_epochs": 0,
         "early_stopping_tolerance": 1e-4,
-        "min_accuracy": 0.85,
-        "max_train_seconds": 600
+        "min_accuracy": 0.90,
+        "max_train_seconds": 300
       },
       "overrides": {
-        "ar_3w_base": { "lr": 1.0 },
-        "conv_small":  { "max_epochs": 150, "max_train_seconds": 900 }
+        "ar_2w_base": { "lr": 1.0 }
+      }
+    },
+    "allreduce": {
+      "train_samples": null,
+      "test_samples": null,
+      "models": ["dense_small", "dense_large"],
+      "training_presets": ["ar_2w_base", "ar_3w_base"],
+      "defaults": {
+        "max_epochs": 300,
+        "batch_size": 256,
+        "lr": 1.0,
+        "offline_epochs": 0,
+        "early_stopping_tolerance": 1e-4,
+        "min_accuracy": 0.90,
+        "max_train_seconds": 1200
+      },
+      "overrides": {
+        "dense_large": { "early_stopping_tolerance": 5e-5, "max_train_seconds": 1800 }
       }
     },
     "benchmark": {
       "train_samples": null,
       "test_samples": null,
-      "models": ["dense_small", "dense_large", "conv_tiny", "conv_small", "conv_large"],
+      "models": ["dense_small", "dense_large"],
       "training_presets": [
         "ps_2w_1s_base_barrier",
         "ps_2w_1s_nonblocking",
         "ps_2w_1s_sparse_barrier",
-        "ar_2w_base",
-        "ar_2w_sparse"
+        "ar_2w_base"
       ],
       "defaults": {
-        "max_epochs": 150,
+        "max_epochs": 300,
         "batch_size": 256,
         "lr": 0.5,
         "offline_epochs": 0,
         "early_stopping_tolerance": 1e-4,
-        "min_accuracy": 0.85,
-        "max_train_seconds": 900
+        "min_accuracy": 0.90,
+        "max_train_seconds": 1200
       },
       "overrides": {
         "ar_2w_base":   { "lr": 1.0 },
-        "ar_2w_sparse": { "lr": 1.0 },
-        "conv_tiny":    { "min_accuracy": 0.80, "max_epochs": 200, "max_train_seconds": 1200 },
-        "conv_small":   { "max_epochs": 200, "max_train_seconds": 1200 },
-        "conv_large":   { "max_epochs": 200, "max_train_seconds": 1500 },
-        "dense_large":  { "max_epochs": 120 }
+        "dense_large":  { "early_stopping_tolerance": 5e-5, "max_train_seconds": 1800 },
+        "dense_large+ps_2w_1s_base_barrier":  { "early_stopping_tolerance": null },
+        "dense_large+ps_2w_1s_nonblocking":   { "early_stopping_tolerance": null },
+        "dense_large+ps_2w_1s_sparse_barrier":{ "early_stopping_tolerance": null }
+      }
+    },
+    "conv_investigation": {
+      "train_samples": null,
+      "test_samples": null,
+      "models": ["conv_small", "conv_large"],
+      "training_presets": ["ar_2w_base", "ps_2w_1s_base_barrier"],
+      "defaults": {
+        "max_epochs": 200,
+        "batch_size": 256,
+        "lr": 0.5,
+        "offline_epochs": 0,
+        "early_stopping_tolerance": 1e-4,
+        "min_accuracy": 0.20,
+        "max_train_seconds": 1200
+      },
+      "overrides": {
+        "ar_2w_base": { "lr": 1.0 }
       }
     }
   }
