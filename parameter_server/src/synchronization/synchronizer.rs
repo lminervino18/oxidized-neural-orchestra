@@ -6,15 +6,15 @@ use crate::storage::{Result, Store, StoreHandle};
 #[allow(unused)]
 #[trait_variant::make(Synchronizer: Send)]
 pub trait SynchronizerTemplate: Clone {
-    /// Should implement a step in the training process, meaning accumulating this gradient and updating the parameters.
+    /// Accumulates `grad` and updates model parameters, writing the result into `params`.
     ///
     /// # Args
-    /// * `handle` - The parameter handle holding the parameters of the model.
-    /// * `grad` - The incoming gradient to accumulate.
-    /// * `params` - Where to write the resultant parameters.
+    /// * `handle` - The parameter store shared across all worker tasks on this server.
+    /// * `grad` - The incoming gradient to accumulate for this step.
+    /// * `params` - Buffer to write the updated parameters into after the step.
     ///
     /// # Returns
-    /// An error if there's a size mismatch between `grad`, `params` and the size of the storage.
+    /// An error if there is a size mismatch between `grad`, `params`, or the store.
     async fn step<S>(
         &self,
         handle: &StoreHandle<S>,

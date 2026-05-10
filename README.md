@@ -15,7 +15,10 @@
 
 ## Overview
 
-**O.N.O** is a fully distributed system for training neural networks, built from scratch in Rust. It implements a Parameter Server architecture where workers train local models in parallel and synchronize gradients through centralized parameter servers.
+**O.N.O** is a fully distributed system for training neural networks, built from scratch in Rust. It supports two distributed training algorithms:
+
+- **Parameter Server** — workers push gradients to centralized parameter servers, which apply updates and return the new parameters.
+- **All-Reduce** — workers exchange and reduce gradients directly with each other, with no central server.
 
 The system exposes three interfaces:
 - **`orchestui`** — an interactive TUI to configure and monitor training in real time
@@ -25,6 +28,10 @@ The system exposes three interfaces:
 ---
 
 ## Architecture
+
+The **orchestrator** connects to all nodes, sends each one its configuration spec, and waits for training to complete. All nodes run the same `node` binary — the spec received at connection time determines whether a node acts as a worker or a parameter server.
+
+### Parameter Server
 
 ```
          Orchestrator
@@ -36,9 +43,23 @@ The system exposes three interfaces:
    (N nodes)       (M nodes)
 ```
 
-- The **orchestrator** connects to all workers and servers, sends each node its configuration spec, and waits for training to complete.
-- Each **worker** trains a local copy of the model on its data partition and synchronizes gradients with the parameter servers.
-- Each **parameter server** holds a partition of the model parameters and applies gradient updates.
+Workers train locally on their data partition and push gradients to the parameter servers. Servers apply updates and return the new parameters. Model parameters are sharded across servers.
+
+### All-Reduce
+
+```
+        Orchestrator
+             |
+    +--------+--------+
+    |        |        |
+    v        v        v
+ Worker  Worker  Worker
+    |        |        |
+    +--------+--------+
+         (ring reduce)
+```
+
+Workers exchange and reduce gradients directly with each other — no parameter server needed. Each worker ends up with the same averaged gradient and applies it locally.
 
 ---
 
@@ -56,63 +77,57 @@ The system exposes three interfaces:
 
 The interactive terminal dashboard. Requires `model.json` and `training.json` config files.
 ```bash
-./orchestui/run.sh
+cargo run -p orchestui
 ```
 
-When the TUI opens, enter the paths to your config files:
+When the TUI opens, enter the paths to your config files (leave blank to use `model.json` / `training.json` in the current directory):
 ```
 model.json path:    orchestui/model.json
 training.json path: orchestui/training.json
 ```
 
-Example config files are provided in `orchestui/`.
+Press `?` at either prompt to see an inline config example. Example config files are provided in `orchestui/`.
 
 ---
 
 ### Option 2 — Python (`orchestra-py`)
 
-Install the module and run locally — workers and servers are spawned automatically:
+Install the module and run the example script — containers are started first via Docker:
 ```bash
 cd orchestra-py
 python3 -m venv ../.venv
 source ../.venv/bin/activate
 maturin develop
 cd ..
+python3 docker/compose_up.py --workers 3 --servers 3
 source .venv/bin/activate && python3 orchestra-py/local.py
-```
-
-Or via Docker (workers and servers must be running first):
-```bash
-./entities_up.sh
-./orchestrator_up.sh orchestra-py
 ```
 
 ---
 
 ### Option 3 — Headless Rust (`orchestrator`)
+
+Start the node containers, then run the orchestrator binary against your config files:
 ```bash
-./entities_up.sh
-./orchestrator_up.sh orchestrator
+python3 docker/compose_up.py --workers N --servers M --release
+cargo run -p orchestrator -- model.json training.json
 ```
 
 ---
 
 ## Docker Configuration
 
-All Docker deployments read from `docker/config.json`:
-```json
-{
-  "release": false,
-  "servers": 2,
-  "workers": 3
-}
+All node containers (workers and servers) are started with:
+```bash
+python3 docker/compose_up.py --workers N --servers M [--release]
 ```
 
-- `release` — compile in release mode
-- `servers` — number of parameter server containers
-- `workers` — number of worker containers
+This script:
+1. Generates `compose.yaml` via `docker/gen_compose.py`
+2. Fills `/etc/hosts` with `worker-*` / `server-*` entries (requires sudo once)
+3. Runs `docker compose up --build -d --remove-orphans`
 
-Worker and server addresses are generated automatically from this config — no hardcoding needed.
+All containers use the same `node/Dockerfile`. Server addresses start at port `40000`, worker addresses at `50000`. Address lists are generated automatically — no hardcoding needed.
 
 ---
 
@@ -130,6 +145,10 @@ Worker and server addresses are generated automatically from this config — no 
 ```
 
 ### `training.json`
+
+Two algorithm options — pick one:
+
+**Parameter Server:**
 ```json
 {
   "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
@@ -141,10 +160,31 @@ Worker and server addresses are generated automatically from this config — no 
     }
   },
   "dataset": {
-    "src": { "inline": { "data": [1.0,2.0, 2.0,4.0, 3.0,6.0, 4.0,8.0] } },
+    "src": {
+      "inline": {
+        "samples": [1.0, 2.0, 3.0, 4.0],
+        "labels": [2.0, 4.0, 6.0, 8.0]
+      }
+    },
     "x_size": 1,
     "y_size": 1
   },
+  "optimizer": { "gradient_descent": { "lr": 0.01 } },
+  "loss_fn": "mse",
+  "batch_size": 4,
+  "max_epochs": 500,
+  "offline_epochs": 0,
+  "seed": 42,
+  "early_stopping": { "tolerance": 1e-4 }
+}
+```
+
+**All-Reduce:**
+```json
+{
+  "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+  "algorithm": "all_reduce",
+  "dataset": { ... },
   "optimizer": { "gradient_descent": { "lr": 0.01 } },
   "loss_fn": "mse",
   "batch_size": 4,
@@ -153,21 +193,24 @@ Worker and server addresses are generated automatically from this config — no 
 }
 ```
 
-Synchronizer options: `"barrier"` | `"non_blocking"`  
-Store options: `"blocking"` | `"wild"`  
-`seed` and `act_fn` are optional — omit them to use defaults.
+Synchronizer options (PS only): `"barrier"` | `"non_blocking"`  
+Store options (PS only): `"blocking"` | `"wild"`  
+`seed`, `serializer`, `early_stopping`, and `act_fn` are optional — omit them to use defaults.  
+For a local dataset use `"src": { "local": { "samples_path": "...", "labels_path": "..." } }` instead of `inline`.
 
 ---
 
 ## Python API
+
+### Parameter Server
 ```python
-import orchestra
-from orchestra import Sequential, orchestrate
+from orchestra import Sequential, orchestrate, parameter_server
 from orchestra.arch import Dense
 from orchestra.activations import Sigmoid
 from orchestra.initialization import Kaiming
 from orchestra.datasets import InlineDataset
 from orchestra.optimizers import GradientDescent
+from orchestra.loss_fns import Mse
 from orchestra.sync import BarrierSync
 from orchestra.store import BlockingStore
 
@@ -177,11 +220,15 @@ model = Sequential([
     Dense(1, Kaiming()),
 ])
 
-training = orchestra.parameter_server(
+samples = [1.0, 2.0, 3.0, 4.0]
+labels  = [2.0, 4.0, 6.0, 8.0]
+
+training = parameter_server(
     worker_addrs=["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
     server_addrs=["127.0.0.1:40000", "127.0.0.1:40001"],
-    dataset=InlineDataset(data, x_size=1, y_size=1),
+    dataset=InlineDataset(samples, labels, x_size=1, y_size=1),
     optimizer=GradientDescent(lr=0.01),
+    loss_fn=Mse(),
     sync=BarrierSync(),
     store=BlockingStore(),
     max_epochs=500,
@@ -190,7 +237,32 @@ training = orchestra.parameter_server(
 
 session = orchestrate(model, training)
 trained = session.wait()
-trained.save("weights.csv", output_sizes=[8, 4, 1], input_size=1)
+trained.save_safetensors("weights.safetensors")
+```
+
+### All-Reduce
+```python
+from orchestra import Sequential, orchestrate, all_reduce
+from orchestra.arch import Dense
+from orchestra.initialization import Kaiming
+from orchestra.datasets import InlineDataset
+from orchestra.optimizers import GradientDescent
+from orchestra.loss_fns import Mse
+
+model = Sequential([Dense(8, Kaiming()), Dense(1, Kaiming())])
+
+training = all_reduce(
+    worker_addrs=["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+    dataset=InlineDataset(samples, labels, x_size=1, y_size=1),
+    optimizer=GradientDescent(lr=0.01),
+    loss_fn=Mse(),
+    max_epochs=500,
+    batch_size=4,
+)
+
+session = orchestrate(model, training)
+trained = session.wait()
+trained.save_safetensors("weights.safetensors")
 ```
 
 ---
@@ -199,13 +271,9 @@ trained.save("weights.csv", output_sizes=[8, 4, 1], input_size=1)
 
 | Feature | Status |
 |---|---|
-| Neural network library (dense layers, activations, optimizers) | ✅ |
-| Parameter Server distributed training | ✅ |
-| Barrier and non-blocking synchronization | ✅ |
-| TUI dashboard (`orchestui`) | ✅ |
-| Python FFI via PyO3 (`orchestra-py`) | ✅ |
-| Docker deployment | ✅ |
-| All-Reduce strategy | 🔲 |
+| Global architecture | ✅ |
+| Parameter Server | ✅ |
+| All-Reduce | ✅ |
 | Strategy Switch | 🔲 |
 
 ---

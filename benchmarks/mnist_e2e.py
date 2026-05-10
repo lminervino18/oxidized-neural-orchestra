@@ -36,6 +36,7 @@ RESULTS_DIR   = BENCH_DIR / "results"
 PLOTS_DIR     = BENCH_DIR / "plots"
 ARTIFACTS_DIR = RESULTS_DIR / "artifacts"
 SUBSET_DIR    = RESULTS_DIR / "data"
+DOCKER_LOGS_DIR = RESULTS_DIR / "docker_logs"
 
 X_SIZE = 784
 Y_SIZE = 10
@@ -70,6 +71,15 @@ MODEL_DEFS = {
             {"size": 10,  "act": "sigmoid"},
         ],
     },
+    "dense_large": {
+        "type": "dense",
+        "dense": [
+            {"size": 256, "act": "sigmoid"},
+            {"size": 128, "act": "sigmoid"},
+            {"size": 64,  "act": "sigmoid"},
+            {"size": 10,  "act": "sigmoid"},
+        ],
+    },
     "conv_tiny": {
         "type": "conv",
         "conv": [
@@ -83,6 +93,42 @@ MODEL_DEFS = {
         ],
         "dense": [{"size": 10, "act": "sigmoid"}],
         "flat_size": 8 * 13 * 13,
+    },
+    # kernel=4 stride=2: (28-4)%2==0 → backward pass safe
+    "conv_small": {
+        "type": "conv",
+        "conv": [
+            {
+                "input_dim": (1, 28, 28),
+                "kernel_dim": (16, 1, 4),
+                "stride": 2,
+                "padding": 0,
+                "act": "sigmoid",
+            },
+        ],
+        "dense": [
+            {"size": 64, "act": "sigmoid"},
+            {"size": 10, "act": "sigmoid"},
+        ],
+        "flat_size": 16 * 13 * 13,
+    },
+    "conv_large": {
+        "type": "conv",
+        "conv": [
+            {
+                "input_dim": (1, 28, 28),
+                "kernel_dim": (32, 1, 4),
+                "stride": 2,
+                "padding": 0,
+                "act": "sigmoid",
+            },
+        ],
+        "dense": [
+            {"size": 128, "act": "sigmoid"},
+            {"size": 64,  "act": "sigmoid"},
+            {"size": 10,  "act": "sigmoid"},
+        ],
+        "flat_size": 32 * 13 * 13,
     },
 }
 
@@ -112,9 +158,10 @@ def build_runs(profile_cfg: dict, all_presets: dict) -> list:
             cfg["training"]   = preset_name
             cfg["workers"]    = preset["workers"]
             cfg["servers"]    = preset["servers"]
+            cfg["algorithm"]  = preset.get("algorithm", "parameter_server")
             cfg["serializer"] = preset["serializer"]
-            cfg["sync"]       = preset["sync"]
-            cfg["store"]      = preset["store"]
+            cfg["sync"]       = preset.get("sync")
+            cfg["store"]      = preset.get("store")
             runs.append(cfg)
 
     return runs
@@ -310,6 +357,21 @@ def docker_up(workers: int, servers: int, rebuild: bool, release: bool = True) -
 
 
 
+def capture_docker_logs(workers: int, servers: int, label: str):
+    """Save logs from all containers to DOCKER_LOGS_DIR/<label>/<container>.log."""
+    DOCKER_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    run_dir = DOCKER_LOGS_DIR / label
+    run_dir.mkdir(exist_ok=True)
+    names = [f"worker-{i}" for i in range(workers)] + [f"server-{i}" for i in range(servers)]
+    for name in names:
+        r = subprocess.run(
+            ["docker", "logs", name],
+            capture_output=True,
+            text=True,
+        )
+        (run_dir / f"{name}.log").write_text(r.stdout + r.stderr)
+
+
 def docker_down():
     subprocess.run(
         ["docker", "compose", "-f", str(COMPOSE_FILE), "down"],
@@ -381,28 +443,36 @@ def build_training(run_cfg: dict, train_s: Path, train_l: Path):
     from orchestra.store import BlockingStore, WildStore
     from orchestra.sync import BarrierSync, NonBlockingSync
 
-    w, s = run_cfg["workers"], run_cfg["servers"]
+    w, s  = run_cfg["workers"], run_cfg["servers"]
     worker_addrs = [f"worker-{i}:{50000 + i}" for i in range(w)]
     server_addrs = [f"server-{i}:{40000 + i}" for i in range(s)]
 
-    sync  = BarrierSync()    if run_cfg["sync"]       == "barrier"  else NonBlockingSync()
-    store = BlockingStore()  if run_cfg["store"]      == "blocking" else WildStore()
-    ser   = BaseSerializer() if run_cfg["serializer"] == "base"     else SparseSerializer(r=0.9)
+    ser   = BaseSerializer() if run_cfg["serializer"] == "base" else SparseSerializer(r=0.9)
+    algo  = run_cfg.get("algorithm", "parameter_server")
 
-    return orchestra.parameter_server(
+    common = dict(
         worker_addrs=worker_addrs,
-        server_addrs=server_addrs,
         dataset=LocalDataset(str(train_s), str(train_l), x_size=X_SIZE, y_size=Y_SIZE),
         optimizer=GradientDescent(lr=run_cfg.get("lr", 0.5)),
         loss_fn=Mse(),
-        sync=sync,
-        store=store,
         serializer=ser,
         max_epochs=run_cfg["max_epochs"],
         batch_size=run_cfg["batch_size"],
         offline_epochs=run_cfg.get("offline_epochs", 0),
         seed=42,
         early_stopping_tolerance=run_cfg.get("early_stopping_tolerance"),
+    )
+
+    if algo == "all_reduce":
+        return orchestra.all_reduce(**common)
+
+    sync  = BarrierSync()   if run_cfg.get("sync")  == "barrier"  else NonBlockingSync()
+    store = BlockingStore() if run_cfg.get("store") == "blocking" else WildStore()
+    return orchestra.parameter_server(
+        **common,
+        server_addrs=server_addrs,
+        sync=sync,
+        store=store,
     )
 
 
@@ -534,9 +604,10 @@ def run_single(run_cfg: dict, profile_cfg: dict, profile_name: str) -> dict:
         "training_name":        training_name,
         "workers":              run_cfg["workers"],
         "servers":              run_cfg["servers"],
+        "algorithm":            run_cfg.get("algorithm", "parameter_server"),
         "serializer":           run_cfg["serializer"],
-        "sync":                 run_cfg["sync"],
-        "store":                run_cfg["store"],
+        "sync":                 run_cfg.get("sync"),
+        "store":                run_cfg.get("store"),
         "max_epochs":           run_cfg["max_epochs"],
         "batch_size":           run_cfg["batch_size"],
         "lr":                   run_cfg.get("lr", 0.5),
@@ -716,7 +787,7 @@ def plot_results(results: list, profile: str, run_ts: str):
 
 def parse_args():
     p = argparse.ArgumentParser(description="MNIST end-to-end benchmark for O.N.O")
-    p.add_argument("--profile",         choices=["smoke", "benchmark"], default="smoke")
+    p.add_argument("--profile",         choices=["smoke", "benchmark", "allreduce", "conv_investigation"], default="smoke")
     p.add_argument("--config",          type=Path,
                    default=Path(__file__).parent / "mnist_configs.json")
     p.add_argument("--output",          type=Path)
@@ -853,6 +924,12 @@ def main():
                     break
 
         finally:
+            log_label = f"{topology_id}_{datetime.datetime.now().strftime('%H-%M-%S')}"
+            try:
+                capture_docker_logs(workers, servers, log_label)
+                print(f"  docker logs saved → results/docker_logs/{log_label}/")
+            except Exception as ex:
+                print(f"  WARNING: log capture failed: {ex}")
             if not args.keep_containers:
                 print("\n  stopping containers...")
                 try:
