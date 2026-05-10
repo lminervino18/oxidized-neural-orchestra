@@ -5,7 +5,7 @@ use tokio::io::AsyncWrite;
 use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset,
-    specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
+    specs::{node::NodeSpec, server::ServerSpec},
     transport::TransportLayer,
 };
 
@@ -14,18 +14,20 @@ pub struct OrchHandle<T: TransportLayer> {
     transport: T,
 }
 
-/// The response of pulling a node specification.
-pub enum PullSpecResponse {
-    Worker(WorkerSpec),
-    ParameterServer(ServerSpec),
-}
-
 /// A notified orchestrator event.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum OrchEvent {
     Disconnect,
     RequestParams,
     Stop,
+    Switch {
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+    },
+    Upgrade {
+        spec: ServerSpec,
+        worker_addrs: Vec<String>,
+    },
 }
 
 impl<T> OrchHandle<T>
@@ -47,16 +49,11 @@ where
     ///
     /// # Returns
     /// The specification or an io error if occurred.
-    pub async fn pull_specification(&mut self) -> io::Result<PullSpecResponse> {
+    pub async fn pull_specification(&mut self) -> io::Result<NodeSpec> {
         let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateNode(NodeSpec::Server(spec))) => {
-                PullSpecResponse::ParameterServer(spec)
-            }
-            Msg::Control(Command::CreateNode(NodeSpec::Worker(spec))) => {
-                PullSpecResponse::Worker(spec)
-            }
+            Msg::Control(Command::CreateNode(spec)) => spec,
             msg => {
-                let text = format!("Expected creation from orchestrator, got: {msg:?}");
+                let text = format!("Expected node specification from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));
             }
         };
@@ -128,6 +125,16 @@ where
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
             Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
             Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
+            Msg::Control(Command::Upgrade { spec, worker_addrs }) => {
+                OrchEvent::Upgrade { spec, worker_addrs }
+            }
+            Msg::Control(Command::Switch {
+                server_sizes,
+                server_ordering,
+            }) => OrchEvent::Switch {
+                server_sizes,
+                server_ordering,
+            },
             msg => {
                 let text = format!("Unexpected message from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));

@@ -12,8 +12,7 @@ mod utils;
 pub use clusters::ParamServerCluster;
 pub use connection::{Acceptor, Connection, Connector};
 pub use handles::{
-    NodeHandle, OrchEvent, OrchHandle, ParamServerHandle, PullSpecResponse, WorkerEvent,
-    WorkerHandle,
+    NodeHandle, OrchEvent, OrchHandle, ParamServerHandle, WorkerEvent, WorkerHandle,
 };
 pub use protocol::specs;
 pub use share_dataset::get_dataset_cursor;

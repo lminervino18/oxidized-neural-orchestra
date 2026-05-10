@@ -3,7 +3,7 @@ use std::{borrow::Cow, io};
 use half::f16;
 use serde::{Deserialize, Serialize};
 
-use super::specs::node::NodeSpec;
+use super::specs::{node::NodeSpec, server::ServerSpec};
 
 pub type Header = u32;
 pub const HEADER_SIZE: usize = size_of::<Header>();
@@ -31,7 +31,17 @@ pub enum Entity {
 pub enum Command<'a> {
     Connect(Entity),
     CreateNode(NodeSpec),
-    ReportLoss { losses: Cow<'a, [f32]> },
+    Upgrade {
+        spec: ServerSpec,
+        worker_addrs: Vec<String>,
+    },
+    Switch {
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+    },
+    ReportLoss {
+        losses: Cow<'a, [f32]>,
+    },
     RequestParams,
     StopAfterEpoch,
     Disconnect,

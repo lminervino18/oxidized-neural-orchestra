@@ -1,9 +1,8 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchEvent, OrchHandle, PullSpecResponse, TransportLayer,
-    get_dataset_cursor,
-    specs::{server::ServerSpec, worker::WorkerSpec},
+    Acceptor, Connection, Connector, OrchEvent, OrchHandle, TransportLayer, get_dataset_cursor,
+    specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
 };
 use log::{info, warn};
 use parameter_server::service::ServerBuilder;
@@ -120,10 +119,8 @@ where
 
             let result = match orch_handle.pull_specification().await {
                 Err(e) => Err(e),
-                Ok(PullSpecResponse::ParameterServer(spec)) => {
-                    self.run_server(orch_handle, spec).await
-                }
-                Ok(PullSpecResponse::Worker(spec)) => self.run_worker(orch_handle, spec).await,
+                Ok(NodeSpec::Worker(spec)) => self.run_worker(orch_handle, spec).await,
+                Ok(NodeSpec::Server(spec)) => self.run_server(orch_handle, spec).await,
             };
 
             match result {

@@ -6,6 +6,6 @@ mod worker;
 
 use compressor::{CompressedGrad, Compressor};
 pub use node::NodeHandle;
-pub use orchestrator::{OrchEvent, OrchHandle, PullSpecResponse};
+pub use orchestrator::{OrchEvent, OrchHandle};
 pub use parameter_server::ParamServerHandle;
 pub use worker::{WorkerEvent, WorkerHandle};
