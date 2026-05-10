@@ -4,7 +4,8 @@ use comms::{OrchEvent, OrchHandle, TransportLayer};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 
-use crate::{middlewares::ServerClusterManager, workers::Worker};
+use super::{Run, Worker};
+use crate::middlewares::ServerClusterManager;
 
 /// The middleman between the parameter server and the model trainer.
 pub struct ParamServerWorker<T>
@@ -52,7 +53,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn run(&mut self) -> io::Result<()> {
+    async fn run(&mut self) -> io::Result<Run> {
         let mut should_continue = true;
 
         while should_continue {
@@ -86,6 +87,6 @@ where
 
         self.cluster_manager.disconnect().await?;
         self.orch_handle.disconnect().await?;
-        Ok(())
+        Ok(Run::Done)
     }
 }

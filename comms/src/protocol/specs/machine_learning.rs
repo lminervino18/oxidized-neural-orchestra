@@ -26,6 +26,9 @@ pub enum ParamGenSpec {
         value: f32,
         limit: usize,
     },
+    Inline {
+        params: Vec<f32>,
+    },
     Rand {
         distribution: DistributionSpec,
         limit: usize,
@@ -40,6 +43,7 @@ impl ParamGenSpec {
         match self {
             ParamGenSpec::Const { limit, .. } => *limit,
             ParamGenSpec::Rand { limit, .. } => *limit,
+            ParamGenSpec::Inline { params } => params.len(),
             ParamGenSpec::Chained { specs } => specs.iter().map(|spec| spec.size()).sum(),
         }
     }

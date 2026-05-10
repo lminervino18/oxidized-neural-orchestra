@@ -1,10 +1,11 @@
 use std::io;
 
-use comms::{OrchEvent, OrchHandle, TransportLayer};
+use comms::{OrchEvent, OrchHandle, TransportLayer, specs::machine_learning::ParamGenSpec};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 
-use crate::{middlewares::WorkerRingManager, workers::Worker};
+use super::{Run, Worker};
+use crate::middlewares::WorkerRingManager;
 
 /// The middleman between the workers and the model trainer.
 pub struct AllReduceWorker<T>
@@ -53,7 +54,7 @@ impl<T> Worker for AllReduceWorker<T>
 where
     T: TransportLayer,
 {
-    async fn run(&mut self) -> io::Result<()> {
+    async fn run(&mut self) -> io::Result<Run> {
         let mut should_continue = true;
 
         while should_continue {
@@ -69,11 +70,20 @@ where
                 event = self.orch_handle.recv_event() => match event? {
                     OrchEvent::Stop => {
                         info!("received a stop command from orchestrator");
-                        should_continue = false;
+                        break;
                     }
                     OrchEvent::Disconnect => {
                         info!("received a disconnect command from the orchestrator");
                         break;
+                    }
+                    OrchEvent::Upgrade { mut spec, worker_addrs } => {
+                        info!("upgradeing to a parameter server");
+                        spec.param_gen = ParamGenSpec::Inline { params: self.params.clone() };
+                        return Ok(Run::Upgrade { spec, worker_addrs })
+                    }
+                    OrchEvent::Switch { server_sizes, server_ordering } => {
+                        info!("switching algorithm to parameter server as a worker");
+                        return Ok(Run::Switch { server_sizes, server_ordering })
                     }
                     other => {
                         warn!("unexpected message from orchestrator, got: {other:?}");
@@ -101,6 +111,6 @@ where
         }
 
         self.orch_handle.disconnect().await?;
-        Ok(())
+        Ok(Run::Done)
     }
 }
