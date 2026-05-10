@@ -241,10 +241,8 @@ impl Session {
                                 reporter.update(worker_id, &losses);
                             }
                             Some(TrainingEvent::Complete { model: trained, .. }) => {
-                                // Drain remaining events so worker_listener tasks finish
-                                // their ring disconnect before the runtime drops.
                                 while rx.blocking_recv().is_some() {}
-                                break Ok(trained)
+                                break Ok(trained);
                             }
                             Some(TrainingEvent::Error(e)) => break Err(e.to_string()),
                             Some(_) => continue,

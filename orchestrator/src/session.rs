@@ -620,8 +620,6 @@ impl Session {
             let _ = tx.send(WorkerHandleRequest::Disconnect).await;
         }
 
-        // Each worker_listener holds one internal_tx clone.
-        // Draining until None means all tasks finished their disconnect.
         while internal_rx.recv().await.is_some() {}
 
         params
