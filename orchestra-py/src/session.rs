@@ -241,7 +241,8 @@ impl Session {
                                 reporter.update(worker_id, &losses);
                             }
                             Some(TrainingEvent::Complete { model: trained, .. }) => {
-                                break Ok(trained)
+                                while rx.blocking_recv().is_some() {}
+                                break Ok(trained);
                             }
                             Some(TrainingEvent::Error(e)) => break Err(e.to_string()),
                             Some(_) => continue,

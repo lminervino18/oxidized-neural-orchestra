@@ -616,9 +616,11 @@ impl Session {
             i = (i + 1) % wk_txs.len();
         };
 
-        for tx in wk_txs {
+        for tx in wk_txs.iter() {
             let _ = tx.send(WorkerHandleRequest::Disconnect).await;
         }
+
+        while internal_rx.recv().await.is_some() {}
 
         params
     }

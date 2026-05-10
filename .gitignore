@@ -64,3 +64,7 @@ issue.md
 
 # Local analysis docs (not for the repo)
 notebooks/mnist/conclusion.md
+
+# 
+benchmarks/manual/*
+benchmarks/*.md
