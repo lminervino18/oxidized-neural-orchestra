@@ -1,16 +1,16 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchEvent, OrchHandle, TransportLayer, get_dataset_cursor,
+    Acceptor, Connection, Connector, OrchHandle, TransportLayer, get_dataset_cursor,
     specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
 };
-use log::{info, warn};
+use log::{error, info, warn};
 use parameter_server::service::ServerBuilder;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
-use worker::builder::WorkerBuilder;
+use worker::{builder::WorkerBuilder, workers::Run};
 
 /// Routes incoming orchestrator connections to the appropriate runtime role,
 /// keeping the process alive across sequential sessions.
@@ -61,27 +61,12 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn run_server(
-        &mut self,
-        mut orch_handle: OrchHandle<T>,
-        spec: ServerSpec,
-    ) -> io::Result<()> {
+    async fn run_server(&mut self, orch_handle: OrchHandle<T>, spec: ServerSpec) -> io::Result<()> {
         info!("starting parameter server session");
 
         let mut server_builder = ServerBuilder::new(&mut self.acceptor);
-        let mut pserver = server_builder.build(spec).await?;
-
-        let mut params = pserver.run().await?;
-        loop {
-            match orch_handle.recv_event().await? {
-                OrchEvent::Disconnect => {
-                    orch_handle.disconnect().await?;
-                    break;
-                }
-                OrchEvent::RequestParams => orch_handle.push_params(&mut params).await?,
-                event => warn!("Unexpected OrchEvent: {event:?}"),
-            }
-        }
+        let mut pserver = server_builder.build(spec, orch_handle).await?;
+        pserver.run().await?;
 
         info!("parameter server session finished");
         Ok(())
@@ -104,29 +89,60 @@ where
     /// Returns an io error if the underlying listener fails.
     pub async fn run(mut self) -> io::Result<()> {
         loop {
-            info!("waiting for next session");
+            info!("awaiting connection");
 
-            let conn = self.acceptor.accept().await?;
-
-            let Connection::Orchestrator(mut orch_handle) = conn else {
-                warn!(
-                    "expected orchestrator as first connection, got unexpected connection type; skipping"
-                );
+            let Ok(conn) = self.acceptor.accept().await else {
+                warn!("failed to accept incoming connection");
                 continue;
             };
 
-            info!("accepted orchestrator connection");
-
-            let result = match orch_handle.pull_specification().await {
-                Err(e) => Err(e),
-                Ok(NodeSpec::Worker(spec)) => self.run_worker(orch_handle, spec).await,
-                Ok(NodeSpec::Server(spec)) => self.run_server(orch_handle, spec).await,
+            let Connection::Orchestrator(mut orch_handle) = conn else {
+                warn!("expected an orchestrator connection, got something else");
+                continue;
             };
 
-            match result {
-                Ok(()) => info!("session finished, waiting for next session"),
-                Err(e) => warn!("session failed: {e}, resetting and waiting for next session"),
+            let Ok(node_spec) = orch_handle.pull_specification().await else {
+                warn!("failed to get node specification");
+                continue;
+            };
+
+            if let Err(e) = self.route_spec(orch_handle, node_spec).await {
+                error!("session failed with an error: {e}");
             }
+        }
+    }
+
+    /// Given a node specification calls the correspondent run handler.
+    ///
+    /// # Args
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    /// * `spec` - The node's specification.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    async fn route_spec(&mut self, orch_handle: OrchHandle<T>, spec: NodeSpec) -> io::Result<()> {
+        match spec {
+            NodeSpec::Server(spec) => self.run_server(orch_handle, spec).await,
+            NodeSpec::Worker(spec) => match self.run_worker(orch_handle, spec).await? {
+                Run::Done => Ok(()),
+                Run::Switch {
+                    server_sizes,
+                    server_ordering,
+                } => {
+                    // 1. Wait for incoming connections from servers
+                    // 2. For each new server connection download it's dataset part.
+                    // 3. Build the worker, it must be a parameter server worker.
+                    // 4. Train.
+                    todo!("route_spec match run_worker Run::Switch");
+                }
+                Run::Upgrade { spec, worker_addrs } => {
+                    // 1. Connect to each worker.
+                    // 2. For each send it's append it's new dataset partition.
+                    // 3. Build the server.
+                    // 4. Train.
+                    todo!("route_spec match run_worker Run::Upgrade");
+                }
+            },
         }
     }
 
@@ -142,7 +158,7 @@ where
         &mut self,
         mut orch_handle: OrchHandle<T>,
         spec: WorkerSpec,
-    ) -> io::Result<()>
+    ) -> io::Result<Run>
     where
         T: TransportLayer + 'static,
     {
@@ -166,8 +182,8 @@ where
             .build(spec, orch_handle, samples_raw, labels_raw)
             .await?;
 
-        worker.run().await?;
+        let run = worker.run().await?;
         info!("worker session finished");
-        Ok(())
+        Ok(run)
     }
 }

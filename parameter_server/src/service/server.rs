@@ -10,7 +10,7 @@ where
     T: TransportLayer,
 {
     /// Indirection method for `ParameterServer::run`.
-    async fn run(&mut self) -> io::Result<Vec<f32>>;
+    async fn run(&mut self) -> io::Result<()>;
 
     /// Indirection method for `ParameterServer::spawn`
     ///

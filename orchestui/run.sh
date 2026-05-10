@@ -9,7 +9,8 @@ read NWORKERS NSERVERS < <(python3 -c "
 import json
 
 d = json.load(open('$ORCHESTUI_DIR/training.json'))
-ps = d.get('algorithm', {}).get('parameter_server', {})
+algo = d.get('algorithm', {})
+ps = algo.get('parameter_server', {}) if isinstance(algo, dict) else {}
 
 nworkers = len(d.get('worker_addrs', []))
 nservers = len(ps.get('server_addrs', []))

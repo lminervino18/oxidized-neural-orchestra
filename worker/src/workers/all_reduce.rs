@@ -67,6 +67,7 @@ where
             should_continue = !was_last;
 
             tokio::select! {
+                biased;
                 event = self.orch_handle.recv_event() => match event? {
                     OrchEvent::Stop => {
                         info!("received a stop command from orchestrator");
@@ -103,14 +104,17 @@ where
             }
         }
 
-        self.ring_manager.disconnect().await?;
         self.orch_handle.done().await?;
 
-        if let OrchEvent::RequestParams = self.orch_handle.recv_event().await? {
-            self.orch_handle.push_params(&mut self.params).await?;
+        loop {
+            match self.orch_handle.recv_event().await? {
+                OrchEvent::Disconnect => break,
+                OrchEvent::RequestParams => self.orch_handle.push_params(&mut self.params).await?,
+                other => warn!("unexpected message from orchestrator, got: {other:?}"),
+            }
         }
 
-        self.orch_handle.disconnect().await?;
+        self.ring_manager.disconnect().await?;
         Ok(Run::Done)
     }
 }
