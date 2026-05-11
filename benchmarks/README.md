@@ -56,6 +56,7 @@ sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n
 | 17 | dense_large | AllReduce | 2 | 0 | sparse | — | 150 |
 | 19 | dense_small | AllReduce | 3 | 0 | sparse | — | 150 |
 | 20 | dense_large | AllReduce | 3 | 0 | sparse | — | 200 |
+| 21 | conv_tiny_softmax | AllReduce | 2 | 0 | base | — | 30 |
 
 ## Comparison Plots
 
@@ -140,6 +141,7 @@ Pass/fail: `accuracy >= min_accuracy AND train_seconds <= max_train_seconds`.
 |------|-------------|
 | `dense_small` | 784 → 128 → 64 → 10 (Sigmoid) |
 | `dense_large` | 784 → 256 → 128 → 64 → 10 (Sigmoid) |
+| `conv_tiny_softmax` | Conv2d(8 filters, 4×4, stride 2) → flatten(1352) → 10 (Softmax), CE loss |
 
 ## Results Format
 

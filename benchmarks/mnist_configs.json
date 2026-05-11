@@ -34,6 +34,12 @@
       "conv": [{"input_dim": [1,28,28], "kernel_dim": [32,1,4], "stride": 2, "padding": 0, "act": "sigmoid"}],
       "dense": [{"size": 128, "act": "sigmoid"}, {"size": 64, "act": "sigmoid"}, {"size": 10, "act": "sigmoid"}],
       "flat_size": 5408
+    },
+    "conv_tiny_softmax": {
+      "type": "conv",
+      "conv": [{"input_dim": [1,28,28], "kernel_dim": [8,1,4], "stride": 2, "padding": 0, "act": null}],
+      "dense": [{"size": 10, "act": "softmax"}],
+      "flat_size": 1352
     }
   },
 
@@ -253,6 +259,18 @@
       "max_epochs": 200,
       "early_stopping_tolerance": null,
       "min_accuracy": 0.90, "max_train_seconds": 400
+    },
+    {
+      "id": 21,
+      "model": "conv_tiny_softmax",
+      "workers": 2, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "base",
+      "sync": null, "store": null,
+      "lr": 0.1, "batch_size": 256, "offline_epochs": 0, "loss_fn": "cross_entropy",
+      "max_epochs": 30,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.20, "max_train_seconds": 300
     }
   ],
 

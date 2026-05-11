@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use orchestrator::configs::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
 use pyo3::prelude::*;
 
-use crate::activations::Sigmoid;
+use crate::activations::{Sigmoid, Softmax};
 use crate::initialization::{
     Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier, XavierUniform,
 };
@@ -24,6 +24,7 @@ pub enum PyInit {
 #[derive(Clone)]
 pub enum PyActFn {
     Sigmoid(f32),
+    Softmax,
 }
 
 /// A fully-connected dense layer.
@@ -91,6 +92,8 @@ impl Dense {
             Some(a) => {
                 if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
                     Some(PyActFn::Sigmoid(s.amp))
+                } else if a.is_instance_of::<Softmax>() {
+                    Some(PyActFn::Softmax)
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err(
                         "act_fn must be an activation function or None",
@@ -123,6 +126,7 @@ impl Dense {
 
         let act_fn = self.act_fn.as_ref().map(|a| match a {
             PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
+            PyActFn::Softmax => ActFnConfig::Softmax,
         });
 
         LayerConfig::Dense {
@@ -219,6 +223,8 @@ impl Conv2d {
             Some(a) => {
                 if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
                     Some(PyActFn::Sigmoid(s.amp))
+                } else if a.is_instance_of::<Softmax>() {
+                    Some(PyActFn::Softmax)
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err(
                         "act_fn must be an activation function or None",
@@ -254,6 +260,7 @@ impl Conv2d {
 
         let act_fn = self.act_fn.as_ref().map(|a| match a {
             PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
+            PyActFn::Softmax => ActFnConfig::Softmax,
         });
 
         LayerConfig::Conv {

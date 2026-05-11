@@ -273,11 +273,15 @@ def capture_docker_logs(workers: int, servers: int, label: str):
 def build_model(model_name: str, model_defs: dict):
     from orchestra import Sequential
     from orchestra.arch import Conv2d, Dense
-    from orchestra.activations import Sigmoid
+    from orchestra.activations import Sigmoid, Softmax
     from orchestra.initialization import Xavier
 
     def act(name):
-        return Sigmoid() if name == "sigmoid" else None
+        if name == "sigmoid":
+            return Sigmoid()
+        if name == "softmax":
+            return Softmax()
+        return None
 
     mdef = model_defs[model_name]
     if mdef["type"] == "dense":
@@ -346,7 +350,11 @@ def evaluate(model_name: str, model_defs: dict, safetensors_path: Path,
     sd   = load_file(str(safetensors_path))
 
     def _act(name):
-        return torch.sigmoid if name == "sigmoid" else None
+        if name == "sigmoid":
+            return torch.sigmoid
+        if name == "softmax":
+            return lambda x: torch.softmax(x, dim=-1)
+        return None
 
     if mdef["type"] == "dense":
         dense_defs = mdef["dense"]
