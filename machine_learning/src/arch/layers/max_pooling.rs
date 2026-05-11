@@ -19,7 +19,7 @@ pub struct MaxPooling {
 
     // Backward metadata
     delta_out: Array4<f32>,
-    dilated: Array4<f32>,
+    max_indices: Array4<(usize, usize)>,
 }
 
 impl MaxPooling {
@@ -27,6 +27,7 @@ impl MaxPooling {
         let real_input_dim = (0, 0);
 
         let zeros4 = Array4::zeros((1, 1, 1, 1));
+        let max_indices = Array4::from_elem((1, 1, 1, 1), (0, 0));
 
         Self {
             filter_size,
@@ -36,7 +37,7 @@ impl MaxPooling {
             effective_input: zeros4.clone(),
             output: zeros4.clone(),
             delta_out: zeros4.clone(),
-            dilated: zeros4,
+            max_indices,
         }
     }
 
@@ -52,6 +53,7 @@ impl MaxPooling {
             ref mut real_input_dim,
             ref mut effective_input,
             ref mut output,
+            ref mut max_indices,
             ..
         } = *self;
 
@@ -82,6 +84,7 @@ impl MaxPooling {
         effective_input_view.assign(input_view);
 
         output.reshape_inplace((batch_size, filters, output_height, output_width));
+        max_indices.reshape_inplace((batch_size, filters, output_height, output_width));
 
         for b in 0..batch_size {
             let input_b = self.effective_input.index_axis(Axis(0), b);
@@ -95,9 +98,20 @@ impl MaxPooling {
                             input_bf.slice(s![i..i + filter_size, j..j + filter_size]);
 
                         // TODO: how could the iterator be empty?!!! add safety comment
-                        let max = input_chunk.iter().max_by(|a, b| a.total_cmp(b)).unwrap();
+                        let (mut max_idx, max) = input_chunk
+                            .indexed_iter()
+                            .max_by(|(_, rhs), (_, lhs)| rhs.total_cmp(lhs))
+                            .unwrap();
+
+                        max_idx = (max_idx.0 + i, max_idx.1 + j);
+
+                        println!("i: {i}");
+                        println!("j: {j}");
+                        println!("local_max_idx: {max_idx:#?}");
+                        println!("max_idx: {max_idx:#?}");
 
                         output[[b, f, x, y]] = *max;
+                        max_indices[[b, f, x, y]] = max_idx;
                     }
                 }
             }
@@ -106,47 +120,24 @@ impl MaxPooling {
         Ok(output.view())
     }
 
-    pub fn backward(
-        &mut self,
-        params: &[f32],
-        d_in: ArrayViewMut4<f32>,
-    ) -> Result<ArrayViewMut4<'_, f32>> {
-        todo!()
-    }
+    pub fn backward(&mut self, d_in: ArrayViewMut4<f32>) -> Result<ArrayViewMut4<'_, f32>> {
+        let (batches, in_channels, _, _) = d_in.dim();
+        self.delta_out.reshape_inplace((
+            batches,
+            in_channels,
+            self.real_input_dim.0,
+            self.real_input_dim.1,
+        ));
 
-    /// Performs inward dilation to a input delta and saves the result into the delta metadata
-    /// array.
-    ///
-    /// ## Args
-    /// * `delta` - The input delta to dilate and pad.
-    fn dilate(&mut self, delta: ArrayView4<f32>) {
-        let Self {
-            stride,
-            ref mut dilated,
-            ..
-        } = *self;
+        for b in 0..batches {
+            for c in 0..in_channels {
+                azip!((d in &d_in, &idx in &self.max_indices) {
+                    self.delta_out[[b,c,idx.0,idx.1]] = *d;
+                });
+            }
+        }
 
-        let inward_padding = stride - 1;
-        let (delta_filters, delta_in_channels, delta_width, delta_height) = delta.dim();
-        let dilated_width = delta_width + (delta_width - 1) * inward_padding;
-        let dilated_height = delta_height + (delta_height - 1) * inward_padding;
-
-        let dilated_dim = (
-            delta_filters,
-            delta_in_channels,
-            dilated_height,
-            dilated_width,
-        );
-
-        dilated.reshape_inplace(dilated_dim);
-        // NOTE: this might not be needed as the assigned delta overwrites the past one if
-        // dimensions match.
-        dilated.fill(0.);
-        dilated
-            .slice_mut(s![.., ..,
-                ..dilated_height; stride,
-                ..dilated_width; stride])
-            .assign(&delta);
+        Ok(self.delta_out.view_mut())
     }
 }
 
@@ -172,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_max_pooling00_forward_1batch_1filter_4_by_4_img_filter_size_2_stride2_padding0() {
+    fn test_max_pooling01_forward_1batch_1filter_4_by_4_img_filter_size_2_stride2_padding0() {
         let input = array![[[
             [1., 2., 3., 4.],
             [5., 6., 7., 8.],
@@ -184,6 +175,59 @@ mod tests {
         let expected = array![[[[6., 8.], [14., 16.]]]];
 
         let output = max_pooling.forward(input.view()).unwrap();
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_max_pooling02_backward_with_no_padding_stride1_and_filter_size1_equals_input() {
+        let input = array![[[
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
+        ]]];
+        let mut max_pooling = MaxPooling::new(1, 1, 0);
+        max_pooling.forward(input.view()).unwrap();
+        let mut delta_in = array![[[
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
+        ]]];
+
+        let output = max_pooling.backward(delta_in.view_mut()).unwrap();
+        let expected = &delta_in;
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_max_pooling03_backward_1batch_1filter_4_by_4_img_filter_size_2_stride2_padding0() {
+        unsafe {
+            std::env::set_var("RUST_BACKTRACE", "1");
+        }
+
+        let input = array![[[
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
+        ]]];
+        let mut max_pooling = MaxPooling::new(2, 2, 0);
+        max_pooling.forward(input.view()).unwrap();
+        let mut delta_in = array![[[[6., 8.], [14., 16.]]]];
+
+        let expected_max_indices = array![[[[(0, 0), (0, 3)], [(3, 0), (3, 3)]]]];
+        assert_eq!(max_pooling.max_indices, expected_max_indices);
+
+        let output = max_pooling.backward(delta_in.view_mut()).unwrap();
+        let expected = array![[[
+            [0., 0., 0., 0.],
+            [0., 6., 0., 8.],
+            [0., 0., 0., 0.],
+            [0., 14., 0., 16.]
+        ]]];
 
         assert_eq!(output, expected);
     }
