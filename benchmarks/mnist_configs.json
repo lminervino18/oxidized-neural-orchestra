@@ -1,132 +1,296 @@
 {
-  "training_presets": {
-    "ps_1w_1s_base_barrier": {
-      "workers": 1, "servers": 1,
-      "algorithm": "parameter_server",
-      "serializer": "base", "sync": "barrier", "store": "blocking"
+  "model_defs": {
+    "dense_small": {
+      "type": "dense",
+      "dense": [
+        {"size": 128, "act": "sigmoid"},
+        {"size": 64,  "act": "sigmoid"},
+        {"size": 10,  "act": "sigmoid"}
+      ]
     },
-    "ps_2w_1s_base_barrier": {
-      "workers": 2, "servers": 1,
-      "algorithm": "parameter_server",
-      "serializer": "base", "sync": "barrier", "store": "blocking"
+    "dense_large": {
+      "type": "dense",
+      "dense": [
+        {"size": 256, "act": "sigmoid"},
+        {"size": 128, "act": "sigmoid"},
+        {"size": 64,  "act": "sigmoid"},
+        {"size": 10,  "act": "sigmoid"}
+      ]
     },
-    "ps_3w_1s_base_barrier": {
-      "workers": 3, "servers": 1,
-      "algorithm": "parameter_server",
-      "serializer": "base", "sync": "barrier", "store": "blocking"
+    "conv_tiny": {
+      "type": "conv",
+      "conv": [{"input_dim": [1,28,28], "kernel_dim": [8,1,4], "stride": 2, "padding": 0, "act": null}],
+      "dense": [{"size": 10, "act": "sigmoid"}],
+      "flat_size": 1352
     },
-    "ps_3w_2s_base_barrier": {
-      "workers": 3, "servers": 2,
-      "algorithm": "parameter_server",
-      "serializer": "base", "sync": "barrier", "store": "blocking"
+    "conv_small": {
+      "type": "conv",
+      "conv": [{"input_dim": [1,28,28], "kernel_dim": [16,1,4], "stride": 2, "padding": 0, "act": "sigmoid"}],
+      "dense": [{"size": 64, "act": "sigmoid"}, {"size": 10, "act": "sigmoid"}],
+      "flat_size": 2704
     },
-    "ps_2w_1s_sparse_barrier": {
-      "workers": 2, "servers": 1,
-      "algorithm": "parameter_server",
-      "serializer": "sparse", "sync": "barrier", "store": "blocking"
-    },
-    "ps_2w_1s_nonblocking": {
-      "workers": 2, "servers": 1,
-      "algorithm": "parameter_server",
-      "serializer": "base", "sync": "nonblocking", "store": "wild"
-    },
-    "ar_2w_base": {
-      "workers": 2, "servers": 0,
-      "algorithm": "all_reduce",
-      "serializer": "base", "sync": null, "store": null
-    },
-    "ar_3w_base": {
-      "workers": 3, "servers": 0,
-      "algorithm": "all_reduce",
-      "serializer": "base", "sync": null, "store": null
-    },
-    "ar_2w_sparse": {
-      "workers": 2, "servers": 0,
-      "algorithm": "all_reduce",
-      "serializer": "sparse", "sync": null, "store": null
+    "conv_large": {
+      "type": "conv",
+      "conv": [{"input_dim": [1,28,28], "kernel_dim": [32,1,4], "stride": 2, "padding": 0, "act": "sigmoid"}],
+      "dense": [{"size": 128, "act": "sigmoid"}, {"size": 64, "act": "sigmoid"}, {"size": 10, "act": "sigmoid"}],
+      "flat_size": 5408
     }
   },
-  "profiles": {
-    "smoke": {
-      "train_samples": null,
-      "test_samples": null,
-      "models": ["dense_small"],
-      "training_presets": ["ar_2w_base", "ps_2w_1s_base_barrier"],
-      "defaults": {
-        "max_epochs": 300,
-        "batch_size": 256,
-        "lr": 0.5,
-        "offline_epochs": 0,
-        "early_stopping_tolerance": 1e-4,
-        "min_accuracy": 0.90,
-        "max_train_seconds": 300
-      },
-      "overrides": {
-        "ar_2w_base": { "lr": 1.0 }
-      }
+
+  "runs": [
+    {
+      "id": 1,
+      "model": "dense_small",
+      "workers": 2, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 80,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.90, "max_train_seconds": 180
     },
-    "allreduce": {
-      "train_samples": null,
-      "test_samples": null,
-      "models": ["dense_small", "dense_large"],
-      "training_presets": ["ar_2w_base", "ar_3w_base"],
-      "defaults": {
-        "max_epochs": 300,
-        "batch_size": 256,
-        "lr": 1.0,
-        "offline_epochs": 0,
-        "early_stopping_tolerance": 1e-4,
-        "min_accuracy": 0.90,
-        "max_train_seconds": 1200
-      },
-      "overrides": {
-        "dense_large": { "early_stopping_tolerance": 5e-5, "max_train_seconds": 1800 }
-      }
+    {
+      "id": 2,
+      "model": "dense_large",
+      "workers": 2, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 250,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 600
     },
-    "benchmark": {
-      "train_samples": null,
-      "test_samples": null,
-      "models": ["dense_small", "dense_large"],
-      "training_presets": [
-        "ps_2w_1s_base_barrier",
-        "ps_2w_1s_nonblocking",
-        "ps_2w_1s_sparse_barrier",
-        "ar_2w_base"
-      ],
-      "defaults": {
-        "max_epochs": 300,
-        "batch_size": 256,
-        "lr": 0.5,
-        "offline_epochs": 0,
-        "early_stopping_tolerance": 1e-4,
-        "min_accuracy": 0.90,
-        "max_train_seconds": 1200
-      },
-      "overrides": {
-        "ar_2w_base":   { "lr": 1.0 },
-        "dense_large":  { "early_stopping_tolerance": 5e-5, "max_train_seconds": 1800 },
-        "dense_large+ps_2w_1s_base_barrier":  { "early_stopping_tolerance": null },
-        "dense_large+ps_2w_1s_nonblocking":   { "early_stopping_tolerance": null },
-        "dense_large+ps_2w_1s_sparse_barrier":{ "early_stopping_tolerance": null }
-      }
+    {
+      "id": 3,
+      "model": "dense_small",
+      "workers": 3, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 300
     },
-    "conv_investigation": {
-      "train_samples": null,
-      "test_samples": null,
-      "models": ["conv_small", "conv_large"],
-      "training_presets": ["ar_2w_base", "ps_2w_1s_base_barrier"],
-      "defaults": {
-        "max_epochs": 200,
-        "batch_size": 256,
-        "lr": 0.5,
-        "offline_epochs": 0,
-        "early_stopping_tolerance": 1e-4,
-        "min_accuracy": 0.20,
-        "max_train_seconds": 1200
-      },
-      "overrides": {
-        "ar_2w_base": { "lr": 1.0 }
-      }
+    {
+      "id": 4,
+      "model": "dense_large",
+      "workers": 3, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 250,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 600
+    },
+    {
+      "id": 5,
+      "model": "dense_small",
+      "workers": 3, "servers": 2,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 300
+    },
+    {
+      "id": 6,
+      "model": "dense_large",
+      "workers": 3, "servers": 2,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 250,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 600
+    },
+    {
+      "id": 7,
+      "model": "dense_small",
+      "workers": 2, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "sparse",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 80,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.90, "max_train_seconds": 180
+    },
+    {
+      "id": 8,
+      "model": "dense_large",
+      "workers": 2, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "sparse",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 250,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 600
+    },
+    {
+      "id": 9,
+      "model": "dense_small",
+      "workers": 2, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "nonblocking", "store": "wild",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 80,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.90, "max_train_seconds": 180
+    },
+    {
+      "id": 10,
+      "model": "dense_large",
+      "workers": 2, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "nonblocking", "store": "wild",
+      "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 250,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 600
+    },
+    {
+      "id": 11,
+      "model": "dense_small",
+      "workers": 2, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "base",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.90, "max_train_seconds": 180
+    },
+    {
+      "id": 12,
+      "model": "dense_large",
+      "workers": 2, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "base",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": 5e-5,
+      "min_accuracy": 0.90, "max_train_seconds": 400
+    },
+    {
+      "id": 13,
+      "model": "dense_small",
+      "workers": 3, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "base",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.90, "max_train_seconds": 180
+    },
+    {
+      "id": 14,
+      "model": "dense_large",
+      "workers": 3, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "base",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 200,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 400
+    },
+    {
+      "id": 16,
+      "model": "dense_small",
+      "workers": 2, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "sparse",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.90, "max_train_seconds": 300
+    },
+    {
+      "id": 17,
+      "model": "dense_large",
+      "workers": 2, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "sparse",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": 5e-5,
+      "min_accuracy": 0.90, "max_train_seconds": 400
+    },
+    {
+      "id": 19,
+      "model": "dense_small",
+      "workers": 3, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "sparse",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 150,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 300
+    },
+    {
+      "id": 20,
+      "model": "dense_large",
+      "workers": 3, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "sparse",
+      "sync": null, "store": null,
+      "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
+      "max_epochs": 200,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.90, "max_train_seconds": 400
     }
-  }
+  ],
+
+  "comparison_plots": [
+    {
+      "filename": "cmp_ps_vs_ar",
+      "title": "PS vs AllReduce — 2 workers, base serializer",
+      "run_ids": [1, 2, 11, 12]
+    },
+    {
+      "filename": "cmp_ps_worker_scaling",
+      "title": "PS worker scaling — base serializer, barrier sync",
+      "run_ids": [1, 2, 3, 4, 5, 6]
+    },
+    {
+      "filename": "cmp_ar_worker_scaling",
+      "title": "AllReduce worker scaling — base serializer",
+      "run_ids": [11, 12, 13, 14]
+    },
+    {
+      "filename": "cmp_sparse_vs_base_ps",
+      "title": "Sparse vs base gradient — PS 2w/1s, barrier sync",
+      "run_ids": [1, 2, 7, 8]
+    },
+    {
+      "filename": "cmp_sparse_vs_base_ar",
+      "title": "Sparse vs base gradient — AllReduce 2w",
+      "run_ids": [11, 12, 16, 17]
+    },
+    {
+      "filename": "cmp_ar_sparse_worker_scaling",
+      "title": "AllReduce sparse — worker scaling",
+      "run_ids": [16, 17, 19, 20]
+    },
+    {
+      "filename": "cmp_barrier_vs_nonblocking",
+      "title": "Barrier vs non-blocking sync — PS 2w/1s, base serializer",
+      "run_ids": [1, 2, 9, 10]
+    }
+  ]
 }
