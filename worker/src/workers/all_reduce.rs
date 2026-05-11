@@ -8,18 +8,18 @@ use super::{Run, Worker};
 use crate::middlewares::WorkerRingManager;
 
 /// The middleman between the workers and the model trainer.
-pub struct AllReduceWorker<T>
+pub struct AllReduceWorker<'node, T>
 where
     T: TransportLayer,
 {
     trainer: Box<dyn Trainer>,
     ring_manager: WorkerRingManager<T>,
-    orch_handle: OrchHandle<T>,
+    orch_handle: &'node mut OrchHandle<T>,
     optimization_params: Vec<f32>,
     params: Vec<f32>,
 }
 
-impl<T> AllReduceWorker<T>
+impl<'node, T> AllReduceWorker<'node, T>
 where
     T: TransportLayer,
 {
@@ -36,7 +36,7 @@ where
     pub fn new(
         trainer: Box<dyn Trainer>,
         ring_manager: WorkerRingManager<T>,
-        orch_handle: OrchHandle<T>,
+        orch_handle: &'node mut OrchHandle<T>,
         params: Vec<f32>,
     ) -> Self {
         Self {
@@ -50,7 +50,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T> Worker for AllReduceWorker<T>
+impl<T> Worker for AllReduceWorker<'_, T>
 where
     T: TransportLayer,
 {
@@ -62,7 +62,11 @@ where
                 .ring_manager
                 .build_param_manager(&mut self.optimization_params);
 
-            let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
+            let TrainResult { losses, was_last } = self
+                .trainer
+                .train(&mut param_manager)
+                .map_err(io::Error::other)?;
+
             self.orch_handle.push_losses(losses).await?;
             should_continue = !was_last;
 
@@ -77,14 +81,26 @@ where
                         info!("received a disconnect command from the orchestrator");
                         break;
                     }
-                    OrchEvent::Upgrade { mut spec, worker_addrs } => {
-                        info!("upgradeing to a parameter server");
-                        spec.param_gen = ParamGenSpec::Inline { params: self.params.clone() };
-                        return Ok(Run::Upgrade { spec, worker_addrs })
+                    OrchEvent::Upgrade { mut spec } => {
+                        info!("upgrading to parameter server");
+
+                        spec.param_gen = ParamGenSpec::Inline {
+                            params: self.params.clone()
+                        };
+
+                        return Ok(Run::Upgrade { spec })
                     }
-                    OrchEvent::Switch { server_sizes, server_ordering } => {
+                    OrchEvent::Switch {
+                        server_addrs,
+                        server_sizes,
+                        server_ordering
+                    } => {
                         info!("switching algorithm to parameter server as a worker");
-                        return Ok(Run::Switch { server_sizes, server_ordering })
+                        return Ok(Run::Switch {
+                            server_addrs,
+                            server_sizes,
+                            server_ordering
+                        });
                     }
                     other => {
                         warn!("unexpected message from orchestrator, got: {other:?}");
@@ -116,5 +132,9 @@ where
 
         self.ring_manager.disconnect().await?;
         Ok(Run::Done)
+    }
+
+    fn into_trainer(self: Box<Self>) -> Box<dyn Trainer> {
+        self.trainer
     }
 }

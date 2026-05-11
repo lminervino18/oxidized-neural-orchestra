@@ -33,9 +33,9 @@ pub enum Command<'a> {
     CreateNode(NodeSpec),
     Upgrade {
         spec: ServerSpec,
-        worker_addrs: Vec<String>,
     },
     Switch {
+        server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     },

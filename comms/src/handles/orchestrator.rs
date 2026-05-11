@@ -21,12 +21,12 @@ pub enum OrchEvent {
     RequestParams,
     Stop,
     Switch {
+        server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     },
     Upgrade {
         spec: ServerSpec,
-        worker_addrs: Vec<String>,
     },
 }
 
@@ -125,13 +125,13 @@ where
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
             Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
             Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
-            Msg::Control(Command::Upgrade { spec, worker_addrs }) => {
-                OrchEvent::Upgrade { spec, worker_addrs }
-            }
+            Msg::Control(Command::Upgrade { spec }) => OrchEvent::Upgrade { spec },
             Msg::Control(Command::Switch {
+                server_addrs,
                 server_sizes,
                 server_ordering,
             }) => OrchEvent::Switch {
+                server_addrs,
                 server_sizes,
                 server_ordering,
             },

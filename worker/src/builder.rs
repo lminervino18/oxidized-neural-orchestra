@@ -76,13 +76,13 @@ where
     ///
     /// # Returns
     /// A fully initialized worker ready to start.
-    pub async fn build(
+    pub async fn build<'a>(
         self,
         spec: WorkerSpec,
-        orch_handle: OrchHandle<T>,
+        orch_handle: &'a mut OrchHandle<T>,
         samples_raw: Vec<f32>,
         labels_raw: Vec<f32>,
-    ) -> io::Result<Box<dyn Worker>> {
+    ) -> io::Result<Box<dyn Worker + 'a>> {
         let WorkerSpec {
             worker_id,
             trainer,
