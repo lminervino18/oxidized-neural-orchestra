@@ -110,7 +110,7 @@ fn main() -> io::Result<()> {
             r: Float01::new(0.9).unwrap(),
         },
         dataset: DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: vec![
                     0.0, 1.0, 0.0, //
                     1.0, 1.0, 1.0, //

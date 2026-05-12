@@ -2,7 +2,7 @@ use std::{env, num::NonZeroUsize};
 
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
-    dataset::{Dataset, DatasetSrc},
+    dataset::{DataSrc, Dataset},
     optimization::{GradientDescent, Optimizer},
     training::BackpropTrainer,
 };
@@ -104,8 +104,8 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let trainer = BackpropTrainer::new(
         model,
         vec![GradientDescent::new(FloatPositive::new(0.1).unwrap())],
-        Dataset::new(
-            DatasetSrc::inmem(vec![0., 1., 2., 3.], vec![1., 2., 3., 4.]),
+        Dataset::loaded(
+            DataSrc::inmem(vec![0., 1., 2., 3.], vec![1., 2., 3., 4.]),
             x_size,
             y_size,
         ),
@@ -118,12 +118,13 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
 
     // Worker node.
     let transport = Stp::new(wk_orch_rx, wk_orch_tx);
-    let orch_wk_handle = OrchHandle::new(transport);
+    let mut orch_wk_handle = OrchHandle::new(transport);
     let transport = Stp::new(sv_rx, sv_tx);
     let server_wk_handle = ParamServerHandle::new(0, transport);
     let mut cluster_manager = ServerClusterManager::new(vec![0]);
     cluster_manager.spawn(server_wk_handle, 2);
-    let mut worker = ParamServerWorker::new(Box::new(trainer), cluster_manager, orch_wk_handle);
+    let mut worker =
+        ParamServerWorker::new(Box::new(trainer), cluster_manager, &mut orch_wk_handle);
 
     // Server node.
     let transport = Stp::new(wk_rx, wk_tx);

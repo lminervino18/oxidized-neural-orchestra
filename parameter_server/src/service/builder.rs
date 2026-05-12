@@ -1,7 +1,7 @@
 use std::{io, num::NonZeroUsize, thread};
 
 use comms::{
-    Acceptor, Connection, OrchHandle, TransportLayer,
+    Acceptor, Connection, OrchHandle, TransportLayer, WorkerHandle,
     specs::{
         machine_learning::OptimizerSpec,
         server::{ServerSpec, StoreSpec, SynchronizerSpec},
@@ -53,7 +53,7 @@ where
     /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
-    /// A new Server or a `RandErr` if the specification has
+    /// A new `Server` or a `RandErr` if the specification has
     /// invalid `RandParamGen` construction values.
     pub async fn build(
         &mut self,
@@ -63,16 +63,39 @@ where
     where
         T: TransportLayer,
     {
+        self.build_with(spec, orch_handle, async |_| Ok(())).await
+    }
+
+    /// Builds a new `Server` following a spec and calling connection_hook for each new connection
+    /// before spawning the inner worker handler into the server.
+    ///
+    /// # Args
+    /// * `spec`- The specification of the parameter serve.r
+    /// * `orch_handle` - THe handle for communicating with the orchestrator.
+    ///
+    /// # Returns
+    ///  A new Server or a `RandErr` if the specification has
+    /// invalid `RandParamGen` construction values.
+    pub async fn build_with<G>(
+        &mut self,
+        spec: ServerSpec,
+        orch_handle: OrchHandle<T>,
+        mut connection_hook: G,
+    ) -> io::Result<Box<dyn Server<T>>>
+    where
+        G: AsyncFnMut(&mut WorkerHandle<T>) -> io::Result<()>,
+    {
         let nworkers = spec.nworkers;
         let mut server = self
             .resolve_optimizer(spec, orch_handle)
             .map_err(io::Error::other)?;
 
         for _ in 0..nworkers {
-            let Connection::Worker(worker_handle) = self.acceptor.accept().await? else {
+            let Connection::Worker(mut worker_handle) = self.acceptor.accept().await? else {
                 return Err(io::Error::other("Unexpected non worker connection"));
             };
 
+            connection_hook(&mut worker_handle).await?;
             server.spawn(worker_handle);
         }
 

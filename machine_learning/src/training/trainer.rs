@@ -1,4 +1,8 @@
-use crate::{Result, param_manager::ParamManager};
+use crate::{
+    Result,
+    dataset::{DataSrc, Dataset},
+    param_manager::ParamManager,
+};
 
 /// The result of a training call.
 ///
@@ -29,4 +33,16 @@ pub trait Trainer: Send {
     /// # Returns
     /// An error if there's a mismatch in the sizes of the grad and param buffers.
     fn optimize<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<()>;
+
+    /// Appends the given source to it's dataset.
+    ///
+    /// # Args
+    /// * `src` - The new data to be appended.
+    fn load_dataset(&mut self, src: DataSrc);
+
+    /// Drops self and returns it's inner dataset.
+    ///
+    /// # Returns
+    /// A boxed `Dataset` instance.
+    fn into_dataset(self: Box<Self>) -> Dataset;
 }

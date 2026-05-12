@@ -4,6 +4,7 @@ use comms::specs::server::ServerSpec;
 use machine_learning::training::Trainer;
 
 /// The result of running a worker instance.
+#[derive(Debug)]
 pub enum Run {
     Done,
     Switch {

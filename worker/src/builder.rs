@@ -1,12 +1,14 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchHandle, TransportLayer,
+    Acceptor, Connection, Connector, DatasetSrc, OrchHandle, ParamServerHandle, TransportLayer,
     protocol::Entity,
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{
-    dataset::DatasetBuilder, initialization::ParamGenBuilder, training::TrainerBuilder,
+    dataset::DataSrc,
+    initialization::ParamGenBuilder,
+    training::{Trainer, TrainerBuilder},
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -68,70 +70,65 @@ where
     ///
     /// # Args
     /// * `spec` - The specification for a worker.
-    /// * `acceptor` - The network acceptor.
-    /// * `connector` - The network connector.
     /// * `orch_handle` - The handle to communicate with the orchestrator.
-    /// * `samples_raw` - The dataset samples raw data.
-    /// * `labels_raw` - The dataset labels raw data.
     ///
     /// # Returns
-    /// A fully initialized worker ready to start.
+    /// A fully initialized worker ready to train.
     pub async fn build<'a>(
-        self,
-        spec: WorkerSpec,
+        &mut self,
+        spec: &WorkerSpec,
         orch_handle: &'a mut OrchHandle<T>,
-        samples_raw: Vec<f32>,
-        labels_raw: Vec<f32>,
     ) -> io::Result<Box<dyn Worker + 'a>> {
-        let WorkerSpec {
-            worker_id,
-            trainer,
-            dataset,
-            algorithm,
-            serializer,
-            seed,
-        } = spec;
-
-        let dataset_builder = DatasetBuilder::new();
-        let dataset = dataset_builder.build_inmem(dataset, samples_raw, labels_raw);
+        let dataset_src = self.download_dataset(orch_handle).await?;
         let trainer_builder = TrainerBuilder::new();
 
-        match algorithm {
+        let WorkerSpec {
+            worker_id,
+            ref trainer,
+            ref algorithm,
+            serializer,
+            seed,
+        } = *spec;
+
+        match *algorithm {
             AlgorithmSpec::ParameterServer {
                 ref server_addrs,
                 ref server_sizes,
-                server_ordering,
+                ref server_ordering,
             } => {
                 let cluster_manager = self
                     .connect_to_servers(
-                        spec.worker_id,
+                        worker_id,
                         server_addrs,
                         server_sizes,
-                        server_ordering,
+                        server_ordering.clone(),
                         serializer,
                         seed,
+                        async |_| Ok(()),
                     )
                     .await?;
 
-                let trainer = trainer_builder.build(trainer, server_sizes, dataset);
+                let mut trainer = trainer_builder.build(trainer.clone(), server_sizes);
+                trainer.load_dataset(dataset_src);
+
                 let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
             AlgorithmSpec::AllReduce {
-                worker_addrs,
-                param_gen,
+                ref worker_addrs,
+                ref param_gen,
                 amount_of_layers,
             } => {
                 let param_gen_builder = ParamGenBuilder::new();
                 let mut param_gen = param_gen_builder
-                    .build(param_gen, spec.seed)
+                    .build(param_gen.clone(), spec.seed)
                     .map_err(io::Error::other)?;
 
                 let model_size = param_gen.size();
                 let ring_manager = self
                     .connect_to_workers(
                         worker_id,
-                        worker_addrs,
+                        worker_addrs.clone(),
                         model_size,
                         serializer,
                         seed,
@@ -141,11 +138,77 @@ where
 
                 // SAFETY: The parameter generator was just created.
                 let params = param_gen.sample_remaining().unwrap();
-                let trainer = trainer_builder.build(trainer, &[model_size], dataset);
+                let mut trainer = trainer_builder.build(trainer.clone(), &[model_size]);
+                trainer.load_dataset(dataset_src);
+
                 let worker = AllReduceWorker::new(trainer, ring_manager, orch_handle, params);
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
         }
+    }
+
+    /// Builds a `ParameterServerWorker` from an `AllReduceWorker`'s left over data.
+    ///
+    /// # Args
+    /// * `spec` - The worker's old specification.
+    /// * `server_addrs` - The servers' network addresses.
+    /// * `server_sizes` - The sizes of the worker nodes.
+    /// * `server_ordering` - The ordering of the server layers.
+    /// * `trainer` - The trainer used to train until now.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    ///
+    /// # Returns
+    /// A new `ParamServerWorker` or an io error if occurred.
+    pub async fn build_switched<'a>(
+        &mut self,
+        spec: WorkerSpec,
+        server_addrs: Vec<String>,
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+        mut trainer: Box<dyn Trainer>,
+        orch_handle: &'a mut OrchHandle<T>,
+    ) -> io::Result<ParamServerWorker<'a, T>> {
+        let WorkerSpec {
+            worker_id,
+            serializer,
+            seed,
+            ..
+        } = spec;
+
+        let cluster_manager = self
+            .connect_to_servers(
+                worker_id,
+                &server_addrs,
+                &server_sizes,
+                server_ordering,
+                serializer,
+                seed,
+                async |param_handle| {
+                    let data_src = self.download_dataset(param_handle).await?;
+                    trainer.load_dataset(data_src);
+                    Ok(())
+                },
+            )
+            .await?;
+
+        let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
+        Ok(worker)
+    }
+
+    /// Downloads the dataset from the given dataset source.
+    ///
+    /// # Args
+    /// * `dataset_src` - The handle to communicate with the dataset producer.
+    ///
+    /// # Returns
+    /// A new `Dataset` instance or an io error if occurred.
+    async fn download_dataset<S>(&self, dataset_src: &mut S) -> io::Result<DataSrc>
+    where
+        S: DatasetSrc,
+    {
+        let (mut xs, mut ys) = (Vec::new(), Vec::new());
+        dataset_src.pull_dataset(&mut xs, &mut ys).await?;
+        Ok(DataSrc::inmem(xs, ys))
     }
 
     /// Connects this worker to all the servers in the network.
@@ -159,15 +222,19 @@ where
     ///
     /// # Returns
     /// A new `ServerClusterManager` instance or an io error if occurred.
-    async fn connect_to_servers(
-        self,
+    async fn connect_to_servers<H>(
+        &self,
         id: usize,
         server_addrs: &[String],
         server_sizes: &[usize],
         server_ordering: Vec<usize>,
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
-    ) -> io::Result<ServerClusterManager<T>> {
+        mut connection_hook: H,
+    ) -> io::Result<ServerClusterManager<T>>
+    where
+        H: AsyncFnMut(&mut ParamServerHandle<T>) -> io::Result<()>,
+    {
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
         let src_entity = Entity::Worker { id };
 
@@ -183,6 +250,7 @@ where
                 server_handle.enable_sparse_capability(r, seed);
             }
 
+            connection_hook(&mut server_handle).await?;
             cluster_manager.spawn(server_handle, size);
         }
 
@@ -202,7 +270,7 @@ where
     /// # Returns
     /// A new `WorkerRingManager` instance or an error if occurred.
     async fn connect_to_workers(
-        self,
+        &mut self,
         id: usize,
         addrs: Vec<String>,
         model_size: usize,

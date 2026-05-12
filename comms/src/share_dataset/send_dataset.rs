@@ -1,12 +1,24 @@
-use std::io;
+use std::io::{self, Cursor};
 
 use tokio::io::AsyncRead;
 
 use crate::{
-    protocol::{Msg, Payload},
+    protocol::{Command, Msg, Payload},
     transport::TransportLayer,
     utils,
 };
+
+/// Helper function for wrapping the dataset's source buffer in a readable bytes cursor.
+///
+/// # Args
+/// * `dataset_raw`: The `f32` dataset buffer.
+///
+/// # Returns
+/// A `Cursor<&[u8]>` wrapping the buffer.
+pub fn get_dataset_cursor(dataset_raw: &[f32]) -> Cursor<&[u8]> {
+    let dataset_bytes = bytemuck::cast_slice(dataset_raw);
+    Cursor::new(dataset_bytes)
+}
 
 /// Sends chunks of the dataset with `chunk` size.
 ///
@@ -28,10 +40,13 @@ where
     R: AsyncRead + Unpin,
     T: TransportLayer,
 {
-    let mut buf: Vec<u32> = vec![0; chunk_size / size_of::<f32>()];
+    const UNIT_SIZE: usize = size_of::<f32>();
+    let mut buf: Vec<u32> = vec![0; chunk_size / UNIT_SIZE];
     let buf_u8 = bytemuck::cast_slice_mut(&mut buf);
+
     send_chunks_from(xs, buf_u8, transport).await?;
     send_chunks_from(ys, buf_u8, transport).await?;
+
     Ok(())
 }
 
@@ -57,5 +72,6 @@ where
         transport.send(&msg).await?;
     }
 
-    Ok(())
+    let msg = Msg::Control(Command::Eof);
+    transport.send(&msg).await
 }

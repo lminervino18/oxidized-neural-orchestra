@@ -3,7 +3,7 @@ use std::num::NonZeroUsize;
 use comms::floats::{FloatNonNegative, FloatPositive};
 use orchestrator::{
     configs::{
-        AlgorithmConfig, DatasetConfig, DatasetSrc, EarlyStoppingConfig, LossFnConfig,
+        AlgorithmConfig, DataSrc, DatasetConfig, EarlyStoppingConfig, LossFnConfig,
         OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
     },
     train, CancelHandle,
@@ -151,7 +151,7 @@ pub fn parameter_server(
 
     let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: d.samples.clone(),
                 labels: d.labels.clone(),
             },
@@ -160,7 +160,7 @@ pub fn parameter_server(
         }
     } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Local {
+            src: DataSrc::Local {
                 samples_path: d.samples_path.clone(),
                 labels_path: d.labels_path.clone(),
             },
@@ -298,7 +298,7 @@ pub fn all_reduce(
 
     let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: d.samples.clone(),
                 labels: d.labels.clone(),
             },
@@ -307,7 +307,7 @@ pub fn all_reduce(
         }
     } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Local {
+            src: DataSrc::Local {
                 samples_path: d.samples_path.clone(),
                 labels_path: d.labels_path.clone(),
             },

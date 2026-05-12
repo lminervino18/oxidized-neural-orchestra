@@ -1,11 +1,11 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchHandle, TransportLayer,
+    Acceptor, Connection, Connector, OrchHandle, TransportLayer, share_dataset,
     specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
 };
 use log::{error, info, warn};
-use machine_learning::training::Trainer;
+use machine_learning::{dataset::Dataset, training::Trainer};
 use parameter_server::service::{Server, ServerBuilder};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -13,7 +13,7 @@ use tokio::{
 };
 use worker::{
     builder::WorkerBuilder,
-    workers::{Run, Worker},
+    workers::{ParamServerWorker, Run, Worker},
 };
 
 /// Routes incoming orchestrator connections to the appropriate runtime role
@@ -111,7 +111,8 @@ where
     /// # Returns
     /// An io error if occurred.
     async fn as_server(&mut self, spec: ServerSpec, orch_handle: OrchHandle<T>) -> io::Result<()> {
-        let mut server = self.build_server(spec, orch_handle).await?;
+        let mut server_builder = ServerBuilder::new(&mut self.acceptor);
+        let mut server = server_builder.build(spec, orch_handle).await?;
         self.run_server(server.as_mut()).await
     }
 
@@ -128,7 +129,8 @@ where
         spec: WorkerSpec,
         mut orch_handle: OrchHandle<T>,
     ) -> io::Result<()> {
-        let mut worker = self.build_worker(spec, &mut orch_handle).await?;
+        let mut worker_builder = WorkerBuilder::new(&mut self.acceptor, self.connector.clone());
+        let mut worker = worker_builder.build(&spec, &mut orch_handle).await?;
 
         match self.run_worker(worker.as_mut()).await? {
             Run::Done => Ok(()),
@@ -138,72 +140,26 @@ where
                 server_ordering,
             } => {
                 let trainer = worker.into_trainer();
-                self.switch(
-                    server_addrs,
-                    server_sizes,
-                    server_ordering,
-                    trainer,
-                    orch_handle,
-                )
-                .await
+                let mut worker = self
+                    .switch(
+                        spec,
+                        server_addrs,
+                        server_sizes,
+                        server_ordering,
+                        trainer,
+                        &mut orch_handle,
+                    )
+                    .await?;
+
+                worker.run().await.map(|_| ())
             }
             Run::Upgrade { spec } => {
                 let trainer = worker.into_trainer();
-                self.upgrade(spec, orch_handle, trainer).await
+                let dataset = trainer.into_dataset();
+                let mut server = self.upgrade(spec, orch_handle, dataset).await?;
+                server.run().await
             }
         }
-    }
-
-    /// Builds a server given a specification and an orchestrator handle.
-    ///
-    /// # Args
-    /// * `spec` - The specification for building the server.
-    /// * `orch_handle` - The handle for communicating with the orchestrator.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    async fn build_server(
-        &mut self,
-        spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
-    ) -> io::Result<Box<dyn Server<T>>> {
-        let mut server_builder = ServerBuilder::new(&mut self.acceptor);
-        server_builder.build(spec, orch_handle).await
-    }
-
-    /// Builds a worker given a specification and an orchestrator handle.
-    ///
-    /// # Args
-    /// * `spec` - The specification for building the worker.
-    /// * `orch_handle` - The handle for communicating with the orchestrator.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    async fn build_worker<'a>(
-        &mut self,
-        spec: WorkerSpec,
-        orch_handle: &'a mut OrchHandle<T>,
-    ) -> io::Result<Box<dyn Worker + 'a>> {
-        const UNIT_SIZE: usize = size_of::<f32>();
-        let x_size_bytes = spec.dataset.x_size_bytes as usize;
-        let y_size_bytes = spec.dataset.y_size_bytes as usize;
-        let mut samples_raw = vec![0.0; x_size_bytes / UNIT_SIZE];
-        let mut labels_raw = vec![0.0; y_size_bytes / UNIT_SIZE];
-
-        orch_handle
-            .pull_dataset(
-                &mut comms::get_dataset_cursor(&mut samples_raw),
-                &mut comms::get_dataset_cursor(&mut labels_raw),
-                x_size_bytes,
-                y_size_bytes,
-            )
-            .await?;
-
-        let worker = WorkerBuilder::new(&mut self.acceptor, self.connector.clone())
-            .build(spec, orch_handle, samples_raw, labels_raw)
-            .await?;
-
-        Ok(worker)
     }
 
     /// Runs the node as a server instance for a training session.
@@ -238,38 +194,81 @@ where
         Ok(run)
     }
 
-    async fn switch(
+    #[allow(unused_variables)]
+    /// Switches from an `AllReduceWorker` to a `ParamServerWorker`.
+    ///
+    /// # Args
+    /// * `spec` - The worker's previous specification.
+    /// * `server_addrs` - The network addresses of the server nodes.
+    /// * `server_sizes` - The sizes of each server node.
+    /// * `server_ordering` - The ordering of server layers.
+    /// * `trainer` - The trainer used to train until now.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    ///
+    /// # Returns
+    /// A new worker (presumably a `ParamServerWorker`) or an io error if occurred.
+    async fn switch<'a>(
         &mut self,
+        spec: WorkerSpec,
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
         trainer: Box<dyn Trainer>,
-        orch_handle: OrchHandle<T>,
-    ) -> io::Result<()> {
-        // 1. Build the worker from the trainer (add WorkerBuilder::with_trainer).
-        // 2. Connect to the servers.
-        // 3. For each new server connection download it's dataset part.
-        // 4. Build the worker, it must be a parameter server worker.
-        // 5. Train.
-        //
-        // TODO: Ver como se puede recibir el dataset de los servers.
-        todo!("route_spec match run_worker Run::Switch");
+        orch_handle: &'a mut OrchHandle<T>,
+    ) -> io::Result<ParamServerWorker<'a, T>> {
+        let mut worker_builder = WorkerBuilder::new(&mut self.acceptor, self.connector.clone());
+        let worker = worker_builder
+            .build_switched(
+                spec,
+                server_addrs,
+                server_sizes,
+                server_ordering,
+                trainer,
+                orch_handle,
+            )
+            .await?;
+
+        Ok(worker)
     }
 
+    /// Promotes a worker into a `ParameterServer` by first sharing it's dataset with the new
+    /// worker instances.
+    ///
+    /// # Args
+    /// * `spec` - The server specification.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    /// * `dataset` - The server's previous dataset that's to be shared with the workers.
+    ///
+    /// # Returns
+    /// The server ready to train.
     async fn upgrade(
         &mut self,
         spec: ServerSpec,
         orch_handle: OrchHandle<T>,
-        trainer: Box<dyn Trainer>,
-    ) -> io::Result<()> {
-        // 1. Build the server.
-        // 2. For each send and append it's new dataset partition.
-        // 3. Train.
-        //
-        // TODO: Ver como hacer para que el server mande datasets a los workers.
-        //       Habría que ver que se puede hacer desde `Self::switch` para esto.
-        //
-        //       Seguro va a haber que agregar un append dataset al trainer.
-        todo!("route_spec match run_worker Run::Upgrade");
+        dataset: Dataset,
+    ) -> io::Result<Box<dyn Server<T>>> {
+        const CHUNK_SIZE: usize = 1 << 12;
+
+        let mut partitions = dataset.partition(spec.nworkers);
+        let mut server_builder = ServerBuilder::new(&mut self.acceptor);
+
+        let server = server_builder
+            .build_with(spec, orch_handle, async |worker_handle| {
+                // SAFETY: The amount of partitions is taken from
+                //         the spec, meaning, this closure will be
+                //         called at most `spec.nworkers` times.
+                let (samples_raw, labels_raw) = partitions.next().unwrap();
+                let mut samples_cursor = share_dataset::get_dataset_cursor(samples_raw);
+                let mut labels_cursor = share_dataset::get_dataset_cursor(labels_raw);
+
+                worker_handle
+                    .push_dataset(&mut samples_cursor, &mut labels_cursor, CHUNK_SIZE)
+                    .await?;
+
+                Ok(())
+            })
+            .await?;
+
+        Ok(server)
     }
 }

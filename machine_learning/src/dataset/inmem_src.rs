@@ -2,12 +2,23 @@ use std::ops::Range;
 
 use rand::Rng;
 
+use crate::dataset::DataSrc;
+
+#[derive(Default)]
 pub struct InMemSrc {
     samples: Vec<f32>,
     labels: Vec<f32>,
 }
 
 impl InMemSrc {
+    /// Creates a new `InMemSrc`.
+    ///
+    /// # Args
+    /// * `samples` - The samples data.
+    /// * `labels` - The labels data.
+    ///
+    /// # Returns
+    /// A new `InMemSrc` instance.
     pub fn new(samples: Vec<f32>, labels: Vec<f32>) -> Self {
         InMemSrc { samples, labels }
     }
@@ -28,6 +39,19 @@ impl InMemSrc {
 
             Self::shuffle_slice(&mut self.samples, i, j, x_size);
             Self::shuffle_slice(&mut self.labels, i, j, y_size);
+        }
+    }
+
+    /// Appends the given data source to self.
+    ///
+    /// # Args
+    /// * `src` - The data to append.
+    pub fn load(&mut self, src: DataSrc) {
+        match src {
+            DataSrc::InMem(mut src) => {
+                self.samples.extend_from_slice(&mut src.samples);
+                self.labels.extend_from_slice(&mut src.labels)
+            }
         }
     }
 

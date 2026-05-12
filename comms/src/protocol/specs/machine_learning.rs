@@ -66,9 +66,7 @@ pub enum LayerSpec {
         act_fn: Option<ActFnSpec>,
     },
     Conv {
-        /// The in channels, height and width of the input.
         input_dim: (usize, usize, usize),
-        /// The filters, in channels, and size of the square kernel.
         kernel_dim: (usize, usize, usize),
         stride: usize,
         padding: usize,
@@ -99,14 +97,7 @@ pub enum OptimizerSpec {
 #[derive(PartialEq, Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetSpec {
-    /// The size of all the dataset samples in bytes.
-    pub x_size_bytes: u64,
-    /// The size of all the dataset labels in bytes.
-    pub y_size_bytes: u64,
-    // TODO: no sé qué nombres poner...
-    /// The length of each sample.
     pub x_size: NonZeroUsize,
-    /// The length of each label.
     pub y_size: NonZeroUsize,
 }
 
@@ -123,6 +114,7 @@ pub enum LossFnSpec {
 pub struct TrainerSpec {
     pub layers: Vec<LayerSpec>,
     pub optimizer: OptimizerSpec,
+    pub dataset: DatasetSpec,
     pub loss_fn: LossFnSpec,
     pub offline_epochs: usize,
     pub max_epochs: NonZeroUsize,

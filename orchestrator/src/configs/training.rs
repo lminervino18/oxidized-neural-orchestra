@@ -47,7 +47,7 @@ pub enum OptimizerConfig {
 /// The dataset's data source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum DatasetSrc {
+pub enum DataSrc {
     Local {
         samples_path: PathBuf,
         labels_path: PathBuf,
@@ -62,7 +62,7 @@ pub enum DatasetSrc {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DatasetConfig {
-    pub src: DatasetSrc,
+    pub src: DataSrc,
     pub x_size: NonZeroUsize,
     pub y_size: NonZeroUsize,
 }

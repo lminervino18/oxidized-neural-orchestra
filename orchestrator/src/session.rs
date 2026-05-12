@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{self, Cursor},
+    io,
     path::{Path, PathBuf},
     slice, thread,
 };
@@ -8,6 +8,7 @@ use std::{
 use comms::{
     Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerEvent, WorkerHandle,
     protocol::Entity,
+    share_dataset,
     specs::{
         server::ServerSpec,
         worker::{AlgorithmSpec, WorkerSpec},
@@ -761,10 +762,8 @@ impl Session {
     where
         T: TransportLayer,
     {
-        let sample_bytes: &[u8] = bytemuck::cast_slice(samples);
-        let label_bytes: &[u8] = bytemuck::cast_slice(labels);
-        let mut samples_cursor = Cursor::new(sample_bytes);
-        let mut labels_cursor = Cursor::new(label_bytes);
+        let mut samples_cursor = share_dataset::get_dataset_cursor(samples);
+        let mut labels_cursor = share_dataset::get_dataset_cursor(labels);
 
         worker_handle
             .push_dataset(&mut samples_cursor, &mut labels_cursor, chunk_size)

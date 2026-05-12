@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    configs::{DatasetSrc, ModelConfig, TrainingConfig},
+    configs::{DataSrc, ModelConfig, TrainingConfig},
     dataset_format::DatasetFormat,
     CancelHandle, Session, StopReason, TrainedModel, TrainingEvent,
 };
@@ -159,7 +159,7 @@ impl TrainingState {
         let max_epochs = training.max_epochs.get();
 
         let initial_phase = match &training.dataset.src {
-            DatasetSrc::Local {
+            DataSrc::Local {
                 samples_path,
                 labels_path,
             } if DatasetFormat::from_path(samples_path).is_some()

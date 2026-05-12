@@ -2,7 +2,7 @@ use std::fs;
 
 use super::{AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
 use crate::{
-    configs::training::DatasetSrc,
+    configs::training::DataSrc,
     error::{OrchErr, Result},
 };
 
@@ -113,7 +113,7 @@ impl Validator {
         };
 
         let samples = match src {
-            DatasetSrc::Inline { samples, labels } => {
+            DataSrc::Inline { samples, labels } => {
                 let len = samples.len() + labels.len();
 
                 if len % row_size != 0 {
@@ -127,7 +127,7 @@ impl Validator {
                 // SAFETY: row_size is a positive integer.
                 len / row_size.get()
             }
-            DatasetSrc::Local {
+            DataSrc::Local {
                 samples_path,
                 labels_path,
             } => {

@@ -7,7 +7,7 @@ use std::{fs, path::PathBuf, time::Duration};
 
 use comms::Connector;
 
-use configs::{Adapter, DatasetSrc, ModelConfig, TrainingConfig, Validator};
+use configs::{Adapter, DataSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
 
@@ -83,8 +83,8 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 ///
 /// # Returns
 /// The paths of the generated binary files if they were found or `None` if not.
-fn generate_binary_dataset(src: &mut DatasetSrc) -> Option<(PathBuf, PathBuf)> {
-    let DatasetSrc::Local {
+fn generate_binary_dataset(src: &mut DataSrc) -> Option<(PathBuf, PathBuf)> {
+    let DataSrc::Local {
         samples_path,
         labels_path,
     } = src
@@ -101,7 +101,7 @@ fn generate_binary_dataset(src: &mut DatasetSrc) -> Option<(PathBuf, PathBuf)> {
 
     let samples_bin_path = convert_to_binary(samples_path, samples_format).ok()?;
     let labels_bin_path = convert_to_binary(labels_path, labels_format).ok()?;
-    *src = DatasetSrc::Local {
+    *src = DataSrc::Local {
         samples_path: samples_bin_path.clone(),
         labels_path: labels_bin_path.clone(),
     };

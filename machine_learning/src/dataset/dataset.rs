@@ -1,48 +1,71 @@
 use std::num::NonZeroUsize;
 
-use super::dataset_src::DatasetSrc;
 use ndarray::ArrayView2;
 use rand::Rng;
+
+use super::{dataset_src::DataSrc, inmem_src::InMemSrc};
 
 /// A container for the *raw* dataset and its meta data. The raw data is expected to be structured
 /// as rows, each with an x and it's expected output y.
 pub struct Dataset {
-    src: DatasetSrc,
+    src: DataSrc,
     rows: usize,
-    x_size: usize,
-    y_size: usize,
+    x_size: NonZeroUsize,
+    y_size: NonZeroUsize,
 }
 
 impl Dataset {
     /// Creates a new `Dataset`.
     ///
     /// # Args
-    /// * `data` - A vector containing the raw data.
     /// * `x_size` - Per row sample size.
     /// * `y_size` - Per row Label size.
     ///
     /// # Returns
     /// A new `Dataset` instance.
-    pub fn new(src: DatasetSrc, x_size: NonZeroUsize, y_size: NonZeroUsize) -> Self {
-        let x_size = x_size.get();
-        let y_size = y_size.get();
-        // SAFETY: both x_size and y_size are positive integers.
-        let rows = src.size() / (x_size + y_size);
-
+    pub fn new(x_size: NonZeroUsize, y_size: NonZeroUsize) -> Self {
         Self {
-            rows,
+            rows: 0,
+            src: DataSrc::InMem(InMemSrc::default()),
+            x_size,
+            y_size,
+        }
+    }
+
+    /// Creates a new `Dataset`.
+    ///
+    /// # Args
+    /// * `src` - The dataset's source data.
+    /// * `x_size` - Per row sample size.
+    /// * `y_size` - Per row Label size.
+    ///
+    /// # Returns
+    /// A new `Dataset` instance.
+    pub fn loaded(src: DataSrc, x_size: NonZeroUsize, y_size: NonZeroUsize) -> Self {
+        Self {
+            // SAFETY: The divisor is always greater than 0.
+            rows: src.size() / (x_size.get() + y_size.get()),
             src,
             x_size,
             y_size,
         }
     }
 
+    /// Appends this data source to this dataset.
+    ///
+    /// # Args
+    /// * `src` - The data to append.
+    pub fn load(&mut self, src: DataSrc) {
+        self.src.load(src);
+    }
+
     /// Shuffles the rows in the dataset using a random number generator.
     ///
     /// # Args
     /// * `rng` - A random number generator.
-    pub fn shuffle<Rn: Rng>(&mut self, rng: &mut Rn) {
-        self.src.shuffle(self.rows, self.x_size, self.y_size, rng);
+    pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
+        let (x_size, y_size) = self.sizes();
+        self.src.shuffle(self.rows, x_size.get(), y_size.get(), rng);
     }
 
     /// Retrieves the dataset in batches of size `batch_size`.
@@ -60,6 +83,34 @@ impl Dataset {
             let n = (start + batch_size.get()).min(self.rows) - start;
             self.view_batch(start, n)
         })
+    }
+
+    /// Partitions the dataset into n parts minimizing the size between them all.
+    ///
+    /// # Args
+    /// * `n` - The amount of partitions to make.
+    ///
+    /// # Returns
+    /// An iterator over the dataset's raw partitions.
+    pub fn partition(&self, n: usize) -> impl Iterator<Item = (&[f32], &[f32])> {
+        let (x_size, y_size) = self.sizes();
+
+        let batch_size = self.rows / n.max(1);
+        let extra = self.rows % n.max(1);
+        let mut start = 0;
+
+        (0..n).map(move |i| {
+            let end = start + batch_size + (i < extra) as usize;
+            let samples_range = start * x_size.get()..end * x_size.get();
+            let labels_range = start * y_size.get()..end * x_size.get();
+
+            start = end;
+            self.src.raw_batch(samples_range, labels_range)
+        })
+    }
+
+    pub fn sizes(&self) -> (NonZeroUsize, NonZeroUsize) {
+        (self.x_size, self.y_size)
     }
 
     /// Creates a view over a certain batch of the dataset.
@@ -82,14 +133,14 @@ impl Dataset {
             ..
         } = self;
 
-        let x_offset = row * x_size;
-        let y_offset = row * y_size;
-        let x_range = x_offset..x_offset + x_size * n;
-        let y_range = y_offset..y_offset + y_size * n;
+        let x_offset = row * x_size.get();
+        let y_offset = row * y_size.get();
+        let x_range = x_offset..x_offset + x_size.get() * n;
+        let y_range = y_offset..y_offset + y_size.get() * n;
         let (x_raw_batch, y_raw_batch) = src.raw_batch(x_range, y_range);
 
-        let x_batch = ArrayView2::from_shape((n, x_size), x_raw_batch).unwrap();
-        let y_batch = ArrayView2::from_shape((n, y_size), y_raw_batch).unwrap();
+        let x_batch = ArrayView2::from_shape((n, x_size.get()), x_raw_batch).unwrap();
+        let y_batch = ArrayView2::from_shape((n, y_size.get()), y_raw_batch).unwrap();
 
         (x_batch, y_batch)
     }
@@ -106,9 +157,9 @@ mod tests {
         let y_sums = vec![3., 7., 11.];
         let x_size = NonZeroUsize::new(2).unwrap();
         let y_size = NonZeroUsize::new(1).unwrap();
-        let src = DatasetSrc::inmem(x_sums, y_sums);
+        let src = DataSrc::inmem(x_sums, y_sums);
 
-        let ds = Dataset::new(src, x_size, y_size);
+        let ds = Dataset::loaded(src, x_size, y_size);
 
         let expected_x = aview2(&[[1., 2.], [3., 4.]]);
         let expected_y = aview2(&[[3.], [7.]]);

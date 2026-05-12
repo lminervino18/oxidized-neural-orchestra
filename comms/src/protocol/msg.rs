@@ -31,6 +31,10 @@ pub enum Entity {
 pub enum Command<'a> {
     Connect(Entity),
     CreateNode(NodeSpec),
+    ShareDataset,
+    ShareDatasetSize {
+        size: usize,
+    },
     Upgrade {
         spec: ServerSpec,
     },
@@ -46,6 +50,7 @@ pub enum Command<'a> {
     StopAfterEpoch,
     Disconnect,
     Done,
+    Eof,
 }
 
 /// The application layer message for the entire system.
