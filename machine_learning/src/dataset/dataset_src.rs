@@ -3,6 +3,7 @@ use rand::Rng;
 use std::ops::Range;
 
 /// The source of a dataset.
+#[derive(Debug)]
 pub enum DataSrc {
     InMem(InMemSrc),
     // Stream(StreamSrc<R>),

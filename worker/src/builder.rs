@@ -79,7 +79,7 @@ where
         spec: &WorkerSpec,
         orch_handle: &'a mut OrchHandle<T>,
     ) -> io::Result<Box<dyn Worker + 'a>> {
-        let dataset_src = self.download_dataset(orch_handle).await?;
+        let data_src = self.download_dataset(orch_handle).await?;
         let trainer_builder = TrainerBuilder::new();
 
         let WorkerSpec {
@@ -108,8 +108,10 @@ where
                     )
                     .await?;
 
+                println!("data src: {data_src:?}");
+
                 let mut trainer = trainer_builder.build(trainer.clone(), server_sizes);
-                trainer.load_dataset(dataset_src);
+                trainer.load_dataset(data_src);
 
                 let worker = ParamServerWorker::new(trainer, cluster_manager, orch_handle);
                 Ok(Box::new(worker) as Box<dyn Worker>)
@@ -139,7 +141,7 @@ where
                 // SAFETY: The parameter generator was just created.
                 let params = param_gen.sample_remaining().unwrap();
                 let mut trainer = trainer_builder.build(trainer.clone(), &[model_size]);
-                trainer.load_dataset(dataset_src);
+                trainer.load_dataset(data_src);
 
                 let worker = AllReduceWorker::new(trainer, ring_manager, orch_handle, params);
                 Ok(Box::new(worker) as Box<dyn Worker>)

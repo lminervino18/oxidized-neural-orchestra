@@ -4,7 +4,7 @@ use rand::Rng;
 
 use crate::dataset::DataSrc;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct InMemSrc {
     samples: Vec<f32>,
     labels: Vec<f32>,
