@@ -502,6 +502,33 @@ def save_result(result: dict, path: Path):
         f.write(json.dumps(result) + "\n")
 
 
+def load_historical_results() -> dict:
+    """
+    Load the most recent result per run_num from all JSONL files in RESULTS_DIR.
+    Files are read in sorted (timestamp) order so newer sessions overwrite older ones.
+    Returns {run_num: result_dict}.
+    """
+    by_num: dict = {}
+    if not RESULTS_DIR.exists():
+        return by_num
+    for path in sorted(RESULTS_DIR.glob("*.jsonl")):
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if "run_num" in rec and "model_name" in rec:
+                        by_num[rec["run_num"]] = rec
+        except OSError:
+            pass
+    return by_num
+
+
 def print_summary(results: list):
     W = 80
     print("\n" + "─" * W)
@@ -924,16 +951,25 @@ def main():
     print_summary(all_results)
 
     run_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    plot_main(all_results, run_ts)
 
-    # Comparison plots (only if the relevant runs were executed)
-    executed_ids = {r["run_num"] for r in all_results if "run_num" in r}
-    results_by_num = {r["run_num"]: r for r in all_results if "run_num" in r}
+    # Merge historical results with current session.
+    # Current session always wins for any run it executed — other runs keep their
+    # last known values from previous sessions so partial runs never blank them out.
+    historical      = load_historical_results()
+    current_by_num  = {r["run_num"]: r for r in all_results if "run_num" in r}
+    merged_by_num   = {**historical, **current_by_num}
+    merged_list     = sorted(merged_by_num.values(), key=lambda r: r.get("run_num", 0))
+
+    plot_main(merged_list, run_ts)
+
+    # Trigger comparison plots for any group that overlaps the current session,
+    # but pass the full merged map so non-executed runs still show historical bars.
+    executed_ids   = set(current_by_num)
     run_defs_by_id = {r["id"]: r for r in all_runs}
 
     for cmp in cmp_plots:
         if set(cmp["run_ids"]) & executed_ids:
-            plot_comparison(results_by_num, cmp, run_defs_by_id, run_ts)
+            plot_comparison(merged_by_num, cmp, run_defs_by_id, run_ts)
 
 
 if __name__ == "__main__":

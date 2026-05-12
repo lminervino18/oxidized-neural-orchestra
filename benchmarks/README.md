@@ -57,7 +57,7 @@ sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n
 | 19 | dense_small | AllReduce | 3 | 0 | sparse | — | 150 |
 | 20 | dense_large | AllReduce | 3 | 0 | sparse | — | 200 |
 | 22 | conv_small_softmax | AllReduce | 2 | 0 | base | — | 100 |
-| 23 | conv_small_softmax | AllReduce | 3 | 0 | base | — | 150 |
+| 23 | conv_small_softmax | AllReduce | 3 | 0 | base | — | 100 |
 | 30 | conv_small_softmax | PS | 2 | 1 | base | barrier | 100 |
 | 32 | conv_small_softmax | PS | 3 | 1 | base | barrier | 250 |
 

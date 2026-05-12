@@ -292,8 +292,8 @@
       "serializer": "base",
       "sync": null, "store": null,
       "lr": 0.05, "batch_size": 256, "offline_epochs": 0, "loss_fn": "cross_entropy",
-      "max_epochs": 150,
-      "early_stopping_tolerance": null,
+      "max_epochs": 100,
+      "early_stopping_tolerance": 1e-4,
       "min_accuracy": 0.85, "max_train_seconds": 1200
     },
     {
