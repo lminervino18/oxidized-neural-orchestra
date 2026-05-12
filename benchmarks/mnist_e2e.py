@@ -224,9 +224,12 @@ def _gen_compose(workers: int, servers: int, release: bool = True):
 def docker_up(workers: int, servers: int, rebuild: bool, release: bool = True) -> float:
     t0 = time.perf_counter()
     _gen_compose(workers, servers, release)
-    cmd = ["docker", "compose", "-f", str(COMPOSE_FILE), "up"]
-    cmd += ["--build", "--no-cache"] if rebuild else ["--build"]
-    cmd += ["-d", "--remove-orphans"]
+    if rebuild:
+        subprocess.run(
+            ["docker", "compose", "-f", str(COMPOSE_FILE), "build", "--no-cache"],
+            check=True,
+        )
+    cmd = ["docker", "compose", "-f", str(COMPOSE_FILE), "up", "--build", "-d", "--remove-orphans"]
     subprocess.run(cmd, check=True)
     time.sleep(10)
     return time.perf_counter() - t0
