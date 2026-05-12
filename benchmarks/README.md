@@ -24,15 +24,17 @@ sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n
 ## Running
 
 ```bash
-# All 22 combinations (~30–35 min)
+# All 22 combinations (~55–60 min)
 .venv/bin/python benchmarks/mnist_e2e.py
 
-# Specific numbered runs
+# Specific numbered runs (only updates those bars in the plots)
 .venv/bin/python benchmarks/mnist_e2e.py --runs 1 11 22
 
 # Keep containers after run / force image rebuild
 .venv/bin/python benchmarks/mnist_e2e.py --keep-containers --rebuild
 ```
+
+Partial runs only regenerate comparison plots that include at least one of the executed runs. All other plots keep their last historical values from previous JSONL files.
 
 ## Run Table
 
@@ -67,90 +69,110 @@ adds a 6–7× per-epoch overhead for conv tensors. Both dimensions are covered 
 runs (large models) and dense sparse runs (sparse gradient compression) respectively.
 `conv_small_softmax` is sufficient to validate conv support end-to-end.
 
-## Comparison Plots
+## Results
 
-Each comparison generates one chart per model per metric (`{name}_{model}_accuracy.png` / `{name}_{model}_time.png`).
+### Overview
 
-| Group | Title | Runs |
-|-------|-------|------|
-| `cmp_ps_vs_ar` | PS vs AllReduce — 2w, base | 1, 2, 11, 12 |
-| `cmp_ps_worker_scaling` | PS worker scaling — base, barrier | 1–6 |
-| `cmp_ar_worker_scaling` | AllReduce worker scaling — base | 11–14 |
-| `cmp_sparse_vs_base_ps` | Sparse vs base — PS 2w/1s, barrier | 1, 2, 7, 8 |
-| `cmp_sparse_vs_base_ar` | Sparse vs base — AllReduce 2w | 11, 12, 16, 17 |
-| `cmp_ar_sparse_worker_scaling` | AllReduce sparse — worker scaling | 16, 17, 19, 20 |
-| `cmp_barrier_vs_nonblocking` | Barrier vs non-blocking — PS 2w/1s, base | 1, 2, 9, 10 |
-| `cmp_conv_ar_worker_scaling` | Conv AllReduce worker scaling — base | 22, 23 |
-| `cmp_conv_ps_vs_ar` | Conv PS vs AllReduce — 2w base | 22, 30 |
-| `cmp_conv_ps_worker_scaling` | Conv PS worker scaling — base, barrier | 30, 32 |
+| Accuracy | Training Time |
+|---|---|
+| ![Accuracy across all 22 runs](plots/accuracy.png) | ![Training time across all 22 runs](plots/training_time.png) |
 
-## Latest Results
+---
 
-### Accuracy
-![Accuracy](plots/accuracy.png)
+### PS vs AllReduce — 2 workers, base serializer
+_Runs 1, 2 (PS barrier) vs 11, 12 (AllReduce ring)_
 
-### Training Time
-![Training Time](plots/training_time.png)
-
-### PS vs AllReduce
 | | dense_small | dense_large |
 |---|---|---|
 | Accuracy | ![](plots/cmp_ps_vs_ar_dense_small_accuracy.png) | ![](plots/cmp_ps_vs_ar_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_ps_vs_ar_dense_small_time.png) | ![](plots/cmp_ps_vs_ar_dense_large_time.png) |
 
-### PS Worker Scaling
+---
+
+### PS Worker Scaling — base serializer, barrier sync
+_Runs 1–6: 2w/1s → 3w/1s → 3w/2s_
+
 | | dense_small | dense_large |
 |---|---|---|
 | Accuracy | ![](plots/cmp_ps_worker_scaling_dense_small_accuracy.png) | ![](plots/cmp_ps_worker_scaling_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_ps_worker_scaling_dense_small_time.png) | ![](plots/cmp_ps_worker_scaling_dense_large_time.png) |
 
-### AllReduce Worker Scaling
+---
+
+### AllReduce Worker Scaling — base serializer
+_Runs 11–14: 2 workers vs 3 workers_
+
 | | dense_small | dense_large |
 |---|---|---|
 | Accuracy | ![](plots/cmp_ar_worker_scaling_dense_small_accuracy.png) | ![](plots/cmp_ar_worker_scaling_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_ar_worker_scaling_dense_small_time.png) | ![](plots/cmp_ar_worker_scaling_dense_large_time.png) |
 
-### Sparse vs Base — PS
+---
+
+### Sparse vs Base Gradient — PS 2w/1s, barrier sync
+_Runs 1, 2 (base) vs 7, 8 (sparse)_
+
 | | dense_small | dense_large |
 |---|---|---|
 | Accuracy | ![](plots/cmp_sparse_vs_base_ps_dense_small_accuracy.png) | ![](plots/cmp_sparse_vs_base_ps_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_sparse_vs_base_ps_dense_small_time.png) | ![](plots/cmp_sparse_vs_base_ps_dense_large_time.png) |
 
-### Sparse vs Base — AllReduce
+---
+
+### Sparse vs Base Gradient — AllReduce 2 workers
+_Runs 11, 12 (base) vs 16, 17 (sparse)_
+
 | | dense_small | dense_large |
 |---|---|---|
 | Accuracy | ![](plots/cmp_sparse_vs_base_ar_dense_small_accuracy.png) | ![](plots/cmp_sparse_vs_base_ar_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_sparse_vs_base_ar_dense_small_time.png) | ![](plots/cmp_sparse_vs_base_ar_dense_large_time.png) |
 
+---
+
 ### AllReduce Sparse — Worker Scaling
+_Runs 16, 17 (2w sparse) vs 19, 20 (3w sparse)_
+
 | | dense_small | dense_large |
 |---|---|---|
 | Accuracy | ![](plots/cmp_ar_sparse_worker_scaling_dense_small_accuracy.png) | ![](plots/cmp_ar_sparse_worker_scaling_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_ar_sparse_worker_scaling_dense_small_time.png) | ![](plots/cmp_ar_sparse_worker_scaling_dense_large_time.png) |
 
-### Barrier vs Non-blocking
+---
+
+### Barrier vs Non-blocking Sync — PS 2w/1s, base serializer
+_Runs 1, 2 (barrier) vs 9, 10 (nonblocking wild)_
+
 | | dense_small | dense_large |
 |---|---|---|
 | Accuracy | ![](plots/cmp_barrier_vs_nonblocking_dense_small_accuracy.png) | ![](plots/cmp_barrier_vs_nonblocking_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_barrier_vs_nonblocking_dense_small_time.png) | ![](plots/cmp_barrier_vs_nonblocking_dense_large_time.png) |
 
-### Conv AllReduce Worker Scaling
-| | conv_small_softmax |
-|---|---|
-| Accuracy | ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_accuracy.png) |
-| Time | ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_time.png) |
+---
 
-### Conv PS vs AllReduce
-| | conv_small_softmax |
-|---|---|
-| Accuracy | ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_accuracy.png) |
-| Time | ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_time.png) |
+### Conv — AllReduce Worker Scaling
+_Runs 22, 23: 2 workers vs 3 workers_
 
-### Conv PS Worker Scaling
-| | conv_small_softmax |
+| Accuracy | Time |
 |---|---|
-| Accuracy | ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_accuracy.png) |
-| Time | ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_time.png) |
+| ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_accuracy.png) | ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_time.png) |
+
+---
+
+### Conv — PS vs AllReduce, 2 workers
+_Runs 22 (AllReduce) vs 30 (PS barrier)_
+
+| Accuracy | Time |
+|---|---|
+| ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_accuracy.png) | ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_time.png) |
+
+---
+
+### Conv — PS Worker Scaling
+_Runs 30, 32: 2w/1s vs 3w/1s_
+
+| Accuracy | Time |
+|---|---|
+| ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_accuracy.png) | ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_time.png) |
 
 ---
 
