@@ -262,7 +262,13 @@ where
                 let mut labels_cursor = share_dataset::get_dataset_cursor(labels_raw);
 
                 worker_handle
-                    .push_dataset(&mut samples_cursor, &mut labels_cursor, CHUNK_SIZE)
+                    .push_dataset(
+                        &mut samples_cursor,
+                        &mut labels_cursor,
+                        samples_raw.len(),
+                        labels_raw.len(),
+                        CHUNK_SIZE,
+                    )
                     .await?;
 
                 Ok(())

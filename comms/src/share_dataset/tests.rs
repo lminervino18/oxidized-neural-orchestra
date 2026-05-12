@@ -17,7 +17,7 @@ async fn test_share_dataset() {
     let (_, tx) = io::split(tx);
     let mut transport = Framer::new(rx, tx);
 
-    let chunk = 4;
+    let chunk_size = 4;
     let x_size = 254;
     let y_size = 127;
     let samples: Vec<_> = (0..x_size).map(|i| i as f32).collect();
@@ -28,9 +28,16 @@ async fn test_share_dataset() {
     let mut tx_x_cursor = share_dataset::get_dataset_cursor(&samples);
     let mut tx_y_cursor = share_dataset::get_dataset_cursor(&labels);
 
-    send_dataset(&mut tx_x_cursor, &mut tx_y_cursor, chunk, &mut transport)
-        .await
-        .unwrap();
+    send_dataset(
+        &mut tx_x_cursor,
+        &mut tx_y_cursor,
+        x_size,
+        y_size,
+        chunk_size,
+        &mut transport,
+    )
+    .await
+    .unwrap();
 
     recv_dataset(&mut rx_x_storage, &mut rx_y_storage, &mut transport)
         .await

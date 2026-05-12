@@ -20,12 +20,14 @@ pub fn get_dataset_cursor(dataset_raw: &[f32]) -> Cursor<&[u8]> {
     Cursor::new(dataset_bytes)
 }
 
-/// Sends chunks of the dataset with `chunk` size.
+/// Sends chunks of the dataset with `chunk_size` size.
 ///
 /// # Args
 /// * `xs` - The sample's source.
 /// * `ys` - The label's source.
-/// * `chunk_size` - The size of each chunk.
+/// * `xs_size_hint` - The minimum amount of units that xs has.
+/// * `ys_size_hint` - The minimum amount of units that ys has.
+/// * `chunk_size` - The size of each chunk in bytes.
 /// * `transport` - The transport layer of the communication.
 ///
 /// # Errors
@@ -33,6 +35,8 @@ pub fn get_dataset_cursor(dataset_raw: &[f32]) -> Cursor<&[u8]> {
 pub async fn send_dataset<R, T>(
     xs: &mut R,
     ys: &mut R,
+    xs_size_hint: usize,
+    ys_size_hint: usize,
     chunk_size: usize,
     transport: &mut T,
 ) -> io::Result<()>
@@ -44,8 +48,8 @@ where
     let mut buf: Vec<u32> = vec![0; chunk_size / UNIT_SIZE];
     let buf_u8 = bytemuck::cast_slice_mut(&mut buf);
 
-    send_chunks_from(xs, buf_u8, transport).await?;
-    send_chunks_from(ys, buf_u8, transport).await?;
+    send_chunks_from(xs, xs_size_hint, buf_u8, transport).await?;
+    send_chunks_from(ys, ys_size_hint, buf_u8, transport).await?;
 
     Ok(())
 }
@@ -54,16 +58,25 @@ where
 ///
 /// # Arsg
 /// * `reader` - The byte source.
+/// * `size_hint` - The minimum amount of bytes that reader has left to read.
 /// * `acc` - The accumulating buffer.
 /// * `transport` - The transport layer of the communication.
 ///
 /// # Returns
 /// An io error if occurred.
-async fn send_chunks_from<R, T>(reader: &mut R, acc: &mut [u8], transport: &mut T) -> io::Result<()>
+async fn send_chunks_from<R, T>(
+    reader: &mut R,
+    size_hint: usize,
+    acc: &mut [u8],
+    transport: &mut T,
+) -> io::Result<()>
 where
     R: AsyncRead + Unpin,
     T: TransportLayer,
 {
+    let msg = Msg::Control(Command::ShareDatasetSize { size: size_hint });
+    transport.send(&msg).await?;
+
     while let n = utils::read_all(reader, acc).await?
         && n > 0
     {

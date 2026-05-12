@@ -747,7 +747,13 @@ impl Session {
         let mut labels_fd = labels_fd.take(labels_size);
 
         worker_handle
-            .push_dataset(&mut samples_fd, &mut labels_fd, chunk_size)
+            .push_dataset(
+                &mut samples_fd,
+                &mut labels_fd,
+                samples_size as usize,
+                labels_size as usize,
+                chunk_size,
+            )
             .await?;
 
         Ok(())
@@ -766,7 +772,13 @@ impl Session {
         let mut labels_cursor = share_dataset::get_dataset_cursor(labels);
 
         worker_handle
-            .push_dataset(&mut samples_cursor, &mut labels_cursor, chunk_size)
+            .push_dataset(
+                &mut samples_cursor,
+                &mut labels_cursor,
+                samples.len(),
+                labels.len(),
+                chunk_size,
+            )
             .await?;
 
         Ok(())
