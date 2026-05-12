@@ -24,11 +24,11 @@ sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n
 ## Running
 
 ```bash
-# All 18 combinations (~40–90 min)
+# All 22 combinations (~30–35 min)
 .venv/bin/python benchmarks/mnist_e2e.py
 
 # Specific numbered runs
-.venv/bin/python benchmarks/mnist_e2e.py --runs 1 11 16
+.venv/bin/python benchmarks/mnist_e2e.py --runs 1 11 22
 
 # Keep containers after run / force image rebuild
 .venv/bin/python benchmarks/mnist_e2e.py --keep-containers --rebuild
@@ -39,15 +39,15 @@ sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n
 | # | Model | Algorithm | Workers | Servers | Serializer | Sync | Max Epochs |
 |---|-------|-----------|---------|---------|------------|------|------------|
 | 1 | dense_small | PS | 2 | 1 | base | barrier | 80 |
-| 2 | dense_large | PS | 2 | 1 | base | barrier | 250 |
+| 2 | dense_large | PS | 2 | 1 | base | barrier | 120 |
 | 3 | dense_small | PS | 3 | 1 | base | barrier | 150 |
-| 4 | dense_large | PS | 3 | 1 | base | barrier | 250 |
+| 4 | dense_large | PS | 3 | 1 | base | barrier | 200 |
 | 5 | dense_small | PS | 3 | 2 | base | barrier | 150 |
-| 6 | dense_large | PS | 3 | 2 | base | barrier | 250 |
+| 6 | dense_large | PS | 3 | 2 | base | barrier | 200 |
 | 7 | dense_small | PS | 2 | 1 | sparse | barrier | 80 |
-| 8 | dense_large | PS | 2 | 1 | sparse | barrier | 250 |
+| 8 | dense_large | PS | 2 | 1 | sparse | barrier | 120 |
 | 9 | dense_small | PS | 2 | 1 | base | nonblocking | 80 |
-| 10 | dense_large | PS | 2 | 1 | base | nonblocking | 250 |
+| 10 | dense_large | PS | 2 | 1 | base | nonblocking | 120 |
 | 11 | dense_small | AllReduce | 2 | 0 | base | — | 150 |
 | 12 | dense_large | AllReduce | 2 | 0 | base | — | 150 |
 | 13 | dense_small | AllReduce | 3 | 0 | base | — | 150 |
@@ -56,7 +56,16 @@ sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n
 | 17 | dense_large | AllReduce | 2 | 0 | sparse | — | 150 |
 | 19 | dense_small | AllReduce | 3 | 0 | sparse | — | 150 |
 | 20 | dense_large | AllReduce | 3 | 0 | sparse | — | 200 |
-| 21 | conv_tiny_softmax | AllReduce | 2 | 0 | base | — | 30 |
+| 22 | conv_small_softmax | AllReduce | 2 | 0 | base | — | 100 |
+| 23 | conv_small_softmax | AllReduce | 3 | 0 | base | — | 150 |
+| 30 | conv_small_softmax | PS | 2 | 1 | base | barrier | 100 |
+| 32 | conv_small_softmax | PS | 3 | 1 | base | barrier | 250 |
+
+**Not included:** `conv_large_softmax` (Conv2d 32 filters) and conv sparse runs.
+`conv_large` requires ~15s/epoch making a 200-epoch run ~50 min; the sparse serializer
+adds a 6–7× per-epoch overhead for conv tensors. Both dimensions are covered by dense
+runs (large models) and dense sparse runs (sparse gradient compression) respectively.
+`conv_small_softmax` is sufficient to validate conv support end-to-end.
 
 ## Comparison Plots
 
@@ -71,6 +80,9 @@ Each comparison generates one chart per model per metric (`{name}_{model}_accura
 | `cmp_sparse_vs_base_ar` | Sparse vs base — AllReduce 2w | 11, 12, 16, 17 |
 | `cmp_ar_sparse_worker_scaling` | AllReduce sparse — worker scaling | 16, 17, 19, 20 |
 | `cmp_barrier_vs_nonblocking` | Barrier vs non-blocking — PS 2w/1s, base | 1, 2, 9, 10 |
+| `cmp_conv_ar_worker_scaling` | Conv AllReduce worker scaling — base | 22, 23 |
+| `cmp_conv_ps_vs_ar` | Conv PS vs AllReduce — 2w base | 22, 30 |
+| `cmp_conv_ps_worker_scaling` | Conv PS worker scaling — base, barrier | 30, 32 |
 
 ## Latest Results
 
@@ -122,6 +134,24 @@ Each comparison generates one chart per model per metric (`{name}_{model}_accura
 | Accuracy | ![](plots/cmp_barrier_vs_nonblocking_dense_small_accuracy.png) | ![](plots/cmp_barrier_vs_nonblocking_dense_large_accuracy.png) |
 | Time | ![](plots/cmp_barrier_vs_nonblocking_dense_small_time.png) | ![](plots/cmp_barrier_vs_nonblocking_dense_large_time.png) |
 
+### Conv AllReduce Worker Scaling
+| | conv_small_softmax |
+|---|---|
+| Accuracy | ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_accuracy.png) |
+| Time | ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_time.png) |
+
+### Conv PS vs AllReduce
+| | conv_small_softmax |
+|---|---|
+| Accuracy | ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_accuracy.png) |
+| Time | ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_time.png) |
+
+### Conv PS Worker Scaling
+| | conv_small_softmax |
+|---|---|
+| Accuracy | ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_accuracy.png) |
+| Time | ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_time.png) |
+
 ---
 
 ## What Gets Measured
@@ -141,7 +171,7 @@ Pass/fail: `accuracy >= min_accuracy AND train_seconds <= max_train_seconds`.
 |------|-------------|
 | `dense_small` | 784 → 128 → 64 → 10 (Sigmoid) |
 | `dense_large` | 784 → 256 → 128 → 64 → 10 (Sigmoid) |
-| `conv_tiny_softmax` | Conv2d(8 filters, 4×4, stride 2) → flatten(1352) → 10 (Softmax), CE loss |
+| `conv_small_softmax` | Conv2d(16 filters, 4×4, stride 2) → flatten(2704) → 64 → 10 (Softmax), CE loss |
 
 ## Results Format
 

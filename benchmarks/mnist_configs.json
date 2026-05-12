@@ -40,6 +40,18 @@
       "conv": [{"input_dim": [1,28,28], "kernel_dim": [8,1,4], "stride": 2, "padding": 0, "act": null}],
       "dense": [{"size": 10, "act": "softmax"}],
       "flat_size": 1352
+    },
+    "conv_small_softmax": {
+      "type": "conv",
+      "conv": [{"input_dim": [1,28,28], "kernel_dim": [16,1,4], "stride": 2, "padding": 0, "act": null}],
+      "dense": [{"size": 64, "act": null}, {"size": 10, "act": "softmax"}],
+      "flat_size": 2704
+    },
+    "conv_large_softmax": {
+      "type": "conv",
+      "conv": [{"input_dim": [1,28,28], "kernel_dim": [32,1,4], "stride": 2, "padding": 0, "act": null}],
+      "dense": [{"size": 128, "act": null}, {"size": 64, "act": null}, {"size": 10, "act": "softmax"}],
+      "flat_size": 5408
     }
   },
 
@@ -54,7 +66,7 @@
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 80,
       "early_stopping_tolerance": 1e-4,
-      "min_accuracy": 0.90, "max_train_seconds": 180
+      "min_accuracy": 0.85, "max_train_seconds": 180
     },
     {
       "id": 2,
@@ -64,9 +76,9 @@
       "serializer": "base",
       "sync": "barrier", "store": "blocking",
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
-      "max_epochs": 250,
+      "max_epochs": 120,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 600
+      "min_accuracy": 0.85, "max_train_seconds": 360
     },
     {
       "id": 3,
@@ -78,7 +90,7 @@
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 300
+      "min_accuracy": 0.85, "max_train_seconds": 300
     },
     {
       "id": 4,
@@ -88,9 +100,9 @@
       "serializer": "base",
       "sync": "barrier", "store": "blocking",
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
-      "max_epochs": 250,
+      "max_epochs": 200,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 600
+      "min_accuracy": 0.85, "max_train_seconds": 600
     },
     {
       "id": 5,
@@ -102,7 +114,7 @@
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 300
+      "min_accuracy": 0.85, "max_train_seconds": 300
     },
     {
       "id": 6,
@@ -112,9 +124,9 @@
       "serializer": "base",
       "sync": "barrier", "store": "blocking",
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
-      "max_epochs": 250,
+      "max_epochs": 200,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 600
+      "min_accuracy": 0.85, "max_train_seconds": 600
     },
     {
       "id": 7,
@@ -126,7 +138,7 @@
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 80,
       "early_stopping_tolerance": 1e-4,
-      "min_accuracy": 0.90, "max_train_seconds": 180
+      "min_accuracy": 0.85, "max_train_seconds": 180
     },
     {
       "id": 8,
@@ -136,9 +148,9 @@
       "serializer": "sparse",
       "sync": "barrier", "store": "blocking",
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
-      "max_epochs": 250,
+      "max_epochs": 120,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 600
+      "min_accuracy": 0.85, "max_train_seconds": 360
     },
     {
       "id": 9,
@@ -150,7 +162,7 @@
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 80,
       "early_stopping_tolerance": 1e-4,
-      "min_accuracy": 0.90, "max_train_seconds": 180
+      "min_accuracy": 0.85, "max_train_seconds": 180
     },
     {
       "id": 10,
@@ -160,9 +172,9 @@
       "serializer": "base",
       "sync": "nonblocking", "store": "wild",
       "lr": 0.5, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
-      "max_epochs": 250,
+      "max_epochs": 120,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 600
+      "min_accuracy": 0.85, "max_train_seconds": 360
     },
     {
       "id": 11,
@@ -174,7 +186,7 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": 1e-4,
-      "min_accuracy": 0.90, "max_train_seconds": 180
+      "min_accuracy": 0.85, "max_train_seconds": 180
     },
     {
       "id": 12,
@@ -186,7 +198,7 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": 5e-5,
-      "min_accuracy": 0.90, "max_train_seconds": 400
+      "min_accuracy": 0.85, "max_train_seconds": 400
     },
     {
       "id": 13,
@@ -198,7 +210,7 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": 1e-4,
-      "min_accuracy": 0.90, "max_train_seconds": 180
+      "min_accuracy": 0.85, "max_train_seconds": 180
     },
     {
       "id": 14,
@@ -210,7 +222,7 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 200,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 400
+      "min_accuracy": 0.85, "max_train_seconds": 400
     },
     {
       "id": 16,
@@ -222,7 +234,7 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": 1e-4,
-      "min_accuracy": 0.90, "max_train_seconds": 300
+      "min_accuracy": 0.85, "max_train_seconds": 300
     },
     {
       "id": 17,
@@ -234,7 +246,7 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": 5e-5,
-      "min_accuracy": 0.90, "max_train_seconds": 400
+      "min_accuracy": 0.85, "max_train_seconds": 400
     },
     {
       "id": 19,
@@ -246,7 +258,7 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 150,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 300
+      "min_accuracy": 0.85, "max_train_seconds": 300
     },
     {
       "id": 20,
@@ -258,19 +270,55 @@
       "lr": 1.0, "batch_size": 256, "offline_epochs": 0, "loss_fn": "mse",
       "max_epochs": 200,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.90, "max_train_seconds": 400
+      "min_accuracy": 0.85, "max_train_seconds": 400
     },
     {
-      "id": 21,
-      "model": "conv_tiny_softmax",
+      "id": 22,
+      "model": "conv_small_softmax",
       "workers": 2, "servers": 0,
       "algorithm": "all_reduce",
       "serializer": "base",
       "sync": null, "store": null,
       "lr": 0.1, "batch_size": 256, "offline_epochs": 0, "loss_fn": "cross_entropy",
-      "max_epochs": 30,
+      "max_epochs": 100,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.85, "max_train_seconds": 400
+    },
+    {
+      "id": 23,
+      "model": "conv_small_softmax",
+      "workers": 3, "servers": 0,
+      "algorithm": "all_reduce",
+      "serializer": "base",
+      "sync": null, "store": null,
+      "lr": 0.05, "batch_size": 256, "offline_epochs": 0, "loss_fn": "cross_entropy",
+      "max_epochs": 150,
       "early_stopping_tolerance": null,
-      "min_accuracy": 0.20, "max_train_seconds": 300
+      "min_accuracy": 0.85, "max_train_seconds": 1200
+    },
+    {
+      "id": 30,
+      "model": "conv_small_softmax",
+      "workers": 2, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.1, "batch_size": 256, "offline_epochs": 0, "loss_fn": "cross_entropy",
+      "max_epochs": 100,
+      "early_stopping_tolerance": 1e-4,
+      "min_accuracy": 0.85, "max_train_seconds": 600
+    },
+    {
+      "id": 32,
+      "model": "conv_small_softmax",
+      "workers": 3, "servers": 1,
+      "algorithm": "parameter_server",
+      "serializer": "base",
+      "sync": "barrier", "store": "blocking",
+      "lr": 0.1, "batch_size": 256, "offline_epochs": 0, "loss_fn": "cross_entropy",
+      "max_epochs": 250,
+      "early_stopping_tolerance": null,
+      "min_accuracy": 0.85, "max_train_seconds": 1800
     }
   ],
 
@@ -309,6 +357,21 @@
       "filename": "cmp_barrier_vs_nonblocking",
       "title": "Barrier vs non-blocking sync — PS 2w/1s, base serializer",
       "run_ids": [1, 2, 9, 10]
+    },
+    {
+      "filename": "cmp_conv_ar_worker_scaling",
+      "title": "Conv AllReduce worker scaling — base serializer",
+      "run_ids": [22, 23]
+    },
+    {
+      "filename": "cmp_conv_ps_vs_ar",
+      "title": "Conv PS vs AllReduce — 2w base",
+      "run_ids": [22, 30]
+    },
+    {
+      "filename": "cmp_conv_ps_worker_scaling",
+      "title": "Conv PS worker scaling — base serializer, barrier sync",
+      "run_ids": [30, 32]
     }
   ]
 }

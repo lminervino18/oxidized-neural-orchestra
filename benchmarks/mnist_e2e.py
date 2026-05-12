@@ -228,7 +228,7 @@ def docker_up(workers: int, servers: int, rebuild: bool, release: bool = True) -
     cmd += ["--build", "--no-cache"] if rebuild else ["--build"]
     cmd += ["-d", "--remove-orphans"]
     subprocess.run(cmd, check=True)
-    time.sleep(5)
+    time.sleep(10)
     return time.perf_counter() - t0
 
 
@@ -248,7 +248,7 @@ def containers_running(workers: int, servers: int) -> bool:
     return True
 
 
-def wait_nodes_ready(workers: int, servers: int, timeout: float = 30.0) -> bool:
+def wait_nodes_ready(workers: int, servers: int, timeout: float = 60.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if containers_running(workers, servers):
@@ -823,7 +823,10 @@ def main():
             else:
                 print("  starting Docker containers...")
                 docker_start_s = docker_up(workers, servers, rebuild=args.rebuild)
-                print(f"  Docker ready in {docker_start_s:.1f}s")
+                print(f"  Docker up in {docker_start_s:.1f}s, waiting for nodes to be ready...")
+                if not wait_nodes_ready(workers, servers, timeout=60.0):
+                    raise RuntimeError("nodes did not become ready within 60s")
+                print(f"  nodes ready")
         except Exception as e:
             print(f"  ERROR: Docker setup failed: {e}")
             for run in topo_runs:
@@ -846,9 +849,16 @@ def main():
                 docker_restarted = False
                 if i > 0:
                     is_ps = run.get("algorithm", "parameter_server") == "parameter_server"
-                    needs_restart = is_ps or not wait_nodes_ready(workers, servers, timeout=30.0)
+                    prev_run = topo_runs[i - 1]
+                    serializer_changed = run.get("serializer") != prev_run.get("serializer")
+                    needs_restart = is_ps or serializer_changed or not wait_nodes_ready(workers, servers, timeout=30.0)
                     if needs_restart:
-                        reason = "PS inter-session reset" if is_ps else "nodes not ready"
+                        if is_ps:
+                            reason = "PS inter-session reset"
+                        elif serializer_changed:
+                            reason = f"serializer change {prev_run.get('serializer')}→{run.get('serializer')}"
+                        else:
+                            reason = "nodes not ready"
                         print(f"  restarting containers ({reason})...")
                         try:
                             docker_down()
@@ -866,7 +876,20 @@ def main():
                       f"ser={ser}  sync={sync}  "
                       f"ep={run['max_epochs']}  es={run.get('early_stopping_tolerance')}")
 
+                _transient = ("deadline has elapsed", "Broken pipe", "Connection refused",
+                              "connection reset", "os error 32", "os error 104")
                 result = run_single(run, model_defs)
+                if not result["passed"] and result.get("error") and \
+                        any(t in result["error"] for t in _transient) and not docker_restarted:
+                    print(f"  transient error detected, restarting containers and retrying...")
+                    try:
+                        docker_down()
+                    except Exception:
+                        pass
+                    docker_start_s = docker_up(workers, servers, rebuild=False)
+                    time.sleep(5)
+                    docker_restarted = True
+                    result = run_single(run, model_defs)
                 result["docker_start_seconds"]     = docker_start_s if (i == 0 or docker_restarted) else 0.0
                 result["topology_id"]              = topology_id
                 result["reused_topology"]          = i > 0 and not docker_restarted
