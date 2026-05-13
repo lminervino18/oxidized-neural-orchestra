@@ -92,23 +92,26 @@ impl MaxPooling {
             for f in 0..filters {
                 let input_bf = input_b.index_axis(Axis(0), f);
 
-                for (x, i) in (0..effective_width).step_by(filter_size).enumerate() {
-                    for (y, j) in (0..effective_width).step_by(filter_size).enumerate() {
+                // este +1 me da un poco de miedo
+                for (x, i) in (0..effective_width - filter_size + 1)
+                    .step_by(stride)
+                    .enumerate()
+                {
+                    for (y, j) in (0..effective_height - filter_size + 1)
+                        .step_by(stride)
+                        .enumerate()
+                    {
                         let input_chunk =
                             input_bf.slice(s![i..i + filter_size, j..j + filter_size]);
 
-                        // TODO: how could the iterator be empty?!!! add safety comment
+                        // SAFETY: There must be at least one element in `input_chunk` as otherwise
+                        //         we would not be doing this iteration.
                         let (mut max_idx, max) = input_chunk
                             .indexed_iter()
                             .max_by(|(_, rhs), (_, lhs)| rhs.total_cmp(lhs))
                             .unwrap();
 
                         max_idx = (max_idx.0 + i, max_idx.1 + j);
-
-                        println!("i: {i}");
-                        println!("j: {j}");
-                        println!("local_max_idx: {max_idx:#?}");
-                        println!("max_idx: {max_idx:#?}");
 
                         output[[b, f, x, y]] = *max;
                         max_indices[[b, f, x, y]] = max_idx;
@@ -204,10 +207,6 @@ mod tests {
 
     #[test]
     fn test_max_pooling03_backward_1batch_1filter_4_by_4_img_filter_size_2_stride2_padding0() {
-        unsafe {
-            std::env::set_var("RUST_BACKTRACE", "1");
-        }
-
         let input = array![[[
             [1., 2., 3., 4.],
             [5., 6., 7., 8.],
@@ -218,15 +217,49 @@ mod tests {
         max_pooling.forward(input.view()).unwrap();
         let mut delta_in = array![[[[6., 8.], [14., 16.]]]];
 
-        let expected_max_indices = array![[[[(0, 0), (0, 3)], [(3, 0), (3, 3)]]]];
+        let expected_max_indices = array![[[[(1, 1), (1, 3)], [(3, 1), (3, 3)]]]];
+        assert_eq!(max_pooling.max_indices, expected_max_indices);
+
+        let delta_in = max_pooling.backward(delta_in.view_mut()).unwrap();
+        let expected_delta_in = array![[[
+            [0., 0., 0., 0.],
+            [0., 6., 0., 8.],
+            [0., 0., 0., 0.],
+            [0., 14., 0., 16.]
+        ]]];
+
+        assert_eq!(delta_in, expected_delta_in);
+    }
+
+    #[test]
+    fn test_max_pooling04_stride1_filter_size2() {
+        unsafe {
+            std::env::set_var("RUST_BACKTRACE", "1");
+        }
+
+        let input = array![[[
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
+        ]]];
+        let mut max_pooling = MaxPooling::new(2, 1, 0);
+        max_pooling.forward(input.view()).unwrap();
+        let mut delta_in = array![[[[6., 7., 8.], [10., 11., 12.], [14., 15., 16.]]]];
+
+        let expected_max_indices = array![[[
+            [(1, 1), (1, 2), (1, 3)],
+            [(2, 1), (2, 2), (2, 3)],
+            [(3, 1), (3, 2), (3, 3)]
+        ]]];
         assert_eq!(max_pooling.max_indices, expected_max_indices);
 
         let output = max_pooling.backward(delta_in.view_mut()).unwrap();
         let expected = array![[[
             [0., 0., 0., 0.],
-            [0., 6., 0., 8.],
-            [0., 0., 0., 0.],
-            [0., 14., 0., 16.]
+            [0., 6., 7., 8.],
+            [0., 10., 11., 12.],
+            [0., 14., 15., 16.]
         ]]];
 
         assert_eq!(output, expected);
