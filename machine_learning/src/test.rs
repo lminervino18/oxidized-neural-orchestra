@@ -714,3 +714,85 @@ fn test_machine_learning_dimensionality_correctness() {
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
     assert!(trainer.train(&mut param_manager).is_ok())
 }
+
+#[test]
+fn test_machine_learning_dimensionality_correctness_with_max_pooling() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let nsamples = 10;
+
+    let in_channels = 1;
+    let input_height = 28;
+    let input_width = 28;
+
+    let x_size = in_channels * input_height * input_width;
+    let y_size = 10;
+
+    let samples = vec![1.; nsamples * x_size];
+    let labels = vec![1.; nsamples * y_size];
+
+    let filters = 4;
+    let kernel_size = 3;
+    let stride = 2;
+    let padding = 1;
+
+    let pooling_filter_size = 3;
+    let pooling_stride = 3;
+    let pooling_padding = 0;
+
+    let output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
+    let output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
+
+    let pooling_output_height =
+        (output_height + 2 * pooling_padding - pooling_filter_size) / pooling_stride + 1;
+    let pooling_output_width =
+        (output_width + 2 * pooling_padding - pooling_filter_size) / pooling_stride + 1;
+
+    let model = Sequential::new(vec![
+        Layer::two_d_to4d(in_channels, input_height, input_width),
+        Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
+        Layer::max_pooling(pooling_filter_size, pooling_stride, pooling_padding),
+        Layer::four_d_to2d(filters, pooling_output_height, pooling_output_width),
+        Layer::dense((
+            filters * pooling_output_height * pooling_output_width,
+            y_size,
+        )),
+        Layer::sigmoid(1.0),
+    ]);
+    let nparams = model.size();
+    let nreal_layers = 2;
+    let ordering = vec![0; nreal_layers];
+
+    let dataset = Dataset::new(
+        DatasetSrc::inmem(samples, labels),
+        NonZeroUsize::new(x_size).unwrap(),
+        NonZeroUsize::new(y_size).unwrap(),
+    );
+
+    let offline_epochs = 0;
+    let max_epochs = NonZeroUsize::new(10).unwrap();
+    let batch_size = NonZeroUsize::new(4).unwrap();
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
+    let loss_fn = Mse::new();
+    let rng = StdRng::from_os_rng();
+
+    let mut trainer = BackpropTrainer::new(
+        model,
+        vec![optimizer],
+        dataset,
+        loss_fn,
+        offline_epochs,
+        max_epochs,
+        batch_size,
+        rng,
+    );
+
+    let mut params_grads = gen_params_grads(&[nparams]);
+    let servers: Vec<_> = params_grads
+        .iter_mut()
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
+        .collect();
+
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
+    assert!(trainer.train(&mut param_manager).is_ok())
+}

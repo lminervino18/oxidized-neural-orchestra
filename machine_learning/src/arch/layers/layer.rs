@@ -1,6 +1,6 @@
 use ndarray::{Data, RawData, prelude::*};
 
-use super::{Conv2d, Dense, Sigmoid, Softmax};
+use super::{Conv2d, Dense, MaxPooling, Sigmoid, Softmax};
 use crate::{MlErr, Result, arch::layers::Reshape};
 
 /// An indirection layer to prevent leaking the
@@ -10,6 +10,7 @@ enum Inner {
     Dense(Dense),
     Sigmoid(Sigmoid),
     Conv2d(Conv2d),
+    MaxPooling(MaxPooling),
     Softmax(Softmax),
     Reshape(Reshape),
 }
@@ -69,6 +70,23 @@ impl Layer {
         )))
     }
 
+    /// Creates a new `Layer::MaxPooling` layer.
+    ///
+    /// # Arguments
+    /// * `kernel_size` - The height/width of the square filter.
+    /// * `stride` - The stride for the filter.
+    /// * `padding` - The input padding size.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
+    pub fn max_pooling(filter_size: usize, stride: usize, padding: usize) -> Self {
+        Self(Inner::MaxPooling(MaxPooling::new(
+            filter_size,
+            stride,
+            padding,
+        )))
+    }
+
     /// Creates a new `Layer::Softmax` layer.
     ///
     /// # Returns
@@ -114,6 +132,7 @@ impl Layer {
             Dense(layer) => layer.size(),
             Sigmoid(layer) => layer.size(),
             Conv2d(layer) => layer.size(),
+            MaxPooling(layer) => layer.size(),
             Softmax(layer) => layer.size(),
             Reshape(layer) => layer.size(),
         }
@@ -136,6 +155,7 @@ impl Layer {
             Dense(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
             Sigmoid(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
             Conv2d(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
+            MaxPooling(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
             Softmax(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
             Reshape(layer) => layer.forward(x)?,
         };
@@ -160,9 +180,10 @@ impl Layer {
         d: ArrayViewMutD<'a, f32>,
     ) -> Result<ArrayViewMutD<'a, f32>> {
         let q = match &mut self.0 {
-            Conv2d(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
             Dense(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
             Sigmoid(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
+            Conv2d(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
+            MaxPooling(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
             Softmax(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
             Reshape(layer) => layer.backward(try_cast_dim(d)?)?,
         };
