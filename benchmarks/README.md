@@ -24,11 +24,14 @@ sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n
 ## Running
 
 ```bash
-# All 22 combinations (~55–60 min)
+# All 22 runs (~55–60 min)
 .venv/bin/python benchmarks/mnist_e2e.py
 
 # Specific numbered runs (only updates those bars in the plots)
-.venv/bin/python benchmarks/mnist_e2e.py --runs 1 11 22
+.venv/bin/python benchmarks/mnist_e2e.py --runs 0 10 18
+
+# Regenerate all plots from historical results without running training
+.venv/bin/python benchmarks/mnist_e2e.py --plots-only
 
 # Keep containers after run / force image rebuild
 .venv/bin/python benchmarks/mnist_e2e.py --keep-containers --rebuild
@@ -40,28 +43,28 @@ Partial runs only regenerate comparison plots that include at least one of the e
 
 | # | Model | Algorithm | Workers | Servers | Serializer | Sync | Max Epochs |
 |---|-------|-----------|---------|---------|------------|------|------------|
-| 1 | dense_small | PS | 2 | 1 | base | barrier | 80 |
-| 2 | dense_large | PS | 2 | 1 | base | barrier | 120 |
-| 3 | dense_small | PS | 3 | 1 | base | barrier | 150 |
-| 4 | dense_large | PS | 3 | 1 | base | barrier | 200 |
-| 5 | dense_small | PS | 3 | 2 | base | barrier | 150 |
-| 6 | dense_large | PS | 3 | 2 | base | barrier | 200 |
-| 7 | dense_small | PS | 2 | 1 | sparse | barrier | 80 |
-| 8 | dense_large | PS | 2 | 1 | sparse | barrier | 120 |
-| 9 | dense_small | PS | 2 | 1 | base | nonblocking | 80 |
-| 10 | dense_large | PS | 2 | 1 | base | nonblocking | 120 |
-| 11 | dense_small | AllReduce | 2 | 0 | base | — | 150 |
-| 12 | dense_large | AllReduce | 2 | 0 | base | — | 150 |
-| 13 | dense_small | AllReduce | 3 | 0 | base | — | 150 |
-| 14 | dense_large | AllReduce | 3 | 0 | base | — | 200 |
-| 16 | dense_small | AllReduce | 2 | 0 | sparse | — | 150 |
-| 17 | dense_large | AllReduce | 2 | 0 | sparse | — | 150 |
-| 19 | dense_small | AllReduce | 3 | 0 | sparse | — | 150 |
-| 20 | dense_large | AllReduce | 3 | 0 | sparse | — | 200 |
-| 22 | conv_small_softmax | AllReduce | 2 | 0 | base | — | 100 |
-| 23 | conv_small_softmax | AllReduce | 3 | 0 | base | — | 100 |
-| 30 | conv_small_softmax | PS | 2 | 1 | base | barrier | 100 |
-| 32 | conv_small_softmax | PS | 3 | 1 | base | barrier | 250 |
+| 0 | dense_small | PS | 2 | 1 | base | barrier | 80 |
+| 1 | dense_large | PS | 2 | 1 | base | barrier | 120 |
+| 2 | dense_small | PS | 3 | 1 | base | barrier | 150 |
+| 3 | dense_large | PS | 3 | 1 | base | barrier | 200 |
+| 4 | dense_small | PS | 3 | 2 | base | barrier | 150 |
+| 5 | dense_large | PS | 3 | 2 | base | barrier | 200 |
+| 6 | dense_small | PS | 2 | 1 | sparse | barrier | 80 |
+| 7 | dense_large | PS | 2 | 1 | sparse | barrier | 120 |
+| 8 | dense_small | PS | 2 | 1 | base | nonblocking | 80 |
+| 9 | dense_large | PS | 2 | 1 | base | nonblocking | 120 |
+| 10 | dense_small | AllReduce | 2 | 0 | base | — | 150 |
+| 11 | dense_large | AllReduce | 2 | 0 | base | — | 150 |
+| 12 | dense_small | AllReduce | 3 | 0 | base | — | 150 |
+| 13 | dense_large | AllReduce | 3 | 0 | base | — | 200 |
+| 14 | dense_small | AllReduce | 2 | 0 | sparse | — | 150 |
+| 15 | dense_large | AllReduce | 2 | 0 | sparse | — | 150 |
+| 16 | dense_small | AllReduce | 3 | 0 | sparse | — | 150 |
+| 17 | dense_large | AllReduce | 3 | 0 | sparse | — | 200 |
+| 18 | conv_small_softmax | AllReduce | 2 | 0 | base | — | 100 |
+| 19 | conv_small_softmax | AllReduce | 3 | 0 | base | — | 100 |
+| 20 | conv_small_softmax | PS | 2 | 1 | base | barrier | 100 |
+| 21 | conv_small_softmax | PS | 3 | 1 | base | barrier | 250 |
 
 **Not included:** `conv_large_softmax` (Conv2d 32 filters) and conv sparse runs.
 `conv_large` requires ~15s/epoch making a 200-epoch run ~50 min; the sparse serializer
@@ -80,7 +83,7 @@ runs (large models) and dense sparse runs (sparse gradient compression) respecti
 ---
 
 ### PS vs AllReduce — 2 workers, base serializer
-_Runs 1, 2 (PS barrier) vs 11, 12 (AllReduce ring)_
+_Runs 0, 1 (PS barrier) vs 10, 11 (AllReduce ring)_
 
 | | dense_small | dense_large |
 |---|---|---|
@@ -90,7 +93,7 @@ _Runs 1, 2 (PS barrier) vs 11, 12 (AllReduce ring)_
 ---
 
 ### PS Worker Scaling — base serializer, barrier sync
-_Runs 1–6: 2w/1s → 3w/1s → 3w/2s_
+_Runs 0–5: 2w/1s → 3w/1s → 3w/2s_
 
 | | dense_small | dense_large |
 |---|---|---|
@@ -100,7 +103,7 @@ _Runs 1–6: 2w/1s → 3w/1s → 3w/2s_
 ---
 
 ### AllReduce Worker Scaling — base serializer
-_Runs 11–14: 2 workers vs 3 workers_
+_Runs 10–13: 2 workers vs 3 workers_
 
 | | dense_small | dense_large |
 |---|---|---|
@@ -110,7 +113,7 @@ _Runs 11–14: 2 workers vs 3 workers_
 ---
 
 ### Sparse vs Base Gradient — PS 2w/1s, barrier sync
-_Runs 1, 2 (base) vs 7, 8 (sparse)_
+_Runs 0, 1 (base) vs 6, 7 (sparse)_
 
 | | dense_small | dense_large |
 |---|---|---|
@@ -120,7 +123,7 @@ _Runs 1, 2 (base) vs 7, 8 (sparse)_
 ---
 
 ### Sparse vs Base Gradient — AllReduce 2 workers
-_Runs 11, 12 (base) vs 16, 17 (sparse)_
+_Runs 10, 11 (base) vs 14, 15 (sparse)_
 
 | | dense_small | dense_large |
 |---|---|---|
@@ -130,7 +133,7 @@ _Runs 11, 12 (base) vs 16, 17 (sparse)_
 ---
 
 ### AllReduce Sparse — Worker Scaling
-_Runs 16, 17 (2w sparse) vs 19, 20 (3w sparse)_
+_Runs 14, 15 (2w sparse) vs 16, 17 (3w sparse)_
 
 | | dense_small | dense_large |
 |---|---|---|
@@ -140,7 +143,7 @@ _Runs 16, 17 (2w sparse) vs 19, 20 (3w sparse)_
 ---
 
 ### Barrier vs Non-blocking Sync — PS 2w/1s, base serializer
-_Runs 1, 2 (barrier) vs 9, 10 (nonblocking wild)_
+_Runs 0, 1 (barrier) vs 8, 9 (nonblocking wild)_
 
 | | dense_small | dense_large |
 |---|---|---|
@@ -150,7 +153,7 @@ _Runs 1, 2 (barrier) vs 9, 10 (nonblocking wild)_
 ---
 
 ### Conv — AllReduce Worker Scaling
-_Runs 22, 23: 2 workers vs 3 workers_
+_Runs 18, 19: 2 workers vs 3 workers_
 
 | Accuracy | Time |
 |---|---|
@@ -159,7 +162,7 @@ _Runs 22, 23: 2 workers vs 3 workers_
 ---
 
 ### Conv — PS vs AllReduce, 2 workers
-_Runs 22 (AllReduce) vs 30 (PS barrier)_
+_Runs 18 (AllReduce) vs 20 (PS barrier)_
 
 | Accuracy | Time |
 |---|---|
@@ -168,7 +171,7 @@ _Runs 22 (AllReduce) vs 30 (PS barrier)_
 ---
 
 ### Conv — PS Worker Scaling
-_Runs 30, 32: 2w/1s vs 3w/1s_
+_Runs 20, 21: 2w/1s vs 3w/1s_
 
 | Accuracy | Time |
 |---|---|
@@ -199,7 +202,7 @@ Pass/fail: `accuracy >= min_accuracy AND train_seconds <= max_train_seconds`.
 
 ```json
 {
-  "run_num": 1,
+  "run_num": 0,
   "model_name": "dense_small",
   "workers": 2, "servers": 1,
   "algorithm": "parameter_server",

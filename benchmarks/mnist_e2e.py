@@ -790,6 +790,8 @@ def parse_args():
     p.add_argument("--output",         type=Path)
     p.add_argument("--keep-containers", action="store_true")
     p.add_argument("--rebuild",        action="store_true")
+    p.add_argument("--plots-only",     action="store_true",
+                   help="Regenerate plots from historical results without running training")
     return p.parse_args()
 
 
@@ -803,6 +805,19 @@ def main():
     model_defs  = config["model_defs"]
     all_runs    = config["runs"]
     cmp_plots   = config.get("comparison_plots", [])
+
+    if args.plots_only:
+        run_ts         = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        run_defs_by_id = {r["id"]: r for r in all_runs}
+        historical     = load_historical_results()
+        merged_list    = sorted(
+            (v for k, v in historical.items() if k in run_defs_by_id),
+            key=lambda r: r.get("run_num", 0),
+        )
+        plot_main(merged_list, run_ts)
+        for cmp in cmp_plots:
+            plot_comparison(historical, cmp, run_defs_by_id, run_ts)
+        return
 
     # Filter by --runs if specified
     if args.runs:
@@ -950,22 +965,26 @@ def main():
 
     print_summary(all_results)
 
-    run_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    run_ts         = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    run_defs_by_id = {r["id"]: r for r in all_runs}
 
     # Merge historical results with current session.
     # Current session always wins for any run it executed — other runs keep their
     # last known values from previous sessions so partial runs never blank them out.
-    historical      = load_historical_results()
-    current_by_num  = {r["run_num"]: r for r in all_results if "run_num" in r}
-    merged_by_num   = {**historical, **current_by_num}
-    merged_list     = sorted(merged_by_num.values(), key=lambda r: r.get("run_num", 0))
+    # Only include IDs present in the current config to avoid stale bars from old runs.
+    historical     = load_historical_results()
+    current_by_num = {r["run_num"]: r for r in all_results if "run_num" in r}
+    merged_by_num  = {**historical, **current_by_num}
+    merged_list    = sorted(
+        (v for k, v in merged_by_num.items() if k in run_defs_by_id),
+        key=lambda r: r.get("run_num", 0),
+    )
 
     plot_main(merged_list, run_ts)
 
     # Trigger comparison plots for any group that overlaps the current session,
     # but pass the full merged map so non-executed runs still show historical bars.
-    executed_ids   = set(current_by_num)
-    run_defs_by_id = {r["id"]: r for r in all_runs}
+    executed_ids = set(current_by_num)
 
     for cmp in cmp_plots:
         if set(cmp["run_ids"]) & executed_ids:
