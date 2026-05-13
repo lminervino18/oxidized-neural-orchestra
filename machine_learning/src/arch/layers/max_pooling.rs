@@ -2,7 +2,7 @@ use std::cmp;
 
 use ndarray::prelude::*;
 
-use crate::{MlErr, Result, arch::InplaceReshape};
+use crate::{Result, arch::InplaceReshape};
 
 #[derive(Clone, Debug)]
 pub struct MaxPooling {
@@ -58,7 +58,6 @@ impl MaxPooling {
         } = *self;
 
         let (batch_size, filters, input_height, input_width) = x.dim();
-
         *real_input_dim = (input_height, input_width);
 
         let output_height = (input_height + 2 * padding - filter_size) / stride + 1;
@@ -105,8 +104,8 @@ impl MaxPooling {
                             chunk_origin.1..chunk_origin.1 + filter_size,
                         ]);
 
-                        // SAFETY: There must be at least one element in `input_chunk` as otherwise
-                        //         we would not be doing this iteration.
+                        // SAFETY: `filter_size` is a non-zero positive integer, so there must be
+                        //         at least one element.
                         let (mut max_idx, max) = input_chunk
                             .indexed_iter()
                             .max_by(|(_, a), (_, b)| a.total_cmp(b))
@@ -125,23 +124,26 @@ impl MaxPooling {
     }
 
     pub fn backward(&mut self, d_in: ArrayViewMut4<f32>) -> Result<ArrayViewMut4<'_, f32>> {
+        let Self {
+            real_input_dim,
+            ref mut delta_out,
+            ref max_indices,
+            ..
+        } = *self;
+
         let (batches, in_channels, _, _) = d_in.dim();
-        self.delta_out.reshape_inplace((
-            batches,
-            in_channels,
-            self.real_input_dim.0,
-            self.real_input_dim.1,
-        ));
+        delta_out.reshape_inplace((batches, in_channels, real_input_dim.0, real_input_dim.1));
+        delta_out.fill(0.);
 
         for b in 0..batches {
             for c in 0..in_channels {
-                azip!((d in &d_in, &idx in &self.max_indices) {
-                    self.delta_out[[b,c,idx.0,idx.1]] = *d;
+                azip!((d in &d_in, &idx in max_indices) {
+                    delta_out[[b,c,idx.0,idx.1]] = *d;
                 });
             }
         }
 
-        Ok(self.delta_out.view_mut())
+        Ok(delta_out.view_mut())
     }
 }
 
