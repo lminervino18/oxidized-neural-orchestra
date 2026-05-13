@@ -87,34 +87,35 @@ impl MaxPooling {
         max_indices.reshape_inplace((batch_size, filters, output_height, output_width));
 
         for b in 0..batch_size {
-            let input_b = self.effective_input.index_axis(Axis(0), b);
+            let input_b = effective_input.index_axis(Axis(0), b);
+            let mut output_b = output.index_axis_mut(Axis(0), b);
+            let mut max_indices_b = max_indices.index_axis_mut(Axis(0), b);
 
             for f in 0..filters {
                 let input_bf = input_b.index_axis(Axis(0), f);
+                let mut output_bf = output_b.index_axis_mut(Axis(0), f);
+                let mut max_indices_bf = max_indices_b.index_axis_mut(Axis(0), f);
 
-                // este +1 me da un poco de miedo
-                for (y, i) in (0..effective_height - filter_size + 1)
-                    .step_by(stride)
-                    .enumerate()
-                {
-                    for (x, j) in (0..effective_width - filter_size + 1)
-                        .step_by(stride)
-                        .enumerate()
-                    {
-                        let input_chunk =
-                            input_bf.slice(s![i..i + filter_size, j..j + filter_size]);
+                for h in 0..output_height {
+                    for w in 0..output_width {
+                        let chunk_origin = (h * stride, w * stride);
+
+                        let input_chunk = input_bf.slice(s![
+                            chunk_origin.0..chunk_origin.0 + filter_size,
+                            chunk_origin.1..chunk_origin.1 + filter_size,
+                        ]);
 
                         // SAFETY: There must be at least one element in `input_chunk` as otherwise
                         //         we would not be doing this iteration.
                         let (mut max_idx, max) = input_chunk
                             .indexed_iter()
-                            .max_by(|(_, rhs), (_, lhs)| rhs.total_cmp(lhs))
+                            .max_by(|(_, a), (_, b)| a.total_cmp(b))
                             .unwrap();
 
-                        max_idx = (max_idx.0 + i, max_idx.1 + j);
+                        max_idx = (max_idx.0 + chunk_origin.0, max_idx.1 + chunk_origin.1);
 
-                        output[[b, f, y, x]] = *max;
-                        max_indices[[b, f, y, x]] = max_idx;
+                        output_bf[[h, w]] = *max;
+                        max_indices_bf[[h, w]] = max_idx;
                     }
                 }
             }
