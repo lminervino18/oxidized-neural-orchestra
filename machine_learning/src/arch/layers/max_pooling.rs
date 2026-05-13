@@ -93,11 +93,11 @@ impl MaxPooling {
                 let input_bf = input_b.index_axis(Axis(0), f);
 
                 // este +1 me da un poco de miedo
-                for (x, i) in (0..effective_width - filter_size + 1)
+                for (y, i) in (0..effective_height - filter_size + 1)
                     .step_by(stride)
                     .enumerate()
                 {
-                    for (y, j) in (0..effective_height - filter_size + 1)
+                    for (x, j) in (0..effective_width - filter_size + 1)
                         .step_by(stride)
                         .enumerate()
                     {
@@ -113,8 +113,8 @@ impl MaxPooling {
 
                         max_idx = (max_idx.0 + i, max_idx.1 + j);
 
-                        output[[b, f, x, y]] = *max;
-                        max_indices[[b, f, x, y]] = max_idx;
+                        output[[b, f, y, x]] = *max;
+                        max_indices[[b, f, y, x]] = max_idx;
                     }
                 }
             }
@@ -260,6 +260,48 @@ mod tests {
             [0., 6., 7., 8.],
             [0., 10., 11., 12.],
             [0., 14., 15., 16.]
+        ]]];
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_max_pooling04_rectangle_input() {
+        unsafe {
+            std::env::set_var("RUST_BACKTRACE", "1");
+        }
+
+        let input = array![[[
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.],
+            [17., 18., 19., 20.]
+        ]]];
+        let mut max_pooling = MaxPooling::new(2, 1, 0);
+        max_pooling.forward(input.view()).unwrap();
+        let mut delta_in = array![[[
+            [6., 7., 8.],
+            [10., 11., 12.],
+            [14., 15., 16.],
+            [18., 19., 20.]
+        ]]];
+
+        let expected_max_indices = array![[[
+            [(1, 1), (1, 2), (1, 3)],
+            [(2, 1), (2, 2), (2, 3)],
+            [(3, 1), (3, 2), (3, 3)],
+            [(4, 1), (4, 2), (4, 3)]
+        ]]];
+        assert_eq!(max_pooling.max_indices, expected_max_indices);
+
+        let output = max_pooling.backward(delta_in.view_mut()).unwrap();
+        let expected = array![[[
+            [0., 0., 0., 0.],
+            [0., 6., 7., 8.],
+            [0., 10., 11., 12.],
+            [0., 14., 15., 16.],
+            [0., 18., 19., 20.]
         ]]];
 
         assert_eq!(output, expected);
