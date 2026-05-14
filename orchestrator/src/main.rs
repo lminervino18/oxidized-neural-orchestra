@@ -2,6 +2,8 @@ use std::{
     env, io,
     num::NonZeroUsize,
     process::{Command, ExitStatus},
+    thread,
+    time::Duration,
 };
 
 use comms::floats::{Float01, FloatNonNegative, FloatPositive};
@@ -61,10 +63,12 @@ fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>)
 
 fn main() -> io::Result<()> {
     const WORKERS: usize = 3;
-    const SERVERS: usize = 2;
+    const SERVERS: usize = 0;
     const RELEASE: bool = false;
 
     setup_docker(WORKERS, SERVERS, RELEASE)?;
+
+    thread::sleep(Duration::from_secs(2));
     let (worker_addrs, server_addrs) = build_addresses(WORKERS, SERVERS);
 
     let model_config = ModelConfig {
@@ -163,9 +167,8 @@ fn main() -> io::Result<()> {
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
-        early_stopping: Some(EarlyStoppingConfig {
-            tolerance: FloatNonNegative::new(0.5).unwrap(),
-        }),
+        early_stopping: None,
+        // early_stopping: Some(EarlyStoppingConfig { tolerance: FloatNonNegative::new(0.5).unwrap(), }),
     };
 
     let session = train(model_config, training_config).unwrap();

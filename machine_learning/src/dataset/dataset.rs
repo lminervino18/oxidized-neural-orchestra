@@ -56,6 +56,8 @@ impl Dataset {
     /// # Args
     /// * `src` - The data to append.
     pub fn load(&mut self, src: DataSrc) {
+        let (x_size, y_size) = self.sizes();
+        self.rows += src.size() / (x_size.get() + y_size.get());
         self.src.load(src);
     }
 

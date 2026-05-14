@@ -108,8 +108,6 @@ where
                     )
                     .await?;
 
-                println!("data src: {data_src:?}");
-
                 let mut trainer = trainer_builder.build(trainer.clone(), server_sizes);
                 trainer.load_dataset(data_src);
 
