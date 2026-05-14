@@ -30,7 +30,9 @@ pub enum Entity {
 #[serde(rename_all = "snake_case")]
 pub enum Command<'a> {
     Connect(Entity),
-    CreateNode(NodeSpec),
+    CreateNode {
+        spec: NodeSpec,
+    },
     ShareDataset,
     ShareDatasetSize {
         size: usize,
@@ -44,7 +46,7 @@ pub enum Command<'a> {
         server_ordering: Vec<usize>,
     },
     ReportLoss {
-        losses: Cow<'a, [f32]>,
+        losses: Cow<'a, [f64]>,
     },
     RequestParams,
     StopAfterEpoch,

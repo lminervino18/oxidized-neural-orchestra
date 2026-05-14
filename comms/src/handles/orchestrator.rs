@@ -51,7 +51,7 @@ where
     /// The specification or an io error if occurred.
     pub async fn pull_specification(&mut self) -> io::Result<NodeSpec> {
         let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateNode(spec)) => spec,
+            Msg::Control(Command::CreateNode { spec }) => spec,
             msg => {
                 let text = format!("Expected node specification from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));
@@ -80,7 +80,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn push_losses(&mut self, losses: &[f32]) -> io::Result<()> {
+    pub async fn push_losses(&mut self, losses: &[f64]) -> io::Result<()> {
         if losses.iter().any(|l| !l.is_finite()) {
             return Err(io::Error::other("loss diverged: NaN or Inf detected"));
         }

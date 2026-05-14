@@ -81,7 +81,7 @@ pub struct WorkerState {
     /// Number of epochs completed so far.
     pub epochs_done: usize,
     /// Most recently reported loss value.
-    pub last_loss: Option<f32>,
+    pub last_loss: Option<f64>,
     /// Whether the worker has disconnected.
     pub done: bool,
 }

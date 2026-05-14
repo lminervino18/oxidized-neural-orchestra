@@ -171,4 +171,22 @@ mod tests {
         assert_eq!(x, expected_x);
         assert_eq!(y, expected_y);
     }
+
+    #[test]
+    fn test_maybe_empty_batch() {
+        const N: usize = 100;
+        let xs = vec![0.0; N];
+        let ys = vec![1.0; N];
+
+        let src = DataSrc::inmem(xs, ys);
+        let size = NonZeroUsize::new(1).unwrap();
+        let ds = Dataset::loaded(src, size, size);
+
+        for batch_size in 1..2 * N {
+            let mut batches = ds.batches(NonZeroUsize::new(batch_size).unwrap());
+            if batches.any(|(x, y)| x.nrows() == 0 || y.nrows() == 0) {
+                panic!("the amount of rows must be greater than 0");
+            }
+        }
+    }
 }

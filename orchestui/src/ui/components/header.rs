@@ -24,8 +24,12 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Phase::Connecting => Span::styled("CONNECTING", Theme::accent_cyan()),
         Phase::Training => Span::styled("TRAINING", Theme::ok()),
         Phase::Finished => match state.finish_reason {
-            Some(StopReason::EarlyStopping) => Span::styled("FINISHED · early stop", Theme::accent_magenta()),
-            Some(StopReason::ManualStop) => Span::styled("FINISHED · stopped", Theme::accent_magenta()),
+            Some(StopReason::EarlyStopping) => {
+                Span::styled("FINISHED · early stop", Theme::accent_magenta())
+            }
+            Some(StopReason::ManualStop) => {
+                Span::styled("FINISHED · stopped", Theme::accent_magenta())
+            }
             _ => Span::styled("FINISHED", Theme::accent_magenta()),
         },
         Phase::Error => Span::styled("ERROR", Theme::error()),
@@ -75,10 +79,7 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
 
     if let Some(tol) = &state.early_stopping_label {
         spans.push(Span::styled("  │  ", Theme::muted()));
-        spans.push(Span::styled(
-            format!("early stop tol {tol}"),
-            Theme::dim(),
-        ));
+        spans.push(Span::styled(format!("early stop tol {tol}"), Theme::dim()));
     }
 
     spans.push(hint);
@@ -96,12 +97,17 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
 }
 
 fn avg_loss_str(state: &TrainingState) -> String {
-    let losses: Vec<f32> = state.workers.iter().filter_map(|w| w.last_loss).collect();
+    let count = state.workers.len();
 
-    if losses.is_empty() {
+    if count == 0 {
         return "—".into();
     }
 
-    let avg = losses.iter().sum::<f32>() / losses.len() as f32;
-    fmt_loss(avg)
+    let sum: f64 = state
+        .workers
+        .iter()
+        .flat_map(|worker| worker.last_loss)
+        .sum();
+
+    fmt_loss(sum / count as f64)
 }

@@ -180,7 +180,7 @@ impl CancelHandle {
 #[derive(Debug)]
 pub enum TrainingEvent {
     /// A worker completed an epoch and reported its losses.
-    Loss { worker_id: usize, losses: Vec<f32> },
+    Loss { worker_id: usize, losses: Vec<f64> },
     /// A worker finished and disconnected.
     WorkerDone(usize),
     /// Training completed and all servers returned the final trained model.
@@ -202,14 +202,14 @@ enum WorkerHandleRequest {
 }
 
 struct SyncRoundSignal {
-    prev: f32,
-    curr: f32,
+    prev: f64,
+    curr: f64,
 }
 
 struct ConvergenceTracker {
     n_workers: usize,
-    pending: HashMap<usize, f32>,
-    prev_avg: Option<f32>,
+    pending: HashMap<usize, f64>,
+    prev_avg: Option<f64>,
 }
 
 impl ConvergenceTracker {
@@ -221,7 +221,7 @@ impl ConvergenceTracker {
         }
     }
 
-    fn record(&mut self, worker_id: usize, losses: &[f32]) -> Option<SyncRoundSignal> {
+    fn record(&mut self, worker_id: usize, losses: &[f64]) -> Option<SyncRoundSignal> {
         let last = *losses.last()?;
         self.pending.insert(worker_id, last);
 
@@ -229,7 +229,8 @@ impl ConvergenceTracker {
             return None;
         }
 
-        let curr = self.pending.values().sum::<f32>() / self.n_workers as f32;
+        let pending_sum: f64 = self.pending.values().sum();
+        let curr = pending_sum / self.n_workers as f64;
         self.pending.clear();
 
         let signal = self.prev_avg.map(|prev| SyncRoundSignal { prev, curr });
@@ -543,7 +544,7 @@ impl Session {
                             if stop_reason.is_none() {
                                 if let Some(cfg) = early_stopping {
                                     if let Some(sig) = tracker.record(worker_id, &losses) {
-                                        if (sig.prev - sig.curr).abs() < *cfg.tolerance {
+                                        if (sig.prev - sig.curr).abs() < *cfg.tolerance as f64 {
                                             info!(
                                                 "early stopping triggered (prev={:.6}, curr={:.6})",
                                                 sig.prev, sig.curr

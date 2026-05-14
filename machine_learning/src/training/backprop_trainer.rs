@@ -31,7 +31,7 @@ where
     batch_size: NonZeroUsize,
     rng: R,
 
-    losses: Vec<f32>,
+    losses: Vec<f64>,
 }
 
 impl<O, L, R> BackpropTrainer<O, L, R>

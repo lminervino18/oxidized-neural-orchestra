@@ -23,7 +23,7 @@ pub struct WorkerHandle<T> {
 #[derive(Debug)]
 pub enum WorkerEvent<'a> {
     Grad(&'a [f32]),
-    Loss(Vec<f32>),
+    Loss(Vec<f64>),
     RequestParams,
     Disconnect,
     Done,

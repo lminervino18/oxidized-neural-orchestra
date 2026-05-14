@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const BAR_WIDTH: usize = 40;
 
-fn fmt_loss(loss: f32) -> String {
+fn fmt_loss(loss: f64) -> String {
     if loss.abs() < 1e-4 {
         format!("{loss:.3e}")
     } else {
@@ -20,14 +20,20 @@ fn fmt_loss(loss: f32) -> String {
     }
 }
 
-fn avg_loss(last_loss: &[Option<f32>]) -> f32 {
-    let reported: Vec<f32> = last_loss.iter().filter_map(|l| *l).collect();
+fn avg_loss(last_loss: &[Option<f64>]) -> f64 {
+    let mut sum = 0.0;
+    let mut count = 0.0;
 
-    if reported.is_empty() {
+    for &loss in last_loss.iter().flatten() {
+        sum += loss;
+        count += 1.0;
+    }
+
+    if count == 0.0 {
         return 0.0;
     }
 
-    reported.iter().sum::<f32>() / reported.len() as f32
+    sum / count
 }
 
 /// Tracks per-worker training progress and renders it to stdout.
@@ -36,7 +42,7 @@ fn avg_loss(last_loss: &[Option<f32>]) -> f32 {
 /// In non-TTY mode (pipes, CI) prints one line per epoch update instead.
 struct ProgressReporter {
     worker_epochs: Vec<usize>,
-    last_loss: Vec<Option<f32>>,
+    last_loss: Vec<Option<f64>>,
     max_epochs: usize,
     is_tty: bool,
     current_epoch: Arc<AtomicUsize>,
@@ -67,7 +73,7 @@ impl ProgressReporter {
                     let i = spinner_i.fetch_add(1, Ordering::Relaxed);
                     let spinner = SPINNER[i % SPINNER.len()];
                     let epoch = current_epoch.load(Ordering::Relaxed);
-                    let loss = f32::from_bits(avg_loss_bits.load(Ordering::Relaxed) as u32);
+                    let loss = f64::from_bits(avg_loss_bits.load(Ordering::Relaxed) as u64);
                     let filled = ((epoch * BAR_WIDTH) / max_epochs.max(1)).min(BAR_WIDTH);
 
                     print!(
@@ -99,7 +105,7 @@ impl ProgressReporter {
         }
     }
 
-    fn update(&mut self, worker_id: usize, losses: &[f32]) {
+    fn update(&mut self, worker_id: usize, losses: &[f64]) {
         for &loss in losses {
             if worker_id < self.worker_epochs.len() {
                 self.worker_epochs[worker_id] += 1;

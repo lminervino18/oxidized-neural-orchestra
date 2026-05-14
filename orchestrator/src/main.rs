@@ -63,7 +63,7 @@ fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>)
 
 fn main() -> io::Result<()> {
     const WORKERS: usize = 3;
-    const SERVERS: usize = 0;
+    const SERVERS: usize = 2;
     const RELEASE: bool = false;
 
     setup_docker(WORKERS, SERVERS, RELEASE)?;
