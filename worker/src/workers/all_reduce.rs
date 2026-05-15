@@ -81,13 +81,16 @@ where
                         info!("received a disconnect command from the orchestrator");
                         break;
                     }
-                    OrchEvent::Upgrade { mut spec } => {
+                    OrchEvent::Upgrade { mut spec, ranges } => {
                         info!("upgrading to parameter server");
 
-                        spec.param_gen = ParamGenSpec::Inline {
-                            params: self.params.clone()
-                        };
+                        let params: Vec<_> = ranges
+                            .into_iter()
+                            .flat_map(|(a, b)| &self.params[a..b])
+                            .cloned()
+                            .collect();
 
+                        spec.param_gen = ParamGenSpec::Inline { params };
                         return Ok(Run::Upgrade { spec })
                     }
                     OrchEvent::Switch {

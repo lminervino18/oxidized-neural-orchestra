@@ -27,6 +27,7 @@ pub enum OrchEvent {
     },
     Upgrade {
         spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
     },
 }
 
@@ -101,7 +102,7 @@ where
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
             Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
             Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
-            Msg::Control(Command::Upgrade { spec }) => OrchEvent::Upgrade { spec },
+            Msg::Control(Command::Upgrade { spec, ranges }) => OrchEvent::Upgrade { spec, ranges },
             Msg::Control(Command::Switch {
                 server_addrs,
                 server_sizes,

@@ -39,6 +39,7 @@ pub enum Command<'a> {
     },
     Upgrade {
         spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
     },
     Switch {
         server_addrs: Vec<String>,
