@@ -1,18 +1,13 @@
-use std::{
-    collections::HashMap,
-    io::{self, SeekFrom},
-    path::Path,
-    thread,
-};
+use std::{collections::HashMap, io::SeekFrom, path::Path, thread};
 
 use comms::{
-    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerEvent, WorkerHandle,
+    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle,
     protocol::Entity,
     share_dataset,
     specs::{server::ServerSpec, worker::WorkerSpec},
 };
 use futures::future;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt},
@@ -28,7 +23,7 @@ use super::TrainedModel;
 use crate::{
     OrchErr, Result, TrainingEvent,
     configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
-    sessions::WorkerRequest,
+    sessions::{WorkerListener, WorkerRequest},
 };
 
 /// Why a training session ended.
@@ -164,116 +159,6 @@ impl Session {
         })
     }
 
-    async fn worker_listener(
-        id: usize,
-        mut worker_handle: WorkerHandle<NetRtp>,
-        mut wk_rx: Receiver<WorkerRequest>,
-        tx: Sender<TrainingEvent>,
-    ) {
-        let mut stopping = false;
-        loop {
-            tokio::select! {
-                req = wk_rx.recv() => match req {
-                    Some(WorkerRequest::Stop) if stopping => {}
-                    Some(WorkerRequest::Stop) => {
-                        stopping = true;
-
-                        if let Err(e) = worker_handle.stop().await {
-                            error!("worker {id}: failed to send stop command: {e}");
-
-                            let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                id,
-                                details: format!("failed to send stop command: {e}"),
-                            });
-
-                            let _ = tx.send(event).await;
-                            return;
-                        }
-                    },
-                    Some(WorkerRequest::PullParams) => {
-                        match worker_handle.pull_params().await {
-                            Ok(params) => {
-                                let _ = tx.send(TrainingEvent::Params(params.to_vec())).await;
-                            },
-                            Err(e) => {
-                                error!("worker {id}: failed to send pull params command: {e}");
-
-                                let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                    id: id,
-                                    details: format!("failed to send pull params command: {e}"),
-                                });
-
-                                let _ = tx.send(event).await;
-                                return;
-                            },
-                        }
-                    }
-                    Some(WorkerRequest::Disconnect) => {
-                        if let Err(e) = worker_handle.disconnect().await {
-                            error!("worker {id}: failed to send disconnect command: {e}");
-
-                            let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                id: id,
-                                details: format!("failed to send disconnect command: {e}"),
-                            });
-
-                            let _ = tx.send(event).await;
-                        }
-                        return;
-                    }
-                    None => {}
-                },
-                event = worker_handle.recv_event() => match event {
-                    Ok(WorkerEvent::Loss(losses)) => {
-                        debug!("worker {id} reported {} losses", losses.len());
-
-                        let event = TrainingEvent::PublishedLosses {
-                            worker_id: id,
-                            losses,
-                        };
-
-                        let _ = tx.send(event).await;
-                    }
-                    Ok(WorkerEvent::Done) => {
-                        info!("worker {id} done");
-                        let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
-                    }
-                    Ok(WorkerEvent::Disconnect) => {
-                        info!("worker {id} disconnected");
-                        return;
-                    }
-                    Ok(event) => {
-                        warn!("worker {id}: unexpected event {event:?}");
-
-                        let event = TrainingEvent::Error(OrchErr::WorkerError {
-                            id: id,
-                            details: format!("unexpected event {event:?}"),
-                        });
-
-                        let _ = tx.send(event).await;
-                        return;
-                    }
-                    Err(e) if is_eof(&e) => {
-                        info!("worker {id}'s connection closed");
-                        let _ = tx.send(TrainingEvent::WorkerDone(id)).await;
-                        return;
-                    }
-                    Err(e) => {
-                        error!("worker {id} error: {e}");
-
-                        let event = TrainingEvent::Error(OrchErr::WorkerError {
-                            id: id,
-                            details: e.to_string(),
-                        });
-
-                        let _ = tx.send(event).await;
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
     /// Consumes `self` and creates an event listener for this training session.
     ///
     /// Spawns a background thread that drives the session. The `cancel_rx` must come
@@ -337,25 +222,29 @@ impl Session {
         event_rx
     }
 
+    /// Spawns the worker listeners for each worker.
+    ///
+    /// # Args
+    /// * `workers` - The worker handlers for communicating with each worker.
+    /// * `event_tx` - The training event sender.
+    ///
+    /// # Returns
+    /// Senders for making requests to the workers through their listeners.
     fn spawn_worker_listeners(
         workers: Vec<WorkerHandle<NetRtp>>,
-        internal_tx: Sender<TrainingEvent>,
+        event_tx: Sender<TrainingEvent>,
     ) -> Vec<Sender<WorkerRequest>> {
-        let mut wk_txs = Vec::with_capacity(workers.len());
+        let mut request_txs = Vec::with_capacity(workers.len());
 
         for (i, worker_handle) in workers.into_iter().enumerate() {
-            let (wk_tx, wk_rx) = mpsc::channel(256);
-            wk_txs.push(wk_tx);
+            let (tx, rx) = mpsc::channel(256);
+            request_txs.push(tx);
 
-            tokio::spawn(Self::worker_listener(
-                i,
-                worker_handle,
-                wk_rx,
-                internal_tx.clone(),
-            ));
+            let worker_listener = WorkerListener::new(i, worker_handle);
+            tokio::spawn(worker_listener.listen(rx, event_tx.clone()));
         }
 
-        wk_txs
+        request_txs
     }
 
     async fn run_training_loop(
@@ -685,11 +574,4 @@ impl Session {
 
         Ok(())
     }
-}
-
-fn is_eof(e: &io::Error) -> bool {
-    matches!(
-        e.kind(),
-        io::ErrorKind::UnexpectedEof | io::ErrorKind::ConnectionReset
-    ) || e.to_string().contains("early eof")
 }
