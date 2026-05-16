@@ -4,15 +4,18 @@ use std::{
     io,
 };
 
+use crate::sessions::WorkerRequest;
+
 /// The orchestrator module's error type.
 #[derive(Debug)]
 pub enum OrchErr {
     InvalidConfig(String),
     Unsupported(String),
     ConnectionFailed { addr: String, source: io::Error },
-    WorkerError { worker_id: usize, event: String },
+    WorkerError { id: usize, details: String },
     ServerError(String),
     SafeTensors(safetensors::SafeTensorError),
+    InvalidRequest(WorkerRequest),
     Io(io::Error),
 }
 
@@ -27,12 +30,10 @@ impl Display for OrchErr {
             Self::ConnectionFailed { addr, source } => {
                 format!("failed to reach to {addr}: {source}")
             }
-            Self::WorkerError {
-                worker_id,
-                event: msg,
-            } => {
-                format!("worker {worker_id} error: {msg}")
+            Self::WorkerError { id, details: msg } => {
+                format!("worker {id} error: {msg}")
             }
+            Self::InvalidRequest(req) => format!("invalid worker request: {req:?}"),
             Self::SafeTensors(e) => format!("safetensors error: {e}"),
             Self::ServerError(msg) => format!("server error: {msg}"),
             Self::Io(e) => format!("io error: {e}"),

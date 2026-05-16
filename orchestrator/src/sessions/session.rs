@@ -28,6 +28,7 @@ use super::TrainedModel;
 use crate::{
     OrchErr, Result, TrainingEvent,
     configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
+    sessions::WorkerRequest,
 };
 
 /// Why a training session ended.
@@ -56,13 +57,6 @@ impl CancelHandle {
     pub fn stop(&self) {
         let _ = self.0.try_send(());
     }
-}
-
-#[derive(Debug)]
-enum WorkerHandleRequest {
-    PullParams,
-    Disconnect,
-    Stop,
 }
 
 struct SyncRoundSignal {
@@ -173,30 +167,30 @@ impl Session {
     async fn worker_listener(
         id: usize,
         mut worker_handle: WorkerHandle<NetRtp>,
-        mut wk_rx: Receiver<WorkerHandleRequest>,
+        mut wk_rx: Receiver<WorkerRequest>,
         tx: Sender<TrainingEvent>,
     ) {
         let mut stopping = false;
         loop {
             tokio::select! {
                 req = wk_rx.recv() => match req {
-                    Some(WorkerHandleRequest::Stop) if stopping => {}
-                    Some(WorkerHandleRequest::Stop) => {
+                    Some(WorkerRequest::Stop) if stopping => {}
+                    Some(WorkerRequest::Stop) => {
                         stopping = true;
 
                         if let Err(e) = worker_handle.stop().await {
                             error!("worker {id}: failed to send stop command: {e}");
 
                             let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                worker_id: id,
-                                event: format!("failed to send stop command: {e}"),
+                                id,
+                                details: format!("failed to send stop command: {e}"),
                             });
 
                             let _ = tx.send(event).await;
                             return;
                         }
                     },
-                    Some(WorkerHandleRequest::PullParams) => {
+                    Some(WorkerRequest::PullParams) => {
                         match worker_handle.pull_params().await {
                             Ok(params) => {
                                 let _ = tx.send(TrainingEvent::Params(params.to_vec())).await;
@@ -205,8 +199,8 @@ impl Session {
                                 error!("worker {id}: failed to send pull params command: {e}");
 
                                 let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                    worker_id: id,
-                                    event: format!("failed to send pull params command: {e}"),
+                                    id: id,
+                                    details: format!("failed to send pull params command: {e}"),
                                 });
 
                                 let _ = tx.send(event).await;
@@ -214,13 +208,13 @@ impl Session {
                             },
                         }
                     }
-                    Some(WorkerHandleRequest::Disconnect) => {
+                    Some(WorkerRequest::Disconnect) => {
                         if let Err(e) = worker_handle.disconnect().await {
                             error!("worker {id}: failed to send disconnect command: {e}");
 
                             let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                worker_id: id,
-                                event: format!("failed to send disconnect command: {e}"),
+                                id: id,
+                                details: format!("failed to send disconnect command: {e}"),
                             });
 
                             let _ = tx.send(event).await;
@@ -252,8 +246,8 @@ impl Session {
                         warn!("worker {id}: unexpected event {event:?}");
 
                         let event = TrainingEvent::Error(OrchErr::WorkerError {
-                            worker_id: id,
-                            event: format!("unexpected event {event:?}"),
+                            id: id,
+                            details: format!("unexpected event {event:?}"),
                         });
 
                         let _ = tx.send(event).await;
@@ -268,8 +262,8 @@ impl Session {
                         error!("worker {id} error: {e}");
 
                         let event = TrainingEvent::Error(OrchErr::WorkerError {
-                            worker_id: id,
-                            event: e.to_string(),
+                            id: id,
+                            details: e.to_string(),
                         });
 
                         let _ = tx.send(event).await;
@@ -346,7 +340,7 @@ impl Session {
     fn spawn_worker_listeners(
         workers: Vec<WorkerHandle<NetRtp>>,
         internal_tx: Sender<TrainingEvent>,
-    ) -> Vec<Sender<WorkerHandleRequest>> {
+    ) -> Vec<Sender<WorkerRequest>> {
         let mut wk_txs = Vec::with_capacity(workers.len());
 
         for (i, worker_handle) in workers.into_iter().enumerate() {
@@ -367,7 +361,7 @@ impl Session {
     async fn run_training_loop(
         cancel_rx: &mut Receiver<()>,
         internal_rx: &mut Receiver<TrainingEvent>,
-        wk_txs: &mut [Sender<WorkerHandleRequest>],
+        wk_txs: &mut [Sender<WorkerRequest>],
         n_workers: usize,
         early_stopping: &Option<EarlyStoppingConfig>,
         event_tx: &Sender<TrainingEvent>,
@@ -384,7 +378,7 @@ impl Session {
                     stop_reason = Some(StopReason::ManualStop);
 
                     for tx in wk_txs.iter_mut() {
-                        let _ = tx.send(WorkerHandleRequest::Stop).await;
+                        let _ = tx.send(WorkerRequest::Stop).await;
                     }
                 }
                 evt = internal_rx.recv() => {
@@ -412,7 +406,7 @@ impl Session {
 
                                             stop_reason = Some(StopReason::EarlyStopping);
                                             for tx in wk_txs.iter_mut() {
-                                                let _ = tx.send(WorkerHandleRequest::Stop).await;
+                                                let _ = tx.send(WorkerRequest::Stop).await;
                                             }
                                         }
                                     }
@@ -463,13 +457,13 @@ impl Session {
     }
 
     async fn finalize_all_reduce(
-        wk_txs: &mut Vec<Sender<WorkerHandleRequest>>,
+        wk_txs: &mut Vec<Sender<WorkerRequest>>,
         internal_rx: &mut Receiver<TrainingEvent>,
     ) -> Vec<f32> {
         let mut i = 0;
 
         let params = loop {
-            let _ = wk_txs[i].send(WorkerHandleRequest::PullParams).await;
+            let _ = wk_txs[i].send(WorkerRequest::PullParams).await;
 
             if let Some(TrainingEvent::Params(params)) = internal_rx.recv().await {
                 break params.to_vec();
@@ -479,7 +473,7 @@ impl Session {
         };
 
         for tx in wk_txs {
-            let _ = tx.send(WorkerHandleRequest::Disconnect).await;
+            let _ = tx.send(WorkerRequest::Disconnect).await;
         }
 
         params
