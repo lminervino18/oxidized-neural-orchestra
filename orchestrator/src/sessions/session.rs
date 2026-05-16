@@ -26,7 +26,7 @@ use tokio::{
 
 use super::TrainedModel;
 use crate::{
-    OrchErr, Result,
+    OrchErr, Result, TrainingEvent,
     configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
 };
 
@@ -56,24 +56,6 @@ impl CancelHandle {
     pub fn stop(&self) {
         let _ = self.0.try_send(());
     }
-}
-
-/// An event produced during a training session.
-#[derive(Debug)]
-pub enum TrainingEvent {
-    PublishedLosses {
-        worker_id: usize,
-        losses: Vec<f64>,
-    },
-    WorkerDone(usize),
-    /// Training completed and all servers returned the final trained model.
-    Complete {
-        model: TrainedModel,
-        reason: StopReason,
-    },
-    /// The parameters of the all reduce worker.
-    Params(Vec<f32>),
-    Error(OrchErr),
 }
 
 #[derive(Debug)]
@@ -197,57 +179,55 @@ impl Session {
         let mut stopping = false;
         loop {
             tokio::select! {
-                req = wk_rx.recv() => {
-                    match req {
-                        Some(WorkerHandleRequest::Stop) if stopping => {}
-                        Some(WorkerHandleRequest::Stop) => {
-                            stopping = true;
+                req = wk_rx.recv() => match req {
+                    Some(WorkerHandleRequest::Stop) if stopping => {}
+                    Some(WorkerHandleRequest::Stop) => {
+                        stopping = true;
 
-                            if let Err(e) = worker_handle.stop().await {
-                                error!("worker {id}: failed to send stop command: {e}");
+                        if let Err(e) = worker_handle.stop().await {
+                            error!("worker {id}: failed to send stop command: {e}");
+
+                            let event = TrainingEvent::Error(OrchErr::WorkerError {
+                                worker_id: id,
+                                event: format!("failed to send stop command: {e}"),
+                            });
+
+                            let _ = tx.send(event).await;
+                            return;
+                        }
+                    },
+                    Some(WorkerHandleRequest::PullParams) => {
+                        match worker_handle.pull_params().await {
+                            Ok(params) => {
+                                let _ = tx.send(TrainingEvent::Params(params.to_vec())).await;
+                            },
+                            Err(e) => {
+                                error!("worker {id}: failed to send pull params command: {e}");
 
                                 let event = TrainingEvent::Error(OrchErr::WorkerError {
                                     worker_id: id,
-                                    event: format!("failed to send stop command: {e}"),
+                                    event: format!("failed to send pull params command: {e}"),
                                 });
 
                                 let _ = tx.send(event).await;
                                 return;
-                            }
-                        },
-                        Some(WorkerHandleRequest::PullParams) => {
-                            match worker_handle.pull_params().await {
-                                Ok(params) => {
-                                    let _ = tx.send(TrainingEvent::Params(params.to_vec())).await;
-                                },
-                                Err(e) => {
-                                    error!("worker {id}: failed to send pull params command: {e}");
-
-                                    let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                        worker_id: id,
-                                        event: format!("failed to send pull params command: {e}"),
-                                    });
-
-                                    let _ = tx.send(event).await;
-                                    return;
-                                },
-                            }
+                            },
                         }
-                        Some(WorkerHandleRequest::Disconnect) => {
-                            if let Err(e) = worker_handle.disconnect().await {
-                                error!("worker {id}: failed to send disconnect command: {e}");
-
-                                let event = TrainingEvent::Error(OrchErr::WorkerError {
-                                    worker_id: id,
-                                    event: format!("failed to send disconnect command: {e}"),
-                                });
-
-                                let _ = tx.send(event).await;
-                            }
-                            return;
-                        }
-                        None => {}
                     }
+                    Some(WorkerHandleRequest::Disconnect) => {
+                        if let Err(e) = worker_handle.disconnect().await {
+                            error!("worker {id}: failed to send disconnect command: {e}");
+
+                            let event = TrainingEvent::Error(OrchErr::WorkerError {
+                                worker_id: id,
+                                event: format!("failed to send disconnect command: {e}"),
+                            });
+
+                            let _ = tx.send(event).await;
+                        }
+                        return;
+                    }
+                    None => {}
                 },
                 event = worker_handle.recv_event() => match event {
                     Ok(WorkerEvent::Loss(losses)) => {
@@ -347,18 +327,16 @@ impl Session {
 
                 info!("received {} total parameters", params.len());
 
-                let trained = TrainedModel {
-                    params,
-                    model,
-                    input_size,
+                let event = TrainingEvent::TrainingComplete {
+                    model: TrainedModel {
+                        params,
+                        model,
+                        input_size,
+                    },
+                    reason,
                 };
 
-                let _ = event_tx
-                    .send(TrainingEvent::Complete {
-                        model: trained,
-                        reason,
-                    })
-                    .await;
+                let _ = event_tx.send(event).await;
             });
         });
 

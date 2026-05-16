@@ -180,7 +180,7 @@ fn main() -> io::Result<()> {
             Some(orchestrator::TrainingEvent::PublishedLosses { losses, worker_id }) => {
                 println!("losses {worker_id}: {losses:?}")
             }
-            Some(orchestrator::TrainingEvent::Complete {
+            Some(orchestrator::TrainingEvent::TrainingComplete {
                 model: trained,
                 reason,
             }) => {

@@ -313,7 +313,7 @@ impl TrainingState {
                 }
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
-            TrainingEvent::Complete {
+            TrainingEvent::TrainingComplete {
                 model: trained,
                 reason,
             } => {

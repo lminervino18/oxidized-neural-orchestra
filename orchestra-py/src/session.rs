@@ -246,7 +246,7 @@ impl Session {
                             Some(TrainingEvent::PublishedLosses { worker_id, losses }) => {
                                 reporter.update(worker_id, &losses);
                             }
-                            Some(TrainingEvent::Complete { model: trained, .. }) => {
+                            Some(TrainingEvent::TrainingComplete { model: trained, .. }) => {
                                 break Ok(trained)
                             }
                             Some(TrainingEvent::Error(e)) => break Err(e.to_string()),

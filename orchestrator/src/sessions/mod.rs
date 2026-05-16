@@ -1,5 +1,8 @@
+mod event;
 mod session;
 mod trained_model;
+mod training_strategies;
 
-pub use session::{CancelHandle, Session, StopReason, TrainingEvent};
+pub use event::TrainingEvent;
+pub use session::{CancelHandle, Session, StopReason};
 pub use trained_model::TrainedModel;
