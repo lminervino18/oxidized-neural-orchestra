@@ -2,36 +2,13 @@ use comms::{TransportLayer, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::{OrchErr, Result, StopReason, TrainedModel};
-
-/// Requests that the orchestrator can make to a worker handler task.
-#[derive(Debug)]
-pub enum WorkerRequest {
-    PullParams,
-    Disconnect,
-    Stop,
-}
+use super::{TrainingEvent, WorkerRequest};
+use crate::{OrchErr, Result};
 
 /// The return type of the `handle_event` method.
 enum EventResolution {
     NotifyOrch(TrainingEvent),
     Exit,
-}
-
-/// An event produced during a training session.
-#[derive(Debug)]
-pub enum TrainingEvent {
-    PublishedLosses {
-        worker_id: usize,
-        losses: Vec<f64>,
-    },
-    WorkerDone(usize),
-    TrainingComplete {
-        model: TrainedModel,
-        reason: StopReason,
-    },
-    Params(Vec<f32>),
-    Error(OrchErr),
 }
 
 /// The worker handle manager.

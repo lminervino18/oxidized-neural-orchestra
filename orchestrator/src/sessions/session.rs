@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::SeekFrom, path::Path, thread};
+use std::{io::SeekFrom, path::Path, thread};
 
 use comms::{
     Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle,
@@ -23,17 +23,8 @@ use super::TrainedModel;
 use crate::{
     OrchErr, Result, TrainingEvent,
     configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
-    sessions::{WorkerListener, WorkerRequest},
+    sessions::{EventListener, WorkerListener, WorkerRequest},
 };
-
-/// Why a training session ended.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum StopReason {
-    #[default]
-    MaxEpochsReached,
-    EarlyStopping,
-    ManualStop,
-}
 
 /// A handle that lets any caller request an early stop of an ongoing training session.
 pub struct CancelHandle(Sender<()>);
@@ -51,44 +42,6 @@ impl CancelHandle {
 
     pub fn stop(&self) {
         let _ = self.0.try_send(());
-    }
-}
-
-struct SyncRoundSignal {
-    prev: f64,
-    curr: f64,
-}
-
-struct ConvergenceTracker {
-    n_workers: usize,
-    pending: HashMap<usize, f64>,
-    prev_avg: Option<f64>,
-}
-
-impl ConvergenceTracker {
-    fn new(n_workers: usize) -> Self {
-        Self {
-            n_workers,
-            pending: HashMap::new(),
-            prev_avg: None,
-        }
-    }
-
-    fn record(&mut self, worker_id: usize, losses: &[f64]) -> Option<SyncRoundSignal> {
-        let last = *losses.last()?;
-        self.pending.insert(worker_id, last);
-
-        if self.pending.len() < self.n_workers {
-            return None;
-        }
-
-        let pending_sum: f64 = self.pending.values().sum();
-        let curr = pending_sum / self.n_workers as f64;
-        self.pending.clear();
-
-        let signal = self.prev_avg.map(|prev| SyncRoundSignal { prev, curr });
-        self.prev_avg = Some(curr);
-        signal
     }
 }
 
@@ -138,7 +91,7 @@ impl Session {
             AlgorithmConfig::ParameterServer { .. } => {
                 info!("connecting to {nservers} servers");
                 let server_handles = runtime.block_on(Self::create_servers(servers, &connector))?;
-                debug!("successfully created servers");
+                info!("successfully created servers");
                 server_handles
             }
             _ => Vec::new(),
@@ -146,7 +99,7 @@ impl Session {
 
         info!("connecting to {nworkers} workers");
         let worker_handles = runtime.block_on(Self::create_workers(workers, &connector))?;
-        debug!("successfully created workers");
+        info!("successfully created workers");
 
         Ok(Self {
             runtime,
@@ -167,40 +120,50 @@ impl Session {
     ///
     /// # Returns
     /// A receiver that yields `TrainingEvent`s as training progresses.
-    pub fn event_listener(self, mut cancel_rx: Receiver<()>) -> Receiver<TrainingEvent> {
-        let (event_tx, event_rx) = mpsc::channel(256);
+    pub fn event_listener(self, cancel_rx: Receiver<()>) -> Receiver<TrainingEvent> {
+        let (user_event_tx, user_event_rx) = mpsc::channel(256);
 
-        let model = self.model;
-        let input_size = self.input_size;
-        let algorithm = self.algorithm;
-        let early_stopping = self.early_stopping;
+        let Self {
+            workers,
+            servers,
+            model,
+            algorithm,
+            input_size,
+            early_stopping,
+            ..
+        } = self;
 
         thread::spawn(move || {
             self.runtime.block_on(async move {
-                let (internal_tx, mut internal_rx) = mpsc::channel(256);
-                let n_workers = self.workers.len();
+                let (req_tx, mut req_rx) = mpsc::channel(256);
+                let mut req_txs = Vec::with_capacity(workers.len());
 
-                let mut wk_txs = Self::spawn_worker_listeners(self.workers, internal_tx);
+                for (i, worker_handle) in workers.into_iter().enumerate() {
+                    let (tx, rx) = mpsc::channel(256);
+                    req_txs.push(tx);
 
-                let Some(reason) = Self::run_training_loop(
-                    &mut cancel_rx,
-                    &mut internal_rx,
-                    &mut wk_txs,
-                    n_workers,
-                    &early_stopping,
-                    &event_tx,
-                )
-                .await
-                else {
+                    let worker_listener = WorkerListener::new(i, worker_handle);
+                    tokio::spawn(worker_listener.listen(rx, req_tx.clone()));
+                }
+
+                let mut event_listener = EventListener::new(
+                    cancel_rx,
+                    &mut req_txs,
+                    early_stopping,
+                    &mut req_rx,
+                    user_event_tx.clone(),
+                );
+
+                let Some(stop_reason) = event_listener.listen().await else {
                     return;
                 };
 
                 let params = match algorithm {
                     AlgorithmConfig::ParameterServer { .. } => {
-                        Self::finalize_parameter_server(self.servers, &event_tx).await
+                        Self::finalize_parameter_server(servers, user_event_tx.clone()).await
                     }
                     AlgorithmConfig::AllReduce { .. } => {
-                        Self::finalize_all_reduce(&mut wk_txs, &mut internal_rx).await
+                        Self::finalize_all_reduce(&mut req_txs, &mut req_rx).await
                     }
                 };
 
@@ -212,132 +175,37 @@ impl Session {
                         model,
                         input_size,
                     },
-                    reason,
+                    reason: stop_reason,
                 };
 
-                let _ = event_tx.send(event).await;
+                let _ = user_event_tx.send(event).await;
             });
         });
 
-        event_rx
-    }
-
-    /// Spawns the worker listeners for each worker.
-    ///
-    /// # Args
-    /// * `workers` - The worker handlers for communicating with each worker.
-    /// * `event_tx` - The training event sender.
-    ///
-    /// # Returns
-    /// Senders for making requests to the workers through their listeners.
-    fn spawn_worker_listeners(
-        workers: Vec<WorkerHandle<NetRtp>>,
-        event_tx: Sender<TrainingEvent>,
-    ) -> Vec<Sender<WorkerRequest>> {
-        let mut request_txs = Vec::with_capacity(workers.len());
-
-        for (i, worker_handle) in workers.into_iter().enumerate() {
-            let (tx, rx) = mpsc::channel(256);
-            request_txs.push(tx);
-
-            let worker_listener = WorkerListener::new(i, worker_handle);
-            tokio::spawn(worker_listener.listen(rx, event_tx.clone()));
-        }
-
-        request_txs
-    }
-
-    async fn run_training_loop(
-        cancel_rx: &mut Receiver<()>,
-        internal_rx: &mut Receiver<TrainingEvent>,
-        wk_txs: &mut [Sender<WorkerRequest>],
-        n_workers: usize,
-        early_stopping: &Option<EarlyStoppingConfig>,
-        event_tx: &Sender<TrainingEvent>,
-    ) -> Option<StopReason> {
-        let mut tracker = ConvergenceTracker::new(n_workers);
-        let mut stop_reason: Option<StopReason> = None;
-        let mut workers_done = 0;
-
-        loop {
-            tokio::select! {
-                biased;
-                _ = cancel_rx.recv(), if stop_reason.is_none() => {
-                    info!("manual stop requested");
-                    stop_reason = Some(StopReason::ManualStop);
-
-                    for tx in wk_txs.iter_mut() {
-                        let _ = tx.send(WorkerRequest::Stop).await;
-                    }
-                }
-                evt = internal_rx.recv() => {
-                    let Some(event) = evt else {
-                        break;
-                    };
-
-                    match event {
-                        TrainingEvent::WorkerDone(id) => {
-                            workers_done += 1;
-                            let _ = event_tx.send(TrainingEvent::WorkerDone(id)).await;
-                            if workers_done == n_workers {
-                                break;
-                            }
-                        }
-                        TrainingEvent::PublishedLosses { worker_id, losses } => {
-                            if stop_reason.is_none() {
-                                if let Some(cfg) = early_stopping {
-                                    if let Some(sig) = tracker.record(worker_id, &losses) {
-                                        if (sig.prev - sig.curr).abs() < *cfg.tolerance as f64 {
-                                            info!(
-                                                "early stopping triggered (prev={:.6}, curr={:.6})",
-                                                sig.prev, sig.curr
-                                            );
-
-                                            stop_reason = Some(StopReason::EarlyStopping);
-                                            for tx in wk_txs.iter_mut() {
-                                                let _ = tx.send(WorkerRequest::Stop).await;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            let _ = event_tx.send(TrainingEvent::PublishedLosses { worker_id, losses }).await;
-                        }
-                        TrainingEvent::Error(e) => {
-                            let _ = event_tx.send(TrainingEvent::Error(e)).await;
-                            return None;
-                        }
-                        other => {
-                            let _ = event_tx.send(other).await;
-                        }
-                    }
-                }
-            }
-        }
-
-        Some(stop_reason.unwrap_or_default())
+        user_event_rx
     }
 
     async fn finalize_parameter_server(
         servers: Vec<ParamServerHandle<NetRtp>>,
-        event_tx: &Sender<TrainingEvent>,
+        event_tx: Sender<TrainingEvent>,
     ) -> Vec<f32> {
         debug!("all workers done, reading final params from all servers");
-        let mut model_params: Vec<f32> = Vec::new();
+        let mut model_params = Vec::new();
 
         for (i, mut server_handle) in servers.into_iter().enumerate() {
             match server_handle.pull_params().await {
                 Ok(params) => {
                     model_params.extend_from_slice(params);
+
                     if let Err(e) = server_handle.disconnect().await {
                         error!("Failed to disconnect server {i}: {e}");
                     }
                 }
                 Err(e) => {
-                    let err =
-                        OrchErr::ServerError(format!("unexpected error from server {i}: {e}"));
-                    let _ = event_tx.send(TrainingEvent::Error(err)).await;
+                    let details = format!("unexpected error from server {i}: {e}");
+                    let err = OrchErr::ServerError(details);
+                    let event = TrainingEvent::Error(err);
+                    let _ = event_tx.send(event).await;
                 }
             }
         }
