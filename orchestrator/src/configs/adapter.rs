@@ -44,20 +44,18 @@ impl Adapter {
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
-    #[allow(clippy::type_complexity)]
     pub fn adapt_configs<'a>(
         &self,
         model: ModelConfig,
         training: &'a TrainingConfig,
     ) -> Result<(
-        Vec<(String, WorkerSpec)>,
-        Vec<Partition<'a>>,
+        Vec<(String, WorkerSpec, Partition<'a>)>,
         Vec<(String, ServerSpec)>,
     )> {
         let partitions =
             self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
 
-        match &training.algorithm {
+        let (workers, servers) = match &training.algorithm {
             AlgorithmConfig::ParameterServer { .. } => {
                 let (servers, server_addrs, server_sizes, server_ordering) =
                     self.adapt_servers(&model, training)?;
@@ -70,14 +68,21 @@ impl Adapter {
                     server_ordering,
                 )?;
 
-                Ok((workers, partitions, servers))
+                (workers, servers)
             }
             AlgorithmConfig::AllReduce => {
                 let workers = self.adapt_all_reduce_workers(&model, training)?;
-
-                Ok((workers, partitions, Vec::new()))
+                (workers, Vec::new())
             }
-        }
+        };
+
+        let workers = workers
+            .into_iter()
+            .zip(partitions)
+            .map(|((addr, spec), partition)| (addr, spec, partition))
+            .collect();
+
+        Ok((workers, servers))
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.

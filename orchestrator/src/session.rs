@@ -152,8 +152,7 @@ impl Session {
     /// # Errors
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
     pub fn new<F>(
-        workers: Vec<(String, WorkerSpec)>,
-        partitions: Vec<Partition>,
+        workers: Vec<(String, WorkerSpec, Partition<'_>)>,
         servers: Vec<(String, ServerSpec)>,
         connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
         model: ModelConfig,
@@ -165,7 +164,7 @@ impl Session {
     {
         let algorithm = workers
             .first()
-            .map(|(_, spec)| spec.algorithm.clone())
+            .map(|(_, spec, _)| spec.algorithm.clone())
             .ok_or_else(|| OrchErr::InvalidConfig("at least one worker is required".into()))?;
 
         let (nworkers, nservers) = (workers.len(), servers.len());
@@ -176,8 +175,7 @@ impl Session {
         let server_chans = runtime.block_on(Self::create_servers(servers, &connector))?;
         debug!("successfully created all servers");
 
-        let worker_chans =
-            runtime.block_on(Self::create_workers(workers, partitions, &connector))?;
+        let worker_chans = runtime.block_on(Self::create_workers(workers, &connector))?;
         debug!("successfully created all workers");
 
         Ok(Self {
@@ -552,15 +550,14 @@ impl Session {
     /// Connects to the worker nodes and sends their specification and dataset partitions.
     ///
     /// # Args
-    /// * `workers` - The workers' network addresses and specifications.
+    /// * `workers` - The workers' network addresses, specifications and dataset partitions.
     /// * `partitions` - The workers' dataset partitions.
     /// * `connector` - The connector to create the network connections.
     ///
     /// # Returns
     /// The worker handles or an orch error if occurred.
     async fn create_workers<'a, F>(
-        workers: Vec<(String, WorkerSpec)>,
-        partitions: Vec<Partition<'a>>,
+        workers: Vec<(String, WorkerSpec, Partition<'a>)>,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<WorkerHandle<NetRtp>>>
     where
@@ -568,8 +565,10 @@ impl Session {
     {
         const CHUNK_SIZE: usize = 8192;
 
-        let futs = workers.into_iter().zip(partitions).enumerate().map(
-            |(i, ((addr, spec), partition))| async move {
+        let futs = workers
+            .into_iter()
+            .enumerate()
+            .map(|(i, (addr, spec, partition))| async move {
                 debug!("connecting to worker at {addr}");
 
                 let stream =
@@ -589,8 +588,7 @@ impl Session {
                 let mut worker_handle = node_handle.create_worker(spec).await?;
                 Self::send_partition(&mut worker_handle, partition, CHUNK_SIZE).await?;
                 Ok::<_, OrchErr>(worker_handle)
-            },
-        );
+            });
 
         future::try_join_all(futs).await
     }
