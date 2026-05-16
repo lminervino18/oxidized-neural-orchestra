@@ -127,8 +127,8 @@ impl ConvergenceTracker {
 /// Represents an ongoing training session.
 pub struct Session {
     runtime: Runtime,
-    servers: Vec<ParamServerHandle<NetRtp>>,
     workers: Vec<WorkerHandle<NetRtp>>,
+    servers: Vec<ParamServerHandle<NetRtp>>,
     model: ModelConfig,
     input_size: usize,
     algorithm: AlgorithmSpec,
@@ -139,12 +139,11 @@ impl Session {
     /// Creates a new session by connecting to all workers and servers.
     ///
     /// # Args
-    /// * `workers` - List of (address, spec) pairs for each worker.
-    /// * `partitions` - List of dataset partitions for each worker.
-    /// * `servers` - List of (address, spec) pairs for each parameter server.
-    /// * `connector` - The underlying entity connector.
-    /// * `model` - The model architecture, kept for post-training serialization.
-    /// * `input_size` - The input size of the first layer, derived from the dataset.
+    /// * `workers` - The workers' network addresses, specifications and dataset partitions.
+    /// * `servers` - The servers' network addresses and specifications.
+    /// * `connector` - The network connector.
+    /// * `model` - The model's architecture configuration.
+    /// * `input_size` - The model's input size.
     ///
     /// # Returns
     /// A ready session with all connections established.
@@ -172,16 +171,16 @@ impl Session {
 
         let runtime = Builder::new_multi_thread().enable_all().build()?;
 
-        let server_chans = runtime.block_on(Self::create_servers(servers, &connector))?;
+        let server_handles = runtime.block_on(Self::create_servers(servers, &connector))?;
         debug!("successfully created all servers");
 
-        let worker_chans = runtime.block_on(Self::create_workers(workers, &connector))?;
+        let worker_handles = runtime.block_on(Self::create_workers(workers, &connector))?;
         debug!("successfully created all workers");
 
         Ok(Self {
             runtime,
-            servers: server_chans,
-            workers: worker_chans,
+            workers: worker_handles,
+            servers: server_handles,
             model,
             input_size,
             algorithm,

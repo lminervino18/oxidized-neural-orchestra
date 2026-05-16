@@ -40,7 +40,7 @@ impl Adapter {
     /// * `training` - The training's configuration.
     ///
     /// # Returns
-    /// The workers' and servers' specifications and network addresses.
+    /// The workers' and servers' specifications, network addresses and the workers' dataset partitions.
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
@@ -108,12 +108,12 @@ impl Adapter {
         server_ordering: Vec<usize>,
     ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
+        let serializer_spec = self.adapt_serializer(training);
         let algorithm_spec = AlgorithmSpec::ParameterServer {
             server_addrs,
             server_sizes,
             server_ordering,
         };
-        let serializer_spec = self.adapt_serializer(training);
 
         let worker_specs = training
             .worker_addrs
