@@ -135,22 +135,14 @@ impl Session {
 
         thread::spawn(move || {
             self.runtime.block_on(async move {
-                let (req_tx, mut req_rx) = mpsc::channel(256);
-                let mut req_txs = Vec::with_capacity(workers.len());
-
-                for (i, worker_handle) in workers.into_iter().enumerate() {
-                    let (tx, rx) = mpsc::channel(256);
-                    req_txs.push(tx);
-
-                    let worker_listener = WorkerListener::new(i, worker_handle);
-                    tokio::spawn(worker_listener.listen(rx, req_tx.clone()));
-                }
+                let (event_tx, mut event_rx) = mpsc::channel(256);
+                let mut req_txs = Self::spawn_worker_listeners(workers, event_tx);
 
                 let mut event_listener = EventListener::new(
                     cancel_rx,
                     &mut req_txs,
                     early_stopping,
-                    &mut req_rx,
+                    &mut event_rx,
                     user_event_tx.clone(),
                 );
 
@@ -163,7 +155,12 @@ impl Session {
                         Self::finalize_parameter_server(servers, user_event_tx.clone()).await
                     }
                     AlgorithmConfig::AllReduce { .. } => {
-                        Self::finalize_all_reduce(&mut req_txs, &mut req_rx).await
+                        Self::finalize_all_reduce(
+                            &mut req_txs,
+                            &mut event_rx,
+                            user_event_tx.clone(),
+                        )
+                        .await
                     }
                 };
 
@@ -185,10 +182,50 @@ impl Session {
         user_event_rx
     }
 
+    /// Spawns the worker listeners.
+    ///
+    /// # Args
+    /// * `workers` - The handles for communicating with the workers.
+    /// * `event_tx` - The listener's response sender.
+    ///
+    /// # Returns
+    /// A list of senders to make requests to the listeners.
+    fn spawn_worker_listeners<T>(
+        workers: Vec<WorkerHandle<T>>,
+        event_tx: Sender<TrainingEvent>,
+    ) -> Vec<Sender<WorkerRequest>>
+    where
+        T: TransportLayer + 'static,
+    {
+        let mut req_txs = Vec::with_capacity(workers.len());
+
+        for (i, worker_handle) in workers.into_iter().enumerate() {
+            let (req_tx, req_rx) = mpsc::channel(256);
+            req_txs.push(req_tx);
+
+            let worker_listener = WorkerListener::new(i, worker_handle);
+            tokio::spawn(worker_listener.listen(req_rx, event_tx.clone()));
+        }
+
+        req_txs
+    }
+
+    /// Finalizes a training using parameter server. Retrieves the parameters from
+    /// all the servers.
+    ///
+    /// # Args
+    /// * `servers` - The handles for communicating with the servers.
+    /// * `user_event_tx` - The user sender for communicating if an error occurred.
+    ///
+    /// # Returns
+    /// The trained parameters of the model.
     async fn finalize_parameter_server(
         servers: Vec<ParamServerHandle<NetRtp>>,
-        event_tx: Sender<TrainingEvent>,
+        user_event_tx: Sender<TrainingEvent>,
     ) -> Vec<f32> {
+        // TODO: This implementation is wrong, the model layers aren't ordered
+        //       this way, tha parameters are all shuffled.
+
         debug!("all workers done, reading final params from all servers");
         let mut model_params = Vec::new();
 
@@ -205,7 +242,7 @@ impl Session {
                     let details = format!("unexpected error from server {i}: {e}");
                     let err = OrchErr::ServerError(details);
                     let event = TrainingEvent::Error(err);
-                    let _ = event_tx.send(event).await;
+                    let _ = user_event_tx.send(event).await;
                 }
             }
         }
@@ -213,23 +250,44 @@ impl Session {
         model_params
     }
 
+    /// Finalizes a training using all reduce. Retrieves the parameters from
+    /// the first worker that sends them.
+    ///
+    /// # Args
+    /// * `req_txs` - The request senders to ask for the parameters.
+    /// * `req_rx` - The request receptor, to retrieve the parameters.
+    /// * `user_event_tx` - The user sender for communicating if an error occurred.
+    ///
+    /// # Returns
+    /// The trained parameters of the model.
     async fn finalize_all_reduce(
-        wk_txs: &mut Vec<Sender<WorkerRequest>>,
-        internal_rx: &mut Receiver<TrainingEvent>,
+        req_txs: &mut Vec<Sender<WorkerRequest>>,
+        req_rx: &mut Receiver<TrainingEvent>,
+        user_event_tx: Sender<TrainingEvent>,
     ) -> Vec<f32> {
         let mut i = 0;
 
         let params = loop {
-            let _ = wk_txs[i].send(WorkerRequest::PullParams).await;
+            let _ = req_txs[i].send(WorkerRequest::PullParams).await;
 
-            if let Some(TrainingEvent::Params(params)) = internal_rx.recv().await {
+            match req_rx.recv().await {
+                Some(TrainingEvent::Params(params)) => break params.to_vec(),
+                Some(TrainingEvent::Error(e)) => {
+                    let details = format!("failed to retrieve params from worker {i}: {e}");
+                    let err = OrchErr::WorkerError { id: i, details };
+                    let _ = user_event_tx.send(TrainingEvent::Error(err)).await;
+                }
+                _ => {}
+            }
+
+            if let Some(TrainingEvent::Params(params)) = req_rx.recv().await {
                 break params.to_vec();
             }
 
-            i = (i + 1) % wk_txs.len();
+            i = (i + 1) % req_txs.len();
         };
 
-        for tx in wk_txs {
+        for tx in req_txs {
             let _ = tx.send(WorkerRequest::Disconnect).await;
         }
 

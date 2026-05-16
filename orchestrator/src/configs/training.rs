@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Criteria for stopping training early when loss improvement falls below a threshold.
 ///
 /// Guarantees that `tolerance` is strictly positive, which is enforced at construction time.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct EarlyStoppingConfig {
     pub tolerance: FloatNonNegative,
 }
