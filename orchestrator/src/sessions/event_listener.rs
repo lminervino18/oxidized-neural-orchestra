@@ -11,7 +11,7 @@ use crate::{
 pub struct EventListener<'a> {
     cancel_rx: Receiver<()>,
     req_txs: &'a mut [Sender<WorkerRequest>],
-    early_stopper: Option<EarlyStoppingConfig>,
+    early_stopping: Option<EarlyStoppingConfig>,
     event_rx: &'a mut Receiver<TrainingEvent>,
     event_tx: Sender<TrainingEvent>,
 
@@ -27,7 +27,7 @@ impl<'a> EventListener<'a> {
     /// # Args
     /// * `cancel_rx` - The training cancellation request receiver.
     /// * `req_txs` - The request senders for the worker listeners.
-    /// * `early_stopper` - The early stopping mechanism.
+    /// * `early_stopping` - The early stopping mechanism.
     /// * `event_rx` - An event producer.
     /// * `event_tx` - An event consumer.
     ///
@@ -36,7 +36,7 @@ impl<'a> EventListener<'a> {
     pub fn new(
         cancel_rx: Receiver<()>,
         req_txs: &'a mut [Sender<WorkerRequest>],
-        early_stopper: Option<EarlyStoppingConfig>,
+        early_stopping: Option<EarlyStoppingConfig>,
         event_rx: &'a mut Receiver<TrainingEvent>,
         event_tx: Sender<TrainingEvent>,
     ) -> Self {
@@ -45,7 +45,7 @@ impl<'a> EventListener<'a> {
         Self {
             cancel_rx,
             req_txs,
-            early_stopper,
+            early_stopping,
             event_rx,
             event_tx,
             workers_left: n_workers,
@@ -109,7 +109,7 @@ impl<'a> EventListener<'a> {
             }
             TrainingEvent::PublishedLosses { worker_id, losses } => {
                 if self.stop_reason.is_none() {
-                    if let Some(ref cfg) = self.early_stopper {
+                    if let Some(ref cfg) = self.early_stopping {
                         if let Some((prev, curr)) = self.tracker.record(worker_id, &losses) {
                             if (prev - curr).abs() < *cfg.tolerance as f64 {
                                 info!("early stopping triggered (prev={prev:.6}, curr={curr:.6})");

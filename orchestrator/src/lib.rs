@@ -32,13 +32,11 @@ pub use sessions::{CancelHandle, Session, StopReason, TrainedModel, TrainingEven
 /// or connecting to any worker or server fails.
 pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session> {
     let dataset_bin = generate_binary_dataset(&mut training.dataset.src);
+
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 
-    let input_size = training.dataset.x_size.get();
-
     let adapter = Adapter::new();
-    let early_stopping = training.early_stopping.clone();
     let (workers, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
     // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
@@ -55,15 +53,14 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
         )
     };
 
-    let connector = Connector::new(transport_factory);
     let session = Session::new(
         workers,
         servers,
-        connector,
+        Connector::new(transport_factory),
         model,
         training.algorithm.clone(),
-        input_size,
-        early_stopping,
+        training.dataset.x_size.get(),
+        training.early_stopping,
     )?;
 
     if let Some((samples_bin, labels_bin)) = dataset_bin {
