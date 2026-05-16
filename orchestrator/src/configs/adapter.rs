@@ -440,8 +440,8 @@ impl Adapter {
     /// A list of `Partition::Local`.
     fn adapt_local_dataset<'a, T>(
         &self,
-        samples_path: &'a PathBuf,
-        labels_path: &'a PathBuf,
+        samples_path: PathBuf,
+        labels_path: PathBuf,
         partition_sizes: T,
     ) -> Vec<Partition<'a>>
     where
@@ -453,8 +453,8 @@ impl Adapter {
         partition_sizes
             .map(|(x_size_bytes, y_size_bytes)| {
                 let partition = Partition::Local {
-                    samples_path,
-                    labels_path,
+                    samples_path: samples_path.clone(),
+                    labels_path: labels_path.clone(),
                     samples_offset,
                     labels_offset,
                     samples_size: x_size_bytes,
@@ -551,7 +551,11 @@ impl Adapter {
             DataSrc::Local {
                 samples_path,
                 labels_path,
-            } => self.adapt_local_dataset(samples_path, labels_path, partition_sizes),
+            } => self.adapt_local_dataset(
+                samples_path.to_path_buf(),
+                labels_path.to_path_buf(),
+                partition_sizes,
+            ),
         };
 
         Ok(partitions)

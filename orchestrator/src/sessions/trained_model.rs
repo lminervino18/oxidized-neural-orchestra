@@ -3,8 +3,10 @@ use std::path::Path;
 use log::info;
 use safetensors::tensor;
 
-use super::Result;
-use crate::configs::{LayerConfig, ModelConfig};
+use crate::{
+    Result,
+    configs::{LayerConfig, ModelConfig},
+};
 
 /// The result of a completed training session.
 ///

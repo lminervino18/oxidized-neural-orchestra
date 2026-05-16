@@ -5,7 +5,7 @@ use std::sync::{
 };
 use std::thread::JoinHandle;
 
-use orchestrator::{CancelHandle, TrainingEvent};
+use orchestrator::sessions::{CancelHandle, TrainingEvent};
 use pyo3::prelude::*;
 use tokio::sync::mpsc;
 

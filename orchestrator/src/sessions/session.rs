@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     io::{self, SeekFrom},
-    path::PathBuf,
+    path::Path,
     thread,
 };
 
@@ -9,10 +9,7 @@ use comms::{
     Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerEvent, WorkerHandle,
     protocol::Entity,
     share_dataset,
-    specs::{
-        server::ServerSpec,
-        worker::{AlgorithmSpec, WorkerSpec},
-    },
+    specs::{server::ServerSpec, worker::WorkerSpec},
 };
 use futures::future;
 use log::{debug, error, info, warn};
@@ -30,7 +27,7 @@ use tokio::{
 use super::TrainedModel;
 use crate::{
     OrchErr, Result,
-    configs::{EarlyStoppingConfig, ModelConfig, Partition},
+    configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
 };
 
 /// Why a training session ended.
@@ -124,14 +121,14 @@ impl ConvergenceTracker {
     }
 }
 
-/// Represents an ongoing training session.
+/// An ongoing training session.
 pub struct Session {
     runtime: Runtime,
     workers: Vec<WorkerHandle<NetRtp>>,
     servers: Vec<ParamServerHandle<NetRtp>>,
     model: ModelConfig,
+    algorithm: AlgorithmConfig,
     input_size: usize,
-    algorithm: AlgorithmSpec,
     early_stopping: Option<EarlyStoppingConfig>,
 }
 
@@ -143,6 +140,7 @@ impl Session {
     /// * `servers` - The servers' network addresses and specifications.
     /// * `connector` - The network connector.
     /// * `model` - The model's architecture configuration.
+    /// * `training` - The model's training configuration.
     /// * `input_size` - The model's input size.
     ///
     /// # Returns
@@ -155,35 +153,37 @@ impl Session {
         servers: Vec<(String, ServerSpec)>,
         connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
         model: ModelConfig,
+        algorithm: AlgorithmConfig,
         input_size: usize,
         early_stopping: Option<EarlyStoppingConfig>,
     ) -> Result<Self>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
-        let algorithm = workers
-            .first()
-            .map(|(_, spec, _)| spec.algorithm.clone())
-            .ok_or_else(|| OrchErr::InvalidConfig("at least one worker is required".into()))?;
-
-        let (nworkers, nservers) = (workers.len(), servers.len());
-        info!("connecting to {nworkers} workers and {nservers} servers");
-
         let runtime = Builder::new_multi_thread().enable_all().build()?;
+        let (nworkers, nservers) = (workers.len(), servers.len());
 
-        let server_handles = runtime.block_on(Self::create_servers(servers, &connector))?;
-        debug!("successfully created all servers");
+        let server_handles = match algorithm {
+            AlgorithmConfig::ParameterServer { .. } => {
+                info!("connecting to {nservers} servers");
+                let server_handles = runtime.block_on(Self::create_servers(servers, &connector))?;
+                debug!("successfully created servers");
+                server_handles
+            }
+            _ => Vec::new(),
+        };
 
+        info!("connecting to {nworkers} workers");
         let worker_handles = runtime.block_on(Self::create_workers(workers, &connector))?;
-        debug!("successfully created all workers");
+        debug!("successfully created workers");
 
         Ok(Self {
             runtime,
             workers: worker_handles,
             servers: server_handles,
             model,
-            input_size,
             algorithm,
+            input_size,
             early_stopping,
         })
     }
@@ -337,10 +337,10 @@ impl Session {
                 };
 
                 let params = match algorithm {
-                    AlgorithmSpec::ParameterServer { .. } => {
+                    AlgorithmConfig::ParameterServer { .. } => {
                         Self::finalize_parameter_server(self.servers, &event_tx).await
                     }
-                    AlgorithmSpec::AllReduce { .. } => {
+                    AlgorithmConfig::AllReduce { .. } => {
                         Self::finalize_all_reduce(&mut wk_txs, &mut internal_rx).await
                     }
                 };
@@ -617,8 +617,8 @@ impl Session {
             } => {
                 Self::send_local_partition(
                     worker_handle,
-                    samples_path,
-                    labels_path,
+                    &samples_path,
+                    &labels_path,
                     samples_offset,
                     labels_offset,
                     samples_size,
@@ -649,8 +649,8 @@ impl Session {
     /// An orch error if occurred.
     async fn send_local_partition<T>(
         worker_handle: &mut WorkerHandle<T>,
-        samples_path: &PathBuf,
-        labels_path: &PathBuf,
+        samples_path: &Path,
+        labels_path: &Path,
         samples_offset: u64,
         labels_offset: u64,
         samples_size: u64,
