@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use comms::floats::{Float01, FloatNonNegative, FloatPositive};
+use comms::floats::{Float01, FloatPositive};
 use orchestrator::{CancelHandle, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
@@ -177,14 +177,14 @@ fn main() -> io::Result<()> {
 
     loop {
         match rx.blocking_recv() {
-            Some(orchestrator::TrainingEvent::Loss { losses, worker_id }) => {
+            Some(orchestrator::TrainingEvent::PublishedLosses { losses, worker_id }) => {
                 println!("losses {worker_id}: {losses:?}")
             }
             Some(orchestrator::TrainingEvent::Complete {
                 model: trained,
                 reason,
             }) => {
-                println!("params: {:?}", trained.params());
+                println!("params: {:?}", trained.params);
                 println!("stop reason: {reason:?}");
 
                 trained

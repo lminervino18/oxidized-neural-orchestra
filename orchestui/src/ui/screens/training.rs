@@ -282,7 +282,7 @@ impl TrainingState {
     /// Applies a single training event to the state.
     fn apply(&mut self, event: TrainingEvent) {
         match event {
-            TrainingEvent::Loss { worker_id, losses } => {
+            TrainingEvent::PublishedLosses { worker_id, losses } => {
                 self.phase = Phase::Training;
 
                 if worker_id < self.workers.len() {
@@ -328,7 +328,7 @@ impl TrainingState {
                     LogLevel::Info,
                     format!(
                         "training complete ({reason_str}) — {} parameters received",
-                        trained.params().len()
+                        trained.params.len()
                     ),
                 );
                 self.final_trained = Some(trained);

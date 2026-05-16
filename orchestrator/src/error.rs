@@ -12,6 +12,7 @@ pub enum OrchErr {
     ConnectionFailed { addr: String, source: io::Error },
     WorkerError { worker_id: usize, event: String },
     ServerError(String),
+    SafeTensors(safetensors::SafeTensorError),
     Io(io::Error),
 }
 
@@ -32,6 +33,7 @@ impl Display for OrchErr {
             } => {
                 format!("worker {worker_id} error: {msg}")
             }
+            Self::SafeTensors(e) => format!("safetensors error: {e}"),
             Self::ServerError(msg) => format!("server error: {msg}"),
             Self::Io(e) => format!("io error: {e}"),
         };
@@ -53,5 +55,11 @@ impl Error for OrchErr {
 impl From<io::Error> for OrchErr {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<safetensors::SafeTensorError> for OrchErr {
+    fn from(value: safetensors::SafeTensorError) -> Self {
+        Self::SafeTensors(value)
     }
 }

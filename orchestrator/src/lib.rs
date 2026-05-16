@@ -2,6 +2,7 @@ pub mod configs;
 pub mod dataset_format;
 mod error;
 mod session;
+mod trained_model;
 
 use std::{fs, path::PathBuf, time::Duration};
 
@@ -10,8 +11,8 @@ use comms::Connector;
 use configs::{Adapter, DataSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
 use error::{OrchErr, Result};
-
-pub use session::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
+pub use session::{CancelHandle, Session, StopReason, TrainingEvent};
+pub use trained_model::TrainedModel;
 
 /// Starts the distributed training process and returns an active session.
 ///

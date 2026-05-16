@@ -1,8 +1,8 @@
 use std::{
     collections::HashMap,
-    io,
-    path::{Path, PathBuf},
-    slice, thread,
+    io::{self, SeekFrom},
+    path::PathBuf,
+    thread,
 };
 
 use comms::{
@@ -27,126 +27,11 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
+use super::TrainedModel;
 use crate::{
     OrchErr, Result,
-    configs::{EarlyStoppingConfig, LayerConfig, ModelConfig, Partition},
+    configs::{EarlyStoppingConfig, ModelConfig, Partition},
 };
-
-/// The result of a completed training session.
-///
-/// Contains the trained model parameters alongside the model architecture,
-/// allowing the weights to be saved to disk without requiring additional context.
-#[derive(Debug)]
-pub struct TrainedModel {
-    /// The flat parameter vector received from the parameter servers.
-    pub params: Vec<f32>,
-    /// The model architecture used during training.
-    pub model: ModelConfig,
-    /// The input size of the first layer, derived from the dataset's `x_size`.
-    pub input_size: usize,
-}
-
-impl TrainedModel {
-    /// Returns the weights as a flat slice.
-    pub fn params(&self) -> &[f32] {
-        &self.params
-    }
-
-    /// Saves the trained model parameters to a `.safetensors` file.
-    ///
-    /// Each dense layer produces two tensors named `layer_N.weight` and
-    /// `layer_N.bias`, following the PyTorch `state_dict` convention.
-    /// The weight tensor has shape `[input_size, output_size]` and the
-    /// bias tensor has shape `[output_size]`.
-    ///
-    /// # Args
-    /// * `path` - The output file path (e.g. `"model.safetensors"`).
-    ///
-    /// # Errors
-    /// Returns an `OrchErr` if the file cannot be written or the parameter
-    /// buffer does not match the model architecture.
-    pub fn save_safetensors(&self, path: impl AsRef<Path>) -> Result<()> {
-        use safetensors::{Dtype, tensor::TensorView};
-
-        let mut tensors: Vec<(String, TensorView)> = Vec::new();
-        let mut offset = 0;
-        let mut prev = self.input_size;
-
-        // SAFETY: we cast &[f32] to &[u8] for safetensors — f32 is always 4 bytes,
-        // alignment is valid, and the slice is live for the duration of this function.
-        let params_bytes = unsafe {
-            slice::from_raw_parts(self.params.as_ptr() as *const u8, self.params.len() * 4)
-        };
-
-        for (i, layer) in self.model.layers.iter().enumerate() {
-            let (w_count, b_count, w_shape, b_shape, out) = match layer {
-                LayerConfig::Dense { output_size, .. } => {
-                    let out = output_size.get();
-                    let w_count = prev * out;
-                    let b_count = out;
-
-                    (w_count, b_count, vec![prev, out], vec![out], out)
-                }
-                LayerConfig::Conv {
-                    input_dim,
-                    kernel_dim,
-                    stride,
-                    padding,
-                    ..
-                } => {
-                    let input_height = input_dim.1.get();
-                    let input_width = input_dim.2.get();
-                    let (filters, in_channels, kernel_size) =
-                        (kernel_dim.0.get(), kernel_dim.1.get(), kernel_dim.2.get());
-                    let stride = stride.get();
-
-                    let output_height = (input_height + 2 * padding - kernel_size) / stride + 1;
-                    let output_width = (input_width + 2 * padding - kernel_size) / stride + 1;
-
-                    let w_count = filters * in_channels * kernel_size * kernel_size;
-                    let b_count = filters;
-                    let out = output_height * output_width * filters;
-
-                    (
-                        w_count,
-                        b_count,
-                        vec![filters, in_channels, kernel_size, kernel_size],
-                        vec![filters],
-                        out,
-                    )
-                }
-            };
-
-            let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];
-            tensors.push((
-                format!("layer_{i}.weight"),
-                TensorView::new(Dtype::F32, w_shape, w_bytes)
-                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
-            ));
-            offset += w_count;
-
-            let b_bytes = &params_bytes[offset * 4..(offset + b_count) * 4];
-            tensors.push((
-                format!("layer_{i}.bias"),
-                TensorView::new(Dtype::F32, b_shape, b_bytes)
-                    .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?,
-            ));
-            offset += b_count;
-
-            prev = out;
-        }
-
-        safetensors::tensor::serialize_to_file(
-            tensors.iter().map(|(k, v)| (k.as_str(), v.clone())),
-            &None,
-            path.as_ref(),
-        )
-        .map_err(|e| OrchErr::Io(io::Error::other(e.to_string())))?;
-
-        info!("model saved to {}", path.as_ref().display());
-        Ok(())
-    }
-}
 
 /// Why a training session ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -179,9 +64,10 @@ impl CancelHandle {
 /// An event produced during a training session.
 #[derive(Debug)]
 pub enum TrainingEvent {
-    /// A worker completed an epoch and reported its losses.
-    Loss { worker_id: usize, losses: Vec<f64> },
-    /// A worker finished and disconnected.
+    PublishedLosses {
+        worker_id: usize,
+        losses: Vec<f64>,
+    },
     WorkerDone(usize),
     /// Training completed and all servers returned the final trained model.
     Complete {
@@ -190,7 +76,6 @@ pub enum TrainingEvent {
     },
     /// The parameters of the all reduce worker.
     Params(Vec<f32>),
-    /// A worker or server produced an unrecoverable error.
     Error(OrchErr),
 }
 
@@ -371,7 +256,7 @@ impl Session {
                     Ok(WorkerEvent::Loss(losses)) => {
                         debug!("worker {id} reported {} losses", losses.len());
 
-                        let event = TrainingEvent::Loss {
+                        let event = TrainingEvent::PublishedLosses {
                             worker_id: id,
                             losses,
                         };
@@ -540,7 +425,7 @@ impl Session {
                                 break;
                             }
                         }
-                        TrainingEvent::Loss { worker_id, losses } => {
+                        TrainingEvent::PublishedLosses { worker_id, losses } => {
                             if stop_reason.is_none() {
                                 if let Some(cfg) = early_stopping {
                                     if let Some(sig) = tracker.record(worker_id, &losses) {
@@ -559,7 +444,7 @@ impl Session {
                                 }
                             }
 
-                            let _ = event_tx.send(TrainingEvent::Loss { worker_id, losses }).await;
+                            let _ = event_tx.send(TrainingEvent::PublishedLosses { worker_id, losses }).await;
                         }
                         TrainingEvent::Error(e) => {
                             let _ = event_tx.send(TrainingEvent::Error(e)).await;
@@ -625,7 +510,14 @@ impl Session {
         params
     }
 
-    /// Connects to all nodes and bootstraps each as a parameter server.
+    /// Connects to the server nodes and sends their specification.
+    ///
+    /// # Args
+    /// * `servers` - The servers' network addresses and specifications.
+    /// * `connector` - The connector to create the network connections.
+    ///
+    /// # Returns
+    /// The worker handles or an orch error if occurred.
     async fn create_servers<F>(
         servers: Vec<(String, ServerSpec)>,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
@@ -643,6 +535,7 @@ impl Session {
                         addr: addr.clone(),
                         source: e,
                     })?;
+
             let (rx, tx) = stream.into_split();
             let node_handle = connector
                 .connect_node(i, rx, tx, Entity::Orchestrator)
@@ -656,7 +549,15 @@ impl Session {
         Ok(handles)
     }
 
-    /// Connects to all nodes, bootstraps each as a worker, and sends its dataset partition.
+    /// Connects to the worker nodes and sends their specification and dataset partitions.
+    ///
+    /// # Args
+    /// * `workers` - The workers' network addresses and specifications.
+    /// * `partitions` - The workers' dataset partitions.
+    /// * `connector` - The connector to create the network connections.
+    ///
+    /// # Returns
+    /// The worker handles or an orch error if occurred.
     async fn create_workers<'a, F>(
         workers: Vec<(String, WorkerSpec)>,
         partitions: Vec<Partition<'a>>,
@@ -678,6 +579,7 @@ impl Session {
                             addr: addr.clone(),
                             source: e,
                         })?;
+
                 let (rx, tx) = stream.into_split();
                 let node_handle = connector
                     .connect_node(i, rx, tx, Entity::Orchestrator)
@@ -685,8 +587,7 @@ impl Session {
                     .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
                 let mut worker_handle = node_handle.create_worker(spec).await?;
-                Self::send_partition(partition, CHUNK_SIZE, &mut worker_handle).await?;
-
+                Self::send_partition(&mut worker_handle, partition, CHUNK_SIZE).await?;
                 Ok::<_, OrchErr>(worker_handle)
             },
         );
@@ -694,10 +595,19 @@ impl Session {
         future::try_join_all(futs).await
     }
 
+    /// Sends a dataset partition to a worker.
+    ///
+    /// # Args
+    /// * `worker_handle` - The handle for communicating with the worker.
+    /// * `partition` - The dataset partition to send.
+    /// * `chunk_size` - The chunk size to use for each message in bytes.
+    ///
+    /// # Returns
+    /// An orch error if occurred.
     async fn send_partition<'a, T: TransportLayer>(
+        worker_handle: &mut WorkerHandle<T>,
         partition: Partition<'a>,
         chunk_size: usize,
-        worker_handle: &mut WorkerHandle<T>,
     ) -> Result<()> {
         match partition {
             Partition::Local {
@@ -709,6 +619,7 @@ impl Session {
                 labels_size,
             } => {
                 Self::send_local_partition(
+                    worker_handle,
                     samples_path,
                     labels_path,
                     samples_offset,
@@ -716,17 +627,31 @@ impl Session {
                     samples_size,
                     labels_size,
                     chunk_size,
-                    worker_handle,
                 )
                 .await
             }
             Partition::Inline { samples, labels } => {
-                Self::send_inline_partition(samples, labels, chunk_size, worker_handle).await
+                Self::send_inline_partition(worker_handle, samples, labels, chunk_size).await
             }
         }
     }
 
+    /// Sends a local partition to a worker.
+    ///
+    /// # Args
+    /// * `worker_handle` - The handle for communicating with the worker.
+    /// * `samples_path` - The path to the samples file.
+    /// * `labels_path` - The path to the labels file.
+    /// * `samples_offset` - The file offset to the starting position for this worker's samples.
+    /// * `labels_offset` - The file offset to the starting position for this worker's labels.
+    /// * `samples_size` - The amount of bytes this worker's samples take.
+    /// * `labels_size` - The amount of bytes this worker's labels take.
+    /// * `chunk_size` - The chunk size to use for each message in bytes.
+    ///
+    /// # Returns
+    /// An orch error if occurred.
     async fn send_local_partition<T>(
+        worker_handle: &mut WorkerHandle<T>,
         samples_path: &PathBuf,
         labels_path: &PathBuf,
         samples_offset: u64,
@@ -734,7 +659,6 @@ impl Session {
         samples_size: u64,
         labels_size: u64,
         chunk_size: usize,
-        worker_handle: &mut WorkerHandle<T>,
     ) -> Result<()>
     where
         T: TransportLayer,
@@ -742,15 +666,13 @@ impl Session {
         let mut samples_fd = File::open(samples_path).await?;
         let mut labels_fd = File::open(labels_path).await?;
 
-        samples_fd.seek(io::SeekFrom::Start(samples_offset)).await?;
-        labels_fd.seek(io::SeekFrom::Start(labels_offset)).await?;
-        let mut samples_fd = samples_fd.take(samples_size);
-        let mut labels_fd = labels_fd.take(labels_size);
+        samples_fd.seek(SeekFrom::Start(samples_offset)).await?;
+        labels_fd.seek(SeekFrom::Start(labels_offset)).await?;
 
         worker_handle
             .push_dataset(
-                &mut samples_fd,
-                &mut labels_fd,
+                &mut samples_fd.take(samples_size),
+                &mut labels_fd.take(labels_size),
                 samples_size as usize,
                 labels_size as usize,
                 chunk_size,
@@ -760,11 +682,21 @@ impl Session {
         Ok(())
     }
 
+    /// Sends in inline partition to a worker.
+    ///
+    /// # Args
+    /// * `worker_handle` - The handle for communicating with the worker.
+    /// * `samples` - The slice of samples.
+    /// * `labels` - The slice of labels.
+    /// * `chunk_size` - The chunk size to use for each message in bytes.
+    ///
+    /// # Returns
+    /// An orch error if occurred.
     async fn send_inline_partition<T>(
+        worker_handle: &mut WorkerHandle<T>,
         samples: &[f32],
         labels: &[f32],
         chunk_size: usize,
-        worker_handle: &mut WorkerHandle<T>,
     ) -> Result<()>
     where
         T: TransportLayer,

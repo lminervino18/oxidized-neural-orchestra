@@ -184,7 +184,7 @@ impl TrainedModel {
     /// # Returns
     /// The trained parameters in a flat vector.
     pub fn weights(&self) -> Vec<f32> {
-        self.inner.params().to_vec()
+        self.inner.params.to_vec()
     }
 
     /// Saves the trained model in safetensors format.
@@ -243,7 +243,7 @@ impl Session {
 
                     let result = loop {
                         match rx.blocking_recv() {
-                            Some(TrainingEvent::Loss { worker_id, losses }) => {
+                            Some(TrainingEvent::PublishedLosses { worker_id, losses }) => {
                                 reporter.update(worker_id, &losses);
                             }
                             Some(TrainingEvent::Complete { model: trained, .. }) => {
