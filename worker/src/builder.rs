@@ -6,7 +6,7 @@ use comms::{
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{
-    data::DataSrc,
+    datasets::DataSrc,
     initialization::ParamGenBuilder,
     training::{Trainer, TrainerBuilder},
 };

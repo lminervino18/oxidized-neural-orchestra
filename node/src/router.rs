@@ -5,7 +5,7 @@ use comms::{
     specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
 };
 use log::{error, info, warn};
-use machine_learning::{data::Dataset, training::Trainer};
+use machine_learning::{datasets::Dataset, training::Trainer};
 use parameter_server::service::{Server, ServerBuilder};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
