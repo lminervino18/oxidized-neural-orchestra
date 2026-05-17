@@ -10,7 +10,7 @@ use crate::{
         layers::Layer,
         loss::{CrossEntropy, LossFn, Mse},
     },
-    data::Dataset,
+    datasets::Dataset,
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
 };
 

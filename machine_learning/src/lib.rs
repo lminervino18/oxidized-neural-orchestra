@@ -1,5 +1,5 @@
 pub mod arch;
-pub mod data;
+pub mod datasets;
 pub mod error;
 pub mod initialization;
 pub mod optimization;
