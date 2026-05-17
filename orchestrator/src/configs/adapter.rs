@@ -44,6 +44,7 @@ impl Adapter {
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
+    #[allow(clippy::type_complexity)]
     pub fn adapt_configs<'a>(
         &self,
         model: ModelConfig,

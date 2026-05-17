@@ -292,7 +292,7 @@ impl TrainingState {
 
                         if let Some(series) = self.loss_series.get_mut(worker_id) {
                             let epoch = self.workers[worker_id].epochs_done as f64;
-                            series.push((epoch, *loss as f64));
+                            series.push((epoch, *loss));
                         }
                     }
 

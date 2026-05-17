@@ -243,7 +243,7 @@ impl Session {
             AlgorithmConfig::ParameterServer { .. } => {
                 Self::finalize_parameter_server(server_handles, user_event_tx).await
             }
-            AlgorithmConfig::AllReduce { .. } => {
+            AlgorithmConfig::AllReduce => {
                 Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
             }
         }
@@ -504,6 +504,7 @@ impl Session {
     ///
     /// # Returns
     /// An orch error if occurred.
+    #[allow(clippy::too_many_arguments)]
     async fn send_local_partition<T>(
         worker_handle: &mut WorkerHandle<T>,
         samples_path: &Path,

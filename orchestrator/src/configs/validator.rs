@@ -54,18 +54,17 @@ impl Validator {
                     continue;
                 }
                 LayerConfig::Conv {
-                    input_dim,
-                    kernel_dim,
+                    input_dim: (_, height, width),
+                    kernel_dim: (_, _, size),
                     padding,
                     ..
                 } => {
-                    // input_dim = 9, padding = 1, kernel dim = 16 -> true... wtf ?
-                    if (input_dim.1.get() + 2 * padding - kernel_dim.2.get()) <= 0
-                        || input_dim.2.get() + 2 * padding - kernel_dim.2.get() <= 0
-                    {
-                        return Err(OrchErr::InvalidConfig(
-                            "conv layer input_dim + 2 * padding - kernel_size must be greater than 0 for both height and width".into(),
-                        ));
+                    let remaining_height = (height.get() + 2 * padding).saturating_sub(size.get());
+                    let remaining_width = (width.get() + 2 * padding).saturating_sub(size.get());
+
+                    if remaining_height == 0 || remaining_width == 0 {
+                        let details = "conv layer input_dim + 2 * padding - kernel_size must be greater than 0 for both height and width";
+                        return Err(OrchErr::InvalidConfig(details.into()));
                     }
                 }
             }

@@ -55,10 +55,10 @@ where
         loop {
             tokio::select! {
                 req = rx.recv() => {
-                    if let Some(req) = req {
-                        if let Err(e) = self.handle_request(req).await {
-                            let _ = tx.send(TrainingEvent::Error(e)).await;
-                        }
+                    if let Some(req) = req
+                        && let Err(e) = self.handle_request(req).await
+                    {
+                        let _ = tx.send(TrainingEvent::Error(e)).await;
                     }
                 },
                 event = self.worker_handle.recv_event() => match event {

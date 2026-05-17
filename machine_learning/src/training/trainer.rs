@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    dataset::{DataSrc, Dataset},
+    data::{DataSrc, Dataset},
     param_manager::ParamManager,
 };
 

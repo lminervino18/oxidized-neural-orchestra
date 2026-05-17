@@ -2,7 +2,7 @@ use std::{env, num::NonZeroUsize};
 
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::Mse},
-    dataset::{DataSrc, Dataset},
+    data::{DataSrc, Dataset},
     optimization::{GradientDescent, Optimizer},
     training::BackpropTrainer,
 };

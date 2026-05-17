@@ -6,7 +6,7 @@ use comms::{
     specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 use machine_learning::{
-    dataset::DataSrc,
+    data::DataSrc,
     initialization::ParamGenBuilder,
     training::{Trainer, TrainerBuilder},
 };
@@ -222,6 +222,7 @@ where
     ///
     /// # Returns
     /// A new `ServerClusterManager` instance or an io error if occurred.
+    #[allow(clippy::too_many_arguments)]
     async fn connect_to_servers<H>(
         &self,
         id: usize,

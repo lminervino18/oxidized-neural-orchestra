@@ -108,16 +108,14 @@ impl<'a> EventListener<'a> {
                 Some(self.workers_left > 0)
             }
             TrainingEvent::PublishedLosses { worker_id, losses } => {
-                if self.stop_reason.is_none() {
-                    if let Some(ref cfg) = self.early_stopping {
-                        if let Some((prev, curr)) = self.tracker.record(worker_id, &losses) {
-                            if (prev - curr).abs() < *cfg.tolerance as f64 {
-                                info!("early stopping triggered (prev={prev:.6}, curr={curr:.6})");
-                                self.stop_reason = Some(StopReason::EarlyStopping);
-                                self.broadcast_request(WorkerRequest::Stop).await;
-                            }
-                        }
-                    }
+                if self.stop_reason.is_none()
+                    && let Some(ref cfg) = self.early_stopping
+                    && let Some((prev, curr)) = self.tracker.record(worker_id, &losses)
+                    && (prev - curr).abs() < *cfg.tolerance as f64
+                {
+                    info!("early stopping triggered (prev={prev:.6}, curr={curr:.6})");
+                    self.stop_reason = Some(StopReason::EarlyStopping);
+                    self.broadcast_request(WorkerRequest::Stop).await;
                 }
 
                 let event = TrainingEvent::PublishedLosses { worker_id, losses };

@@ -1,12 +1,14 @@
-use std::io::{IsTerminal, Write};
-use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
-    Arc,
+use std::{
+    io::{IsTerminal, Write},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    },
+    thread::{self, JoinHandle},
 };
-use std::thread::JoinHandle;
 
 use orchestrator::sessions::{CancelHandle, TrainingEvent};
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use tokio::sync::mpsc;
 
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -197,7 +199,7 @@ impl TrainedModel {
     pub fn save_safetensors(&self, path: &str) -> PyResult<()> {
         self.inner
             .save_safetensors(path)
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 }
 
@@ -230,14 +232,14 @@ impl Session {
         let (session, cancel_rx) = self
             .inner
             .take()
-            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("session already consumed"))?;
+            .ok_or_else(|| PyRuntimeError::new_err("session already consumed"))?;
 
         let max_epochs = self.max_epochs;
         let worker_count = self.worker_count;
 
         let trained = py
             .detach(|| {
-                std::thread::spawn(move || {
+                thread::spawn(move || {
                     let mut rx = session.event_listener(cancel_rx);
                     let mut reporter = ProgressReporter::new(max_epochs, worker_count);
 
@@ -261,7 +263,7 @@ impl Session {
                 .join()
                 .map_err(|_| "session thread panicked".to_string())?
             })
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+            .map_err(PyRuntimeError::new_err)?;
 
         Ok(TrainedModel { inner: trained })
     }

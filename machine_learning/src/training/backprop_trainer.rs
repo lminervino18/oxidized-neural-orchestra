@@ -6,7 +6,7 @@ use super::{TrainResult, Trainer};
 use crate::{
     Result,
     arch::{Sequential, loss::LossFn},
-    dataset::{DataSrc, Dataset},
+    data::{DataSrc, Dataset},
     optimization::{GradientDescent, Optimizer},
     param_manager::ParamManager,
 };
