@@ -30,7 +30,7 @@ pub enum TrainingEvent {
     WorkerDone(usize),
     TrainingComplete {
         model: TrainedModel,
-        reason: StopReason,
+        stop_reason: StopReason,
     },
     Params(Vec<f32>),
     Error(OrchErr),

@@ -21,7 +21,7 @@ use tokio::{
 
 use super::TrainedModel;
 use crate::{
-    OrchErr, Result, TrainingEvent,
+    OrchErr, Result, StopReason, TrainingEvent,
     configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
     sessions::{EventListener, WorkerListener, WorkerRequest},
 };
@@ -48,8 +48,8 @@ impl CancelHandle {
 /// An ongoing training session.
 pub struct Session {
     runtime: Runtime,
-    workers: Vec<WorkerHandle<NetRtp>>,
-    servers: Vec<ParamServerHandle<NetRtp>>,
+    worker_handles: Vec<WorkerHandle<NetRtp>>,
+    server_handles: Vec<ParamServerHandle<NetRtp>>,
     model: ModelConfig,
     algorithm: AlgorithmConfig,
     input_size: usize,
@@ -103,8 +103,8 @@ impl Session {
 
         Ok(Self {
             runtime,
-            workers: worker_handles,
-            servers: server_handles,
+            worker_handles,
+            server_handles,
             model,
             algorithm,
             input_size,
@@ -114,9 +114,12 @@ impl Session {
 
     /// Consumes `self` and creates an event listener for this training session.
     ///
-    /// Spawns a background thread that drives the session. The `cancel_rx` must come
+    /// Spawns a background task that drives the session. The `cancel_rx` must come
     /// from a `CancelHandle::pair()` call; the caller retains the `CancelHandle` to
     /// request an orderly stop at any time.
+    ///
+    /// # Args
+    /// * `cancel_rx` - A training cancel event receiver.
     ///
     /// # Returns
     /// A receiver that yields `TrainingEvent`s as training progresses.
@@ -124,82 +127,146 @@ impl Session {
         let (user_event_tx, user_event_rx) = mpsc::channel(256);
 
         let Self {
-            workers,
-            servers,
+            runtime,
+            worker_handles,
+            server_handles,
             model,
             algorithm,
             input_size,
             early_stopping,
-            ..
         } = self;
 
-        thread::spawn(move || {
-            self.runtime.block_on(async move {
-                let (event_tx, mut event_rx) = mpsc::channel(256);
-                let mut req_txs = Self::spawn_worker_listeners(workers, event_tx);
+        let run_loop_fut = async move {
+            let (event_tx, mut event_rx) = mpsc::channel(256);
 
-                let mut event_listener = EventListener::new(
-                    cancel_rx,
-                    &mut req_txs,
-                    early_stopping,
-                    &mut event_rx,
-                    user_event_tx.clone(),
-                );
+            let (Some(stop_reason), mut req_txs) = Self::start_training(
+                worker_handles,
+                &mut event_rx,
+                &event_tx,
+                cancel_rx,
+                early_stopping,
+                &user_event_tx,
+            )
+            .await
+            else {
+                return;
+            };
 
-                let Some(stop_reason) = event_listener.listen().await else {
-                    return;
-                };
+            let params = Self::finalize_training(
+                algorithm,
+                server_handles,
+                &user_event_tx,
+                &mut req_txs,
+                &mut event_rx,
+            )
+            .await;
 
-                let params = match algorithm {
-                    AlgorithmConfig::ParameterServer { .. } => {
-                        Self::finalize_parameter_server(servers, user_event_tx.clone()).await
-                    }
-                    AlgorithmConfig::AllReduce { .. } => {
-                        Self::finalize_all_reduce(
-                            &mut req_txs,
-                            &mut event_rx,
-                            user_event_tx.clone(),
-                        )
-                        .await
-                    }
-                };
+            info!("received {} total parameters", params.len());
 
-                info!("received {} total parameters", params.len());
+            let trained_model = TrainedModel {
+                params,
+                model,
+                input_size,
+            };
 
-                let event = TrainingEvent::TrainingComplete {
-                    model: TrainedModel {
-                        params,
-                        model,
-                        input_size,
-                    },
-                    reason: stop_reason,
-                };
+            let event = TrainingEvent::TrainingComplete {
+                model: trained_model,
+                stop_reason,
+            };
 
-                let _ = user_event_tx.send(event).await;
-            });
-        });
+            let _ = user_event_tx.send(event).await;
+        };
 
+        thread::spawn(move || runtime.block_on(run_loop_fut));
         user_event_rx
+    }
+
+    /// Starts the training stage for the orchestrator. Spawns the worker
+    /// listeners and orchestrates the model's training.
+    ///
+    /// # Args
+    /// * `worker_handles` - The handles for communicating with the workers.
+    /// * `event_rx` - The worker listener event receiver.
+    /// * `event_tx` - The event producer for the worker listeners.
+    /// * `cancel_rx` - The user's halt event receiver.
+    /// * `early_stopping` - The early stopping mechanism configuration.
+    /// * `user_event_tx` - The user event producer.
+    ///
+    /// # Returns
+    /// The worker listener requesters and the stopping reason for the training.
+    async fn start_training<T>(
+        worker_handles: Vec<WorkerHandle<T>>,
+        event_rx: &mut Receiver<TrainingEvent>,
+        event_tx: &Sender<TrainingEvent>,
+        cancel_rx: Receiver<()>,
+        early_stopping: Option<EarlyStoppingConfig>,
+        user_event_tx: &Sender<TrainingEvent>,
+    ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>)
+    where
+        T: TransportLayer + 'static,
+    {
+        let mut req_txs = Self::spawn_worker_listeners(worker_handles, event_tx);
+
+        let mut event_listener = EventListener::new(
+            cancel_rx,
+            &mut req_txs,
+            early_stopping,
+            event_rx,
+            user_event_tx.clone(),
+        );
+
+        (event_listener.listen().await, req_txs)
+    }
+
+    /// Retrieves the parameters from the desired entity.
+    ///
+    /// # Args
+    /// * `algorithm` - The current training algorithm.
+    /// * `server_handles` - The handles for communicating with the servers.
+    /// * `user_event_tx` - The user event notifier.
+    /// * `req_txs` - The request senders for the worker listeners.
+    /// * `event_rx` - The worker listener event consumer.
+    ///
+    /// # Returns
+    /// The trained parameters of the model.
+    async fn finalize_training<T>(
+        algorithm: AlgorithmConfig,
+        server_handles: Vec<ParamServerHandle<T>>,
+        user_event_tx: &Sender<TrainingEvent>,
+        req_txs: &mut [Sender<WorkerRequest>],
+        event_rx: &mut Receiver<TrainingEvent>,
+    ) -> Vec<f32>
+    where
+        T: TransportLayer + 'static,
+    {
+        match algorithm {
+            AlgorithmConfig::ParameterServer { .. } => {
+                Self::finalize_parameter_server(server_handles, user_event_tx).await
+            }
+            AlgorithmConfig::AllReduce { .. } => {
+                Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
+            }
+        }
     }
 
     /// Spawns the worker listeners.
     ///
     /// # Args
-    /// * `workers` - The handles for communicating with the workers.
+    /// * `worker_handles` - The handles for communicating with the workers.
     /// * `event_tx` - The listener's response sender.
     ///
     /// # Returns
     /// A list of senders to make requests to the listeners.
     fn spawn_worker_listeners<T>(
-        workers: Vec<WorkerHandle<T>>,
-        event_tx: Sender<TrainingEvent>,
+        worker_handles: Vec<WorkerHandle<T>>,
+        event_tx: &Sender<TrainingEvent>,
     ) -> Vec<Sender<WorkerRequest>>
     where
         T: TransportLayer + 'static,
     {
-        let mut req_txs = Vec::with_capacity(workers.len());
+        let mut req_txs = Vec::with_capacity(worker_handles.len());
 
-        for (i, worker_handle) in workers.into_iter().enumerate() {
+        for (i, worker_handle) in worker_handles.into_iter().enumerate() {
             let (req_tx, req_rx) = mpsc::channel(256);
             req_txs.push(req_tx);
 
@@ -214,22 +281,25 @@ impl Session {
     /// all the servers.
     ///
     /// # Args
-    /// * `servers` - The handles for communicating with the servers.
+    /// * `server_handles` - The handles for communicating with the servers.
     /// * `user_event_tx` - The user sender for communicating if an error occurred.
     ///
     /// # Returns
     /// The trained parameters of the model.
-    async fn finalize_parameter_server(
-        servers: Vec<ParamServerHandle<NetRtp>>,
-        user_event_tx: Sender<TrainingEvent>,
-    ) -> Vec<f32> {
+    async fn finalize_parameter_server<T>(
+        server_handles: Vec<ParamServerHandle<T>>,
+        user_event_tx: &Sender<TrainingEvent>,
+    ) -> Vec<f32>
+    where
+        T: TransportLayer,
+    {
         // TODO: This implementation is wrong, the model layers aren't ordered
-        //       this way, tha parameters are all shuffled.
+        //       this way, the parameters are all shuffled up.
 
         debug!("all workers done, reading final params from all servers");
         let mut model_params = Vec::new();
 
-        for (i, mut server_handle) in servers.into_iter().enumerate() {
+        for (i, mut server_handle) in server_handles.into_iter().enumerate() {
             match server_handle.pull_params().await {
                 Ok(params) => {
                     model_params.extend_from_slice(params);
@@ -261,9 +331,9 @@ impl Session {
     /// # Returns
     /// The trained parameters of the model.
     async fn finalize_all_reduce(
-        req_txs: &mut Vec<Sender<WorkerRequest>>,
+        req_txs: &mut [Sender<WorkerRequest>],
         req_rx: &mut Receiver<TrainingEvent>,
-        user_event_tx: Sender<TrainingEvent>,
+        user_event_tx: &Sender<TrainingEvent>,
     ) -> Vec<f32> {
         let mut i = 0;
 

@@ -315,7 +315,7 @@ impl TrainingState {
             }
             TrainingEvent::TrainingComplete {
                 model: trained,
-                reason,
+                stop_reason: reason,
             } => {
                 self.phase = Phase::Finished;
                 self.finish_reason = Some(reason);

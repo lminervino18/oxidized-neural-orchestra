@@ -182,7 +182,7 @@ fn main() -> io::Result<()> {
             }
             Some(orchestrator::TrainingEvent::TrainingComplete {
                 model: trained,
-                reason,
+                stop_reason: reason,
             }) => {
                 println!("params: {:?}", trained.params);
                 println!("stop reason: {reason:?}");
