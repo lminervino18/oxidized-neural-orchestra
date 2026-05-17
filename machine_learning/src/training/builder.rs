@@ -207,39 +207,13 @@ impl TrainerBuilder {
         match spec.loss_fn {
             LossFnSpec::Mse => {
                 let loss_fn = Mse::new();
-                self.resolve_dataset(spec, optimizers, layers, loss_fn)
+                self.terminate_build(spec, optimizers, layers, loss_fn)
             }
             LossFnSpec::CrossEntropy => {
                 let loss_fn = CrossEntropy::new();
-                self.resolve_dataset(spec, optimizers, layers, loss_fn)
+                self.terminate_build(spec, optimizers, layers, loss_fn)
             }
         }
-    }
-
-    /// Resolves the `Dataset` for this trainer.
-    ///
-    /// # Args
-    /// * `spec` - The specification for this trainer.
-    /// * `optimizers` - A list of optimizers, one per server.
-    /// * `layers` - A list of resolved layers.
-    /// * `loss_fn` - A resolved loss function.
-    ///
-    /// # Returns
-    /// A new `Trainer`.
-    fn resolve_dataset<O, L>(
-        &self,
-        spec: TrainerSpec,
-        optimizers: Vec<O>,
-        layers: Vec<Layer>,
-        loss_fn: L,
-    ) -> Box<dyn Trainer>
-    where
-        O: Optimizer + Send + 'static,
-        L: LossFn + Send + 'static,
-    {
-        let DatasetSpec { x_size, y_size } = spec.dataset;
-        let dataset = Dataset::new(x_size, y_size);
-        self.terminate_build(spec, optimizers, layers, loss_fn, dataset)
     }
 
     /// Terminates the entire build for this trainer and instanciates the final entity.
@@ -249,7 +223,6 @@ impl TrainerBuilder {
     /// * `optimizers` - A list of optimizers, one per server.
     /// * `layers` - A list of resolved layers.
     /// * `loss_fn` - A resolved loss function.
-    /// * `dataset` - A resolved empty dataset.
     ///
     /// # Returns
     /// A new `Trainer`.
@@ -259,13 +232,14 @@ impl TrainerBuilder {
         optimizers: Vec<O>,
         layers: Vec<Layer>,
         loss_fn: L,
-        dataset: Dataset,
     ) -> Box<dyn Trainer>
     where
         O: Optimizer + Send + 'static,
         L: LossFn + Send + 'static,
     {
         let model = Sequential::new(layers);
+        let DatasetSpec { x_size, y_size } = spec.dataset;
+        let dataset = Dataset::new(x_size, y_size);
         let trainer = BackpropTrainer::new(
             model,
             optimizers,

@@ -194,7 +194,6 @@ where
         Ok(run)
     }
 
-    #[allow(unused_variables)]
     /// Switches from an `AllReduceWorker` to a `ParamServerWorker`.
     ///
     /// # Args
