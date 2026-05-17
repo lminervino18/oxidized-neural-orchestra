@@ -98,11 +98,7 @@ where {
 
         let arr_size = arr.dim().1;
         arr.into_shape_with_order((batch_size, channels, height, width))
-            .map_err(|_| MlErr::SizeMismatch {
-                what: "2d array to 4d array",
-                got: arr_size,
-                expected: height * width,
-            })
+            .map_err(|_| MlErr::size_mismatch("2d array to 4d array", arr_size, height * width))
     }
 
     fn backward<'a>(&self, arr: ArrayViewMut4<'a, f32>) -> Result<ArrayViewMut2<'a, f32>>
@@ -116,10 +112,8 @@ where {
 
         let arr_size = arr.dim().2 * arr.dim().3;
         arr.into_shape_with_order((batch_size, channels * height * width))
-            .map_err(|_| MlErr::SizeMismatch {
-                what: "4d array to 2d array in backward",
-                got: arr_size,
-                expected: height * width,
+            .map_err(|_| {
+                MlErr::size_mismatch("4d array to 2d array in backward", arr_size, height * width)
             })
     }
 }
@@ -136,10 +130,8 @@ where {
 
         let arr_size = arr.dim().2 * arr.dim().3;
         arr.into_shape_with_order((batch_size, channels * height * width))
-            .map_err(|_| MlErr::SizeMismatch {
-                what: "4d array to 2d array in forward",
-                got: arr_size,
-                expected: height * width,
+            .map_err(|_| {
+                MlErr::size_mismatch("4d array to 2d array in forward", arr_size, height * width)
             })
     }
 
@@ -154,10 +146,8 @@ where {
 
         let arr_size = arr.dim().1;
         arr.into_shape_with_order((batch_size, channels, height, width))
-            .map_err(|_| MlErr::SizeMismatch {
-                what: "2d array to 4d array in backward",
-                got: arr_size,
-                expected: height * width,
+            .map_err(|_| {
+                MlErr::size_mismatch("2d array to 4d array in backward", arr_size, height * width)
             })
     }
 }

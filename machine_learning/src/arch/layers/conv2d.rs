@@ -265,11 +265,7 @@ impl Conv2d {
         } = *self;
 
         if params.len() != size {
-            return Err(MlErr::SizeMismatch {
-                what: "params",
-                got: params.len(),
-                expected: size,
-            });
+            return Err(MlErr::size_mismatch("params", params.len(), size));
         }
 
         // SAFETY: The if condition above checks that the size of the
@@ -301,11 +297,7 @@ impl Conv2d {
         } = *self;
 
         if grad.len() != size {
-            return Err(MlErr::SizeMismatch {
-                what: "grad",
-                got: grad.len(),
-                expected: self.size,
-            });
+            return Err(MlErr::size_mismatch("grad", grad.len(), self.size));
         }
 
         // SAFETY: The if condition above checks that the size of the

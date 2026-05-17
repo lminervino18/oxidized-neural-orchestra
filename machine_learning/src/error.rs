@@ -1,6 +1,7 @@
 use std::{
     error::Error,
     fmt::{self, Display},
+    panic::Location,
 };
 
 /// The result type for the `machine_learning` module.
@@ -13,10 +14,40 @@ pub enum MlErr {
         what: &'static str,
         got: usize,
         expected: usize,
+        location: &'static Location<'static>,
     },
-    MatrixError(ndarray::ShapeError),
-    Conv3dError(ndarray_conv::Error<3>),
-    Conv2dError(ndarray_conv::Error<2>),
+    MatrixError {
+        source: ndarray::ShapeError,
+        location: &'static Location<'static>,
+    },
+    Conv3dError {
+        source: ndarray_conv::Error<3>,
+        location: &'static Location<'static>,
+    },
+    Conv2dError {
+        source: ndarray_conv::Error<2>,
+        location: &'static Location<'static>,
+    },
+}
+
+impl MlErr {
+    #[track_caller]
+    pub fn size_mismatch(what: &'static str, got: usize, expected: usize) -> MlErr {
+        MlErr::SizeMismatch {
+            what,
+            got,
+            expected,
+            location: Location::caller(),
+        }
+    }
+
+    #[track_caller]
+    pub fn matrix_error(source: ndarray::ShapeError) -> MlErr {
+        MlErr::MatrixError {
+            source,
+            location: Location::caller(),
+        }
+    }
 }
 
 impl Display for MlErr {
@@ -26,13 +57,16 @@ impl Display for MlErr {
                 what,
                 got,
                 expected,
-            } => format!("size mismatch for {what}: got {got}, expected {expected}"),
-            MlErr::MatrixError(shape_error) => format!("matrix operation failed: {shape_error}"),
-            MlErr::Conv3dError(conv3d_error) => {
-                format!("convolution operation failed: {conv3d_error}")
+                location,
+            } => format!("size mismatch for {what}: got {got}, expected {expected} at {location}"),
+            MlErr::MatrixError { source, location } => {
+                format!("matrix operation failed: {source} at {location}")
             }
-            MlErr::Conv2dError(conv2d_error) => {
-                format!("convolution operation failed: {conv2d_error}")
+            MlErr::Conv3dError { source, location } => {
+                format!("convolution operation failed: {source} at {location}")
+            }
+            MlErr::Conv2dError { source, location } => {
+                format!("convolution operation failed: {source} at {location}")
             }
         };
 
@@ -44,18 +78,27 @@ impl Error for MlErr {}
 
 impl From<ndarray::ShapeError> for MlErr {
     fn from(value: ndarray::ShapeError) -> Self {
-        MlErr::MatrixError(value)
+        MlErr::MatrixError {
+            source: value,
+            location: Location::caller(),
+        }
     }
 }
 
 impl From<ndarray_conv::Error<3>> for MlErr {
     fn from(value: ndarray_conv::Error<3>) -> Self {
-        MlErr::Conv3dError(value)
+        MlErr::Conv3dError {
+            source: value,
+            location: Location::caller(),
+        }
     }
 }
 
 impl From<ndarray_conv::Error<2>> for MlErr {
     fn from(value: ndarray_conv::Error<2>) -> Self {
-        MlErr::Conv2dError(value)
+        MlErr::Conv2dError {
+            source: value,
+            location: Location::caller(),
+        }
     }
 }

@@ -207,5 +207,6 @@ where
     S: RawData<Elem = f32> + Data,
     D: Dimension,
 {
-    arr.into_dimensionality().map_err(MlErr::MatrixError)
+    arr.into_dimensionality()
+        .map_err(|e| MlErr::matrix_error(e))
 }
