@@ -85,6 +85,7 @@ where
             }
         }
 
+        self.orch_handle.done().await?;
         self.cluster_manager.disconnect().await?;
         self.orch_handle.disconnect().await?;
         Ok(Run::Done)

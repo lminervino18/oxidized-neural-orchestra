@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use comms::floats::{Float01, FloatPositive};
+use comms::floats::{Float01, FloatNonNegative, FloatPositive};
 use orchestrator::{CancelHandle, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
@@ -167,8 +167,10 @@ fn main() -> io::Result<()> {
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
-        early_stopping: None,
-        // early_stopping: Some(EarlyStoppingConfig { tolerance: FloatNonNegative::new(0.5).unwrap(), }),
+        // early_stopping: None,
+        early_stopping: Some(EarlyStoppingConfig {
+            tolerance: FloatNonNegative::new(0.5).unwrap(),
+        }),
     };
 
     let session = train(model_config, training_config).unwrap();

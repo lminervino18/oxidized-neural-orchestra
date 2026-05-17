@@ -1,4 +1,4 @@
-use std::{io::SeekFrom, path::Path, thread};
+use std::{collections::HashSet, io::SeekFrom, path::Path, thread};
 
 use comms::{
     Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle,
@@ -295,6 +295,7 @@ impl Session {
     {
         // TODO: This implementation is wrong, the model layers aren't ordered
         //       this way, the parameters are all shuffled up.
+        println!("finalize_parameter_server");
 
         debug!("all workers done, reading final params from all servers");
         let mut model_params = Vec::new();
@@ -325,22 +326,23 @@ impl Session {
     ///
     /// # Args
     /// * `req_txs` - The request senders to ask for the parameters.
-    /// * `req_rx` - The request receptor, to retrieve the parameters.
+    /// * `event_rx` - The request receptor, to retrieve the parameters.
     /// * `user_event_tx` - The user sender for communicating if an error occurred.
     ///
     /// # Returns
     /// The trained parameters of the model.
     async fn finalize_all_reduce(
         req_txs: &mut [Sender<WorkerRequest>],
-        req_rx: &mut Receiver<TrainingEvent>,
+        event_rx: &mut Receiver<TrainingEvent>,
         user_event_tx: &Sender<TrainingEvent>,
     ) -> Vec<f32> {
+        let n_workers = req_txs.len();
         let mut i = 0;
 
         let params = loop {
             let _ = req_txs[i].send(WorkerRequest::PullParams).await;
 
-            match req_rx.recv().await {
+            match event_rx.recv().await {
                 Some(TrainingEvent::Params(params)) => break params.to_vec(),
                 Some(TrainingEvent::Error(e)) => {
                     let details = format!("failed to retrieve params from worker {i}: {e}");
@@ -350,15 +352,23 @@ impl Session {
                 _ => {}
             }
 
-            if let Some(TrainingEvent::Params(params)) = req_rx.recv().await {
+            if let Some(TrainingEvent::Params(params)) = event_rx.recv().await {
                 break params.to_vec();
             }
 
-            i = (i + 1) % req_txs.len();
+            i = (i + 1) % n_workers;
         };
 
-        for tx in req_txs {
+        for tx in req_txs.iter_mut() {
             let _ = tx.send(WorkerRequest::Disconnect).await;
+        }
+
+        let mut disconnected = HashSet::new();
+
+        while disconnected.len() < n_workers {
+            if let Some(TrainingEvent::Disconnect { worker_id }) = event_rx.recv().await {
+                disconnected.insert(worker_id);
+            }
         }
 
         params

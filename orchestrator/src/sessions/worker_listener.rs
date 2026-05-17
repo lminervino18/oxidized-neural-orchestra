@@ -44,38 +44,49 @@ where
     /// Starts the worker listener.
     ///
     /// # Args
-    /// * `rx` - The request receiver.
-    /// * `tx` - The training events sender.
+    /// * `req_rx` - The request receiver.
+    /// * `event_tx` - The training events sender.
     ///
     /// # Returns
     /// An orch error if occurred.
-    pub async fn listen(mut self, mut rx: Receiver<WorkerRequest>, tx: Sender<TrainingEvent>) {
+    pub async fn listen(
+        mut self,
+        mut req_rx: Receiver<WorkerRequest>,
+        event_tx: Sender<TrainingEvent>,
+    ) {
         let id = self.id;
 
         loop {
             tokio::select! {
-                req = rx.recv() => {
-                    if let Some(req) = req
-                        && let Err(e) = self.handle_request(req).await
-                    {
-                        let _ = tx.send(TrainingEvent::Error(e)).await;
+                req = req_rx.recv() => {
+                    println!("worker listener {id} recibio consulta {req:?}");
+
+                    if let Some(req) = req {
+                        match self.handle_request(req, &event_tx).await {
+                            Ok(false) => break,
+                            Err(e) => {
+                                let _ = event_tx.send(TrainingEvent::Error(e)).await;
+                                break;
+                            }
+                            _ => {}
+                        }
                     }
                 },
                 event = self.worker_handle.recv_event() => match event {
                     Ok(event) => match Self::handle_event(id, event) {
                         Ok(EventResolution::Exit) => break,
                         Ok(EventResolution::NotifyOrch(event)) => {
-                            let _ = tx.send(event).await;
+                            let _ = event_tx.send(event).await;
                         }
                         Err(e) => {
-                            let _ = tx.send(TrainingEvent::Error(e)).await;
+                            let _ = event_tx.send(TrainingEvent::Error(e)).await;
                             break;
                         }
                     }
                     Err(e) => {
                         error!("worker {id} error: {e}");
                         let err = OrchErr::WorkerError { id, details: e.to_string() };
-                        let _ = tx.send(TrainingEvent::Error(err)).await;
+                        let _ = event_tx.send(TrainingEvent::Error(err)).await;
                         break;
                     }
                 }
@@ -87,22 +98,35 @@ where
     ///
     /// # Args
     /// * `req` - The request that was made.
+    /// * `event_tx` - The event producer for the orchestrator.
     ///
     /// # Returns
-    /// An orch error if occurred.
-    async fn handle_request(&mut self, req: WorkerRequest) -> Result<()>
+    /// A should continue flag or an orch error if occurred.
+    async fn handle_request(
+        &mut self,
+        req: WorkerRequest,
+        event_tx: &Sender<TrainingEvent>,
+    ) -> Result<bool>
     where
         T: TransportLayer,
     {
         let id = self.id;
 
-        match req {
+        let should_continue = match req {
             WorkerRequest::Disconnect => {
+                info!("disconnecting worker {id}");
+                let event = TrainingEvent::Disconnect { worker_id: id };
+
                 if let Err(e) = self.worker_handle.disconnect().await {
                     info!("disconnecting worker {id}");
+                    let _ = event_tx.send(event).await;
+
                     let details = format!("failed to disconnect worker {id}: {e}");
                     return Err(OrchErr::WorkerError { id, details });
                 }
+
+                let _ = event_tx.send(event).await;
+                false
             }
             WorkerRequest::Stop => {
                 if !self.stopping {
@@ -115,18 +139,28 @@ where
 
                     self.stopping = true;
                 }
+
+                true
             }
             WorkerRequest::PullParams => {
                 info!("pulling parmaeters from worker {id}");
 
-                if let Err(e) = self.worker_handle.pull_params().await {
-                    let details = format!("failed to pull params from worker {id}: {e}");
-                    return Err(OrchErr::WorkerError { id, details });
+                match self.worker_handle.pull_params().await {
+                    Ok(params) => {
+                        let event = TrainingEvent::Params(params.to_vec());
+                        let _ = event_tx.send(event).await;
+                    }
+                    Err(e) => {
+                        let details = format!("failed to pull params from worker {id}: {e}");
+                        return Err(OrchErr::WorkerError { id, details });
+                    }
                 }
-            }
-        }
 
-        Ok(())
+                true
+            }
+        };
+
+        Ok(should_continue)
     }
 
     /// Handles the worker's events for the orchestrator.

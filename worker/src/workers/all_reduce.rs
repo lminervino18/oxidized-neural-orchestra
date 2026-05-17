@@ -124,16 +124,20 @@ where
         }
 
         self.orch_handle.done().await?;
+        debug!("sent done to orchestrator");
 
         loop {
-            match self.orch_handle.recv_event().await? {
+            debug!("waiting on orchestrator event");
+            let event = self.orch_handle.recv_event().await?;
+            debug!("received {event:?} from orchestrator");
+
+            match event {
                 OrchEvent::Disconnect => break,
                 OrchEvent::RequestParams => self.orch_handle.push_params(&mut self.params).await?,
                 other => warn!("unexpected message from orchestrator, got: {other:?}"),
             }
         }
 
-        self.ring_manager.disconnect().await?;
         Ok(Run::Done)
     }
 

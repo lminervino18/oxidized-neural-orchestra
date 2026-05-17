@@ -33,6 +33,9 @@ pub enum TrainingEvent {
         stop_reason: StopReason,
     },
     Params(Vec<f32>),
+    Disconnect {
+        worker_id: usize,
+    },
     Error(OrchErr),
 }
 
