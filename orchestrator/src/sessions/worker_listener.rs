@@ -116,9 +116,7 @@ where
                 let event = TrainingEvent::Disconnect { worker_id: id };
 
                 if let Err(e) = self.worker_handle.disconnect().await {
-                    info!("disconnecting worker {id}");
                     let _ = event_tx.send(event).await;
-
                     let details = format!("failed to disconnect worker {id}: {e}");
                     return Err(OrchErr::WorkerError { id, details });
                 }
