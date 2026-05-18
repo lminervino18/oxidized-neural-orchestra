@@ -3,7 +3,7 @@ use std::{borrow::Cow, io};
 use half::f16;
 use serde::{Deserialize, Serialize};
 
-use super::specs::node::NodeSpec;
+use super::specs::{node::NodeSpec, server::ServerSpec};
 
 pub type Header = u32;
 pub const HEADER_SIZE: usize = size_of::<Header>();
@@ -30,12 +30,30 @@ pub enum Entity {
 #[serde(rename_all = "snake_case")]
 pub enum Command<'a> {
     Connect(Entity),
-    CreateNode(NodeSpec),
-    ReportLoss { losses: Cow<'a, [f32]> },
+    CreateNode {
+        spec: NodeSpec,
+    },
+    ShareDataset,
+    ShareDatasetSize {
+        size: usize,
+    },
+    Upgrade {
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    },
+    Switch {
+        server_addrs: Vec<String>,
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+    },
+    ReportLoss {
+        losses: Cow<'a, [f64]>,
+    },
     RequestParams,
     StopAfterEpoch,
     Disconnect,
     Done,
+    Eof,
 }
 
 /// The application layer message for the entire system.

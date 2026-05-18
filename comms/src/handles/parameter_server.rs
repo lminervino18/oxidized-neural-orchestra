@@ -5,7 +5,9 @@ use rand::{SeedableRng, rngs::StdRng};
 use super::{CompressedGrad, Compressor};
 use crate::{
     floats::Float01,
+    handles::DatasetSrc,
     protocol::{Command, Msg, Payload},
+    share_dataset,
     transport::TransportLayer,
 };
 
@@ -98,5 +100,23 @@ where
     pub async fn disconnect(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Disconnect);
         self.transport.send(&msg).await
+    }
+}
+
+impl<T> DatasetSrc for ParamServerHandle<T>
+where
+    T: TransportLayer,
+{
+    /// Waits to receive the dataset from the parameter server and writes both samples
+    /// and labels to the given writers.
+    ///
+    /// # Args
+    /// * `xs` - The sink for samples.
+    /// * `ys` - The sink for labels.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    async fn pull_dataset(&mut self, xs: &mut Vec<f32>, ys: &mut Vec<f32>) -> io::Result<()> {
+        share_dataset::recv_dataset(xs, ys, &mut self.transport).await
     }
 }

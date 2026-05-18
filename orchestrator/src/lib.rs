@@ -1,17 +1,16 @@
 pub mod configs;
 pub mod dataset_format;
 mod error;
-mod session;
+pub mod sessions;
 
 use std::{fs, path::PathBuf, time::Duration};
 
 use comms::Connector;
 
-use configs::{Adapter, DatasetSrc, ModelConfig, TrainingConfig, Validator};
+use configs::{Adapter, DataSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
-use error::{OrchErr, Result};
-
-pub use session::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
+pub use error::{OrchErr, Result};
+pub use sessions::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
 
 /// Starts the distributed training process and returns an active session.
 ///
@@ -33,14 +32,12 @@ pub use session::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent
 /// or connecting to any worker or server fails.
 pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session> {
     let dataset_bin = generate_binary_dataset(&mut training.dataset.src);
+
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 
-    let input_size = training.dataset.x_size.get();
-
     let adapter = Adapter::new();
-    let early_stopping = training.early_stopping.clone();
-    let (workers, partitions, servers) = adapter.adapt_configs(model.clone(), &training)?;
+    let (workers, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
     // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
     //       configurar esto, si tenemos tiempo y vemos que viene bien lo
@@ -56,15 +53,14 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
         )
     };
 
-    let connector = Connector::new(transport_factory);
     let session = Session::new(
         workers,
-        partitions,
         servers,
-        connector,
+        Connector::new(transport_factory),
         model,
-        input_size,
-        early_stopping,
+        training.algorithm.clone(),
+        training.dataset.x_size.get(),
+        training.early_stopping,
     )?;
 
     if let Some((samples_bin, labels_bin)) = dataset_bin {
@@ -83,8 +79,8 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 ///
 /// # Returns
 /// The paths of the generated binary files if they were found or `None` if not.
-fn generate_binary_dataset(src: &mut DatasetSrc) -> Option<(PathBuf, PathBuf)> {
-    let DatasetSrc::Local {
+fn generate_binary_dataset(src: &mut DataSrc) -> Option<(PathBuf, PathBuf)> {
+    let DataSrc::Local {
         samples_path,
         labels_path,
     } = src
@@ -101,7 +97,7 @@ fn generate_binary_dataset(src: &mut DatasetSrc) -> Option<(PathBuf, PathBuf)> {
 
     let samples_bin_path = convert_to_binary(samples_path, samples_format).ok()?;
     let labels_bin_path = convert_to_binary(labels_path, labels_format).ok()?;
-    *src = DatasetSrc::Local {
+    *src = DataSrc::Local {
         samples_path: samples_bin_path.clone(),
         labels_path: labels_bin_path.clone(),
     };

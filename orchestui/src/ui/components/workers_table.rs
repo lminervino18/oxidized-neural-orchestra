@@ -6,9 +6,11 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::screens::training::{TrainingState, WORKER_COLORS};
-use crate::ui::theme::Theme;
-use crate::ui::utils::fmt_loss;
+use crate::ui::{
+    screens::training::{Phase, TrainingState, WORKER_COLORS},
+    theme::Theme,
+    utils::fmt_loss,
+};
 
 const BAR_WIDTH: usize = 30;
 
@@ -41,16 +43,15 @@ fn draw_progress_bar(f: &mut Frame, area: Rect, state: &TrainingState) {
         .unwrap_or(0);
 
     let max = state.max_epochs;
-    let filled = if max > 0 {
-        (current * BAR_WIDTH / max).min(BAR_WIDTH)
-    } else {
-        0
-    };
+    let filled = (current * BAR_WIDTH)
+        .checked_div(max)
+        .unwrap_or_default()
+        .min(BAR_WIDTH);
+
     let empty = BAR_WIDTH - filled;
+    let pct = (current * 100).checked_div(max).unwrap_or_default();
 
-    let pct = if max > 0 { current * 100 / max } else { 0 };
-
-    let bar_style = if state.phase == crate::ui::screens::training::Phase::Finished {
+    let bar_style = if state.phase == Phase::Finished {
         Theme::accent_magenta()
     } else {
         Theme::ok()
@@ -102,10 +103,7 @@ fn draw_table(f: &mut Frame, area: Rect, state: &TrainingState) {
                 Theme::text()
             };
 
-            let loss_str = w
-                .last_loss
-                .map(|l| fmt_loss(l))
-                .unwrap_or_else(|| "—".into());
+            let loss_str = w.last_loss.map(fmt_loss).unwrap_or_else(|| "—".into());
 
             Row::new(vec![
                 Cell::from(format!("{}", w.id)).style(id_style),

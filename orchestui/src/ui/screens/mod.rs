@@ -24,7 +24,7 @@ pub enum Screen {
     /// The JSON configuration input flow.
     Config(ConfigState),
     /// The live training dashboard.
-    Training(TrainingState),
+    Training(Box<TrainingState>),
 }
 
 impl Screen {
