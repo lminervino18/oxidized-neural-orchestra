@@ -228,14 +228,16 @@ impl Session {
     /// # Errors
     /// Raises a `RuntimeError` if the session was already consumed, if training
     /// fails, or if the background thread panics.
-    pub fn wait(&mut self, py: Python<'_>) -> PyResult<TrainedModel> {
-        let (session, cancel_rx) = self
+    pub fn wait(mut slf: pyo3::PyRefMut<'_, Self>, py: Python<'_>) -> PyResult<TrainedModel> {
+        let (session, cancel_rx) = slf
             .inner
             .take()
             .ok_or_else(|| PyRuntimeError::new_err("session already consumed"))?;
 
-        let max_epochs = self.max_epochs;
-        let worker_count = self.worker_count;
+        let max_epochs = slf.max_epochs;
+        let worker_count = slf.worker_count;
+
+        drop(slf);
 
         let trained = py
             .detach(|| {
