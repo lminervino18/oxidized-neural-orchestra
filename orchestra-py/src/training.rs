@@ -1,14 +1,14 @@
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, thread};
 
 use comms::floats::{FloatNonNegative, FloatPositive};
 use orchestrator::{
     configs::{
-        AlgorithmConfig, DatasetConfig, DatasetSrc, EarlyStoppingConfig, LossFnConfig,
+        AlgorithmConfig, DataSrc, DatasetConfig, EarlyStoppingConfig, LossFnConfig,
         OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
     },
     train, CancelHandle,
 };
-use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 
 use crate::{
@@ -71,6 +71,7 @@ pub struct PyTrainingConfig {
     seed = None,
     early_stopping_tolerance = None,
 ))]
+#[allow(clippy::too_many_arguments)]
 pub fn parameter_server(
     worker_addrs: Vec<String>,
     server_addrs: Vec<String>,
@@ -151,7 +152,7 @@ pub fn parameter_server(
 
     let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: d.samples.clone(),
                 labels: d.labels.clone(),
             },
@@ -160,7 +161,7 @@ pub fn parameter_server(
         }
     } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Local {
+            src: DataSrc::Local {
                 samples_path: d.samples_path.clone(),
                 labels_path: d.labels_path.clone(),
             },
@@ -241,6 +242,7 @@ pub fn parameter_server(
     seed = None,
     early_stopping_tolerance = None,
 ))]
+#[allow(clippy::too_many_arguments)]
 pub fn all_reduce(
     worker_addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,
@@ -298,7 +300,7 @@ pub fn all_reduce(
 
     let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: d.samples.clone(),
                 labels: d.labels.clone(),
             },
@@ -307,7 +309,7 @@ pub fn all_reduce(
         }
     } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
         DatasetConfig {
-            src: DatasetSrc::Local {
+            src: DataSrc::Local {
                 samples_path: d.samples_path.clone(),
                 labels_path: d.labels_path.clone(),
             },
@@ -373,11 +375,11 @@ pub fn orchestrate(
 
     let session = py
         .detach(|| {
-            std::thread::spawn(move || train(model, training).map_err(|e| e.to_string()))
+            thread::spawn(move || train(model, training).map_err(|e| e.to_string()))
                 .join()
                 .map_err(|_| "thread panicked".to_string())?
         })
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
+        .map_err(PyRuntimeError::new_err)?;
 
     let (cancel, cancel_rx) = CancelHandle::pair();
 

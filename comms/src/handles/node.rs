@@ -39,8 +39,7 @@ impl<T: TransportLayer> NodeHandle<T> {
     /// # Returns
     /// The parameter server handle or an io error if occurred.
     pub async fn create_server(mut self, spec: ServerSpec) -> io::Result<ParamServerHandle<T>> {
-        let msg = Msg::Control(Command::CreateNode(NodeSpec::Server(spec)));
-        self.transport.send(&msg).await?;
+        self.create(NodeSpec::Server(spec)).await?;
         Ok(ParamServerHandle::new(self.id, self.transport))
     }
 
@@ -52,8 +51,19 @@ impl<T: TransportLayer> NodeHandle<T> {
     /// # Returns
     /// The ready worker handle or an io error if occurred.
     pub async fn create_worker(mut self, spec: WorkerSpec) -> io::Result<WorkerHandle<T>> {
-        let msg = Msg::Control(Command::CreateNode(NodeSpec::Worker(spec)));
-        self.transport.send(&msg).await?;
+        self.create(NodeSpec::Worker(spec)).await?;
         Ok(WorkerHandle::new(self.id, self.transport))
+    }
+
+    /// Sends a create message to the other end with the given specification.
+    ///
+    /// # Args
+    /// * `spec` - The specification for the node.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    async fn create(&mut self, spec: NodeSpec) -> io::Result<()> {
+        let msg = Msg::Control(Command::CreateNode { spec });
+        self.transport.send(&msg).await
     }
 }

@@ -215,14 +215,14 @@ fn try_load(state: &mut ConfigState) -> Option<Action> {
         }
     };
 
-    Some(Action::Transition(Box::new(Screen::Training(
+    Some(Action::Transition(Box::new(Screen::Training(Box::new(
         TrainingState::new(
             model_json.config,
             training_json.config,
             training_json.worker_count,
             training_json.server_count,
         ),
-    ))))
+    )))))
 }
 
 /// Draws the configuration screen.

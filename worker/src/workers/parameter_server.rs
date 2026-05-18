@@ -4,19 +4,20 @@ use comms::{OrchEvent, OrchHandle, TransportLayer};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 
-use crate::{middlewares::ServerClusterManager, workers::Worker};
+use super::{Run, Worker};
+use crate::middlewares::ServerClusterManager;
 
 /// The middleman between the parameter server and the model trainer.
-pub struct ParamServerWorker<T>
+pub struct ParamServerWorker<'node, T>
 where
     T: TransportLayer,
 {
     trainer: Box<dyn Trainer>,
     cluster_manager: ServerClusterManager<T>,
-    orch_handle: OrchHandle<T>,
+    orch_handle: &'node mut OrchHandle<T>,
 }
 
-impl<T> ParamServerWorker<T>
+impl<'node, T> ParamServerWorker<'node, T>
 where
     T: TransportLayer,
 {
@@ -32,7 +33,7 @@ where
     pub fn new(
         trainer: Box<dyn Trainer>,
         cluster_manager: ServerClusterManager<T>,
-        orch_handle: OrchHandle<T>,
+        orch_handle: &'node mut OrchHandle<T>,
     ) -> Self {
         Self {
             trainer,
@@ -43,7 +44,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T> Worker for ParamServerWorker<T>
+impl<T> Worker for ParamServerWorker<'_, T>
 where
     T: TransportLayer,
 {
@@ -52,7 +53,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn run(&mut self) -> io::Result<()> {
+    async fn run(&mut self) -> io::Result<Run> {
         let mut should_continue = true;
 
         while should_continue {
@@ -84,8 +85,13 @@ where
             }
         }
 
+        self.orch_handle.done().await?;
         self.cluster_manager.disconnect().await?;
         self.orch_handle.disconnect().await?;
-        Ok(())
+        Ok(Run::Done)
+    }
+
+    fn into_trainer(self: Box<Self>) -> Box<dyn Trainer> {
+        self.trainer
     }
 }

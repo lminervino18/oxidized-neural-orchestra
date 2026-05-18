@@ -85,16 +85,6 @@ where
         Ok(self.build_param_manager(params))
     }
 
-    /// Disconnects this worker from the ring of workers.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn disconnect(&mut self) -> io::Result<()> {
-        self.next.disconnect().await?;
-        while !matches!(self.prev.recv_event().await?, WorkerEvent::Disconnect) {}
-        Ok(())
-    }
-
     /// Will start the ring scattering of the gradients with the rest of
     /// the workers.
     ///

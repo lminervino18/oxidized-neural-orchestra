@@ -1,11 +1,10 @@
 use std::{borrow::Cow, io};
 
-use tokio::io::AsyncWrite;
-
+use super::DatasetSrc;
 use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset,
-    specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
+    specs::{node::NodeSpec, server::ServerSpec},
     transport::TransportLayer,
 };
 
@@ -14,18 +13,22 @@ pub struct OrchHandle<T: TransportLayer> {
     transport: T,
 }
 
-/// The response of pulling a node specification.
-pub enum PullSpecResponse {
-    Worker(WorkerSpec),
-    ParameterServer(ServerSpec),
-}
-
 /// A notified orchestrator event.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum OrchEvent {
     Disconnect,
     RequestParams,
+    ShareDataset,
     Stop,
+    Switch {
+        server_addrs: Vec<String>,
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+    },
+    Upgrade {
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    },
 }
 
 impl<T> OrchHandle<T>
@@ -47,45 +50,16 @@ where
     ///
     /// # Returns
     /// The specification or an io error if occurred.
-    pub async fn pull_specification(&mut self) -> io::Result<PullSpecResponse> {
+    pub async fn pull_specification(&mut self) -> io::Result<NodeSpec> {
         let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateNode(NodeSpec::Server(spec))) => {
-                PullSpecResponse::ParameterServer(spec)
-            }
-            Msg::Control(Command::CreateNode(NodeSpec::Worker(spec))) => {
-                PullSpecResponse::Worker(spec)
-            }
+            Msg::Control(Command::CreateNode { spec }) => spec,
             msg => {
-                let text = format!("Expected creation from orchestrator, got: {msg:?}");
+                let text = format!("Expected node specification from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));
             }
         };
 
         Ok(spec)
-    }
-
-    /// Waits to receive the dataset from the orchestrator and writes both samples
-    /// and labels to the given writers.
-    ///
-    /// # Args
-    /// * `xs` - The sink for samples.
-    /// * `ys` - The sink for labels.
-    /// * `xs_size` - The total size of the samples in bytes.
-    /// * `ys_size` - The total size of the labels in bytes.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn pull_dataset<W>(
-        &mut self,
-        xs: &mut W,
-        ys: &mut W,
-        xs_size: usize,
-        ys_size: usize,
-    ) -> io::Result<()>
-    where
-        W: AsyncWrite + Unpin,
-    {
-        share_dataset::recv_dataset(xs, ys, xs_size, ys_size, &mut self.transport).await
     }
 
     /// Pushes the latest parameters to the orchestrator.
@@ -107,7 +81,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn push_losses(&mut self, losses: &[f32]) -> io::Result<()> {
+    pub async fn push_losses(&mut self, losses: &[f64]) -> io::Result<()> {
         if losses.iter().any(|l| !l.is_finite()) {
             return Err(io::Error::other("loss diverged: NaN or Inf detected"));
         }
@@ -128,6 +102,17 @@ where
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
             Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
             Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
+            Msg::Control(Command::Upgrade { spec, ranges }) => OrchEvent::Upgrade { spec, ranges },
+            Msg::Control(Command::Switch {
+                server_addrs,
+                server_sizes,
+                server_ordering,
+            }) => OrchEvent::Switch {
+                server_addrs,
+                server_sizes,
+                server_ordering,
+            },
+            Msg::Control(Command::ShareDataset) => OrchEvent::ShareDataset,
             msg => {
                 let text = format!("Unexpected message from orchestrator, got: {msg:?}");
                 return Err(io::Error::other(text));
@@ -154,5 +139,23 @@ where
     pub async fn disconnect(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Disconnect);
         self.transport.send(&msg).await
+    }
+}
+
+impl<T> DatasetSrc for OrchHandle<T>
+where
+    T: TransportLayer,
+{
+    /// Waits to receive the dataset from the orchestrator and writes both samples
+    /// and labels to the given writers.
+    ///
+    /// # Args
+    /// * `xs` - The sink for samples.
+    /// * `ys` - The sink for labels.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    async fn pull_dataset(&mut self, xs: &mut Vec<f32>, ys: &mut Vec<f32>) -> io::Result<()> {
+        share_dataset::recv_dataset(xs, ys, &mut self.transport).await
     }
 }

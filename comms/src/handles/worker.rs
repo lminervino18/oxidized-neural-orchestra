@@ -23,7 +23,7 @@ pub struct WorkerHandle<T> {
 #[derive(Debug)]
 pub enum WorkerEvent<'a> {
     Grad(&'a [f32]),
-    Loss(Vec<f32>),
+    Loss(Vec<f64>),
     RequestParams,
     Disconnect,
     Done,
@@ -154,6 +154,8 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// # Args
     /// * `xs` - The samples' source.
     /// * `ys` - The labels' source.
+    /// * `xs_size_hint` - The minimum amount of units xs has.
+    /// * `ys_size_hint` - The minimum amout of units ys has.
     /// * `chunk_size` - The maximum size in bytes for each payload.
     ///
     /// # Returns
@@ -162,12 +164,22 @@ impl<T: TransportLayer> WorkerHandle<T> {
         &mut self,
         xs: &mut R,
         ys: &mut R,
+        xs_size_hint: usize,
+        ys_size_hint: usize,
         chunk_size: usize,
     ) -> io::Result<()>
     where
         R: AsyncRead + Unpin,
     {
-        share_dataset::send_dataset(xs, ys, chunk_size, &mut self.transport).await
+        share_dataset::send_dataset(
+            xs,
+            ys,
+            xs_size_hint,
+            ys_size_hint,
+            chunk_size,
+            &mut self.transport,
+        )
+        .await
     }
 
     /// Tells the worker to stop it's execution.

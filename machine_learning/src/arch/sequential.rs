@@ -121,14 +121,14 @@ impl Sequential {
         optimizers: &mut [O],
         loss_fn: &mut L,
         batches: I,
-    ) -> Result<f32>
+    ) -> Result<f64>
     where
         L: LossFn,
         O: Optimizer + Send,
         I: Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)>,
     {
         let mut total_loss = 0.0;
-        let mut num_batches = 0;
+        let mut num_batches: usize = 0;
 
         for (x, y) in batches {
             let y_pred = self.forward(param_manager, x.into_dyn())?;
@@ -144,6 +144,6 @@ impl Sequential {
             param_manager.zero_grad();
         }
 
-        Ok(total_loss / num_batches as f32)
+        Ok(total_loss / num_batches as f64)
     }
 }

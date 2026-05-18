@@ -15,7 +15,7 @@ pub trait LossFn {
         &mut self,
         y_pred: ArrayView<f32, D>,
         y: ArrayView<f32, D>,
-    ) -> (f32, ArrayViewMut<'_, f32, D>)
+    ) -> (f64, ArrayViewMut<'_, f32, D>)
     where
         D: Dimension;
 
@@ -27,7 +27,7 @@ pub trait LossFn {
     ///
     /// # Returns
     /// The calculated loss.
-    fn loss<D>(&mut self, y_pred: ArrayView<f32, D>, y: ArrayView<f32, D>) -> f32
+    fn loss<D>(&mut self, y_pred: ArrayView<f32, D>, y: ArrayView<f32, D>) -> f64
     where
         D: Dimension,
     {
