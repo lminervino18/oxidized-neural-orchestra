@@ -25,8 +25,14 @@ impl ParamGen for InlineParamGen {
 
     fn sample(&mut self, mut n: usize) -> Option<Vec<f32>> {
         n = n.min(self.size());
+
+        if n == 0 {
+            return None;
+        }
+
+        let params = &self.params[self.curr..self.curr + n];
         self.curr += n;
-        (n > 0).then_some(self.params[..n].to_vec())
+        Some(params.to_vec())
     }
 
     fn sample_remaining(&mut self) -> Option<Vec<f32>> {
@@ -48,22 +54,27 @@ mod tests {
     fn exact() {
         const SIZE: usize = 10;
 
-        let mut param_gen = InlineParamGen::new(vec![1.0; SIZE]);
+        let inline: Vec<_> = (0..SIZE).map(|i| i as f32).collect();
+        let mut param_gen = InlineParamGen::new(inline.clone());
         let sample = param_gen.sample(SIZE).unwrap();
 
-        assert_eq!(sample, vec![1.0; SIZE]);
+        assert_eq!(sample, inline);
         assert!(param_gen.sample(1).is_none());
     }
 
     #[test]
     fn partial() {
-        let mut param_gen = InlineParamGen::new(vec![1.0; 10]);
+        const SIZE: usize = 10;
+
+        let inline: Vec<_> = (0..SIZE).map(|i| i as f32).collect();
+        let mut param_gen = InlineParamGen::new(inline.clone());
 
         let sample = param_gen.sample(7).unwrap();
-        assert_eq!(sample, vec![1.0; 7]);
+        assert_eq!(sample, &inline[..7]);
 
         let sample = param_gen.sample(7).unwrap();
-        assert_eq!(sample, vec![1.0; 3]);
+        assert_eq!(sample, &inline[7..]);
+
         assert!(param_gen.sample(1).is_none());
     }
 }
