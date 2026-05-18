@@ -200,15 +200,10 @@ enum WorkerHandleRequest {
     Stop,
 }
 
-struct SyncRoundSignal {
-    prev: f32,
-    curr: f32,
-}
-
 struct ConvergenceTracker {
     n_workers: usize,
     pending: HashMap<usize, f32>,
-    prev_avg: Option<f32>,
+    prev: HashMap<usize, f32>,
 }
 
 impl ConvergenceTracker {
@@ -216,11 +211,16 @@ impl ConvergenceTracker {
         Self {
             n_workers,
             pending: HashMap::new(),
-            prev_avg: None,
+            prev: HashMap::new(),
         }
     }
 
-    fn record(&mut self, worker_id: usize, losses: &[f32]) -> Option<SyncRoundSignal> {
+    /// Records the last loss for a worker and returns the max per-worker delta
+    /// once all workers have reported for the current sync round.
+    ///
+    /// Returns `None` if not all workers have reported yet, or on the first
+    /// complete round (no previous values to compare against).
+    fn record(&mut self, worker_id: usize, losses: &[f32]) -> Option<f32> {
         let last = *losses.last()?;
         self.pending.insert(worker_id, last);
 
@@ -228,12 +228,19 @@ impl ConvergenceTracker {
             return None;
         }
 
-        let curr = self.pending.values().sum::<f32>() / self.n_workers as f32;
+        let max_delta = if self.prev.len() == self.n_workers {
+            self.pending
+                .iter()
+                .filter_map(|(id, &curr)| self.prev.get(id).map(|&prev| (prev - curr).abs()))
+                .fold(0.0f32, f32::max)
+        } else {
+            return None;
+        };
+
+        std::mem::swap(&mut self.prev, &mut self.pending);
         self.pending.clear();
 
-        let signal = self.prev_avg.map(|prev| SyncRoundSignal { prev, curr });
-        self.prev_avg = Some(curr);
-        signal
+        Some(max_delta)
     }
 }
 
@@ -541,11 +548,11 @@ impl Session {
                         TrainingEvent::Loss { worker_id, losses } => {
                             if stop_reason.is_none() {
                                 if let Some(cfg) = early_stopping {
-                                    if let Some(sig) = tracker.record(worker_id, &losses) {
-                                        if (sig.prev - sig.curr).abs() < *cfg.tolerance {
+                                    if let Some(max_delta) = tracker.record(worker_id, &losses) {
+                                        if max_delta < *cfg.tolerance {
                                             info!(
-                                                "early stopping triggered (prev={:.6}, curr={:.6})",
-                                                sig.prev, sig.curr
+                                                "early stopping triggered (max_delta={:.6})",
+                                                max_delta
                                             );
 
                                             stop_reason = Some(StopReason::EarlyStopping);
