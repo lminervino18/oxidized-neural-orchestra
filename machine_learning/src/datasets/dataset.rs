@@ -104,7 +104,7 @@ impl Dataset {
         (0..n).map(move |i| {
             let end = start + batch_size + (i < extra) as usize;
             let samples_range = start * x_size.get()..end * x_size.get();
-            let labels_range = start * y_size.get()..end * x_size.get();
+            let labels_range = start * y_size.get()..end * y_size.get();
 
             start = end;
             self.src.raw_batch(samples_range, labels_range)
