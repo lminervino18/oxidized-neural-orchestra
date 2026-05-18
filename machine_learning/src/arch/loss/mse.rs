@@ -26,7 +26,7 @@ impl LossFn for Mse {
         &mut self,
         y_pred: ArrayView<f32, D>,
         y: ArrayView<f32, D>,
-    ) -> (f32, ArrayViewMut<'_, f32, D>)
+    ) -> (f64, ArrayViewMut<'_, f32, D>)
     where
         D: Dimension,
     {
@@ -40,10 +40,10 @@ impl LossFn for Mse {
 
         azip!((grad in &mut delta_view, &yp in &y_pred, &yt in &y) {
             let diff = yp - yt;
-            total_loss += diff.powi(2);
+            total_loss += diff.powi(2) as f64;
             *grad = diff * two_over_n;
         });
 
-        (total_loss / n, delta_view)
+        (total_loss / n as f64, delta_view)
     }
 }

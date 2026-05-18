@@ -6,7 +6,7 @@ use super::{TrainResult, Trainer};
 use crate::{
     Result,
     arch::{Sequential, loss::LossFn},
-    dataset::Dataset,
+    datasets::{DataSrc, Dataset},
     optimization::{GradientDescent, Optimizer},
     param_manager::ParamManager,
 };
@@ -31,7 +31,7 @@ where
     batch_size: NonZeroUsize,
     rng: R,
 
-    losses: Vec<f32>,
+    losses: Vec<f64>,
 }
 
 impl<O, L, R> BackpropTrainer<O, L, R>
@@ -45,7 +45,7 @@ where
     /// # Args
     /// * `model` - A trainable model.
     /// * `optimizers` - A list of optimizers, one per server.
-    /// * `dataset` - The dataset the model will be trained with.
+    /// * `dataset` - An empty dataset.
     /// * `loss_fn` - The loss function used to measure the difference between a model's output and the expected one.
     /// * `offline_epochs` - The amount of extra epochs to run per `train` call.
     /// * `max_epochs` - The maximum amount of epochs to train.
@@ -130,5 +130,13 @@ where
 
     fn optimize<'mw>(&mut self, param_manager: &mut ParamManager<'mw>) -> Result<()> {
         param_manager.optimize(&mut self.optimizers)
+    }
+
+    fn load_dataset(&mut self, src: DataSrc) {
+        self.dataset.load(src);
+    }
+
+    fn into_dataset(self: Box<Self>) -> Dataset {
+        self.dataset
     }
 }

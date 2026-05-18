@@ -9,7 +9,7 @@ use crate::{MlErr, Result, arch::layers::Reshape};
 enum Inner {
     Dense(Dense),
     Sigmoid(Sigmoid),
-    Conv2d(Conv2d),
+    Conv2d(Box<Conv2d>),
     Softmax(Softmax),
     Reshape(Reshape),
 }
@@ -60,13 +60,13 @@ impl Layer {
         stride: usize,
         padding: usize,
     ) -> Self {
-        Self(Inner::Conv2d(Conv2d::new(
+        Self(Inner::Conv2d(Box::new(Conv2d::new(
             filters,
             in_channels,
             kernel_size,
             stride,
             padding,
-        )))
+        ))))
     }
 
     /// Creates a new `Layer::Softmax` layer.

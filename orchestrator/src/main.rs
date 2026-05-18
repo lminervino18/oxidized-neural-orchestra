@@ -2,6 +2,8 @@ use std::{
     env, io,
     num::NonZeroUsize,
     process::{Command, ExitStatus},
+    thread,
+    time::Duration,
 };
 
 use comms::floats::{Float01, FloatNonNegative, FloatPositive};
@@ -61,10 +63,12 @@ fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>)
 
 fn main() -> io::Result<()> {
     const WORKERS: usize = 3;
-    const SERVERS: usize = 0;
+    const SERVERS: usize = 2;
     const RELEASE: bool = false;
 
     setup_docker(WORKERS, SERVERS, RELEASE)?;
+
+    thread::sleep(Duration::from_secs(2));
     let (worker_addrs, server_addrs) = build_addresses(WORKERS, SERVERS);
 
     let model_config = ModelConfig {
@@ -110,7 +114,7 @@ fn main() -> io::Result<()> {
             r: Float01::new(0.9).unwrap(),
         },
         dataset: DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: vec![
                     0.0, 1.0, 0.0, //
                     1.0, 1.0, 1.0, //
@@ -163,6 +167,7 @@ fn main() -> io::Result<()> {
         max_epochs: NonZeroUsize::new(1000).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
+        // early_stopping: None,
         early_stopping: Some(EarlyStoppingConfig {
             tolerance: FloatNonNegative::new(0.5).unwrap(),
         }),
@@ -174,14 +179,14 @@ fn main() -> io::Result<()> {
 
     loop {
         match rx.blocking_recv() {
-            Some(orchestrator::TrainingEvent::Loss { losses, worker_id }) => {
+            Some(orchestrator::TrainingEvent::PublishedLosses { losses, worker_id }) => {
                 println!("losses {worker_id}: {losses:?}")
             }
-            Some(orchestrator::TrainingEvent::Complete {
+            Some(orchestrator::TrainingEvent::TrainingComplete {
                 model: trained,
-                reason,
+                stop_reason: reason,
             }) => {
-                println!("params: {:?}", trained.params());
+                println!("params: {:?}", trained.params);
                 println!("stop reason: {reason:?}");
 
                 trained

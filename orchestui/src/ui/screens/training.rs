@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    configs::{DatasetSrc, ModelConfig, TrainingConfig},
+    configs::{DataSrc, ModelConfig, TrainingConfig},
     dataset_format::DatasetFormat,
     CancelHandle, Session, StopReason, TrainedModel, TrainingEvent,
 };
@@ -81,7 +81,7 @@ pub struct WorkerState {
     /// Number of epochs completed so far.
     pub epochs_done: usize,
     /// Most recently reported loss value.
-    pub last_loss: Option<f32>,
+    pub last_loss: Option<f64>,
     /// Whether the worker has disconnected.
     pub done: bool,
 }
@@ -159,7 +159,7 @@ impl TrainingState {
         let max_epochs = training.max_epochs.get();
 
         let initial_phase = match &training.dataset.src {
-            DatasetSrc::Local {
+            DataSrc::Local {
                 samples_path,
                 labels_path,
             } if DatasetFormat::from_path(samples_path).is_some()
@@ -282,7 +282,7 @@ impl TrainingState {
     /// Applies a single training event to the state.
     fn apply(&mut self, event: TrainingEvent) {
         match event {
-            TrainingEvent::Loss { worker_id, losses } => {
+            TrainingEvent::PublishedLosses { worker_id, losses } => {
                 self.phase = Phase::Training;
 
                 if worker_id < self.workers.len() {
@@ -292,7 +292,7 @@ impl TrainingState {
 
                         if let Some(series) = self.loss_series.get_mut(worker_id) {
                             let epoch = self.workers[worker_id].epochs_done as f64;
-                            series.push((epoch, *loss as f64));
+                            series.push((epoch, *loss));
                         }
                     }
 
@@ -313,9 +313,9 @@ impl TrainingState {
                 }
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
-            TrainingEvent::Complete {
+            TrainingEvent::TrainingComplete {
                 model: trained,
-                reason,
+                stop_reason: reason,
             } => {
                 self.phase = Phase::Finished;
                 self.finish_reason = Some(reason);
@@ -328,7 +328,7 @@ impl TrainingState {
                     LogLevel::Info,
                     format!(
                         "training complete ({reason_str}) — {} parameters received",
-                        trained.params().len()
+                        trained.params.len()
                     ),
                 );
                 self.final_trained = Some(trained);

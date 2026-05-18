@@ -26,7 +26,7 @@ impl LossFn for CrossEntropy {
         &mut self,
         y_pred: ArrayView<f32, D>,
         y: ArrayView<f32, D>,
-    ) -> (f32, ArrayViewMut<'_, f32, D>)
+    ) -> (f64, ArrayViewMut<'_, f32, D>)
     where
         D: Dimension,
     {
@@ -40,10 +40,10 @@ impl LossFn for CrossEntropy {
 
         azip!((grad in &mut delta_view, &yp in &y_pred, &yt in &y) {
             let yp_safe = yp.max(f32::EPSILON);
-            total_loss -= yt * yp_safe.ln();
+            total_loss -= (yt * yp_safe.ln()) as f64;
             *grad = - (yt / yp_safe) * one_over_n;
         });
 
-        (total_loss / n, delta_view)
+        (total_loss / n as f64, delta_view)
     }
 }

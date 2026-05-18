@@ -624,6 +624,7 @@ dependencies = [
  "comms",
  "env_logger",
  "log",
+ "machine_learning",
  "parameter_server",
  "tokio",
  "worker",

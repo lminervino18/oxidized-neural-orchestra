@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use comms::specs::machine_learning::{DistributionSpec, ParamGenSpec};
 use rand::{Rng, SeedableRng, rngs::StdRng};
 
-use super::{ChainedParamGen, ConstParamGen, ParamGen, RandParamGen, Result};
+use super::{ChainedParamGen, ConstParamGen, InlineParamGen, ParamGen, RandParamGen, Result};
 
 /// Makes `callback`'s return type generic, when trying to resolve a concrete `RandParamGen` it avoids boxing all
 /// parameter generators variants.
@@ -88,6 +88,10 @@ impl ParamGenBuilder {
                 let param_gen = ConstParamGen::new(value, limit);
                 Ok(Box::new(param_gen))
             }
+            ParamGenSpec::Inline { params } => {
+                let param_gen = InlineParamGen::new(params);
+                Ok(Box::new(param_gen))
+            }
             ParamGenSpec::Rand {
                 distribution,
                 limit,
@@ -128,6 +132,10 @@ impl ParamGenBuilder {
                 ParamGenSpec::Const { value, limit } => {
                     let param_gen = ConstParamGen::new(*value, *limit);
                     param_gens.push(Box::new(param_gen));
+                }
+                ParamGenSpec::Inline { params } => {
+                    let param_gen = InlineParamGen::new(params.clone());
+                    param_gens.push(Box::new(param_gen))
                 }
                 ParamGenSpec::Rand {
                     distribution,

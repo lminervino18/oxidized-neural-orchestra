@@ -39,7 +39,7 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 ///
 /// # Returns
 /// A formatted string representation of the loss.
-pub fn fmt_loss(loss: f32) -> String {
+pub fn fmt_loss(loss: f64) -> String {
     if loss.abs() < 1e-4 {
         format!("{loss:.3e}")
     } else {

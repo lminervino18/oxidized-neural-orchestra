@@ -72,10 +72,11 @@ where
             }
         }
 
-        // SAFETY: This parameter vector is the same size as
-        //         the amount of parameters in the storage.
         let nparams = self.handle.len();
-        let mut params = vec![0.; nparams];
+        let mut params = vec![0.0; nparams];
+
+        // SAFETY: The parameter vector is the same size as
+        //         the amount of parameters in the storage.
         self.handle.pull_params(&mut params).await.unwrap();
 
         loop {

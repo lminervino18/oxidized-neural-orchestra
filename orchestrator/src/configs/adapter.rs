@@ -14,7 +14,7 @@ use comms::specs::{
 use super::{ModelConfig, SerializerConfig, TrainingConfig, partition::Partition};
 use crate::{
     configs::{
-        ActFnConfig, AlgorithmConfig, DatasetConfig, DatasetSrc, LayerConfig, LossFnConfig,
+        ActFnConfig, AlgorithmConfig, DataSrc, DatasetConfig, LayerConfig, LossFnConfig,
         OptimizerConfig, ParamGenConfig, StoreConfig, SynchronizerConfig,
     },
     error::{OrchErr, Result},
@@ -40,7 +40,7 @@ impl Adapter {
     /// * `training` - The training's configuration.
     ///
     /// # Returns
-    /// The workers' and servers' specifications and network addresses.
+    /// The workers' and servers' specifications, network addresses and the workers' dataset partitions.
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
@@ -50,14 +50,13 @@ impl Adapter {
         model: ModelConfig,
         training: &'a TrainingConfig,
     ) -> Result<(
-        Vec<(String, WorkerSpec)>,
-        Vec<Partition<'a>>,
+        Vec<(String, WorkerSpec, Partition<'a>)>,
         Vec<(String, ServerSpec)>,
     )> {
-        let (dataset_specs, partitions) =
-            self.adapt_dataset(&training.dataset, training.worker_addrs.len())?;
+        let partitions =
+            self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
 
-        match &training.algorithm {
+        let (workers, servers) = match &training.algorithm {
             AlgorithmConfig::ParameterServer { .. } => {
                 let (servers, server_addrs, server_sizes, server_ordering) =
                     self.adapt_servers(&model, training)?;
@@ -65,20 +64,26 @@ impl Adapter {
                 let workers = self.adapt_parameter_server_workers(
                     &model,
                     training,
-                    dataset_specs,
                     server_addrs,
                     server_sizes,
                     server_ordering,
                 )?;
 
-                Ok((workers, partitions, servers))
+                (workers, servers)
             }
             AlgorithmConfig::AllReduce => {
-                let workers = self.adapt_all_reduce_workers(&model, training, dataset_specs)?;
-
-                Ok((workers, partitions, Vec::new()))
+                let workers = self.adapt_all_reduce_workers(&model, training)?;
+                (workers, Vec::new())
             }
-        }
+        };
+
+        let workers = workers
+            .into_iter()
+            .zip(partitions)
+            .map(|((addr, spec), partition)| (addr, spec, partition))
+            .collect();
+
+        Ok((workers, servers))
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -86,7 +91,6 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
-    /// * `dataset_specs` - Already-resolved dataset specs per worker.
     /// * `server_addrs` - Already-resolved server socket addresses.
     /// * `server_sizes` - The amounts of parameters per server.
     /// * `server_ordering` - The ordering of the layer owners.
@@ -100,25 +104,23 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig,
-        dataset_specs: Vec<DatasetSpec>,
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
+        let serializer_spec = self.adapt_serializer(training);
         let algorithm_spec = AlgorithmSpec::ParameterServer {
             server_addrs,
             server_sizes,
             server_ordering,
         };
-        let serializer_spec = self.adapt_serializer(training);
 
         let worker_specs = training
             .worker_addrs
             .iter()
             .enumerate()
-            .zip(dataset_specs)
-            .map(|((i, addr), dataset)| {
+            .map(|(i, addr)| {
                 if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
                     let text = format!("failed to resolve {i}'th worker's network address: {addr}");
                     return Err(OrchErr::InvalidConfig(text));
@@ -127,7 +129,6 @@ impl Adapter {
                 let worker_spec = WorkerSpec {
                     worker_id: i,
                     trainer: trainer_spec.clone(),
-                    dataset,
                     algorithm: algorithm_spec.clone(),
                     serializer: serializer_spec,
                     seed: training.seed,
@@ -145,7 +146,6 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
-    /// * `dataset_specs` - Already-resolved dataset specs per worker.
     ///
     /// # Returns
     /// Worker addresses and specifications.
@@ -156,7 +156,6 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig,
-        dataset_specs: Vec<DatasetSpec>,
     ) -> Result<Vec<(String, WorkerSpec)>> {
         let trainer_spec = self.adapt_trainer(model, training);
         let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
@@ -173,8 +172,7 @@ impl Adapter {
             .worker_addrs
             .iter()
             .enumerate()
-            .zip(dataset_specs)
-            .map(|((i, addr), dataset)| {
+            .map(|(i, addr)| {
                 if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
                     let text = format!("failed to resolve {i}'th worker's network address: {addr}");
                     return Err(OrchErr::InvalidConfig(text));
@@ -183,7 +181,6 @@ impl Adapter {
                 let worker_spec = WorkerSpec {
                     worker_id: i,
                     trainer: trainer_spec.clone(),
-                    dataset,
                     algorithm: algorithm_spec.clone(),
                     serializer: serializer_spec,
                     seed: training.seed,
@@ -354,6 +351,7 @@ impl Adapter {
     fn adapt_trainer(&self, model: &ModelConfig, training: &TrainingConfig) -> TrainerSpec {
         let (layers, _) = self.adapt_layers(model, training.dataset.x_size);
         let loss_fn_spec = self.adapt_loss_fn(training.loss_fn);
+        let dataset_spec = self.adapt_dataset(&training.dataset);
         let optimizer_spec =
             if matches!(training.algorithm, AlgorithmConfig::ParameterServer { .. }) {
                 self.adapt_optimizer_to_gradient_descent(training.optimizer)
@@ -364,6 +362,7 @@ impl Adapter {
         TrainerSpec {
             layers,
             optimizer: optimizer_spec,
+            dataset: dataset_spec,
             loss_fn: loss_fn_spec,
             offline_epochs: training.offline_epochs,
             max_epochs: training.max_epochs,
@@ -400,40 +399,31 @@ impl Adapter {
     /// * `y_size` - The number of output values per sample.
     ///
     /// # Returns
-    /// Paired lists of `DatasetSpec`s and `Partition::Inline` variants.
-    fn adapt_inline_dataset<'a, T>(
+    /// A list of `Partition::Inline`.
+    fn adapt_inline_dataset<'a, I>(
         &self,
-        samples: &'a [f32],
-        labels: &'a [f32],
-        partition_sizes: T,
-        x_size: NonZeroUsize,
-        y_size: NonZeroUsize,
-    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>)
+        mut samples: &'a [f32],
+        mut labels: &'a [f32],
+        partition_sizes: I,
+    ) -> Vec<Partition<'a>>
     where
-        T: Iterator<Item = (u64, u64)>,
+        I: Iterator<Item = (u64, u64)>,
     {
-        let mut samples_rest = samples;
-        let mut labels_rest = labels;
+        const UNIT_SIZE: usize = size_of::<f32>();
+
         partition_sizes
             .map(|(x_size_bytes, y_size_bytes)| {
-                let samples_curr;
-                let labels_curr;
-                (samples_curr, samples_rest) =
-                    samples_rest.split_at((x_size_bytes / size_of::<f32>() as u64) as usize);
-                (labels_curr, labels_rest) =
-                    labels_rest.split_at((y_size_bytes / size_of::<f32>() as u64) as usize);
-                let spec = DatasetSpec {
-                    x_size_bytes,
-                    y_size_bytes,
-                    x_size,
-                    y_size,
-                };
-                let partition = Partition::Inline {
+                let (samples_curr, labels_curr);
+                let samples_split = (x_size_bytes / UNIT_SIZE as u64) as usize;
+                let labels_split = (y_size_bytes / UNIT_SIZE as u64) as usize;
+
+                (samples_curr, samples) = samples.split_at(samples_split);
+                (labels_curr, labels) = labels.split_at(labels_split);
+
+                Partition::Inline {
                     samples: samples_curr,
                     labels: labels_curr,
-                };
-
-                (spec, partition)
+                }
             })
             .collect()
     }
@@ -448,31 +438,24 @@ impl Adapter {
     /// * `y_size` - The number of output values per sample.
     ///
     /// # Returns
-    /// Paired lists of `DatasetSpec`s and `Partition::Local` variants.
+    /// A list of `Partition::Local`.
     fn adapt_local_dataset<'a, T>(
         &self,
-        samples_path: &'a PathBuf,
-        labels_path: &'a PathBuf,
+        samples_path: PathBuf,
+        labels_path: PathBuf,
         partition_sizes: T,
-        x_size: NonZeroUsize,
-        y_size: NonZeroUsize,
-    ) -> (Vec<DatasetSpec>, Vec<Partition<'a>>)
+    ) -> Vec<Partition<'a>>
     where
         T: Iterator<Item = (u64, u64)>,
     {
         let mut samples_offset = 0;
         let mut labels_offset = 0;
+
         partition_sizes
             .map(|(x_size_bytes, y_size_bytes)| {
-                let spec = DatasetSpec {
-                    x_size_bytes,
-                    y_size_bytes,
-                    x_size,
-                    y_size,
-                };
                 let partition = Partition::Local {
-                    samples_path,
-                    labels_path,
+                    samples_path: samples_path.clone(),
+                    labels_path: labels_path.clone(),
                     samples_offset,
                     labels_offset,
                     samples_size: x_size_bytes,
@@ -482,9 +465,23 @@ impl Adapter {
                 samples_offset += x_size_bytes;
                 labels_offset += y_size_bytes;
 
-                (spec, partition)
+                partition
             })
             .collect()
+    }
+
+    /// Converts a `DatasetConfig` into a `DatasetSpec`.
+    ///
+    /// # Args
+    /// * `dataset` - The dataset's configuration.
+    ///
+    /// # Returns
+    /// A `DatasetSpec`.
+    fn adapt_dataset(&self, dataset: &DatasetConfig) -> DatasetSpec {
+        DatasetSpec {
+            x_size: dataset.x_size,
+            y_size: dataset.y_size,
+        }
     }
 
     /// Converts a `DatasetConfig` into `DatasetSpec`s and `Partition`s.
@@ -503,11 +500,11 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if the dataset cannot be resolved.
-    fn adapt_dataset<'a>(
+    fn adapt_dataset_partitions<'a>(
         &self,
         dataset: &'a DatasetConfig,
         npartitions: usize,
-    ) -> Result<(Vec<DatasetSpec>, Vec<Partition<'a>>)> {
+    ) -> Result<Vec<Partition<'a>>> {
         let DatasetConfig {
             src,
             x_size,
@@ -515,7 +512,7 @@ impl Adapter {
         } = dataset;
 
         let size_bytes = match src {
-            DatasetSrc::Local {
+            DataSrc::Local {
                 samples_path,
                 labels_path,
             } => {
@@ -523,7 +520,7 @@ impl Adapter {
                 let labels_size_bytes = fs::metadata(labels_path)?.len();
                 samples_size_bytes + labels_size_bytes
             }
-            DatasetSrc::Inline { samples, labels } => {
+            DataSrc::Inline { samples, labels } => {
                 let data_len = samples.len() + labels.len();
                 (data_len * size_of::<f32>()) as u64
             }
@@ -548,23 +545,21 @@ impl Adapter {
             (rows * x_size_bytes, rows * y_size_bytes)
         });
 
-        let (specs, partitions) = match src {
-            DatasetSrc::Inline { samples, labels } => {
-                self.adapt_inline_dataset(samples, labels, partition_sizes, *x_size, *y_size)
+        let partitions = match src {
+            DataSrc::Inline { samples, labels } => {
+                self.adapt_inline_dataset(samples, labels, partition_sizes)
             }
-            DatasetSrc::Local {
+            DataSrc::Local {
                 samples_path,
                 labels_path,
             } => self.adapt_local_dataset(
-                samples_path,
-                labels_path,
+                samples_path.to_path_buf(),
+                labels_path.to_path_buf(),
                 partition_sizes,
-                *x_size,
-                *y_size,
             ),
         };
 
-        Ok((specs, partitions))
+        Ok(partitions)
     }
 
     /// Adapts an `OptimizerConfig` into an `OptimizerSpec`.
@@ -810,10 +805,8 @@ mod tests {
         let x_size = NonZeroUsize::new(1).unwrap();
         let y_size = NonZeroUsize::new(1).unwrap();
         let npartitions = 3;
-        let x_size_bytes = ((samples.len() / npartitions) * size_of::<f32>()) as u64;
-        let y_size_bytes = ((labels.len() / npartitions) * size_of::<f32>()) as u64;
         let config = DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: samples.into(),
                 labels: labels.into(),
             },
@@ -821,26 +814,6 @@ mod tests {
             y_size,
         };
 
-        let expected_specs = [
-            DatasetSpec {
-                x_size_bytes,
-                y_size_bytes,
-                x_size,
-                y_size,
-            },
-            DatasetSpec {
-                x_size_bytes,
-                y_size_bytes,
-                x_size,
-                y_size,
-            },
-            DatasetSpec {
-                x_size_bytes,
-                y_size_bytes,
-                x_size,
-                y_size,
-            },
-        ];
         let expected_partitions = [
             Partition::Inline {
                 samples: &samples[..1],
@@ -857,9 +830,9 @@ mod tests {
         ];
 
         let adapter = Adapter::new();
-        let (specs, partitions) = adapter.adapt_dataset(&config, npartitions).unwrap();
-
-        assert_eq!(specs, expected_specs);
+        let partitions = adapter
+            .adapt_dataset_partitions(&config, npartitions)
+            .unwrap();
         assert_eq!(partitions, expected_partitions);
     }
 
@@ -871,7 +844,7 @@ mod tests {
         let y_size = NonZeroUsize::new(1).unwrap();
         let npartitions = 3;
         let config = DatasetConfig {
-            src: DatasetSrc::Inline {
+            src: DataSrc::Inline {
                 samples: samples.into(),
                 labels: labels.into(),
             },
@@ -879,26 +852,6 @@ mod tests {
             y_size,
         };
 
-        let expected_specs = [
-            DatasetSpec {
-                x_size_bytes: (2 * x_size.get() * size_of::<f32>()) as u64,
-                y_size_bytes: (2 * y_size.get() * size_of::<f32>()) as u64,
-                x_size,
-                y_size,
-            },
-            DatasetSpec {
-                x_size_bytes: (x_size.get() * size_of::<f32>()) as u64,
-                y_size_bytes: (y_size.get() * size_of::<f32>()) as u64,
-                x_size,
-                y_size,
-            },
-            DatasetSpec {
-                x_size_bytes: (x_size.get() * size_of::<f32>()) as u64,
-                y_size_bytes: (y_size.get() * size_of::<f32>()) as u64,
-                x_size,
-                y_size,
-            },
-        ];
         let expected_partitions = [
             Partition::Inline {
                 samples: &samples[..2 * x_size.get()],
@@ -915,9 +868,9 @@ mod tests {
         ];
 
         let adapter = Adapter::new();
-        let (specs, partitions) = adapter.adapt_dataset(&config, npartitions).unwrap();
-
-        assert_eq!(specs, expected_specs);
+        let partitions = adapter
+            .adapt_dataset_partitions(&config, npartitions)
+            .unwrap();
         assert_eq!(partitions, expected_partitions);
     }
 
