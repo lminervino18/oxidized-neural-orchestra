@@ -26,8 +26,13 @@ impl ConvergenceTracker {
     /// Records the last loss for a worker and returns the max per-worker delta
     /// once all workers have reported for the current sync round.
     ///
-    /// Returns `None` if not all workers have reported yet, or on the first
-    /// complete round (no previous values to compare against).
+    /// # Args
+    /// * `worker_id` - The id of the worker whose losses are being recorded.
+    /// * `losses` - The losses to record.
+    ///
+    /// # Returns
+    /// The max delta across all workers, or `None` if not all workers have
+    /// reported yet or if this is the first complete round.
     pub fn record(&mut self, worker_id: usize, losses: &[f64]) -> Option<f64> {
         let last = *losses.last()?;
         self.pending.insert(worker_id, last);
