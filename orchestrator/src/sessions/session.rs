@@ -295,7 +295,6 @@ impl Session {
     {
         // TODO: This implementation is wrong, the model layers aren't ordered
         //       this way, the parameters are all shuffled up.
-        println!("finalize_parameter_server");
 
         debug!("all workers done, reading final params from all servers");
         let mut model_params = Vec::new();

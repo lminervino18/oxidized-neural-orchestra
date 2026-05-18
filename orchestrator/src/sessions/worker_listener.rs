@@ -59,8 +59,6 @@ where
         loop {
             tokio::select! {
                 req = req_rx.recv() => {
-                    println!("worker listener {id} recibio consulta {req:?}");
-
                     if let Some(req) = req {
                         match self.handle_request(req, &event_tx).await {
                             Ok(false) => break,
