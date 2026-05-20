@@ -13,7 +13,7 @@ pub struct MaxPooling {
 
     // Forward metadata
     real_input_dim: (usize, usize),
-    /// The input that's actually used during the forward convolution
+    /// The input that's actually used during the forward pass.
     effective_input: Array4<f32>,
     output: Array4<f32>,
 

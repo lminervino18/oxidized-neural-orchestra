@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use std::num::NonZeroUsize;
 
 use comms::floats::FloatPositive;
