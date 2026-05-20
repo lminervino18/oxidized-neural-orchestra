@@ -1,11 +1,13 @@
 use std::num::NonZeroUsize;
 
-use super::dataset_src::DatasetSrc;
 use ndarray::ArrayView2;
 use rand::Rng;
 
+use super::dataset_src::DatasetSrc;
+
 /// A container for the *raw* dataset and its meta data. The raw data is expected to be structured
 /// as rows, each with an x and it's expected output y.
+#[derive(Debug)]
 pub struct Dataset {
     src: DatasetSrc,
     rows: usize,
@@ -97,8 +99,9 @@ impl Dataset {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ndarray::aview2;
+
+    use super::*;
 
     #[test]
     fn test_dataset_inline_src_get_2rows() {

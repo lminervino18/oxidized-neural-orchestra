@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use rand::Rng;
 
+#[derive(Debug)]
 pub struct InMemSrc {
     samples: Vec<f32>,
     labels: Vec<f32>,

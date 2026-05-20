@@ -1,8 +1,11 @@
-use super::inmem_src::InMemSrc;
-use rand::Rng;
 use std::ops::Range;
 
+use rand::Rng;
+
+use super::inmem_src::InMemSrc;
+
 /// The source of a dataset.
+#[derive(Debug)]
 pub enum DatasetSrc {
     InMem(InMemSrc),
     // Stream(StreamSrc<R>),
