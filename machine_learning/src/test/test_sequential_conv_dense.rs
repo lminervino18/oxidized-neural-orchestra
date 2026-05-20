@@ -40,7 +40,7 @@ fn test_conv_dense(
         Layer::conv2d(filters, in_channels, kernel_size, stride, padding),
         Layer::four_d_to2d(filters, output_height, output_width),
         Layer::dense((filters * output_height * output_width, y_size)),
-        Layer::softmax2d(),
+        Layer::softmax(),
     ]);
     let nparams = model.size();
 
@@ -423,7 +423,7 @@ fn test_conv_dense_max_pooling_convergence() {
             filters * pooling_output_height * pooling_output_width,
             SYMBOL_LABELS_SIZE,
         )),
-        Layer::softmax2d(),
+        Layer::softmax(),
     ]);
     let nparams = model.size();
 
