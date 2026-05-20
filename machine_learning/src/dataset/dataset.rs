@@ -39,6 +39,11 @@ impl Dataset {
         }
     }
 
+    /// Returns the number of rows in the dataset.
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
     /// Shuffles the rows in the dataset using a random number generator.
     ///
     /// # Args
