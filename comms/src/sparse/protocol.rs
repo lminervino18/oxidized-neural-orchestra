@@ -8,10 +8,10 @@ type TotalLen = u64;
 /// The size in bytes of the used type for the total length.
 const TOTAL_LEN_SIZE: usize = size_of::<TotalLen>();
 
-/// The type for the index starting a gradient chunk.
-type Idx = u64;
-/// The size in bytes of the used type for the index.
-const IDX_SIZE: usize = size_of::<Idx>();
+/// The type for the offset from the previous chunk.
+type Offset = u32;
+/// The size in bytes of the used type for the offset.
+const OFFSET_SIZE: usize = size_of::<Offset>();
 
 /// The type for the length of a chunk.
 type ChunkLen = u32;
@@ -56,6 +56,7 @@ pub fn calculate_threshold<R: Rng>(residual: &[f32], r: Float01, rng: &mut R) ->
 /// * `threshold` - The minimum value the gradient's values have to reach to be sent.
 pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &[f32], threshold: f32) {
     buf.extend_from_slice(&(residual.len() as TotalLen).to_le_bytes());
+    let mut last_end = 0;
     let mut i = 0;
 
     while i < residual.len() {
@@ -66,14 +67,18 @@ pub fn grad_drop_into(buf: &mut Vec<u8>, residual: &[f32], threshold: f32) {
                 i += 1;
             }
 
+            let offset = start - last_end;
+            buf.extend_from_slice(&(offset as Offset).to_le_bytes());
+
             let chunk_len = i - start;
-            buf.extend_from_slice(&(start as Idx).to_le_bytes());
             buf.extend_from_slice(&(chunk_len as ChunkLen).to_le_bytes());
 
             for &g in &residual[start..i] {
                 let g_short = f16::from_f32(g);
                 buf.extend_from_slice(&g_short.to_le_bytes());
             }
+
+            last_end = i;
         } else {
             i += 1;
         }
@@ -95,41 +100,44 @@ pub fn grad_lift_into(grad: &mut Vec<f32>, buf: &[u8]) -> Result<(), &'static st
 
     // SAFETY: The slice has exactly `TOTAL_LEN_SIZE` bytes in size.
     let total_len = TotalLen::from_le_bytes(total_len_bytes.try_into().unwrap()) as usize;
+    let (mut grad_idx, mut buff_idx) = (0, 0);
+
     grad.fill(0.0);
     grad.resize(total_len, 0.0);
-    let mut i = 0;
 
-    while i < buf.len() {
-        let idx_bytes: [_; IDX_SIZE] = buf
-            .get(i..i + IDX_SIZE)
+    while buff_idx < buf.len() {
+        let idx_bytes: [_; OFFSET_SIZE] = buf
+            .get(buff_idx..buff_idx + OFFSET_SIZE)
             .ok_or("Missing index bytes at grad lift")?
             .try_into()
             .unwrap();
 
-        let idx = Idx::from_le_bytes(idx_bytes) as usize;
-        i += IDX_SIZE;
+        grad_idx += Offset::from_le_bytes(idx_bytes) as usize;
+        buff_idx += OFFSET_SIZE;
 
         let chunk_len_bytes: [_; CHUNK_LEN_SIZE] = buf
-            .get(i..i + CHUNK_LEN_SIZE)
+            .get(buff_idx..buff_idx + CHUNK_LEN_SIZE)
             .ok_or("Missing chunk length bytes at grad lift")?
             .try_into()
             .unwrap();
 
         let chunk_len = ChunkLen::from_le_bytes(chunk_len_bytes) as usize;
-        i += CHUNK_LEN_SIZE;
+        buff_idx += CHUNK_LEN_SIZE;
 
-        if idx > grad.len() || grad.len() - idx < chunk_len {
+        if dbg!(grad_idx) > grad.len() || grad.len() - grad_idx < chunk_len {
             return Err("Gradient chunk exceeds target vector bounds");
         }
 
-        for g in grad.iter_mut().skip(idx).take(chunk_len) {
+        for g in grad.iter_mut().skip(grad_idx).take(chunk_len) {
             let b = buf
-                .get(i..i + size_of::<f16>())
+                .get(buff_idx..buff_idx + size_of::<f16>())
                 .ok_or("Truncated float data")?;
 
             *g = f16::from_le_bytes([b[0], b[1]]).to_f32();
-            i += size_of::<f16>();
+            buff_idx += size_of::<f16>();
         }
+
+        grad_idx += chunk_len;
     }
 
     Ok(())
@@ -145,11 +153,11 @@ fn test_grad_drop() {
 
     let expected = vec![
         4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
-        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        0, 0, 0, 0, // Offset
         2, 0, 0, 0, // ChunkLen
         0, 60, // 1.0
         0, 188, // -1.0
-        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // Offset
         1, 0, 0, 0, // ChunkLen
         0, 64, // 2.0
     ];
@@ -161,11 +169,11 @@ fn test_grad_drop() {
 fn test_grad_lift() {
     let buf = vec![
         4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
-        0, 0, 0, 0, 0, 0, 0, 0, // Idx
+        0, 0, 0, 0, // Offset
         2, 0, 0, 0, // ChunkLen
         0, 60, // 1.0
         0, 188, // -1.0
-        3, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // Offset
         1, 0, 0, 0, // ChunkLen
         0, 64, // 2.0
     ];
@@ -197,7 +205,7 @@ fn test_drop_and_lift_consistency() {
 fn test_passed_smaller_gradient_for_lift() {
     let buf = vec![
         3, 0, 0, 0, 0, 0, 0, 0, // TotalLen
-        1, 0, 0, 0, 0, 0, 0, 0, // Idx
+        1, 0, 0, 0, // Offset
         2, 0, 0, 0, // ChunkLen
         0, 60, // 1.0
         0, 188, // -1.0
