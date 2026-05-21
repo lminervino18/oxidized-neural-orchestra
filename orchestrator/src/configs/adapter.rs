@@ -11,7 +11,10 @@ use comms::specs::{
     worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
 };
 
-use super::{ModelConfig, SerializerConfig, TrainingConfig, partition::Partition};
+use super::{
+    ModelConfig, Partition, SerializerConfig, ServerAdapt, TrainingConfig, WorkerAdapt,
+    WorkerPostAction,
+};
 use crate::{
     configs::{
         ActFnConfig, AlgorithmConfig, DataSrc, DatasetConfig, LayerConfig, LossFnConfig,
@@ -44,22 +47,22 @@ impl Adapter {
     ///
     /// # Errors
     /// An `OrchErr` if the configs fail to be adapted.
-    #[allow(clippy::type_complexity)]
     pub fn adapt_configs<'a>(
         &self,
         model: ModelConfig,
         training: &'a TrainingConfig,
-    ) -> Result<(
-        Vec<(String, WorkerSpec, Partition<'a>)>,
-        Vec<(String, ServerSpec)>,
-    )> {
+    ) -> Result<(Vec<WorkerAdapt<'a>>, Vec<ServerAdapt>)> {
         let partitions =
             self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
 
-        let (workers, servers) = match &training.algorithm {
-            AlgorithmConfig::ParameterServer { .. } => {
-                let (servers, server_addrs, server_sizes, server_ordering) =
-                    self.adapt_servers(&model, training)?;
+        let (workers, servers) = match training.algorithm {
+            AlgorithmConfig::ParameterServer {
+                ref server_addrs,
+                synchronizer,
+                store,
+            } => {
+                let (servers, server_sizes, server_ordering) =
+                    self.adapt_servers(&model, training, server_addrs, synchronizer, store)?;
 
                 let workers = self.adapt_parameter_server_workers(
                     &model,
@@ -67,21 +70,32 @@ impl Adapter {
                     server_addrs,
                     server_sizes,
                     server_ordering,
+                    partitions,
                 )?;
 
                 (workers, servers)
             }
             AlgorithmConfig::AllReduce => {
-                let workers = self.adapt_all_reduce_workers(&model, training)?;
+                let workers = self.adapt_all_reduce_workers(&model, training, partitions)?;
+                (workers, Vec::new())
+            }
+            AlgorithmConfig::StrategySwitch {
+                ref server_addrs,
+                synchronizer,
+                store,
+            } => {
+                let workers = self.adapt_strategy_switch_workers(
+                    &model,
+                    training,
+                    server_addrs.clone(),
+                    synchronizer,
+                    store,
+                    partitions,
+                )?;
+
                 (workers, Vec::new())
             }
         };
-
-        let workers = workers
-            .into_iter()
-            .zip(partitions)
-            .map(|((addr, spec), partition)| (addr, spec, partition))
-            .collect();
 
         Ok((workers, servers))
     }
@@ -94,33 +108,36 @@ impl Adapter {
     /// * `server_addrs` - Already-resolved server socket addresses.
     /// * `server_sizes` - The amounts of parameters per server.
     /// * `server_ordering` - The ordering of the layer owners.
+    /// * `partitions` - The dataset partitions.
     ///
     /// # Returns
     /// Worker addresses and specifications.
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
-    fn adapt_parameter_server_workers(
+    fn adapt_parameter_server_workers<'a>(
         &self,
         model: &ModelConfig,
-        training: &TrainingConfig,
-        server_addrs: Vec<String>,
+        training: &'a TrainingConfig,
+        server_addrs: &[String],
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-    ) -> Result<Vec<(String, WorkerSpec)>> {
+        partitions: Vec<Partition<'a>>,
+    ) -> Result<Vec<WorkerAdapt<'a>>> {
         let trainer_spec = self.adapt_trainer(model, training);
         let serializer_spec = self.adapt_serializer(training);
         let algorithm_spec = AlgorithmSpec::ParameterServer {
-            server_addrs,
+            server_addrs: server_addrs.to_vec(),
             server_sizes,
             server_ordering,
         };
 
-        let worker_specs = training
+        let workers = training
             .worker_addrs
             .iter()
+            .zip(partitions)
             .enumerate()
-            .map(|(i, addr)| {
+            .map(|(i, (addr, partition))| {
                 if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
                     let text = format!("failed to resolve {i}'th worker's network address: {addr}");
                     return Err(OrchErr::InvalidConfig(text));
@@ -134,11 +151,18 @@ impl Adapter {
                     seed: training.seed,
                 };
 
-                Ok((addr.clone(), worker_spec))
+                let worker_adapt = WorkerAdapt {
+                    addr: addr.clone(),
+                    spec: worker_spec,
+                    partition,
+                    post_action: None,
+                };
+
+                Ok(worker_adapt)
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(worker_specs)
+        Ok(workers)
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -146,17 +170,19 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's configuration.
     /// * `training` - The training's configuration.
+    /// * `partitions` - The dataset partitions.
     ///
     /// # Returns
     /// Worker addresses and specifications.
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
-    fn adapt_all_reduce_workers(
+    fn adapt_all_reduce_workers<'a>(
         &self,
         model: &ModelConfig,
         training: &TrainingConfig,
-    ) -> Result<Vec<(String, WorkerSpec)>> {
+        partitions: Vec<Partition<'a>>,
+    ) -> Result<Vec<WorkerAdapt<'a>>> {
         let trainer_spec = self.adapt_trainer(model, training);
         let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
         let algorithm_spec = AlgorithmSpec::AllReduce {
@@ -168,11 +194,12 @@ impl Adapter {
         };
         let serializer_spec = self.adapt_serializer(training);
 
-        let worker_specs = training
+        let workers = training
             .worker_addrs
             .iter()
+            .zip(partitions)
             .enumerate()
-            .map(|(i, addr)| {
+            .map(|(i, (addr, partition))| {
                 if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
                     let text = format!("failed to resolve {i}'th worker's network address: {addr}");
                     return Err(OrchErr::InvalidConfig(text));
@@ -186,11 +213,132 @@ impl Adapter {
                     seed: training.seed,
                 };
 
-                Ok((addr.clone(), worker_spec))
+                let worker_adapt = WorkerAdapt {
+                    addr: addr.clone(),
+                    spec: worker_spec,
+                    partition,
+                    post_action: None,
+                };
+
+                Ok(worker_adapt)
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(worker_specs)
+        Ok(workers)
+    }
+
+    /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
+    ///
+    /// # Args
+    /// * `model` - The model's configuration.
+    /// * `training` - The training's configuration.
+    /// * `server_addrs` - Already-resolved server socket addresses.
+    /// * `partitions` - The dataset partitions.
+    ///
+    /// # Returns
+    /// Worker addresses and specifications.
+    ///
+    /// # Errors
+    /// Returns an `OrchErr` if any address cannot be resolved.
+    fn adapt_strategy_switch_workers<'a>(
+        &self,
+        model: &ModelConfig,
+        training: &TrainingConfig,
+        server_addrs: Vec<String>,
+        synchronizer: SynchronizerConfig,
+        store: StoreConfig,
+        partitions: Vec<Partition<'a>>,
+    ) -> Result<Vec<WorkerAdapt<'a>>> {
+        let serializer_spec = self.adapt_serializer(&training);
+        let (servers, server_sizes, server_ordering) =
+            self.adapt_servers(model, training, &server_addrs, synchronizer, store)?;
+
+        let nworkers = training.worker_addrs.len();
+        let trainer_spec = self.adapt_trainer(model, training);
+        let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
+        let algorithm_spec = AlgorithmSpec::AllReduce {
+            worker_addrs: training.worker_addrs.clone(),
+            param_gen: ParamGenSpec::Chained {
+                specs: param_gen_specs,
+            },
+            amount_of_layers: model.layers.len(),
+        };
+
+        let worker_workers = training
+            .worker_addrs
+            .iter()
+            .zip(&partitions[..nworkers])
+            .enumerate()
+            .map(|(i, (addr, partition))| {
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th worker's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
+
+                let worker_spec = WorkerSpec {
+                    worker_id: i,
+                    trainer: trainer_spec.clone(),
+                    algorithm: algorithm_spec.clone(),
+                    serializer: serializer_spec,
+                    seed: training.seed,
+                };
+
+                let post_action = WorkerPostAction::Switch {
+                    server_addrs: server_addrs.clone(),
+                    server_sizes: server_sizes.clone(),
+                    server_ordering: server_ordering.clone(),
+                };
+
+                let worker_adapt = WorkerAdapt {
+                    addr: addr.clone(),
+                    spec: worker_spec,
+                    partition: partition.clone(),
+                    post_action: Some(post_action),
+                };
+
+                Ok(worker_adapt)
+            });
+
+        let worker_servers = servers
+            .into_iter()
+            .zip(&partitions[nworkers..])
+            .enumerate()
+            .map(|(i, (server_adapt, partition))| {
+                let ServerAdapt {
+                    addr,
+                    spec: server_spec,
+                } = server_adapt;
+
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th worker's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
+
+                let worker_spec = WorkerSpec {
+                    worker_id: i,
+                    trainer: trainer_spec.clone(),
+                    algorithm: algorithm_spec.clone(),
+                    serializer: serializer_spec,
+                    seed: training.seed,
+                };
+
+                let post_action = WorkerPostAction::Upgrade { spec: server_spec };
+
+                let worker_adapt = WorkerAdapt {
+                    addr: addr.clone(),
+                    spec: worker_spec,
+                    partition: partition.clone(),
+                    post_action: Some(post_action),
+                };
+
+                Ok(worker_adapt)
+            });
+
+        let workers = worker_workers
+            .chain(worker_servers)
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(workers)
     }
 
     /// Adapts the training's configurations into a `SerializerSpec`.
@@ -212,6 +360,9 @@ impl Adapter {
     /// # Args
     /// * `model` - The model's architecture and initialization configuration.
     /// * `training` - The training's configuration.
+    /// * `server_addrs` - The server' network addresses.
+    /// * `synchronizer` - The synchronizer's configuration.
+    /// * `store` - The store's configuration.
     ///
     /// # Returns
     /// The servers' specifications, resolved addresses, sizes and layers' ordering.
@@ -223,23 +374,55 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         training: &TrainingConfig,
-    ) -> Result<(
-        Vec<(String, ServerSpec)>,
-        Vec<String>,
-        Vec<usize>,
-        Vec<usize>,
-    )> {
-        let AlgorithmConfig::ParameterServer {
-            server_addrs,
-            synchronizer,
-            store,
-            ..
-        } = &training.algorithm
-        else {
-            let text = "all-reduce does not use parameter servers".into();
-            return Err(OrchErr::Unsupported(text));
-        };
+        server_addrs: &[String],
+        synchronizer: SynchronizerConfig,
+        store: StoreConfig,
+    ) -> Result<(Vec<ServerAdapt>, Vec<usize>, Vec<usize>)> {
+        let (param_gens, server_sizes, server_ordering) =
+            self.adapt_param_gens(model, training, server_addrs.len())?;
 
+        let nworkers = training.worker_addrs.len();
+        let (servers, server_sizes): (Vec<_>, Vec<_>) = server_addrs
+            .iter()
+            .zip(param_gens)
+            .zip(server_sizes)
+            .enumerate()
+            .map(|(i, ((addr, param_gen_spec), size))| {
+                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
+                    let text = format!("failed to resolve {i}'th server's network address: {addr}");
+                    return Err(OrchErr::InvalidConfig(text));
+                }
+
+                let server_spec = ServerSpec {
+                    id: i,
+                    nworkers: training.worker_addrs.len(),
+                    param_gen: param_gen_spec,
+                    optimizer: self.adapt_optimizer(training.optimizer),
+                    synchronizer: self.adapt_synchronizer(&synchronizer, nworkers),
+                    store: self.adapt_store(&store),
+                    seed: training.seed,
+                };
+
+                let adapt = ServerAdapt {
+                    addr: addr.clone(),
+                    spec: server_spec,
+                };
+
+                Ok((adapt, size))
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .unzip();
+
+        Ok((servers, server_sizes, server_ordering))
+    }
+
+    fn adapt_param_gens(
+        &self,
+        model: &ModelConfig,
+        training: &TrainingConfig,
+        nservers: usize,
+    ) -> Result<(Vec<ParamGenSpec>, Vec<usize>, Vec<usize>)> {
         let (_, param_gens) = self.adapt_layers(model, training.dataset.x_size);
         let nlayers = param_gens.len();
 
@@ -252,7 +435,7 @@ impl Adapter {
             })
             .collect();
 
-        let param_gen_bins = balanced_partitions(items, server_addrs.len());
+        let param_gen_bins = balanced_partitions(items, nservers);
         let mut server_ordering = vec![0; nlayers];
 
         for (server_i, bin) in param_gen_bins.iter().enumerate() {
@@ -274,35 +457,8 @@ impl Adapter {
             (chained, sizes.into_iter().sum::<usize>())
         });
 
-        let nworkers = training.worker_addrs.len();
-        let (servers, server_sizes): (Vec<_>, Vec<_>) = server_addrs
-            .iter()
-            .zip(chained_param_gens)
-            .enumerate()
-            .map(|(i, (addr, (param_gen_spec, size)))| {
-                if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
-                    let text = format!("failed to resolve {i}'th server's network address: {addr}");
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-
-                let server_spec = ServerSpec {
-                    id: i,
-                    nworkers: training.worker_addrs.len(),
-                    param_gen: param_gen_spec,
-                    optimizer: self.adapt_optimizer(training.optimizer),
-                    synchronizer: self.adapt_synchronizer(synchronizer, nworkers),
-                    store: self.adapt_store(store),
-                    seed: training.seed,
-                };
-
-                Ok(((addr.clone(), server_spec), size))
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .unzip();
-
-        let server_addrs = servers.iter().map(|(addr, _)| addr.clone()).collect();
-        Ok((servers, server_addrs, server_sizes, server_ordering))
+        let (param_gen_specs, server_sizes) = chained_param_gens.unzip();
+        Ok((param_gen_specs, server_sizes, server_ordering))
     }
 
     /// Adapts a `SynchronizerConfig` into a `SynchronizerSpec`.

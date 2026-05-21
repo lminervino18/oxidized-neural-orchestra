@@ -3,7 +3,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     StopReason, TrainingEvent,
-    configs::EarlyStoppingConfig,
+    configs::{EarlyStoppingConfig, WorkerPostAction},
     sessions::{ConvergenceTracker, WorkerRequest},
 };
 
@@ -14,6 +14,7 @@ pub struct EventListener<'a> {
     early_stopping: Option<EarlyStoppingConfig>,
     event_rx: &'a mut Receiver<TrainingEvent>,
     event_tx: Sender<TrainingEvent>,
+    worker_post_actions: Option<Vec<WorkerPostAction>>,
 
     // Training state
     workers_left: usize,
@@ -30,6 +31,7 @@ impl<'a> EventListener<'a> {
     /// * `early_stopping` - The early stopping mechanism.
     /// * `event_rx` - An event producer.
     /// * `event_tx` - An event consumer.
+    /// * `worker_post_actions` - The actions to take per worker for strategy switch.
     ///
     /// # Returns
     /// A new `EventListener` instance.
@@ -39,6 +41,7 @@ impl<'a> EventListener<'a> {
         early_stopping: Option<EarlyStoppingConfig>,
         event_rx: &'a mut Receiver<TrainingEvent>,
         event_tx: Sender<TrainingEvent>,
+        worker_post_actions: Option<Vec<WorkerPostAction>>,
     ) -> Self {
         let n_workers = req_txs.len();
 
@@ -48,6 +51,7 @@ impl<'a> EventListener<'a> {
             early_stopping,
             event_rx,
             event_tx,
+            worker_post_actions,
             workers_left: n_workers,
             tracker: ConvergenceTracker::new(n_workers),
             stop_reason: None,
@@ -108,6 +112,8 @@ impl<'a> EventListener<'a> {
                 Some(self.workers_left > 0)
             }
             TrainingEvent::PublishedLosses { worker_id, losses } => {
+                // TODO: Chequear aca si se cumple la condicion para hacer la transicion de strategy switch
+
                 if self.stop_reason.is_none()
                     && let Some(ref cfg) = self.early_stopping
                     && let Some((prev, curr)) = self.tracker.record(worker_id, &losses)

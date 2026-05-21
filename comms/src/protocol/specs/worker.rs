@@ -28,7 +28,7 @@ pub enum SerializerSpec {
 }
 
 /// The specification for the `Worker`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerSpec {
     pub worker_id: usize,
     pub trainer: TrainerSpec,

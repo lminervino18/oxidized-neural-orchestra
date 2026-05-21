@@ -92,12 +92,7 @@ impl Validator {
                     return Err(OrchErr::InvalidConfig(text));
                 }
             }
-            AlgorithmConfig::AllReduce => {
-                if training.worker_addrs.len() < 2 {
-                    let text = "all-reduce requires at least two worker addresses".into();
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-            }
+            _ => {}
         }
 
         let DatasetConfig {

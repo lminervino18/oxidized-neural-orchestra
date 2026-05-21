@@ -22,7 +22,10 @@ use tokio::{
 use super::TrainedModel;
 use crate::{
     OrchErr, Result, StopReason, TrainingEvent,
-    configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
+    configs::{
+        AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition, ServerAdapt, WorkerAdapt,
+        WorkerPostAction,
+    },
     sessions::{EventListener, WorkerListener, WorkerRequest},
 };
 
@@ -50,6 +53,7 @@ pub struct Session {
     runtime: Runtime,
     worker_handles: Vec<WorkerHandle<NetRtp>>,
     server_handles: Vec<ParamServerHandle<NetRtp>>,
+    worker_post_actions: Option<Vec<WorkerPostAction>>,
     model: ModelConfig,
     algorithm: AlgorithmConfig,
     input_size: usize,
@@ -73,8 +77,8 @@ impl Session {
     /// # Errors
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
     pub fn new<F>(
-        workers: Vec<(String, WorkerSpec, Partition<'_>)>,
-        servers: Vec<(String, ServerSpec)>,
+        workers: Vec<WorkerAdapt<'_>>,
+        servers: Vec<ServerAdapt>,
         connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
         model: ModelConfig,
         algorithm: AlgorithmConfig,
@@ -89,16 +93,33 @@ impl Session {
 
         let server_handles = match algorithm {
             AlgorithmConfig::ParameterServer { .. } => {
+                let servers_create = servers
+                    .into_iter()
+                    .map(|ServerAdapt { addr, spec }| (addr, spec));
+
                 info!("connecting to {nservers} servers");
-                let server_handles = runtime.block_on(Self::create_servers(servers, &connector))?;
+                let server_handles =
+                    runtime.block_on(Self::create_servers(servers_create, &connector))?;
                 info!("successfully created servers");
                 server_handles
             }
             _ => Vec::new(),
         };
 
+        let (workers_create, worker_post_actions): (Vec<_>, Vec<_>) = workers
+            .into_iter()
+            .map(
+                |WorkerAdapt {
+                     addr,
+                     spec,
+                     partition,
+                     post_action,
+                 }| ((addr, spec, partition), post_action),
+            )
+            .unzip();
+
         info!("connecting to {nworkers} workers");
-        let worker_handles = runtime.block_on(Self::create_workers(workers, &connector))?;
+        let worker_handles = runtime.block_on(Self::create_workers(workers_create, &connector))?;
         info!("successfully created workers");
 
         Ok(Self {
@@ -109,6 +130,7 @@ impl Session {
             algorithm,
             input_size,
             early_stopping,
+            worker_post_actions: worker_post_actions.into_iter().collect(),
         })
     }
 
@@ -134,6 +156,7 @@ impl Session {
             algorithm,
             input_size,
             early_stopping,
+            worker_post_actions,
         } = self;
 
         let run_loop_fut = async move {
@@ -146,6 +169,7 @@ impl Session {
                 cancel_rx,
                 early_stopping,
                 &user_event_tx,
+                worker_post_actions,
             )
             .await
             else {
@@ -191,6 +215,7 @@ impl Session {
     /// * `cancel_rx` - The user's halt event receiver.
     /// * `early_stopping` - The early stopping mechanism configuration.
     /// * `user_event_tx` - The user event producer.
+    /// * `worker_post_actions` - The actions to take per worker for strategy switch.
     ///
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
@@ -201,6 +226,7 @@ impl Session {
         cancel_rx: Receiver<()>,
         early_stopping: Option<EarlyStoppingConfig>,
         user_event_tx: &Sender<TrainingEvent>,
+        worker_post_actions: Option<Vec<WorkerPostAction>>,
     ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>)
     where
         T: TransportLayer + 'static,
@@ -213,6 +239,7 @@ impl Session {
             early_stopping,
             event_rx,
             user_event_tx.clone(),
+            worker_post_actions,
         );
 
         (event_listener.listen().await, req_txs)
@@ -240,7 +267,7 @@ impl Session {
         T: TransportLayer + 'static,
     {
         match algorithm {
-            AlgorithmConfig::ParameterServer { .. } => {
+            AlgorithmConfig::ParameterServer { .. } | AlgorithmConfig::StrategySwitch { .. } => {
                 Self::finalize_parameter_server(server_handles, user_event_tx).await
             }
             AlgorithmConfig::AllReduce => {
@@ -381,14 +408,15 @@ impl Session {
     ///
     /// # Returns
     /// The worker handles or an orch error if occurred.
-    async fn create_servers<F>(
-        servers: Vec<(String, ServerSpec)>,
+    async fn create_servers<I, F>(
+        servers: I,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<ParamServerHandle<NetRtp>>>
     where
+        I: IntoIterator<Item = (String, ServerSpec)>,
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
-        let mut handles = Vec::with_capacity(servers.len());
+        let mut handles = Vec::new();
 
         for (i, (addr, spec)) in servers.into_iter().enumerate() {
             let stream =
@@ -421,12 +449,13 @@ impl Session {
     ///
     /// # Returns
     /// The worker handles or an orch error if occurred.
-    async fn create_workers<'a, F>(
-        workers: Vec<(String, WorkerSpec, Partition<'a>)>,
+    async fn create_workers<'a, F, I>(
+        workers: I,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<WorkerHandle<NetRtp>>>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+        I: IntoIterator<Item = (String, WorkerSpec, Partition<'a>)>,
     {
         const CHUNK_SIZE: usize = 8192;
 
