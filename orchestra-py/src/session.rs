@@ -228,7 +228,7 @@ impl Session {
     /// # Errors
     /// Raises a `RuntimeError` if the session was already consumed, if training
     /// fails, or if the background thread panics.
-    pub fn wait(mut slf: pyo3::PyRefMut<'_, Self>, py: Python<'_>) -> PyResult<TrainedModel> {
+    pub fn wait(mut slf: PyRefMut<'_, Self>, py: Python<'_>) -> PyResult<TrainedModel> {
         let (session, cancel_rx) = slf
             .inner
             .take()
