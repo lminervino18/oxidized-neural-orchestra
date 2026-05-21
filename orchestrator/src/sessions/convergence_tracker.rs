@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, mem};
 
 /// Tracks wheather the training is converging or not.
 pub struct ConvergenceTracker {
@@ -45,9 +45,9 @@ impl ConvergenceTracker {
             self.pending
                 .iter()
                 .filter_map(|(id, &curr)| self.prev.get(id).map(|&prev| (prev - curr).abs()))
-                .fold(0.0f64, f64::max)
+                .fold(0.0, f64::max)
         } else {
-            std::mem::swap(&mut self.prev, &mut self.pending);
+            mem::swap(&mut self.prev, &mut self.pending);
             self.pending.clear();
             return None;
         };
