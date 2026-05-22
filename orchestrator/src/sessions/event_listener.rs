@@ -116,10 +116,10 @@ impl<'a> EventListener<'a> {
 
                 if self.stop_reason.is_none()
                     && let Some(ref cfg) = self.early_stopping
-                    && let Some((prev, curr)) = self.tracker.record(worker_id, &losses)
-                    && (prev - curr).abs() < *cfg.tolerance as f64
+                    && let Some(max_delta) = self.tracker.record(worker_id, &losses)
+                    && max_delta < *cfg.tolerance as f64
                 {
-                    info!("early stopping triggered (prev={prev:.6}, curr={curr:.6})");
+                    info!("early stopping triggered (max_delta={max_delta:.6})");
                     self.stop_reason = Some(StopReason::EarlyStopping);
                     self.broadcast_request(WorkerRequest::Stop).await;
                 }
