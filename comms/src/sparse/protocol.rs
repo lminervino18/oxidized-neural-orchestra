@@ -124,7 +124,7 @@ pub fn grad_lift_into(grad: &mut Vec<f32>, buf: &[u8]) -> Result<(), &'static st
         let chunk_len = ChunkLen::from_le_bytes(chunk_len_bytes) as usize;
         buff_idx += CHUNK_LEN_SIZE;
 
-        if dbg!(grad_idx) > grad.len() || grad.len() - grad_idx < chunk_len {
+        if grad_idx > grad.len() || grad.len() - grad_idx < chunk_len {
             return Err("Gradient chunk exceeds target vector bounds");
         }
 
@@ -143,77 +143,82 @@ pub fn grad_lift_into(grad: &mut Vec<f32>, buf: &[u8]) -> Result<(), &'static st
     Ok(())
 }
 
-#[test]
-fn test_grad_drop() {
-    let grad = vec![1.0, -1.0, 0.0, 2.0];
-    let mut buf = Vec::new();
-    let threshold = 1.0;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    grad_drop_into(&mut buf, &grad, threshold);
+    #[test]
+    fn test_grad_drop() {
+        let grad = vec![1.0, -1.0, 0.0, 2.0];
+        let mut buf = Vec::new();
+        let threshold = 1.0;
 
-    let expected = vec![
-        4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
-        0, 0, 0, 0, // Offset
-        2, 0, 0, 0, // ChunkLen
-        0, 60, // 1.0
-        0, 188, // -1.0
-        1, 0, 0, 0, // Offset
-        1, 0, 0, 0, // ChunkLen
-        0, 64, // 2.0
-    ];
+        grad_drop_into(&mut buf, &grad, threshold);
 
-    assert_eq!(buf, expected);
-}
+        let expected = vec![
+            4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
+            0, 0, 0, 0, // Offset
+            2, 0, 0, 0, // ChunkLen
+            0, 60, // 1.0
+            0, 188, // -1.0
+            1, 0, 0, 0, // Offset
+            1, 0, 0, 0, // ChunkLen
+            0, 64, // 2.0
+        ];
 
-#[test]
-fn test_grad_lift() {
-    let buf = vec![
-        4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
-        0, 0, 0, 0, // Offset
-        2, 0, 0, 0, // ChunkLen
-        0, 60, // 1.0
-        0, 188, // -1.0
-        1, 0, 0, 0, // Offset
-        1, 0, 0, 0, // ChunkLen
-        0, 64, // 2.0
-    ];
+        assert_eq!(buf, expected);
+    }
 
-    let expected = vec![1.0, -1.0, 0.0, 2.0];
-    let mut grad = vec![0.0; expected.len()];
-    grad_lift_into(&mut grad, &buf).unwrap();
+    #[test]
+    fn test_grad_lift() {
+        let buf = vec![
+            4, 0, 0, 0, 0, 0, 0, 0, // TotalLen
+            0, 0, 0, 0, // Offset
+            2, 0, 0, 0, // ChunkLen
+            0, 60, // 1.0
+            0, 188, // -1.0
+            1, 0, 0, 0, // Offset
+            1, 0, 0, 0, // ChunkLen
+            0, 64, // 2.0
+        ];
 
-    assert_eq!(grad, expected);
-}
+        let expected = vec![1.0, -1.0, 0.0, 2.0];
+        let mut grad = vec![0.0; expected.len()];
+        grad_lift_into(&mut grad, &buf).unwrap();
 
-#[test]
-fn test_drop_and_lift_consistency() {
-    let residual = vec![1.0, -1.0, 0.0, 2.0];
-    let expected = residual.clone();
+        assert_eq!(grad, expected);
+    }
 
-    let mut buf = Vec::new();
-    let threshold = 1.0;
+    #[test]
+    fn test_drop_and_lift_consistency() {
+        let residual = vec![1.0, -1.0, 0.0, 2.0];
+        let expected = residual.clone();
 
-    grad_drop_into(&mut buf, &residual, threshold);
+        let mut buf = Vec::new();
+        let threshold = 1.0;
 
-    let mut grad = vec![0.0; residual.len()];
-    grad_lift_into(&mut grad, &buf).unwrap();
+        grad_drop_into(&mut buf, &residual, threshold);
 
-    assert_eq!(grad, expected);
-}
+        let mut grad = vec![0.0; residual.len()];
+        grad_lift_into(&mut grad, &buf).unwrap();
 
-#[test]
-fn test_passed_smaller_gradient_for_lift() {
-    let buf = vec![
-        3, 0, 0, 0, 0, 0, 0, 0, // TotalLen
-        1, 0, 0, 0, // Offset
-        2, 0, 0, 0, // ChunkLen
-        0, 60, // 1.0
-        0, 188, // -1.0
-    ];
+        assert_eq!(grad, expected);
+    }
 
-    let expected = vec![0.0, 1.0, -1.0];
-    let mut grad = Vec::new();
-    grad_lift_into(&mut grad, &buf).unwrap();
+    #[test]
+    fn test_passed_smaller_gradient_for_lift() {
+        let buf = vec![
+            3, 0, 0, 0, 0, 0, 0, 0, // TotalLen
+            1, 0, 0, 0, // Offset
+            2, 0, 0, 0, // ChunkLen
+            0, 60, // 1.0
+            0, 188, // -1.0
+        ];
 
-    assert_eq!(grad, expected);
+        let expected = vec![0.0, 1.0, -1.0];
+        let mut grad = Vec::new();
+        grad_lift_into(&mut grad, &buf).unwrap();
+
+        assert_eq!(grad, expected);
+    }
 }
