@@ -38,7 +38,6 @@ impl<'a> EventListener<'a> {
     ///
     /// # Returns
     /// A new `EventListener` instance.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cancel_rx: Receiver<()>,
         req_txs: &'a mut [Sender<WorkerRequest>],
@@ -112,6 +111,7 @@ impl<'a> EventListener<'a> {
                 let _ = self.event_tx.send(event).await;
                 Some(true)
             }
+            #[allow(unused_variables)]
             TrainingEvent::Upgrade { server_handle } => {
                 // TODO: Ver como reincorporar este handle a la session, capaz lo que conviene
                 //       es que los handles de server los tenga este listener y despues se los
@@ -190,9 +190,10 @@ impl<'a> EventListener<'a> {
                     server_sizes,
                     server_ordering,
                 },
-                WorkerPostAction::Upgrade { spec, ranges } => {
-                    WorkerRequest::Upgrade { spec, ranges }
-                }
+                WorkerPostAction::Upgrade { spec, ranges } => WorkerRequest::Upgrade {
+                    spec: Box::new(spec),
+                    ranges,
+                },
             };
 
             let _ = tx.send(req).await;

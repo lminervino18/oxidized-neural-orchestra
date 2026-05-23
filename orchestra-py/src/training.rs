@@ -71,7 +71,6 @@ pub struct PyTrainingConfig {
     seed = None,
     early_stopping_tolerance = None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub fn parameter_server(
     worker_addrs: Vec<String>,
     server_addrs: Vec<String>,
@@ -242,7 +241,6 @@ pub fn parameter_server(
     seed = None,
     early_stopping_tolerance = None,
 ))]
-#[allow(clippy::too_many_arguments)]
 pub fn all_reduce(
     worker_addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,

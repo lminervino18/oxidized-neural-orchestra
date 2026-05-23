@@ -4,11 +4,11 @@ use rand::Rng;
 
 use super::{TrainResult, Trainer};
 use crate::{
-    Result,
-    arch::{Sequential, loss::LossFn},
+    arch::{loss::LossFn, Sequential},
     datasets::{DataSrc, Dataset},
     optimization::{GradientDescent, Optimizer},
     param_manager::ParamManager,
+    Result,
 };
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,
@@ -54,7 +54,6 @@ where
     ///
     /// # Returns
     /// A new `BackpropTrainer` instance.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         model: Sequential,
         optimizers: Vec<O>,

@@ -51,6 +51,6 @@ impl ConvergenceTracker {
     /// # Returns
     /// A convergence flag, either `true` if the training converged or `false` otherwise.
     pub fn converged(&self) -> bool {
-        *self.winsize + 1 == self.count
+        self.count == *self.winsize
     }
 }

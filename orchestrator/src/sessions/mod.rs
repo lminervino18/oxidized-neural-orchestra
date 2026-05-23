@@ -33,7 +33,7 @@ pub enum WorkerRequest {
         server_ordering: Vec<usize>,
     },
     Upgrade {
-        spec: ServerSpec,
+        spec: Box<ServerSpec>,
         ranges: Vec<(usize, usize)>,
     },
     Stop,
@@ -56,7 +56,7 @@ pub enum TrainingEvent {
         worker_id: usize,
     },
     Upgrade {
-        server_handle: ParamServerHandle<NetRtp>,
+        server_handle: Box<ParamServerHandle<NetRtp>>,
     },
     Error(OrchErr),
 }

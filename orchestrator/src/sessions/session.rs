@@ -172,7 +172,6 @@ impl Session {
     ///
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
-    #[allow(clippy::too_many_arguments)]
     async fn start_training(
         worker_handles: Vec<WorkerHandle<NetRtp>>,
         event_rx: &mut Receiver<TrainingEvent>,
@@ -500,7 +499,6 @@ impl Session {
     ///
     /// # Returns
     /// An orch error if occurred.
-    #[allow(clippy::too_many_arguments)]
     async fn send_local_partition<T>(
         worker_handle: &mut WorkerHandle<T>,
         samples_path: &Path,

@@ -1,4 +1,4 @@
-use comms::{NetRtp, WorkerEvent, WorkerHandle, specs::server::ServerSpec};
+use comms::{NetRtp, ParamServerHandle, WorkerEvent, WorkerHandle, specs::server::ServerSpec};
 use log::{debug, error, info, warn};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -63,25 +63,28 @@ impl WorkerListener {
         loop {
             tokio::select! {
                 req = req_rx.recv() => {
-                    if let Some(req) = req {
-                        match self.handle_request(req, &event_tx).await {
-                            Ok(ReqResolution::Continue) => continue,
-                            Ok(ReqResolution::Halt) => {},
-                            Ok(ReqResolution::Upgrade { spec, ranges }) => {
-                                let event = match self.worker_handle.upgrade(spec, ranges).await {
-                                    Ok(server_handle) => TrainingEvent::Upgrade { server_handle },
-                                    Err(e) => {
-                                        let err = OrchErr::WorkerError { id, details: e.to_string() };
-                                        TrainingEvent::Error(err)
-                                    }
-                                };
+                    let Some(req) = req else {
+                        continue;
+                    };
 
-                                let _ = event_tx.send(event).await;
-                            },
-                            Err(e) => { let _ = event_tx.send(TrainingEvent::Error(e)).await; }
+                    match self.handle_request(req, &event_tx).await {
+                        Ok(ReqResolution::Continue) => {},
+                        Ok(ReqResolution::Halt) => break,
+                        Ok(ReqResolution::Upgrade { spec, ranges }) => {
+                            let event = match self.handle_upgrade(spec, ranges).await {
+                                Ok(server_handle) => TrainingEvent::Upgrade {
+                                    server_handle: Box::new(server_handle)
+                                },
+                                Err(e) => TrainingEvent::Error(e),
+                            };
+
+                            let _ = event_tx.send(event).await;
+                            break
+                        },
+                        Err(e) => {
+                            let _ = event_tx.send(TrainingEvent::Error(e)).await;
+                            break;
                         }
-
-                        break;
                     }
                 },
                 event = self.worker_handle.recv_event() => match event {
@@ -181,7 +184,10 @@ impl WorkerListener {
 
                 ReqResolution::Continue
             }
-            WorkerRequest::Upgrade { spec, ranges } => ReqResolution::Upgrade { spec, ranges },
+            WorkerRequest::Upgrade { spec, ranges } => ReqResolution::Upgrade {
+                spec: *spec,
+                ranges,
+            },
         };
 
         Ok(should_continue)
@@ -222,5 +228,27 @@ impl WorkerListener {
                 Err(OrchErr::WorkerError { id, details })
             }
         }
+    }
+
+    /// Sends an upgrade message to the worker.
+    ///
+    /// # Args
+    /// * `spec` - The specification for the server instanciation.
+    /// * `ranges` - The requested parameter ranges for this server.
+    ///
+    /// # Returns
+    /// The `ParamServerHandle` to communicate with the server or an orch err if occurred.
+    async fn handle_upgrade(
+        self,
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    ) -> Result<ParamServerHandle<NetRtp>> {
+        self.worker_handle
+            .upgrade(spec, ranges)
+            .await
+            .map_err(|e| OrchErr::WorkerError {
+                id: self.id,
+                details: e.to_string(),
+            })
     }
 }

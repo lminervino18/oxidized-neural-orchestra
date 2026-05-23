@@ -1,3 +1,16 @@
 [workspace]
-members = ["comms", "parameter_server", "worker", "machine_learning", "orchestrator", "orchestui", "orchestra-py", "node"]
+members = [
+  "comms",
+  "parameter_server",
+  "worker",
+  "machine_learning",
+  "orchestrator",
+  "orchestui",
+  "orchestra-py",
+  "node",
+]
 resolver = "2"
+
+[workspace.lints.clippy]
+type_complexity = "allow"
+too_many_arguments = "allow"

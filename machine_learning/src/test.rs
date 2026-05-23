@@ -347,7 +347,6 @@ fn test_machine_learning04_xor4_gate_convergence() {
     // println!("loss: {loss}");
 }
 
-#[allow(clippy::too_many_arguments)]
 fn test_conv_dense(
     filters: usize,
     in_channels: usize,

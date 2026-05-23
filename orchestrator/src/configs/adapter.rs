@@ -180,7 +180,7 @@ impl Adapter {
         let winsize = GreaterThanOneUsize::new(5).unwrap();
         let tracker = SwitchTracker::new(winsize, 0.01);
 
-        let (_, _, _, param_ranges) = self.adapt_param_gens(&model, training, nservers)?;
+        let (_, _, _, param_ranges) = self.adapt_param_gens(model, training, nservers)?;
         let (servers, server_sizes, server_ordering) =
             self.adapt_servers(model, training, server_addrs, synchronizer, store)?;
 
@@ -460,7 +460,6 @@ impl Adapter {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
-    #[allow(clippy::type_complexity)]
     fn adapt_servers(
         &self,
         model: &ModelConfig,

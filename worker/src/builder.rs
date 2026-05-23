@@ -222,7 +222,6 @@ where
     ///
     /// # Returns
     /// A new `ServerClusterManager` instance or an io error if occurred.
-    #[allow(clippy::too_many_arguments)]
     async fn connect_to_servers<H>(
         &self,
         id: usize,
