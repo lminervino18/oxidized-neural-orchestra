@@ -6,6 +6,8 @@ mod validator;
 
 use std::num::NonZeroUsize;
 
+use comms::specs::{server::ServerSpec, worker::WorkerSpec};
+
 pub use adapter::Adapter;
 pub use model::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
 pub use partition::Partition;
@@ -14,8 +16,6 @@ pub use training::{
     SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
 };
 pub use validator::Validator;
-
-use comms::specs::{server::ServerSpec, worker::WorkerSpec};
 
 use crate::sessions::{ConvergenceTracker, LossRecorder, SwitchTracker};
 
@@ -29,6 +29,7 @@ pub enum WorkerPostAction {
     },
     Upgrade {
         spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
     },
 }
 
@@ -38,7 +39,6 @@ pub struct WorkerAdapt<'a> {
     pub addr: String,
     pub spec: WorkerSpec,
     pub partition: Partition<'a>,
-    pub post_action: Option<WorkerPostAction>,
 }
 
 /// The adapted values for server initialization.
@@ -48,13 +48,20 @@ pub struct ServerAdapt {
     pub spec: ServerSpec,
 }
 
+/// The metadata to hold for strategy switching.
+#[derive(Debug)]
+pub struct StrategySwitchTracking {
+    pub tracker: SwitchTracker,
+    pub post_actions: Vec<WorkerPostAction>,
+}
+
 /// The adaptated values for session initialization.
 #[derive(Debug)]
 pub struct OrchAdapt {
     pub input_size: NonZeroUsize,
     pub loss_recorder: LossRecorder,
     pub convergence_tracker: Option<ConvergenceTracker>,
-    pub switch_tracker: Option<SwitchTracker>,
+    pub switch_tracking: Option<StrategySwitchTracking>,
     pub model_config: ModelConfig,
     pub algorithm_config: AlgorithmConfig,
 }

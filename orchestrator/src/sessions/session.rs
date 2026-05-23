@@ -1,10 +1,8 @@
 use std::{collections::HashSet, io::SeekFrom, path::Path, thread};
 
 use comms::{
-    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle,
-    protocol::Entity,
+    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle, protocol::Entity,
     share_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
 };
 use futures::future;
 use log::{debug, error, info};
@@ -19,20 +17,21 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use super::{EventListener, SwitchTracker, TrainedModel, WorkerListener, WorkerRequest};
+use super::{EventListener, TrainedModel, WorkerListener, WorkerRequest};
 use crate::{
     OrchErr, Result, StopReason, TrainingEvent,
-    configs::{AlgorithmConfig, OrchAdapt, Partition, ServerAdapt, WorkerAdapt, WorkerPostAction},
+    configs::{
+        AlgorithmConfig, OrchAdapt, Partition, ServerAdapt, StrategySwitchTracking, WorkerAdapt,
+    },
     sessions::{ConvergenceTracker, LossRecorder},
 };
 
 /// An ongoing training session.
 pub struct Session {
     runtime: Runtime,
+    orch_adapt: OrchAdapt,
     worker_handles: Vec<WorkerHandle<NetRtp>>,
     server_handles: Vec<ParamServerHandle<NetRtp>>,
-    orch_adapt: OrchAdapt,
-    worker_post_actions: Option<Vec<WorkerPostAction>>,
 }
 
 impl Session {
@@ -63,42 +62,26 @@ impl Session {
 
         let server_handles = match orch.algorithm_config {
             AlgorithmConfig::ParameterServer { .. } => {
-                let servers_create = servers
-                    .into_iter()
-                    .map(|ServerAdapt { addr, spec }| (addr, spec));
-
                 info!("connecting to {nservers} servers");
-                let server_handles =
-                    runtime.block_on(Self::create_servers(servers_create, &connector))?;
+                let server_handles = runtime.block_on(Self::create_servers(servers, &connector))?;
                 info!("successfully created servers");
                 server_handles
             }
             _ => Vec::new(),
         };
 
-        let (workers_create, worker_post_actions): (Vec<_>, Vec<_>) = workers
-            .into_iter()
-            .map(
-                |WorkerAdapt {
-                     addr,
-                     spec,
-                     partition,
-                     post_action,
-                 }| ((addr, spec, partition), post_action),
-            )
-            .unzip();
-
         info!("connecting to {nworkers} workers");
-        let worker_handles = runtime.block_on(Self::create_workers(workers_create, &connector))?;
+        let worker_handles = runtime.block_on(Self::create_workers(workers, &connector))?;
         info!("successfully created workers");
 
-        Ok(Self {
+        let session = Self {
             runtime,
             orch_adapt: orch,
             worker_handles,
             server_handles,
-            worker_post_actions: worker_post_actions.into_iter().collect(),
-        })
+        };
+
+        Ok(session)
     }
 
     /// Consumes `self` and creates an event listener for this training session.
@@ -119,15 +102,14 @@ impl Session {
             runtime,
             worker_handles,
             server_handles,
-            worker_post_actions,
             orch_adapt:
                 OrchAdapt {
                     input_size,
                     loss_recorder,
                     convergence_tracker,
-                    switch_tracker,
                     model_config,
                     algorithm_config,
+                    switch_tracking,
                 },
         } = self;
 
@@ -142,8 +124,7 @@ impl Session {
                 loss_recorder,
                 convergence_tracker,
                 &user_event_tx,
-                worker_post_actions,
-                switch_tracker,
+                switch_tracking,
             )
             .await
             else {
@@ -187,26 +168,21 @@ impl Session {
     /// * `loss_recorder` - The workers' loss recorder.
     /// * `convergence_tracker` - A tracker device to track model convergence.
     /// * `user_event_tx` - The user event producer.
-    /// * `worker_post_actions` - The actions to take per worker for strategy switch.
-    /// * `switch_tracker` - The tracker needed for strategy switch triggering.
+    /// * `switch_tracking` - The strategy switch tracking metadata.
     ///
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
     #[allow(clippy::too_many_arguments)]
-    async fn start_training<T>(
-        worker_handles: Vec<WorkerHandle<T>>,
+    async fn start_training(
+        worker_handles: Vec<WorkerHandle<NetRtp>>,
         event_rx: &mut Receiver<TrainingEvent>,
         event_tx: &Sender<TrainingEvent>,
         cancel_rx: Receiver<()>,
         loss_recorder: LossRecorder,
         convergence_tracker: Option<ConvergenceTracker>,
         user_event_tx: &Sender<TrainingEvent>,
-        worker_post_actions: Option<Vec<WorkerPostAction>>,
-        switch_tracker: Option<SwitchTracker>,
-    ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>)
-    where
-        T: TransportLayer + 'static,
-    {
+        switch_tracking: Option<StrategySwitchTracking>,
+    ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>) {
         let mut req_txs = Self::spawn_worker_listeners(worker_handles, event_tx);
 
         let mut event_listener = EventListener::new(
@@ -216,8 +192,7 @@ impl Session {
             convergence_tracker,
             event_rx,
             user_event_tx.clone(),
-            worker_post_actions,
-            switch_tracker,
+            switch_tracking,
         );
 
         (event_listener.listen().await, req_txs)
@@ -262,13 +237,10 @@ impl Session {
     ///
     /// # Returns
     /// A list of senders to make requests to the listeners.
-    fn spawn_worker_listeners<T>(
-        worker_handles: Vec<WorkerHandle<T>>,
+    fn spawn_worker_listeners(
+        worker_handles: Vec<WorkerHandle<NetRtp>>,
         event_tx: &Sender<TrainingEvent>,
-    ) -> Vec<Sender<WorkerRequest>>
-    where
-        T: TransportLayer + 'static,
-    {
+    ) -> Vec<Sender<WorkerRequest>> {
         let mut req_txs = Vec::with_capacity(worker_handles.len());
 
         for (i, worker_handle) in worker_handles.into_iter().enumerate() {
@@ -391,12 +363,14 @@ impl Session {
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<ParamServerHandle<NetRtp>>>
     where
-        I: IntoIterator<Item = (String, ServerSpec)>,
+        I: IntoIterator<Item = ServerAdapt>,
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
         let mut handles = Vec::new();
 
-        for (i, (addr, spec)) in servers.into_iter().enumerate() {
+        for (i, ServerAdapt { addr, spec }) in servers.into_iter().enumerate() {
+            debug!("connecting to server at {addr}");
+
             let stream =
                 TcpStream::connect(&addr)
                     .await
@@ -433,14 +407,20 @@ impl Session {
     ) -> Result<Vec<WorkerHandle<NetRtp>>>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
-        I: IntoIterator<Item = (String, WorkerSpec, Partition<'a>)>,
+        I: IntoIterator<Item = WorkerAdapt<'a>>,
     {
         const CHUNK_SIZE: usize = 8192;
 
         let futs = workers
             .into_iter()
             .enumerate()
-            .map(|(i, (addr, spec, partition))| async move {
+            .map(|(i, adapt)| async move {
+                let WorkerAdapt {
+                    addr,
+                    spec,
+                    partition,
+                } = adapt;
+
                 debug!("connecting to worker at {addr}");
 
                 let stream =

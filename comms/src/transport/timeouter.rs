@@ -7,6 +7,7 @@ use crate::protocol::Msg;
 
 /// The `TimeOuter` tries receiving messages inside a time window.
 /// If it fails it returns an error with `ErrorKind::TimedOut`.
+#[derive(Debug)]
 pub struct TimeOuter<L: TransportLayer> {
     timeout: Duration,
     inner: L,

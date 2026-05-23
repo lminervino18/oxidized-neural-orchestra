@@ -8,6 +8,8 @@ mod switch_tracker;
 mod trained_model;
 mod worker_listener;
 
+use comms::{NetRtp, ParamServerHandle, specs::server::ServerSpec};
+
 pub use cancel_handle::CancelHandle;
 pub use convergence_tracker::ConvergenceTracker;
 pub use event_listener::EventListener;
@@ -21,10 +23,19 @@ pub use worker_listener::WorkerListener;
 use crate::OrchErr;
 
 /// Requests that the orchestrator can make to a worker handler task.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum WorkerRequest {
     PullParams,
     Disconnect,
+    Switch {
+        server_addrs: Vec<String>,
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+    },
+    Upgrade {
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    },
     Stop,
 }
 
@@ -43,6 +54,9 @@ pub enum TrainingEvent {
     Params(Vec<f32>),
     Disconnect {
         worker_id: usize,
+    },
+    Upgrade {
+        server_handle: ParamServerHandle<NetRtp>,
     },
     Error(OrchErr),
 }

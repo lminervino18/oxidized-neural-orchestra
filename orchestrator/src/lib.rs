@@ -37,7 +37,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     validator.validate(&model, &training)?;
 
     let adapter = Adapter::new();
-    let (workers, servers, orch) = adapter.adapt_configs(model.clone(), &training)?;
+    let (orch, workers, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
     // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
     //       configurar esto, si tenemos tiempo y vemos que viene bien lo

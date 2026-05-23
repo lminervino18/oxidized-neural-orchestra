@@ -1,9 +1,19 @@
-use comms::{TransportLayer, WorkerEvent, WorkerHandle};
+use comms::{NetRtp, WorkerEvent, WorkerHandle, specs::server::ServerSpec};
 use log::{debug, error, info, warn};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use super::{TrainingEvent, WorkerRequest};
 use crate::{OrchErr, Result};
+
+/// The return type of the `handle_request` method.
+enum ReqResolution {
+    Upgrade {
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    },
+    Continue,
+    Halt,
+}
 
 /// The return type of the `handle_event` method.
 enum EventResolution {
@@ -12,19 +22,13 @@ enum EventResolution {
 }
 
 /// The worker handle manager.
-pub struct WorkerListener<T>
-where
-    T: TransportLayer,
-{
+pub struct WorkerListener {
     id: usize,
-    worker_handle: WorkerHandle<T>,
+    worker_handle: WorkerHandle<NetRtp>,
     stopping: bool,
 }
 
-impl<T> WorkerListener<T>
-where
-    T: TransportLayer,
-{
+impl WorkerListener {
     /// Creates a new `WorkerListener`.
     ///
     /// # Args
@@ -33,7 +37,7 @@ where
     ///
     /// # Returns
     /// A new `WorkerListener` instance.
-    pub fn new(id: usize, worker_handle: WorkerHandle<T>) -> Self {
+    pub fn new(id: usize, worker_handle: WorkerHandle<NetRtp>) -> Self {
         Self {
             id,
             worker_handle,
@@ -61,13 +65,23 @@ where
                 req = req_rx.recv() => {
                     if let Some(req) = req {
                         match self.handle_request(req, &event_tx).await {
-                            Ok(false) => break,
-                            Err(e) => {
-                                let _ = event_tx.send(TrainingEvent::Error(e)).await;
-                                break;
-                            }
-                            _ => {}
+                            Ok(ReqResolution::Continue) => continue,
+                            Ok(ReqResolution::Halt) => {},
+                            Ok(ReqResolution::Upgrade { spec, ranges }) => {
+                                let event = match self.worker_handle.upgrade(spec, ranges).await {
+                                    Ok(server_handle) => TrainingEvent::Upgrade { server_handle },
+                                    Err(e) => {
+                                        let err = OrchErr::WorkerError { id, details: e.to_string() };
+                                        TrainingEvent::Error(err)
+                                    }
+                                };
+
+                                let _ = event_tx.send(event).await;
+                            },
+                            Err(e) => { let _ = event_tx.send(TrainingEvent::Error(e)).await; }
                         }
+
+                        break;
                     }
                 },
                 event = self.worker_handle.recv_event() => match event {
@@ -104,10 +118,7 @@ where
         &mut self,
         req: WorkerRequest,
         event_tx: &Sender<TrainingEvent>,
-    ) -> Result<bool>
-    where
-        T: TransportLayer,
-    {
+    ) -> Result<ReqResolution> {
         let id = self.id;
 
         let should_continue = match req {
@@ -122,7 +133,7 @@ where
                 }
 
                 let _ = event_tx.send(event).await;
-                false
+                ReqResolution::Halt
             }
             WorkerRequest::Stop => {
                 if !self.stopping {
@@ -136,7 +147,7 @@ where
                     self.stopping = true;
                 }
 
-                true
+                ReqResolution::Continue
             }
             WorkerRequest::PullParams => {
                 info!("pulling parmaeters from worker {id}");
@@ -152,8 +163,25 @@ where
                     }
                 }
 
-                true
+                ReqResolution::Continue
             }
+            WorkerRequest::Switch {
+                server_addrs,
+                server_sizes,
+                server_ordering,
+            } => {
+                if let Err(e) = self
+                    .worker_handle
+                    .switch(server_addrs, server_sizes, server_ordering)
+                    .await
+                {
+                    let details = format!("failed to switch worker {id}: {e}");
+                    return Err(OrchErr::WorkerError { id, details });
+                }
+
+                ReqResolution::Continue
+            }
+            WorkerRequest::Upgrade { spec, ranges } => ReqResolution::Upgrade { spec, ranges },
         };
 
         Ok(should_continue)
@@ -167,10 +195,7 @@ where
     ///
     /// # Returns
     /// An `EventResolution` or an orch error if the received event is invalid.
-    fn handle_event(id: usize, event: WorkerEvent<'_>) -> Result<EventResolution>
-    where
-        T: TransportLayer,
-    {
+    fn handle_event(id: usize, event: WorkerEvent<'_>) -> Result<EventResolution> {
         match event {
             WorkerEvent::Loss(losses) => {
                 debug!("worker {id} reported {} losses", losses.len());

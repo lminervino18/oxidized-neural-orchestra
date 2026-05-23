@@ -1,10 +1,12 @@
+use std::mem;
+
 use log::info;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     StopReason, TrainingEvent,
-    configs::WorkerPostAction,
-    sessions::{ConvergenceTracker, LossRecorder, SwitchTracker, WorkerRequest},
+    configs::{StrategySwitchTracking, WorkerPostAction},
+    sessions::{ConvergenceTracker, LossRecorder, WorkerRequest},
 };
 
 /// The main loop over the training events in the system.
@@ -13,12 +15,11 @@ pub struct EventListener<'a> {
     req_txs: &'a mut [Sender<WorkerRequest>],
     event_rx: &'a mut Receiver<TrainingEvent>,
     event_tx: Sender<TrainingEvent>,
-    worker_post_actions: Option<Vec<WorkerPostAction>>,
-    switch_tracker: Option<SwitchTracker>,
 
     // Training state
     workers_left: usize,
     loss_recorder: LossRecorder,
+    switch_tracking: Option<StrategySwitchTracking>,
     convergence_tracker: Option<ConvergenceTracker>,
     stop_reason: Option<StopReason>,
 }
@@ -33,8 +34,7 @@ impl<'a> EventListener<'a> {
     /// * `convergence_tracker` - A tracker device to track model convergence.
     /// * `event_rx` - An event producer.
     /// * `event_tx` - An event consumer.
-    /// * `worker_post_actions` - The actions to take per worker for strategy switch.
-    /// * `switch_tracker` - The tracker needed for strategy switch triggering.
+    /// * `switch_tracking` - The strategy switch tracking metadata.
     ///
     /// # Returns
     /// A new `EventListener` instance.
@@ -46,8 +46,7 @@ impl<'a> EventListener<'a> {
         convergence_tracker: Option<ConvergenceTracker>,
         event_rx: &'a mut Receiver<TrainingEvent>,
         event_tx: Sender<TrainingEvent>,
-        worker_post_actions: Option<Vec<WorkerPostAction>>,
-        switch_tracker: Option<SwitchTracker>,
+        switch_tracking: Option<StrategySwitchTracking>,
     ) -> Self {
         let nworkers = req_txs.len();
 
@@ -58,8 +57,7 @@ impl<'a> EventListener<'a> {
             convergence_tracker,
             event_rx,
             event_tx,
-            worker_post_actions,
-            switch_tracker,
+            switch_tracking,
             workers_left: nworkers,
             stop_reason: None,
         }
@@ -94,16 +92,6 @@ impl<'a> EventListener<'a> {
         Some(self.stop_reason.unwrap_or_default())
     }
 
-    /// Broadcasts a single request to all of the request senders.
-    ///
-    /// # Args
-    /// * `req` - The request to broadcast.
-    async fn broadcast_request(&mut self, req: WorkerRequest) {
-        for tx in self.req_txs.iter_mut() {
-            let _ = tx.send(req).await;
-        }
-    }
-
     /// Handles an incoming event from a worker.
     ///
     /// # Args
@@ -123,6 +111,12 @@ impl<'a> EventListener<'a> {
                 let event = TrainingEvent::PublishedLosses { worker_id, losses };
                 let _ = self.event_tx.send(event).await;
                 Some(true)
+            }
+            TrainingEvent::Upgrade { server_handle } => {
+                // TODO: Ver como reincorporar este handle a la session, capaz lo que conviene
+                //       es que los handles de server los tenga este listener y despues se los
+                //       devuelva a la session una vez que termina el entrenamiento?.
+                todo!();
             }
             other => {
                 let is_err = matches!(other, TrainingEvent::Error(..));
@@ -163,15 +157,55 @@ impl<'a> EventListener<'a> {
             }
         }
 
-        if let Some(ref mut tracker) = self.switch_tracker {
+        if let Some(ref mut switch_tracking) = self.switch_tracking {
+            let StrategySwitchTracking {
+                tracker,
+                post_actions,
+            } = switch_tracking;
+
             tracker.record(loss);
 
             if tracker.should_switch() {
                 info!("strategy switch triggered");
-
-                // TODO: Implementar el switch.
-                todo!("implement the strategy switch");
+                let taken = mem::take(post_actions);
+                self.broadcast_switch(taken).await;
+                self.switch_tracking = None;
             }
+        }
+    }
+
+    /// Broadcasts the `WorkerPostActions` to all the workers.
+    ///
+    /// # Args
+    /// * `post_actios` - The action that each worker needs to take in order to switch algorithm.
+    async fn broadcast_switch(&mut self, post_actions: Vec<WorkerPostAction>) {
+        for (tx, action) in self.req_txs.iter_mut().zip(post_actions) {
+            let req = match action {
+                WorkerPostAction::Switch {
+                    server_addrs,
+                    server_sizes,
+                    server_ordering,
+                } => WorkerRequest::Switch {
+                    server_addrs,
+                    server_sizes,
+                    server_ordering,
+                },
+                WorkerPostAction::Upgrade { spec, ranges } => {
+                    WorkerRequest::Upgrade { spec, ranges }
+                }
+            };
+
+            let _ = tx.send(req).await;
+        }
+    }
+
+    /// Broadcasts a single request to all of the request senders.
+    ///
+    /// # Args
+    /// * `req` - The request to broadcast.
+    async fn broadcast_request(&mut self, req: WorkerRequest) {
+        for tx in self.req_txs.iter_mut() {
+            let _ = tx.send(req.clone()).await;
         }
     }
 }
