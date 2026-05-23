@@ -85,7 +85,7 @@ pub fn parameter_server(
     serializer: Option<&Bound<'_, PyAny>>,
     offline_epochs: usize,
     seed: Option<u64>,
-    early_stopping_tolerance: Option<f32>,
+    early_stopping_tolerance: Option<f64>,
 ) -> PyResult<PyTrainingConfig> {
     let max_epochs_nz = NonZeroUsize::new(max_epochs)
         .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
@@ -253,7 +253,7 @@ pub fn all_reduce(
     serializer: Option<&Bound<'_, PyAny>>,
     offline_epochs: usize,
     seed: Option<u64>,
-    early_stopping_tolerance: Option<f32>,
+    early_stopping_tolerance: Option<f64>,
 ) -> PyResult<PyTrainingConfig> {
     let max_epochs_nz = NonZeroUsize::new(max_epochs)
         .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;

@@ -18,9 +18,10 @@ use super::{
 use crate::{
     configs::{
         ActFnConfig, AlgorithmConfig, DataSrc, DatasetConfig, LayerConfig, LossFnConfig,
-        OptimizerConfig, ParamGenConfig, StoreConfig, SynchronizerConfig,
+        OptimizerConfig, OrchAdapt, ParamGenConfig, StoreConfig, SynchronizerConfig,
     },
     error::{OrchErr, Result},
+    sessions::{ConvergenceTracker, GreaterThanOneUsize, LossRecorder, SwitchTracker},
 };
 
 /// Converts user model and training configurations into worker and server specifications.
@@ -51,7 +52,7 @@ impl Adapter {
         &self,
         model: ModelConfig,
         training: &'a TrainingConfig,
-    ) -> Result<(Vec<WorkerAdapt<'a>>, Vec<ServerAdapt>)> {
+    ) -> Result<(Vec<WorkerAdapt<'a>>, Vec<ServerAdapt>, OrchAdapt)> {
         let partitions =
             self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
 
@@ -97,7 +98,50 @@ impl Adapter {
             }
         };
 
-        Ok((workers, servers))
+        let orch = self.adapt_orch(&model, training)?;
+        Ok((workers, servers, orch))
+    }
+
+    /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerAdapt`.
+    ///
+    /// # Args
+    /// * `model` - The model's configuration.
+    /// * `training` - The training's configuration.
+    ///
+    /// # Returns
+    /// An adapted orchestrator.
+    fn adapt_orch(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<OrchAdapt> {
+        let Some(nworkers) = NonZeroUsize::new(training.worker_addrs.len()) else {
+            let text = "The amount of workers must be positive";
+            return Err(OrchErr::InvalidConfig(text.into()));
+        };
+
+        let convergence_tracker = training.early_stopping.map(|cfg| {
+            // SAFETY: The window size is greater than `1`.
+            let winsize = GreaterThanOneUsize::new(3).unwrap();
+            ConvergenceTracker::new(winsize, cfg.tolerance)
+        });
+
+        let switch_tracker = match training.algorithm {
+            AlgorithmConfig::StrategySwitch { .. } => {
+                // SAFETY: The winsize is greater than `1`.
+                let winsize = GreaterThanOneUsize::new(5).unwrap();
+                let tracker = SwitchTracker::new(winsize, 0.01);
+                Some(tracker)
+            }
+            _ => None,
+        };
+
+        let adapt = OrchAdapt {
+            input_size: training.dataset.x_size,
+            loss_recorder: LossRecorder::new(nworkers),
+            convergence_tracker,
+            switch_tracker,
+            model_config: model.clone(),
+            algorithm_config: training.algorithm.clone(),
+        };
+
+        Ok(adapt)
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
@@ -249,7 +293,7 @@ impl Adapter {
         store: StoreConfig,
         partitions: Vec<Partition<'a>>,
     ) -> Result<Vec<WorkerAdapt<'a>>> {
-        let serializer_spec = self.adapt_serializer(&training);
+        let serializer_spec = self.adapt_serializer(training);
         let (servers, server_sizes, server_ordering) =
             self.adapt_servers(model, training, &server_addrs, synchronizer, store)?;
 
@@ -268,8 +312,8 @@ impl Adapter {
             .worker_addrs
             .iter()
             .zip(&partitions[..nworkers])
-            .enumerate()
-            .map(|(i, (addr, partition))| {
+            .zip(0..)
+            .map(|((addr, partition), i)| {
                 if let Err(..) | Ok(None) = addr.to_socket_addrs().map(|mut addrs| addrs.next()) {
                     let text = format!("failed to resolve {i}'th worker's network address: {addr}");
                     return Err(OrchErr::InvalidConfig(text));
@@ -302,8 +346,8 @@ impl Adapter {
         let worker_servers = servers
             .into_iter()
             .zip(&partitions[nworkers..])
-            .enumerate()
-            .map(|(i, (server_adapt, partition))| {
+            .zip(nworkers..)
+            .map(|((server_adapt, partition), i)| {
                 let ServerAdapt {
                     addr,
                     spec: server_spec,

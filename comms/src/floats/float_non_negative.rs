@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 #[derive(Serialize, Debug, Clone, Copy)]
 #[serde(transparent)]
 pub struct FloatNonNegative {
-    value: f32,
+    value: f64,
 }
 
 impl FloatNonNegative {
@@ -16,7 +16,7 @@ impl FloatNonNegative {
     ///
     /// # Returns
     /// An option with `Some` value if the given `value` is not negative, else `None`.
-    pub fn new(value: f32) -> Option<Self> {
+    pub fn new(value: f64) -> Option<Self> {
         value
             .is_sign_positive()
             .then_some(FloatNonNegative { value })
@@ -38,14 +38,14 @@ impl<'de> Deserialize<'de> for FloatNonNegative {
     where
         D: Deserializer<'de>,
     {
-        let value = f32::deserialize(deserializer)?;
+        let value = f64::deserialize(deserializer)?;
         FloatNonNegative::new(value)
             .ok_or_else(|| de::Error::custom("FloatNonNegative value must be non negative"))
     }
 }
 
 impl Deref for FloatNonNegative {
-    type Target = f32;
+    type Target = f64;
 
     fn deref(&self) -> &Self::Target {
         &self.value

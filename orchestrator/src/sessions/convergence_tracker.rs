@@ -1,60 +1,56 @@
-use std::{collections::HashMap, mem};
+use comms::floats::FloatNonNegative;
+
+use super::GreaterThanOneUsize;
 
 /// Tracks wheather the training is converging or not.
+#[derive(Debug)]
 pub struct ConvergenceTracker {
-    pending: HashMap<usize, f64>,
-    prev: HashMap<usize, f64>,
-    n_workers: usize,
+    winsize: GreaterThanOneUsize,
+    tolerance: FloatNonNegative,
+    last: Option<f64>,
+    count: usize,
 }
 
 impl ConvergenceTracker {
     /// Creates a new `ConvergenceTracker`.
     ///
     /// # Args
-    /// * `n_workers` - The amount of workers
+    /// * `winsize` - The amount of losses to check.
+    /// * `tolerance` - The tolerance of the delta between subsequent losses.
     ///
     /// # Returns
     /// A new `ConvergenceTracker` instance.
-    pub fn new(n_workers: usize) -> Self {
+    pub fn new(winsize: GreaterThanOneUsize, tolerance: FloatNonNegative) -> Self {
         Self {
-            n_workers,
-            pending: HashMap::new(),
-            prev: HashMap::new(),
+            winsize,
+            tolerance,
+            last: None,
+            count: 0,
         }
     }
 
-    /// Records the last loss for a worker and returns the max per-worker delta
-    /// once all workers have reported for the current sync round.
+    /// Records a new loss.
     ///
     /// # Args
-    /// * `worker_id` - The id of the worker whose losses are being recorded.
-    /// * `losses` - The losses to record.
-    ///
-    /// # Returns
-    /// The max delta across all workers, or `None` if not all workers have
-    /// reported yet or if this is the first complete round.
-    pub fn record(&mut self, worker_id: usize, losses: &[f64]) -> Option<f64> {
-        let last = *losses.last()?;
-        self.pending.insert(worker_id, last);
+    /// * `loss` - The latest loss.
+    pub fn record(&mut self, loss: f64) {
+        if let Some(last) = self.last {
+            let delta = (last - loss).abs();
 
-        if self.pending.len() < self.n_workers {
-            return None;
+            if delta > *self.tolerance {
+                self.count = 0;
+            }
         }
 
-        let max_delta = if self.prev.len() == self.n_workers {
-            self.pending
-                .iter()
-                .filter_map(|(id, &curr)| self.prev.get(id).map(|&prev| (prev - curr).abs()))
-                .fold(0.0, f64::max)
-        } else {
-            mem::swap(&mut self.prev, &mut self.pending);
-            self.pending.clear();
-            return None;
-        };
+        self.count += 1;
+        self.last = Some(loss);
+    }
 
-        std::mem::swap(&mut self.prev, &mut self.pending);
-        self.pending.clear();
-
-        Some(max_delta)
+    /// Asks the tracker if the training has converged.
+    ///
+    /// # Returns
+    /// A convergence flag, either `true` if the training converged or `false` otherwise.
+    pub fn converged(&self) -> bool {
+        *self.winsize + 1 == self.count
     }
 }

@@ -19,57 +19,30 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use super::TrainedModel;
+use super::{EventListener, SwitchTracker, TrainedModel, WorkerListener, WorkerRequest};
 use crate::{
     OrchErr, Result, StopReason, TrainingEvent,
-    configs::{
-        AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition, ServerAdapt, WorkerAdapt,
-        WorkerPostAction,
-    },
-    sessions::{EventListener, WorkerListener, WorkerRequest},
+    configs::{AlgorithmConfig, OrchAdapt, Partition, ServerAdapt, WorkerAdapt, WorkerPostAction},
+    sessions::{ConvergenceTracker, LossRecorder},
 };
-
-/// A handle that lets any caller request an early stop of an ongoing training session.
-pub struct CancelHandle(Sender<()>);
-
-impl CancelHandle {
-    /// Creates a matched `(CancelHandle, Receiver)` pair.
-    ///
-    /// The caller retains the `CancelHandle` and passes the `Receiver` to
-    /// `Session::event_listener`. Calling `stop()` on the handle signals
-    /// the session to stop at the next epoch boundary.
-    pub fn pair() -> (Self, Receiver<()>) {
-        let (tx, rx) = mpsc::channel(1);
-        (Self(tx), rx)
-    }
-
-    pub fn stop(&self) {
-        let _ = self.0.try_send(());
-    }
-}
 
 /// An ongoing training session.
 pub struct Session {
     runtime: Runtime,
     worker_handles: Vec<WorkerHandle<NetRtp>>,
     server_handles: Vec<ParamServerHandle<NetRtp>>,
+    orch_adapt: OrchAdapt,
     worker_post_actions: Option<Vec<WorkerPostAction>>,
-    model: ModelConfig,
-    algorithm: AlgorithmConfig,
-    input_size: usize,
-    early_stopping: Option<EarlyStoppingConfig>,
 }
 
 impl Session {
     /// Creates a new session by connecting to all workers and servers.
     ///
     /// # Args
+    /// * `orch` - The orchestrator's values for orchestrating the session.
     /// * `workers` - The workers' network addresses, specifications and dataset partitions.
     /// * `servers` - The servers' network addresses and specifications.
     /// * `connector` - The network connector.
-    /// * `model` - The model's architecture configuration.
-    /// * `training` - The model's training configuration.
-    /// * `input_size` - The model's input size.
     ///
     /// # Returns
     /// A ready session with all connections established.
@@ -77,13 +50,10 @@ impl Session {
     /// # Errors
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
     pub fn new<F>(
+        orch: OrchAdapt,
         workers: Vec<WorkerAdapt<'_>>,
         servers: Vec<ServerAdapt>,
         connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
-        model: ModelConfig,
-        algorithm: AlgorithmConfig,
-        input_size: usize,
-        early_stopping: Option<EarlyStoppingConfig>,
     ) -> Result<Self>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
@@ -91,7 +61,7 @@ impl Session {
         let runtime = Builder::new_multi_thread().enable_all().build()?;
         let (nworkers, nservers) = (workers.len(), servers.len());
 
-        let server_handles = match algorithm {
+        let server_handles = match orch.algorithm_config {
             AlgorithmConfig::ParameterServer { .. } => {
                 let servers_create = servers
                     .into_iter()
@@ -124,12 +94,9 @@ impl Session {
 
         Ok(Self {
             runtime,
+            orch_adapt: orch,
             worker_handles,
             server_handles,
-            model,
-            algorithm,
-            input_size,
-            early_stopping,
             worker_post_actions: worker_post_actions.into_iter().collect(),
         })
     }
@@ -152,11 +119,16 @@ impl Session {
             runtime,
             worker_handles,
             server_handles,
-            model,
-            algorithm,
-            input_size,
-            early_stopping,
             worker_post_actions,
+            orch_adapt:
+                OrchAdapt {
+                    input_size,
+                    loss_recorder,
+                    convergence_tracker,
+                    switch_tracker,
+                    model_config,
+                    algorithm_config,
+                },
         } = self;
 
         let run_loop_fut = async move {
@@ -167,9 +139,11 @@ impl Session {
                 &mut event_rx,
                 &event_tx,
                 cancel_rx,
-                early_stopping,
+                loss_recorder,
+                convergence_tracker,
                 &user_event_tx,
                 worker_post_actions,
+                switch_tracker,
             )
             .await
             else {
@@ -177,7 +151,7 @@ impl Session {
             };
 
             let params = Self::finalize_training(
-                algorithm,
+                algorithm_config,
                 server_handles,
                 &user_event_tx,
                 &mut req_txs,
@@ -185,19 +159,16 @@ impl Session {
             )
             .await;
 
-            info!("received {} total parameters", params.len());
+            let nparams = params.len();
+            info!("received {nparams} total parameters");
 
-            let trained_model = TrainedModel {
+            let model = TrainedModel {
                 params,
-                model,
-                input_size,
+                model: model_config,
+                input_size: input_size.get(),
             };
 
-            let event = TrainingEvent::TrainingComplete {
-                model: trained_model,
-                stop_reason,
-            };
-
+            let event = TrainingEvent::TrainingComplete { model, stop_reason };
             let _ = user_event_tx.send(event).await;
         };
 
@@ -213,20 +184,25 @@ impl Session {
     /// * `event_rx` - The worker listener event receiver.
     /// * `event_tx` - The event producer for the worker listeners.
     /// * `cancel_rx` - The user's halt event receiver.
-    /// * `early_stopping` - The early stopping mechanism configuration.
+    /// * `loss_recorder` - The workers' loss recorder.
+    /// * `convergence_tracker` - A tracker device to track model convergence.
     /// * `user_event_tx` - The user event producer.
     /// * `worker_post_actions` - The actions to take per worker for strategy switch.
+    /// * `switch_tracker` - The tracker needed for strategy switch triggering.
     ///
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
+    #[allow(clippy::too_many_arguments)]
     async fn start_training<T>(
         worker_handles: Vec<WorkerHandle<T>>,
         event_rx: &mut Receiver<TrainingEvent>,
         event_tx: &Sender<TrainingEvent>,
         cancel_rx: Receiver<()>,
-        early_stopping: Option<EarlyStoppingConfig>,
+        loss_recorder: LossRecorder,
+        convergence_tracker: Option<ConvergenceTracker>,
         user_event_tx: &Sender<TrainingEvent>,
         worker_post_actions: Option<Vec<WorkerPostAction>>,
+        switch_tracker: Option<SwitchTracker>,
     ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>)
     where
         T: TransportLayer + 'static,
@@ -236,10 +212,12 @@ impl Session {
         let mut event_listener = EventListener::new(
             cancel_rx,
             &mut req_txs,
-            early_stopping,
+            loss_recorder,
+            convergence_tracker,
             event_rx,
             user_event_tx.clone(),
             worker_post_actions,
+            switch_tracker,
         );
 
         (event_listener.listen().await, req_txs)

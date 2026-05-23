@@ -3,22 +3,23 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
     StopReason, TrainingEvent,
-    configs::{EarlyStoppingConfig, WorkerPostAction},
-    sessions::{ConvergenceTracker, WorkerRequest},
+    configs::WorkerPostAction,
+    sessions::{ConvergenceTracker, LossRecorder, SwitchTracker, WorkerRequest},
 };
 
 /// The main loop over the training events in the system.
 pub struct EventListener<'a> {
     cancel_rx: Receiver<()>,
     req_txs: &'a mut [Sender<WorkerRequest>],
-    early_stopping: Option<EarlyStoppingConfig>,
     event_rx: &'a mut Receiver<TrainingEvent>,
     event_tx: Sender<TrainingEvent>,
     worker_post_actions: Option<Vec<WorkerPostAction>>,
+    switch_tracker: Option<SwitchTracker>,
 
     // Training state
     workers_left: usize,
-    tracker: ConvergenceTracker,
+    loss_recorder: LossRecorder,
+    convergence_tracker: Option<ConvergenceTracker>,
     stop_reason: Option<StopReason>,
 }
 
@@ -28,32 +29,38 @@ impl<'a> EventListener<'a> {
     /// # Args
     /// * `cancel_rx` - The training cancellation request receiver.
     /// * `req_txs` - The request senders for the worker listeners.
-    /// * `early_stopping` - The early stopping mechanism.
+    /// * `loss_recorder` - The workers' loss recorder.
+    /// * `convergence_tracker` - A tracker device to track model convergence.
     /// * `event_rx` - An event producer.
     /// * `event_tx` - An event consumer.
     /// * `worker_post_actions` - The actions to take per worker for strategy switch.
+    /// * `switch_tracker` - The tracker needed for strategy switch triggering.
     ///
     /// # Returns
     /// A new `EventListener` instance.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cancel_rx: Receiver<()>,
         req_txs: &'a mut [Sender<WorkerRequest>],
-        early_stopping: Option<EarlyStoppingConfig>,
+        loss_recorder: LossRecorder,
+        convergence_tracker: Option<ConvergenceTracker>,
         event_rx: &'a mut Receiver<TrainingEvent>,
         event_tx: Sender<TrainingEvent>,
         worker_post_actions: Option<Vec<WorkerPostAction>>,
+        switch_tracker: Option<SwitchTracker>,
     ) -> Self {
-        let n_workers = req_txs.len();
+        let nworkers = req_txs.len();
 
         Self {
             cancel_rx,
             req_txs,
-            early_stopping,
+            loss_recorder,
+            convergence_tracker,
             event_rx,
             event_tx,
             worker_post_actions,
-            workers_left: n_workers,
-            tracker: ConvergenceTracker::new(n_workers),
+            switch_tracker,
+            workers_left: nworkers,
             stop_reason: None,
         }
     }
@@ -112,18 +119,7 @@ impl<'a> EventListener<'a> {
                 Some(self.workers_left > 0)
             }
             TrainingEvent::PublishedLosses { worker_id, losses } => {
-                // TODO: Chequear aca si se cumple la condicion para hacer la transicion de strategy switch
-
-                if self.stop_reason.is_none()
-                    && let Some(ref cfg) = self.early_stopping
-                    && let Some(max_delta) = self.tracker.record(worker_id, &losses)
-                    && max_delta < *cfg.tolerance as f64
-                {
-                    info!("early stopping triggered (max_delta={max_delta:.6})");
-                    self.stop_reason = Some(StopReason::EarlyStopping);
-                    self.broadcast_request(WorkerRequest::Stop).await;
-                }
-
+                self.handle_losses(worker_id, &losses).await;
                 let event = TrainingEvent::PublishedLosses { worker_id, losses };
                 let _ = self.event_tx.send(event).await;
                 Some(true)
@@ -132,6 +128,49 @@ impl<'a> EventListener<'a> {
                 let is_err = matches!(other, TrainingEvent::Error(..));
                 let _ = self.event_tx.send(other).await;
                 (!is_err).then_some(true)
+            }
+        }
+    }
+
+    /// Handles the latest loss update from a worker.
+    ///
+    /// # Args
+    /// * `worker_id` - The id of the worker whose losses are being processed.
+    /// * `losses` - The losses it published.
+    async fn handle_losses(&mut self, worker_id: usize, losses: &[f64]) {
+        if self.stop_reason.is_some() {
+            return;
+        }
+
+        if let Some(&last) = losses.last() {
+            self.loss_recorder.record(worker_id, last);
+        }
+
+        let Some(loss) = self.loss_recorder.max() else {
+            return;
+        };
+
+        self.loss_recorder.clear();
+
+        if let Some(ref mut tracker) = self.convergence_tracker {
+            tracker.record(loss);
+
+            if tracker.converged() {
+                info!("early stopping triggered");
+                self.stop_reason = Some(StopReason::EarlyStopping);
+                self.broadcast_request(WorkerRequest::Stop).await;
+                return;
+            }
+        }
+
+        if let Some(ref mut tracker) = self.switch_tracker {
+            tracker.record(loss);
+
+            if tracker.should_switch() {
+                info!("strategy switch triggered");
+
+                // TODO: Implementar el switch.
+                todo!("implement the strategy switch");
             }
         }
     }

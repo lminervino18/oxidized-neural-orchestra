@@ -4,6 +4,8 @@ mod partition;
 mod training;
 mod validator;
 
+use std::num::NonZeroUsize;
+
 pub use adapter::Adapter;
 pub use model::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
 pub use partition::Partition;
@@ -15,7 +17,9 @@ pub use validator::Validator;
 
 use comms::specs::{server::ServerSpec, worker::WorkerSpec};
 
-// TODO: docstring
+use crate::sessions::{ConvergenceTracker, LossRecorder, SwitchTracker};
+
+/// An action taken by the orchestrator based on strategy switch for each worker.
 #[derive(Debug, Clone)]
 pub enum WorkerPostAction {
     Switch {
@@ -28,7 +32,7 @@ pub enum WorkerPostAction {
     },
 }
 
-/// The result of adapting a worker configuration.
+/// The adapted values for worker initialization.
 #[derive(Debug, Clone)]
 pub struct WorkerAdapt<'a> {
     pub addr: String,
@@ -37,9 +41,20 @@ pub struct WorkerAdapt<'a> {
     pub post_action: Option<WorkerPostAction>,
 }
 
-/// The result of adapting a server configuration.
+/// The adapted values for server initialization.
 #[derive(Debug, Clone)]
 pub struct ServerAdapt {
     pub addr: String,
     pub spec: ServerSpec,
+}
+
+/// The adaptated values for session initialization.
+#[derive(Debug)]
+pub struct OrchAdapt {
+    pub input_size: NonZeroUsize,
+    pub loss_recorder: LossRecorder,
+    pub convergence_tracker: Option<ConvergenceTracker>,
+    pub switch_tracker: Option<SwitchTracker>,
+    pub model_config: ModelConfig,
+    pub algorithm_config: AlgorithmConfig,
 }
