@@ -34,7 +34,7 @@ pub enum WorkerRequest {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-        trainer_spec: TrainerSpec,
+        trainer_spec: Box<TrainerSpec>,
     },
     Upgrade {
         spec: Box<ServerSpec>,

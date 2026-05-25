@@ -191,6 +191,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// * `server_addrs` - The network addresses of the servers.
     /// * `server_sizes` - The sizes in amount of paremters per server.
     /// * `server_ordering` - The layer ordering per server.
+    /// * `trainer_spec` - The specification for the new trainer.
     ///
     /// # Returns
     /// An io error if occurred.

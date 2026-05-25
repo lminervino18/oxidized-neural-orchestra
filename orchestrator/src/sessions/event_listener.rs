@@ -193,7 +193,7 @@ impl<'a> EventListener<'a> {
                     server_addrs,
                     server_sizes,
                     server_ordering,
-                    trainer_spec,
+                    trainer_spec: Box::new(trainer_spec),
                 },
                 WorkerPostAction::Upgrade { spec, ranges } => WorkerRequest::Upgrade {
                     spec: Box::new(spec),
