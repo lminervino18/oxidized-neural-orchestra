@@ -101,7 +101,7 @@ impl Session {
         let Self {
             runtime,
             worker_handles,
-            server_handles,
+            mut server_handles,
             orch_adapt:
                 OrchAdapt {
                     input_size,
@@ -125,6 +125,7 @@ impl Session {
                 convergence_tracker,
                 &user_event_tx,
                 switch_tracking,
+                &mut server_handles,
             )
             .await
             else {
@@ -169,6 +170,7 @@ impl Session {
     /// * `convergence_tracker` - A tracker device to track model convergence.
     /// * `user_event_tx` - The user event producer.
     /// * `switch_tracking` - The strategy switch tracking metadata.
+    /// * `server_handles` - The server handles session vec.
     ///
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
@@ -181,12 +183,14 @@ impl Session {
         convergence_tracker: Option<ConvergenceTracker>,
         user_event_tx: &Sender<TrainingEvent>,
         switch_tracking: Option<StrategySwitchTracking>,
+        server_handles: &mut Vec<ParamServerHandle<NetRtp>>,
     ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>) {
         let mut req_txs = Self::spawn_worker_listeners(worker_handles, event_tx);
 
         let mut event_listener = EventListener::new(
             cancel_rx,
             &mut req_txs,
+            server_handles,
             loss_recorder,
             convergence_tracker,
             event_rx,

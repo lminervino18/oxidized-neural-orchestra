@@ -1,5 +1,6 @@
 use std::mem;
 
+use comms::{NetRtp, ParamServerHandle};
 use log::info;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -12,6 +13,7 @@ use crate::{
 /// The main loop over the training events in the system.
 pub struct EventListener<'a> {
     cancel_rx: Receiver<()>,
+    server_handles: &'a mut Vec<ParamServerHandle<NetRtp>>,
     req_txs: &'a mut [Sender<WorkerRequest>],
     event_rx: &'a mut Receiver<TrainingEvent>,
     event_tx: Sender<TrainingEvent>,
@@ -30,6 +32,7 @@ impl<'a> EventListener<'a> {
     /// # Args
     /// * `cancel_rx` - The training cancellation request receiver.
     /// * `req_txs` - The request senders for the worker listeners.
+    /// * `server_handles` - The server handles session vec.
     /// * `loss_recorder` - The workers' loss recorder.
     /// * `convergence_tracker` - A tracker device to track model convergence.
     /// * `event_rx` - An event producer.
@@ -41,6 +44,7 @@ impl<'a> EventListener<'a> {
     pub fn new(
         cancel_rx: Receiver<()>,
         req_txs: &'a mut [Sender<WorkerRequest>],
+        server_handles: &'a mut Vec<ParamServerHandle<NetRtp>>,
         loss_recorder: LossRecorder,
         convergence_tracker: Option<ConvergenceTracker>,
         event_rx: &'a mut Receiver<TrainingEvent>,
@@ -51,6 +55,7 @@ impl<'a> EventListener<'a> {
 
         Self {
             cancel_rx,
+            server_handles,
             req_txs,
             loss_recorder,
             convergence_tracker,
@@ -111,12 +116,9 @@ impl<'a> EventListener<'a> {
                 let _ = self.event_tx.send(event).await;
                 Some(true)
             }
-            #[allow(unused_variables)]
             TrainingEvent::Upgrade { server_handle } => {
-                // TODO: Ver como reincorporar este handle a la session, capaz lo que conviene
-                //       es que los handles de server los tenga este listener y despues se los
-                //       devuelva a la session una vez que termina el entrenamiento?.
-                todo!();
+                self.server_handles.push(*server_handle);
+                Some(true)
             }
             other => {
                 let is_err = matches!(other, TrainingEvent::Error(..));
