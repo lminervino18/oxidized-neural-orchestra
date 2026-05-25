@@ -85,6 +85,9 @@ impl Validator {
 
         if let AlgorithmConfig::ParameterServer {
             ref server_addrs, ..
+        }
+        | AlgorithmConfig::StrategySwitch {
+            ref server_addrs, ..
         } = training.algorithm
             && server_addrs.is_empty()
         {

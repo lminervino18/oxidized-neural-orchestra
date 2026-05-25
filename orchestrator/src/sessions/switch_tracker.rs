@@ -46,6 +46,10 @@ impl SwitchTracker {
     /// # Returns
     /// `true` if it should switch, `false` otherwise.
     pub fn should_switch(&mut self) -> bool {
+        if self.losses.len() < *self.winsize {
+            return false;
+        }
+
         let mut sum = 0.0;
 
         for i in 1..*self.winsize {

@@ -223,11 +223,17 @@ impl Session {
         T: TransportLayer + 'static,
     {
         match algorithm {
-            AlgorithmConfig::ParameterServer { .. } | AlgorithmConfig::StrategySwitch { .. } => {
+            AlgorithmConfig::ParameterServer { .. } => {
                 Self::finalize_parameter_server(server_handles, user_event_tx).await
             }
             AlgorithmConfig::AllReduce => {
                 Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
+            }
+            AlgorithmConfig::StrategySwitch { .. } if server_handles.is_empty() => {
+                Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
+            }
+            AlgorithmConfig::StrategySwitch { .. } => {
+                Self::finalize_parameter_server(server_handles, user_event_tx).await
             }
         }
     }

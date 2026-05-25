@@ -52,9 +52,6 @@ impl Adapter {
         model: ModelConfig,
         training: &'a TrainingConfig,
     ) -> Result<(OrchAdapt, Vec<WorkerAdapt<'a>>, Vec<ServerAdapt>)> {
-        let partitions =
-            self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
-
         let (orch, workers, servers) = match training.algorithm {
             AlgorithmConfig::ParameterServer {
                 ref server_addrs,
@@ -64,6 +61,9 @@ impl Adapter {
                 let orch = self.adapt_non_strategy_switch_orch(&model, training)?;
                 let (servers, server_sizes, server_ordering) =
                     self.adapt_servers(&model, training, server_addrs, synchronizer, store)?;
+
+                let partitions =
+                    self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
 
                 let workers = self.adapt_parameter_server_workers(
                     &model,
@@ -78,6 +78,9 @@ impl Adapter {
             }
             AlgorithmConfig::AllReduce => {
                 let orch = self.adapt_non_strategy_switch_orch(&model, training)?;
+                let partitions =
+                    self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
+
                 let workers = self.adapt_all_reduce_workers(&model, training, partitions)?;
                 (orch, workers, Vec::new())
             }
@@ -86,6 +89,7 @@ impl Adapter {
                 synchronizer,
                 store,
             } => {
+                let starting_workers = training.worker_addrs.len() + server_addrs.len();
                 let orch = self.adapt_strategy_switch_orch(
                     &model,
                     training,
@@ -93,6 +97,9 @@ impl Adapter {
                     synchronizer,
                     store,
                 )?;
+
+                let partitions =
+                    self.adapt_dataset_partitions(&training.dataset, starting_workers)?;
 
                 let workers = self.adapt_strategy_switch_workers(
                     &model,
@@ -362,8 +369,15 @@ impl Adapter {
         let nworkers = training.worker_addrs.len();
         let trainer_spec = self.adapt_trainer(model, training);
         let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
+        let addrs = training
+            .worker_addrs
+            .iter()
+            .chain(&server_addrs)
+            .cloned()
+            .collect();
+
         let algorithm_spec = AlgorithmSpec::AllReduce {
-            worker_addrs: training.worker_addrs.clone(),
+            worker_addrs: addrs,
             param_gen: ParamGenSpec::Chained {
                 specs: param_gen_specs,
             },

@@ -71,6 +71,8 @@ impl WorkerListener {
                         Ok(ReqResolution::Continue) => {},
                         Ok(ReqResolution::Halt) => break,
                         Ok(ReqResolution::Upgrade { spec, ranges }) => {
+                            info!("upgrading worker {id}");
+
                             let event = match self.handle_upgrade(spec, ranges).await {
                                 Ok(server_handle) => TrainingEvent::Upgrade {
                                     server_handle: Box::new(server_handle)
@@ -173,6 +175,8 @@ impl WorkerListener {
                 server_sizes,
                 server_ordering,
             } => {
+                info!("switching worker {id}");
+
                 if let Err(e) = self
                     .worker_handle
                     .switch(server_addrs, server_sizes, server_ordering)
