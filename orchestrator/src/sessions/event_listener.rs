@@ -118,6 +118,7 @@ impl<'a> EventListener<'a> {
             }
             TrainingEvent::Upgrade { server_handle } => {
                 self.server_handles.push(*server_handle);
+                self.workers_left = self.workers_left.saturating_sub(1);
                 Some(true)
             }
             other => {
