@@ -9,7 +9,7 @@ use crate::{
     floats::Float01,
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
-    specs::server::ServerSpec,
+    specs::{machine_learning::TrainerSpec, server::ServerSpec},
     transport::TransportLayer,
 };
 
@@ -199,11 +199,13 @@ impl<T: TransportLayer> WorkerHandle<T> {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     ) -> io::Result<()> {
         let msg = Msg::Control(Command::Switch {
             server_addrs,
             server_sizes,
             server_ordering,
+            trainer_spec,
         });
 
         self.transport.send(&msg).await

@@ -3,6 +3,8 @@ use std::{borrow::Cow, io};
 use half::f16;
 use serde::{Deserialize, Serialize};
 
+use crate::specs::machine_learning::TrainerSpec;
+
 use super::specs::{node::NodeSpec, server::ServerSpec};
 
 pub type Header = u32;
@@ -45,6 +47,7 @@ pub enum Command<'a> {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     ReportLoss {
         losses: Cow<'a, [f64]>,

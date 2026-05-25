@@ -6,7 +6,7 @@ mod validator;
 
 use std::num::NonZeroUsize;
 
-use comms::specs::{server::ServerSpec, worker::WorkerSpec};
+use comms::specs::{machine_learning::TrainerSpec, server::ServerSpec, worker::WorkerSpec};
 
 pub use adapter::Adapter;
 pub use model::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
@@ -26,6 +26,7 @@ pub enum WorkerPostAction {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     Upgrade {
         spec: ServerSpec,

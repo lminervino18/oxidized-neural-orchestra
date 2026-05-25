@@ -8,7 +8,10 @@ mod switch_tracker;
 mod trained_model;
 mod worker_listener;
 
-use comms::{NetRtp, ParamServerHandle, specs::server::ServerSpec};
+use comms::{
+    NetRtp, ParamServerHandle,
+    specs::{machine_learning::TrainerSpec, server::ServerSpec},
+};
 
 pub use cancel_handle::CancelHandle;
 pub use convergence_tracker::ConvergenceTracker;
@@ -31,6 +34,7 @@ pub enum WorkerRequest {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     Upgrade {
         spec: Box<ServerSpec>,

@@ -187,24 +187,26 @@ impl Adapter {
         let winsize = GreaterThanOneUsize::new(5).unwrap();
         let tracker = SwitchTracker::new(winsize, 0.01);
 
+        let trainer_spec = self.adapt_trainer(model, training);
         let (_, _, _, param_ranges) = self.adapt_param_gens(model, training, nservers)?;
         let (servers, server_sizes, server_ordering) =
             self.adapt_servers(model, training, server_addrs, synchronizer, store)?;
+
+        let switches = (0..nworkers).map(|_| WorkerPostAction::Switch {
+            server_addrs: server_addrs.to_vec(),
+            server_sizes: server_sizes.clone(),
+            server_ordering: server_ordering.clone(),
+            trainer_spec: trainer_spec.clone(),
+        });
 
         let upgrades = servers
             .into_iter()
             .zip(param_ranges)
             .map(|(ServerAdapt { spec, .. }, ranges)| WorkerPostAction::Upgrade { spec, ranges });
 
-        let switches = (0..nworkers).map(|_| WorkerPostAction::Switch {
-            server_addrs: server_addrs.to_vec(),
-            server_sizes: server_sizes.clone(),
-            server_ordering: server_ordering.clone(),
-        });
-
         let tracking = StrategySwitchTracking {
             tracker,
-            post_actions: upgrades.chain(switches).collect(),
+            post_actions: switches.chain(upgrades).collect(),
         };
 
         let adapt = OrchAdapt {
@@ -564,21 +566,39 @@ impl Adapter {
         }
 
         let chained_param_gens = param_gen_bins.into_iter().map(|bin| {
-            let (specs, sizes): (Vec<_>, Vec<_>) = bin
-                .into_iter()
-                .map(|(_, spec)| {
-                    let size = spec.size();
-                    (spec, size)
-                })
-                .unzip();
+            let mut specs = Vec::with_capacity(bin.len());
+            let mut local_ranges = Vec::with_capacity(bin.len());
+            let mut local_offset = 0;
 
+            for (_, spec) in bin {
+                let size = spec.size();
+                specs.push(spec);
+
+                local_ranges.push((local_offset, local_offset + size));
+                local_offset += size;
+            }
+
+            local_ranges.sort_unstable();
             let chained = ParamGenSpec::Chained { specs };
-            (chained, sizes.into_iter().sum::<usize>())
+            (chained, local_offset, local_ranges)
         });
 
-        let (param_gen_specs, server_sizes) = chained_param_gens.unzip();
-        let ranges = Vec::new();
-        Ok((param_gen_specs, server_sizes, server_ordering, ranges))
+        let mut param_gen_specs = Vec::new();
+        let mut server_sizes = Vec::new();
+        let mut server_ranges = Vec::new();
+
+        for (chained, size, ranges) in chained_param_gens {
+            param_gen_specs.push(chained);
+            server_sizes.push(size);
+            server_ranges.push(ranges);
+        }
+
+        Ok((
+            param_gen_specs,
+            server_sizes,
+            server_ordering,
+            server_ranges,
+        ))
     }
 
     /// Adapts a `SynchronizerConfig` into a `SynchronizerSpec`.

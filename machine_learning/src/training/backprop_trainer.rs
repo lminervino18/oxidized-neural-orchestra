@@ -4,11 +4,11 @@ use rand::Rng;
 
 use super::{TrainResult, Trainer};
 use crate::{
-    arch::{loss::LossFn, Sequential},
+    Result,
+    arch::{Sequential, loss::LossFn},
     datasets::{DataSrc, Dataset},
     optimization::{GradientDescent, Optimizer},
     param_manager::ParamManager,
-    Result,
 };
 
 /// A model `Trainer`. Contains the relevant components needed for training a model,

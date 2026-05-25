@@ -3,12 +3,15 @@ use std::io;
 use comms::{
     Acceptor, Connection, Connector, DatasetSrc, OrchHandle, ParamServerHandle, TransportLayer,
     protocol::Entity,
-    specs::worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
+    specs::{
+        machine_learning::TrainerSpec,
+        worker::{AlgorithmSpec, SerializerSpec, WorkerSpec},
+    },
 };
 use machine_learning::{
-    datasets::DataSrc,
+    datasets::{DataSrc, Dataset},
     initialization::ParamGenBuilder,
-    training::{Trainer, TrainerBuilder},
+    training::TrainerBuilder,
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -154,7 +157,8 @@ where
     /// * `server_addrs` - The servers' network addresses.
     /// * `server_sizes` - The sizes of the worker nodes.
     /// * `server_ordering` - The ordering of the server layers.
-    /// * `trainer` - The trainer used to train until now.
+    /// * `dataset` - The dataset that the worker has been using until now.
+    /// * `trainer_spec` - The trainer specification for the new trainer.
     /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
@@ -165,7 +169,8 @@ where
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-        mut trainer: Box<dyn Trainer>,
+        dataset: Dataset,
+        trainer_spec: TrainerSpec,
         orch_handle: &'a mut OrchHandle<T>,
     ) -> io::Result<ParamServerWorker<'a, T>> {
         let WorkerSpec {
@@ -174,6 +179,10 @@ where
             seed,
             ..
         } = spec;
+
+        let trainer_builder = TrainerBuilder::new();
+        let mut trainer = trainer_builder.build(trainer_spec, &server_sizes);
+        trainer.load_dataset(dataset.into_src());
 
         let cluster_manager = self
             .connect_to_servers(

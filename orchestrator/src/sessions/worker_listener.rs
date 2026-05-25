@@ -174,12 +174,13 @@ impl WorkerListener {
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                trainer_spec,
             } => {
                 info!("switching worker {id}");
 
                 if let Err(e) = self
                     .worker_handle
-                    .switch(server_addrs, server_sizes, server_ordering)
+                    .switch(server_addrs, server_sizes, server_ordering, trainer_spec)
                     .await
                 {
                     let details = format!("failed to switch worker {id}: {e}");
