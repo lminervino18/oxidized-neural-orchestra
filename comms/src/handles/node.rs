@@ -1,4 +1,7 @@
-use std::io;
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
 use super::{ParamServerHandle, WorkerHandle};
 use crate::{
@@ -64,6 +67,36 @@ impl<T: TransportLayer> NodeHandle<T> {
     /// An io error if occurred.
     async fn create(&mut self, spec: NodeSpec) -> io::Result<()> {
         let msg = Msg::Control(Command::CreateNode { spec });
+        self.transport.send(&msg).await
+    }
+
+    /// Sends a ping request to the node.
+    ///
+    /// # Returns
+    /// The round trip time duration the other node took to respond.
+    pub async fn ping(&mut self) -> io::Result<Duration> {
+        let msg = Msg::Control(Command::Ping);
+
+        let start = Instant::now();
+        self.transport.send(&msg).await?;
+        Ok(start.elapsed())
+    }
+
+    /// Responds to a ping request by sending a pong response.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn pong(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Pong);
+        self.transport.send(&msg).await
+    }
+
+    /// Disconncts the node.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn disconnect(&mut self) -> io::Result<()> {
+        let msg = Msg::Controll(Command::Disconnect);
         self.transport.send(&msg).await
     }
 }

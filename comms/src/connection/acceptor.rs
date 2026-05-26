@@ -55,7 +55,7 @@ where
             Entity::ParamServer { id } => {
                 Connection::ParamServer(ParamServerHandle::new(id, transport_layer))
             }
-            Entity::Orchestrator => Connection::Orchestrator(OrchHandle::new(transport_layer)),
+            Entity::Orchestrator => Connection::Orch(OrchHandle::new(transport_layer)),
         };
 
         Ok(conn)

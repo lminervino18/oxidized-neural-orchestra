@@ -4,7 +4,10 @@ use super::DatasetSrc;
 use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset,
-    specs::{node::NodeSpec, server::ServerSpec},
+    specs::{
+        node::{NodeSpec, StatRequest},
+        server::ServerSpec,
+    },
     transport::TransportLayer,
 };
 
@@ -16,9 +19,15 @@ pub struct OrchHandle<T: TransportLayer> {
 /// A notified orchestrator event.
 #[derive(Debug)]
 pub enum OrchEvent {
+    Create {
+        spec: NodeSpec,
+    },
     Disconnect,
     RequestParams,
     ShareDataset,
+    StatsRequest {
+        reqs: Vec<StatRequest>,
+    },
     Stop,
     Switch {
         server_addrs: Vec<String>,
@@ -44,22 +53,6 @@ where
     /// A new `OrchHandle` instance.
     pub fn new(transport: T) -> Self {
         Self { transport }
-    }
-
-    /// Waits till the orchestrator sends the specification for this node.
-    ///
-    /// # Returns
-    /// The specification or an io error if occurred.
-    pub async fn pull_specification(&mut self) -> io::Result<NodeSpec> {
-        let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateNode { spec }) => spec,
-            msg => {
-                let text = format!("Expected node specification from orchestrator, got: {msg:?}");
-                return Err(io::Error::other(text));
-            }
-        };
-
-        Ok(spec)
     }
 
     /// Pushes the latest parameters to the orchestrator.
@@ -102,7 +95,9 @@ where
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
             Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
             Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
+            Msg::Control(Command::CreateNode { spec }) => OrchEvent::Create { spec },
             Msg::Control(Command::Upgrade { spec, ranges }) => OrchEvent::Upgrade { spec, ranges },
+            Msg::Control(Command::RequestStats { reqs }) => OrchEvent::StatsRequest { reqs },
             Msg::Control(Command::Switch {
                 server_addrs,
                 server_sizes,

@@ -3,7 +3,10 @@ use std::{borrow::Cow, io};
 use half::f16;
 use serde::{Deserialize, Serialize};
 
-use super::specs::{node::NodeSpec, server::ServerSpec};
+use super::specs::{
+    node::{NodeSpec, StatRequest, StatResponse},
+    server::ServerSpec,
+};
 
 pub type Header = u32;
 pub const HEADER_SIZE: usize = size_of::<Header>();
@@ -33,27 +36,35 @@ pub enum Command<'a> {
     CreateNode {
         spec: NodeSpec,
     },
+    Disconnect,
+    Done,
+    Eof,
+    Ping,
+    Pong,
+    ReportLoss {
+        losses: Cow<'a, [f64]>,
+    },
+    RequestParams,
+    RequestStats {
+        reqs: Vec<StatRequest>,
+    },
     ShareDataset,
     ShareDatasetSize {
         size: usize,
     },
-    Upgrade {
-        spec: ServerSpec,
-        ranges: Vec<(usize, usize)>,
+    Stats {
+        res: Vec<StatResponse>,
     },
+    StopAfterEpoch,
     Switch {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
     },
-    ReportLoss {
-        losses: Cow<'a, [f64]>,
+    Upgrade {
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
     },
-    RequestParams,
-    StopAfterEpoch,
-    Disconnect,
-    Done,
-    Eof,
 }
 
 /// The application layer message for the entire system.

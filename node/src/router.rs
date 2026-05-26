@@ -1,7 +1,8 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchHandle, TransportLayer, share_dataset,
+    Acceptor, Connection, Connector, NodeHandle, OrchEvent, OrchHandle, TransportLayer,
+    share_dataset,
     specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
 };
 use log::{error, info, warn};
@@ -71,20 +72,45 @@ where
         loop {
             info!("awaiting connection");
 
-            let Connection::Orchestrator(mut orch_handle) = self.acceptor.accept().await? else {
+            let Connection::Orch(orch_handle) = self.acceptor.accept().await? else {
                 warn!("expected an orchestrator connection, got something else");
                 continue;
             };
 
-            let Ok(spec) = orch_handle.pull_specification().await else {
-                warn!("failed to get node specification");
-                continue;
-            };
-
-            if let Err(e) = self.route(spec, orch_handle).await {
-                error!("session failed with an error: {e}");
-            }
+            self.handle_orch(orch_handle).await;
         }
+    }
+
+    /// Handles an incoming node connection.
+    ///
+    /// # Args
+    /// * `node_handle` - The newly connected node handle.
+    pub async fn handle_node(&mut self, mut node_handle: NodeHandle<T>) {
+        todo!()
+    }
+
+    /// Handles an incoming orchestrator connection.
+    ///
+    /// # Args
+    /// * `orch_handle` - The newly connected orchestrator handle.
+    pub async fn handle_orch(&mut self, mut orch_handle: OrchHandle<T>) {
+        let spec = while let Ok(event) = orch_handle.recv_event().await {
+            match event {
+                OrchEvent::Create { spec } => {
+                    if let Err(e) = self.route(spec, orch_handle).await {
+                        error!("session failed with an error: {e}");
+                    }
+                }
+                OrchEvent::Disconnect => return,
+                OrchEvent::StatsRequest { reqs } => {
+                    self.service_stat_requests(reqs).await;
+                }
+                msg => {
+                    warn!("received an unexpected orch event: {msg:?}");
+                    continue;
+                }
+            }
+        };
     }
 
     /// Given a node specification calls the correspondent run handler.
