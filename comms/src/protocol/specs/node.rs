@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,14 +8,16 @@ use super::{server::ServerSpec, worker::WorkerSpec};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StatRequest {
-    Ping { addr: String, times: usize },
+    Ping { addrs: Vec<String>, times: usize },
 }
 
 /// A resolved statistic request from a node.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StatResponse {
-    Pong { addr: String, rtts: Vec<Duration> },
+    Pong {
+        rtts: HashMap<String, Vec<Duration>>,
+    },
 }
 
 /// The role assigned to an uninitialized node at bootstrap.

@@ -23,9 +23,10 @@ pub enum Payload<'a> {
 /// An enum of the different types of entities in the system.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Entity {
-    Worker { id: usize },
-    ParamServer { id: usize },
+    Node { id: usize },
     Orchestrator,
+    ParamServer { id: usize },
+    Worker { id: usize },
 }
 
 /// The command for the `Control` variant of the `Msg` enum.
@@ -46,6 +47,7 @@ pub enum Command<'a> {
     },
     RequestParams,
     RequestStats {
+        id: usize,
         reqs: Vec<StatRequest>,
     },
     ShareDataset,
@@ -53,7 +55,7 @@ pub enum Command<'a> {
         size: usize,
     },
     Stats {
-        res: Vec<StatResponse>,
+        stats: Vec<StatResponse>,
     },
     StopAfterEpoch,
     Switch {

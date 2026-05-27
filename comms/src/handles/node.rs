@@ -1,7 +1,4 @@
-use std::{
-    io,
-    time::{Duration, Instant},
-};
+use std::io;
 
 use super::{ParamServerHandle, WorkerHandle};
 use crate::{
@@ -19,6 +16,11 @@ use crate::{
 pub struct NodeHandle<T: TransportLayer> {
     id: usize,
     transport: T,
+}
+
+/// A notified node event.
+pub enum NodeEvent {
+    Pong,
 }
 
 impl<T: TransportLayer> NodeHandle<T> {
@@ -73,13 +75,10 @@ impl<T: TransportLayer> NodeHandle<T> {
     /// Sends a ping request to the node.
     ///
     /// # Returns
-    /// The round trip time duration the other node took to respond.
-    pub async fn ping(&mut self) -> io::Result<Duration> {
+    /// An io error if occurred.
+    pub async fn ping(&mut self) -> io::Result<()> {
         let msg = Msg::Control(Command::Ping);
-
-        let start = Instant::now();
-        self.transport.send(&msg).await?;
-        Ok(start.elapsed())
+        self.transport.send(&msg).await
     }
 
     /// Responds to a ping request by sending a pong response.
@@ -91,12 +90,28 @@ impl<T: TransportLayer> NodeHandle<T> {
         self.transport.send(&msg).await
     }
 
+    /// Blocks until receiving an event from a node.
+    ///
+    /// # Returns
+    /// A `NodeEvent` message or an io error if occurred.
+    pub async fn recv_event(&mut self) -> io::Result<NodeEvent> {
+        let event = match self.transport.recv().await? {
+            Msg::Control(Command::Pong) => NodeEvent::Pong,
+            msg => {
+                let text = format!("Unexpected message from worker {}, got: {msg:?}", self.id);
+                return Err(io::Error::other(text));
+            }
+        };
+
+        Ok(event)
+    }
+
     /// Disconncts the node.
     ///
     /// # Returns
     /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
-        let msg = Msg::Controll(Command::Disconnect);
+        let msg = Msg::Control(Command::Disconnect);
         self.transport.send(&msg).await
     }
 }

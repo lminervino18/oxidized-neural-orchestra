@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData};
 
 use super::Connection;
 use crate::{
-    OrchHandle, ParamServerHandle, WorkerHandle,
+    NodeHandle, OrchHandle, ParamServerHandle, WorkerHandle,
     protocol::{Command, Entity, Msg},
     transport::TransportLayer,
 };
@@ -56,6 +56,7 @@ where
                 Connection::ParamServer(ParamServerHandle::new(id, transport_layer))
             }
             Entity::Orchestrator => Connection::Orch(OrchHandle::new(transport_layer)),
+            Entity::Node { id } => Connection::Node(NodeHandle::new(id, transport_layer)),
         };
 
         Ok(conn)
