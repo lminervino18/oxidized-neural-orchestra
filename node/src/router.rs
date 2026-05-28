@@ -98,8 +98,8 @@ where
                         error!("session failed with an error: {e}");
                     }
                 }
-                OrchEvent::StatsRequest { id, reqs } => {
-                    if let Err(e) = self.service(id, reqs, orch_handle).await {
+                OrchEvent::StatsRequest { reqs } => {
+                    if let Err(e) = self.service(reqs, orch_handle).await {
                         error!("stat service failed with an error: {e}");
                     }
                 }
@@ -117,7 +117,6 @@ where
     /// Services the requests the orchestrator asks for.
     ///
     /// # Args
-    /// * `id` - The id for this node during the stat resolving.
     /// * `reqs` - The requests the orchestrator made.
     /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
@@ -125,11 +124,10 @@ where
     /// An io error if occurred.
     async fn service(
         &mut self,
-        id: usize,
         reqs: Vec<StatRequest>,
         mut orch_handle: OrchHandle<T>,
     ) -> io::Result<()> {
-        let mut service = StatService::new(id, &mut self.acceptor, &mut self.connector);
+        let mut service = StatService::new(&mut self.acceptor, &mut self.connector);
         let stats = service.serve(reqs).await;
         orch_handle.push_stats(stats).await
     }

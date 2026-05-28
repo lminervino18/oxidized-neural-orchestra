@@ -4,19 +4,32 @@ use serde::{Deserialize, Serialize};
 
 use super::{server::ServerSpec, worker::WorkerSpec};
 
+/// A statistic.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct Stat<T> {
+    pub min: T,
+    pub max: T,
+    pub mean: T,
+}
+
 /// A statistic request for a node to resolve.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StatRequest {
-    Ping { addrs: Vec<String>, times: usize },
+    Ping {
+        addrs: Vec<String>,
+        rounds: usize,
+        incoming: usize,
+    },
 }
 
 /// A resolved statistic request from a node.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StatResponse {
-    Pong {
-        rtts: HashMap<String, Vec<Duration>>,
+    Ping {
+        rtts: HashMap<String, Stat<Duration>>,
     },
 }
 

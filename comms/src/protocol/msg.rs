@@ -46,15 +46,14 @@ pub enum Command<'a> {
         losses: Cow<'a, [f64]>,
     },
     RequestParams,
-    RequestStats {
-        id: usize,
-        reqs: Vec<StatRequest>,
-    },
     ShareDataset,
     ShareDatasetSize {
         size: usize,
     },
-    Stats {
+    StatsRequest {
+        reqs: Vec<StatRequest>,
+    },
+    StatsResponse {
         stats: Vec<StatResponse>,
     },
     StopAfterEpoch,

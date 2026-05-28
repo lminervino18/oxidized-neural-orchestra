@@ -19,7 +19,9 @@ pub struct NodeHandle<T: TransportLayer> {
 }
 
 /// A notified node event.
+#[derive(Debug, Clone, Copy)]
 pub enum NodeEvent {
+    Ping,
     Pong,
 }
 
@@ -96,6 +98,7 @@ impl<T: TransportLayer> NodeHandle<T> {
     /// A `NodeEvent` message or an io error if occurred.
     pub async fn recv_event(&mut self) -> io::Result<NodeEvent> {
         let event = match self.transport.recv().await? {
+            Msg::Control(Command::Ping) => NodeEvent::Ping,
             Msg::Control(Command::Pong) => NodeEvent::Pong,
             msg => {
                 let text = format!("Unexpected message from worker {}, got: {msg:?}", self.id);

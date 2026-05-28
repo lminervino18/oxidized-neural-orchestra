@@ -26,7 +26,6 @@ pub enum OrchEvent {
     RequestParams,
     ShareDataset,
     StatsRequest {
-        id: usize,
         reqs: Vec<StatRequest>,
     },
     Stop,
@@ -95,7 +94,7 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn push_stats(&mut self, stats: Vec<StatResponse>) -> io::Result<()> {
-        let msg = Msg::Control(Command::Stats { stats });
+        let msg = Msg::Control(Command::StatsResponse { stats });
         self.transport.send(&msg).await
     }
 
@@ -110,9 +109,7 @@ where
             Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
             Msg::Control(Command::CreateNode { spec }) => OrchEvent::Create { spec },
             Msg::Control(Command::Upgrade { spec, ranges }) => OrchEvent::Upgrade { spec, ranges },
-            Msg::Control(Command::RequestStats { id, reqs }) => {
-                OrchEvent::StatsRequest { id, reqs }
-            }
+            Msg::Control(Command::StatsRequest { reqs }) => OrchEvent::StatsRequest { reqs },
             Msg::Control(Command::Switch {
                 server_addrs,
                 server_sizes,
