@@ -1,3 +1,4 @@
+mod calculator;
 pub mod configs;
 pub mod dataset_format;
 mod error;
