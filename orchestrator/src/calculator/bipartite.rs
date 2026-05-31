@@ -2,7 +2,7 @@ use std::num::NonZeroUsize;
 
 use super::Graph;
 
-/// Calculates the `k` vertices that are the best centered in a `K_{k, n - k}` graph.
+/// Calculates the `k` vertices that are the most centered in a `K_{k, n - k}` subgraph of `graph`.
 ///
 /// # Args
 /// * `graph` - The graph containing all the weights.
@@ -14,24 +14,33 @@ pub fn bipartite_center<W>(graph: Graph<W>, k: usize) -> Vec<usize>
 where
     W: Copy + Ord,
 {
-    let Some(k) = NonZeroUsize::new(k) else {
-        return Vec::new();
-    };
-
     if graph.is_empty() {
         return Vec::new();
     }
 
     let n = graph.len();
-
-    if k.get() >= n {
+    if k >= n {
         return (0..n).collect();
     }
 
-    let mut center = Vec::with_capacity(k.get());
-    let opt = Vec::with_capacity(k.get());
+    let Some(k) = NonZeroUsize::new(k) else {
+        return Vec::new();
+    };
 
-    bt(&graph, k, 0, &mut center, opt, None).0
+    let center_bitmask = bt(&graph, k, 0, 0, 0, None).0;
+    let mut center = Vec::with_capacity(k.get());
+
+    for i in 0..usize::BITS as usize {
+        if center_bitmask & (1 << i) != 0 {
+            center.push(i);
+        }
+
+        if center.len() == k.get() {
+            break;
+        }
+    }
+
+    center
 }
 
 /// Backtracking exploration through every central vertices combination.
@@ -50,39 +59,41 @@ fn bt<W>(
     graph: &Graph<W>,
     k: NonZeroUsize,
     start: usize,
-    center: &mut Vec<usize>,
-    mut opt: Vec<usize>,
-    mut opt_score: Option<W>,
-) -> (Vec<usize>, Option<W>)
+    center: usize,
+    mut opt: usize,
+    mut opt_min: Option<W>,
+) -> (usize, Option<W>)
 where
     W: Copy + Ord,
 {
-    if center.len() == k.get() {
+    let in_center = center.count_ones() as usize;
+
+    if in_center == k.get() {
         // SAFETY: The length of the central vertices slice is positive.
         let score = eval_centrality(graph, center).unwrap();
 
-        if opt_score.is_none_or(|min| score < min) {
-            return (center.clone(), Some(score));
+        if opt_min.is_none_or(|min| score < min) {
+            opt = center;
+            opt_min = Some(score);
         }
 
-        return (opt, opt_score);
+        return (opt, opt_min);
     }
 
     let n = graph.len();
-    let left_to_find = k.get() - center.len();
+    let left_to_find = k.get() - in_center;
     let left_to_search = n - start;
 
     if left_to_find > left_to_search {
-        return (opt, opt_score);
+        return (opt, opt_min);
     }
 
     for i in start..n {
-        center.push(i);
-        (opt, opt_score) = bt(graph, k, i + 1, center, opt, opt_score);
-        center.pop();
+        let bit = 1 << i;
+        (opt, opt_min) = bt(graph, k, i + 1, center | bit, opt, opt_min);
     }
 
-    (opt, opt_score)
+    (opt, opt_min)
 }
 
 /// Evaluates the current centrality of the vertices.
@@ -93,16 +104,23 @@ where
 ///
 /// # Returns
 /// The maximum weight of centrality or `None` if there are no central nodes.
-fn eval_centrality<W>(graph: &Graph<W>, center: &[usize]) -> Option<W>
+fn eval_centrality<W>(graph: &Graph<W>, center: usize) -> Option<W>
 where
     W: Copy + Ord,
 {
     let n = graph.len();
-    let periphery = (0..n).filter(|v| !center.contains(v));
     let mut max = None;
 
-    for v in periphery {
-        for &w in center {
+    for v in 0..n {
+        if (center & (1 << v)) != 0 {
+            continue;
+        }
+
+        for w in 0..n {
+            if (center & (1 << w)) == 0 {
+                continue;
+            }
+
             if let Some(weight) = graph.get_weight(v, w) {
                 max = Some(max.unwrap_or(weight).max(weight));
             }
@@ -165,9 +183,12 @@ mod tests {
     #[test]
     fn medium_test() {
         let edges = [
-            (0, 1, 1), //
-            (0, 2, 1), //
-            (0, 3, 1), //
+            (0, 1, 1),    //
+            (0, 2, 1),    //
+            (0, 3, 1),    //
+            (1, 2, 1000), //
+            (1, 3, 1000), //
+            (2, 3, 1000), //
         ];
 
         let graph = Graph::new(4, edges).unwrap();

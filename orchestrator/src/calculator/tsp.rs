@@ -5,7 +5,7 @@ use super::Graph;
 /// Calculates the best cycle through the given graph.
 ///
 /// The amount of vertices is capped at `usize::BITS`. If a larger graph is
-/// given the result will be an empty `Vec`.
+/// inputed the result will be an empty `Vec`.
 ///
 /// # Args
 /// * `graph` - The graph containing all the weights.
@@ -65,7 +65,7 @@ where
         return Some(solution);
     }
 
-    if visited == (1 << n) - 1 {
+    if visited.count_ones() as usize == n {
         return graph.get_weight(v, 0);
     }
 
@@ -106,9 +106,9 @@ fn reconstruct_solution(n: usize, parent: &[Option<usize>]) -> Vec<usize> {
     while path.len() < n {
         let i = visited * n + v;
 
-        // SAFETY: If reconstruct_solution is invoqued, it means dp found
+        // SAFETY: If `reconstruct_solution` is invoqued, it means dp found
         //         a hamiltonian cycle, meaning that this path should be
-        //         entirely mapped onto the parent table.
+        //         entirely mapped onto the `parent` table.
         let w = parent[i].unwrap();
         visited |= 1 << w;
         path.push(w);
@@ -116,4 +116,65 @@ fn reconstruct_solution(n: usize, parent: &[Option<usize>]) -> Vec<usize> {
     }
 
     path
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_graph() {
+        let graph: Graph<usize> = Graph::new(10, []).unwrap();
+        let path = travelling_salesman_cycle(&graph);
+        assert_eq!(path, Vec::<usize>::new());
+    }
+
+    #[test]
+    fn small_test() {
+        let edges = [
+            (0, 1, 1), //
+            (0, 2, 2), //
+            (1, 2, 3), //
+        ];
+
+        let graph = Graph::new(3, edges).unwrap();
+        let path = travelling_salesman_cycle(&graph);
+        assert_eq!(*path, [0, 1, 2]);
+    }
+
+    #[test]
+    fn medium_test() {
+        let edges = [
+            (0, 1, 1),    //
+            (0, 2, 1000), //
+            (0, 3, 1),    //
+            (1, 2, 1),    //
+            (1, 3, 1000), //
+            (2, 3, 1),    //
+        ];
+
+        let graph = Graph::new(4, edges).unwrap();
+        let path = travelling_salesman_cycle(&graph);
+        assert_eq!(*path, [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn large_test() {
+        let edges = [
+            (0, 1, 1000), //
+            (0, 2, 1),    //
+            (0, 3, 1),    //
+            (0, 4, 1000), //
+            (1, 2, 1000), //
+            (1, 3, 1),    //
+            (1, 4, 1),    //
+            (2, 3, 1000), //
+            (2, 4, 1),    //
+            (3, 4, 1000), //
+        ];
+
+        let graph = Graph::new(5, edges).unwrap();
+        let path = travelling_salesman_cycle(&graph);
+        assert_eq!(*path, [0, 2, 4, 1, 3]);
+    }
 }
