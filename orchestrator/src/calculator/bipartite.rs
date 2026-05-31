@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use super::CompleteGraph;
+use super::Graph;
 
 /// Calculates the `k` vertices that are the best centered in a `K_{k, n - k}` graph.
 ///
@@ -9,10 +9,10 @@ use super::CompleteGraph;
 /// * `k` - The amount of central nodes.
 ///
 /// # Returns
-///
-pub fn min_max_bipartite_partition<W>(graph: CompleteGraph<W>, k: usize) -> Vec<usize>
+/// The set of the k most central vertices.
+pub fn bipartite_center<W>(graph: Graph<W>, k: usize) -> Vec<usize>
 where
-    W: Clone + Copy + Ord,
+    W: Copy + Ord,
 {
     let Some(k) = NonZeroUsize::new(k) else {
         return Vec::new();
@@ -47,7 +47,7 @@ where
 /// # Returns
 /// The optimal solution and it's max weight.
 fn bt<W>(
-    graph: &CompleteGraph<W>,
+    graph: &Graph<W>,
     k: NonZeroUsize,
     start: usize,
     center: &mut Vec<usize>,
@@ -55,13 +55,13 @@ fn bt<W>(
     mut opt_score: Option<W>,
 ) -> (Vec<usize>, Option<W>)
 where
-    W: Clone + Copy + Ord,
+    W: Copy + Ord,
 {
     if center.len() == k.get() {
         // SAFETY: The length of the central vertices slice is positive.
         let score = eval_centrality(graph, center).unwrap();
 
-        if opt_score.map_or(true, |min| score < min) {
+        if opt_score.is_none_or(|min| score < min) {
             return (center.clone(), Some(score));
         }
 
@@ -93,9 +93,9 @@ where
 ///
 /// # Returns
 /// The maximum weight of centrality or `None` if there are no central nodes.
-fn eval_centrality<W>(graph: &CompleteGraph<W>, center: &[usize]) -> Option<W>
+fn eval_centrality<W>(graph: &Graph<W>, center: &[usize]) -> Option<W>
 where
-    W: Clone + Copy + Ord,
+    W: Copy + Ord,
 {
     let n = graph.len();
     let periphery = (0..n).filter(|v| !center.contains(v));
@@ -129,8 +129,8 @@ mod tests {
 
     #[test]
     fn empty_graph() {
-        let graph = CompleteGraph::new(0, [], usize::MAX).unwrap();
-        let center = min_max_bipartite_partition(graph, 1);
+        let graph: Graph<usize> = Graph::new(0, []).unwrap();
+        let center = bipartite_center(graph, 1);
         assert_eq!(center, Vec::<usize>::new());
     }
 
@@ -142,8 +142,8 @@ mod tests {
             (1, 2, 1), //
         ];
 
-        let graph = CompleteGraph::new(3, edges, usize::MAX).unwrap();
-        let center = min_max_bipartite_partition(graph, 0);
+        let graph = Graph::new(3, edges).unwrap();
+        let center = bipartite_center(graph, 0);
 
         assert_eq!(center, Vec::<usize>::new());
     }
@@ -156,8 +156,8 @@ mod tests {
             (1, 2, 2), //
         ];
 
-        let graph = CompleteGraph::new(3, edges, usize::MAX).unwrap();
-        let center = min_max_bipartite_partition(graph, 2);
+        let graph = Graph::new(3, edges).unwrap();
+        let center = bipartite_center(graph, 2);
 
         assert_are_central(center, [0, 1]);
     }
@@ -170,8 +170,8 @@ mod tests {
             (0, 3, 1), //
         ];
 
-        let graph = CompleteGraph::new(4, edges, usize::MAX).unwrap();
-        let center = min_max_bipartite_partition(graph, 3);
+        let graph = Graph::new(4, edges).unwrap();
+        let center = bipartite_center(graph, 3);
 
         assert_are_central(center, [1, 2, 3]);
     }
@@ -191,8 +191,8 @@ mod tests {
             (3, 4, 1),
         ];
 
-        let graph = CompleteGraph::new(5, edges, usize::MAX).unwrap();
-        let center = min_max_bipartite_partition(graph, 3);
+        let graph = Graph::new(5, edges).unwrap();
+        let center = bipartite_center(graph, 3);
 
         assert_are_central(center, [0, 1, 3]);
     }

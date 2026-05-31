@@ -3,5 +3,5 @@ mod graph;
 mod node_calculator;
 pub(super) mod tsp;
 
-pub(super) use graph::CompleteGraph;
+pub(super) use graph::Graph;
 pub use node_calculator::Calculator;
