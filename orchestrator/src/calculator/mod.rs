@@ -4,4 +4,4 @@ mod node_calculator;
 pub(super) mod tsp;
 
 pub(super) use graph::Graph;
-pub use node_calculator::Calculator;
+pub use node_calculator::{Calculator, RoleAssignment};

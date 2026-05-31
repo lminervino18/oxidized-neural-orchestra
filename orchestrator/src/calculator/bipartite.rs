@@ -1,8 +1,11 @@
-use std::num::NonZeroUsize;
+use std::{collections::HashSet, num::NonZeroUsize};
 
 use super::Graph;
 
 /// Calculates the `k` vertices that are the most centered in a `K_{k, n - k}` subgraph of `graph`.
+///
+/// The amount of vertices is capped at `usize::BITS`. If a larger graph is
+/// inputed the result will be an empty `Vec`.
 ///
 /// # Args
 /// * `graph` - The graph containing all the weights.
@@ -10,29 +13,34 @@ use super::Graph;
 ///
 /// # Returns
 /// The set of the k most central vertices.
-pub fn bipartite_center<W>(graph: Graph<W>, k: usize) -> Vec<usize>
+pub fn central_vertices<W>(graph: &Graph<W>, k: usize) -> HashSet<usize>
 where
     W: Copy + Ord,
 {
     if graph.is_empty() {
-        return Vec::new();
+        return HashSet::new();
     }
 
     let n = graph.len();
+
+    if n > usize::BITS as usize {
+        return HashSet::new();
+    }
+
     if k >= n {
         return (0..n).collect();
     }
 
     let Some(k) = NonZeroUsize::new(k) else {
-        return Vec::new();
+        return HashSet::new();
     };
 
-    let center_bitmask = bt(&graph, k, 0, 0, 0, None).0;
-    let mut center = Vec::with_capacity(k.get());
+    let center_bitmask = bt(graph, k, 0, 0, 0, None).0;
+    let mut center = HashSet::with_capacity(k.get());
 
     for i in 0..usize::BITS as usize {
         if center_bitmask & (1 << i) != 0 {
-            center.push(i);
+            center.insert(i);
         }
 
         if center.len() == k.get() {
@@ -136,20 +144,19 @@ mod tests {
 
     use super::*;
 
-    fn assert_are_central<I>(center: Vec<usize>, expected: I)
+    fn assert_are_central<I>(center: HashSet<usize>, expected: I)
     where
         I: IntoIterator<Item = usize>,
     {
         let expected_set: HashSet<_> = expected.into_iter().collect();
-        let center_set: HashSet<_> = center.into_iter().collect();
-        assert_eq!(center_set, expected_set);
+        assert_eq!(center, expected_set);
     }
 
     #[test]
     fn empty_graph() {
         let graph: Graph<usize> = Graph::new(0, []).unwrap();
-        let center = bipartite_center(graph, 1);
-        assert_eq!(center, Vec::<usize>::new());
+        let center = central_vertices(&graph, 1);
+        assert_eq!(center, HashSet::<usize>::new());
     }
 
     #[test]
@@ -161,9 +168,9 @@ mod tests {
         ];
 
         let graph = Graph::new(3, edges).unwrap();
-        let center = bipartite_center(graph, 0);
+        let center = central_vertices(&graph, 0);
 
-        assert_eq!(center, Vec::<usize>::new());
+        assert_eq!(center, HashSet::<usize>::new());
     }
 
     #[test]
@@ -175,7 +182,7 @@ mod tests {
         ];
 
         let graph = Graph::new(3, edges).unwrap();
-        let center = bipartite_center(graph, 2);
+        let center = central_vertices(&graph, 2);
 
         assert_are_central(center, [0, 1]);
     }
@@ -192,7 +199,7 @@ mod tests {
         ];
 
         let graph = Graph::new(4, edges).unwrap();
-        let center = bipartite_center(graph, 3);
+        let center = central_vertices(&graph, 3);
 
         assert_are_central(center, [1, 2, 3]);
     }
@@ -213,7 +220,7 @@ mod tests {
         ];
 
         let graph = Graph::new(5, edges).unwrap();
-        let center = bipartite_center(graph, 3);
+        let center = central_vertices(&graph, 3);
 
         assert_are_central(center, [0, 1, 3]);
     }
