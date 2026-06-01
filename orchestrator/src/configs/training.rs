@@ -1,4 +1,8 @@
-use std::{fmt, num::NonZeroUsize, path::PathBuf};
+use std::{
+    fmt::{self, Display, Formatter},
+    num::NonZeroUsize,
+    path::PathBuf,
+};
 
 use comms::floats::{Float01, FloatNonNegative, FloatPositive};
 use serde::{Deserialize, Serialize};
@@ -11,8 +15,8 @@ pub struct EarlyStoppingConfig {
     pub tolerance: FloatNonNegative,
 }
 
-impl fmt::Display for EarlyStoppingConfig {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for EarlyStoppingConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:.2e}", *self.tolerance)
     }
 }
@@ -93,10 +97,15 @@ pub enum AlgorithmConfig {
         store: StoreConfig,
     },
     AllReduce,
+    StrategySwitch {
+        server_addrs: Vec<String>,
+        synchronizer: SynchronizerConfig,
+        store: StoreConfig,
+    },
 }
 
 /// The `Serializer` configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SerializerConfig {
     #[default]

@@ -96,13 +96,15 @@ where
                     OrchEvent::Switch {
                         server_addrs,
                         server_sizes,
-                        server_ordering
+                        server_ordering,
+                        trainer_spec,
                     } => {
                         info!("switching algorithm to parameter server as a worker");
                         return Ok(Run::Switch {
                             server_addrs,
                             server_sizes,
-                            server_ordering
+                            server_ordering,
+                            trainer_spec,
                         });
                     }
                     other => {
@@ -112,7 +114,9 @@ where
                 response = self.ring_manager.pull_grads(&mut self.params) => {
                     debug!("received gradients from all workers, training...");
 
-                    let mut param_manager = response?;
+                    let Ok(mut param_manager) = response else {
+                        continue;
+                    };
 
                     // SAFETY: The parameter and gradient buffer have the same size.
                     self.trainer.optimize(&mut param_manager).unwrap();

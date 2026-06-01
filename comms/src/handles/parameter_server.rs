@@ -12,6 +12,7 @@ use crate::{
 };
 
 /// The handle for communicating with a `ParameterServer`.
+#[derive(Debug)]
 pub struct ParamServerHandle<T> {
     id: usize,
     transport: T,

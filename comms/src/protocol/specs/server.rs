@@ -19,7 +19,7 @@ pub enum StoreSpec {
 }
 
 /// The specification for the `Server` trait.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerSpec {
     pub id: usize,
     pub nworkers: usize,

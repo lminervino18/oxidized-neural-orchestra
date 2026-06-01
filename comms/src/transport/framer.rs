@@ -11,6 +11,7 @@ use crate::{
 /// The `Framer` builds framed messages by prefixing the payload with it's size.
 ///
 /// It's the last layer of the entire transport layer stack.
+#[derive(Debug)]
 pub struct Framer<R, W>
 where
     R: AsyncRead + Unpin,
