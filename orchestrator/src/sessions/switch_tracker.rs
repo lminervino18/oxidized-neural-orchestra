@@ -15,7 +15,7 @@ impl SwitchTracker {
     /// Creates a new `SwitchTracker`.
     ///
     /// # Args
-    /// * `winsize` - The amount of losses to acumulate (paper uses `5`).
+    /// * `winsize` - The amount of losses to acumulate (paper uses `6`).
     /// * `threshold` - The trigger value for `s` (paper uses `0.01`).
     ///
     /// # Returns
@@ -45,7 +45,7 @@ impl SwitchTracker {
     ///
     /// # Returns
     /// `true` if it should switch, `false` otherwise.
-    pub fn should_switch(&mut self) -> bool {
+    pub fn should_switch(&self) -> bool {
         if self.losses.len() < *self.winsize {
             return false;
         }
@@ -57,7 +57,7 @@ impl SwitchTracker {
             sum += delta.abs() / self.losses[i - 1];
         }
 
-        let s = sum / *self.winsize as f64;
+        let s = sum / (*self.winsize - 1) as f64;
         s <= self.threshold
     }
 }

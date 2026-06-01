@@ -184,7 +184,7 @@ impl Adapter {
         });
 
         // SAFETY: The winsize is greater than `1`.
-        let winsize = GreaterThanOneUsize::new(5).unwrap();
+        let winsize = GreaterThanOneUsize::new(6).unwrap();
         let tracker = SwitchTracker::new(winsize, 0.01);
 
         let trainer_spec = self.adapt_trainer(model, training);
