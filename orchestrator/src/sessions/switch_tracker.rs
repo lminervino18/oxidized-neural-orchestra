@@ -15,7 +15,7 @@ impl SwitchTracker {
     /// Creates a new `SwitchTracker`.
     ///
     /// # Args
-    /// * `winsize` - The amount of losses to accumulate (paper uses `5`).
+    /// * `winsize` - The amount of losses to acumulate (paper uses `6`).
     /// * `threshold` - The trigger value for `s` (paper uses `0.01`).
     ///
     /// # Returns

@@ -181,7 +181,8 @@ impl Adapter {
             ConvergenceTracker::new(winsize, cfg.tolerance)
         });
 
-        let winsize = GreaterThanOneUsize::new(5).unwrap();
+        // SAFETY: The winsize is greater than `1`.
+        let winsize = GreaterThanOneUsize::new(6).unwrap();
         let tracker = SwitchTracker::new(winsize, 0.01);
 
         let trainer_spec = self.adapt_trainer(model, training);
