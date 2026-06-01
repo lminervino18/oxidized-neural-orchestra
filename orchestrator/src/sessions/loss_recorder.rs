@@ -32,7 +32,9 @@ impl LossRecorder {
     /// * `worker_id` - The id of the worker whose loss is being recorded.
     /// * `loss` - The latest loss.
     pub fn record(&mut self, worker_id: usize, loss: f64) {
-        self.losses.insert(worker_id);
+        if !self.losses.insert(worker_id) {
+            return;
+        }
         self.max_loss = self.max_loss.max(loss);
         self.sum_loss += loss;
     }

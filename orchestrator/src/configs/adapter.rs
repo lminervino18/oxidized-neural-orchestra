@@ -134,7 +134,6 @@ impl Adapter {
         };
 
         let convergence_tracker = training.early_stopping.map(|cfg| {
-            // SAFETY: The window size is greater than `1`.
             let winsize = GreaterThanOneUsize::new(3).unwrap();
             ConvergenceTracker::new(winsize, cfg.tolerance)
         });
@@ -178,12 +177,10 @@ impl Adapter {
         };
 
         let convergence_tracker = training.early_stopping.map(|cfg| {
-            // SAFETY: The window size is greater than `1`.
             let winsize = GreaterThanOneUsize::new(3).unwrap();
             ConvergenceTracker::new(winsize, cfg.tolerance)
         });
 
-        // SAFETY: The winsize is greater than `1`.
         let winsize = GreaterThanOneUsize::new(5).unwrap();
         let tracker = SwitchTracker::new(winsize, 0.01);
 

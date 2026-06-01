@@ -180,7 +180,7 @@ impl<'a> EventListener<'a> {
     /// Broadcasts the `WorkerPostActions` to all the workers.
     ///
     /// # Args
-    /// * `post_actios` - The action that each worker needs to take in order to switch algorithm.
+    /// * `post_actions` - The action that each worker needs to take in order to switch algorithm.
     async fn broadcast_switch(&mut self, post_actions: Vec<WorkerPostAction>) {
         for (tx, action) in self.req_txs.iter_mut().zip(post_actions) {
             let req = match action {
