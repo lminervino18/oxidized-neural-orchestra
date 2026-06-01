@@ -189,7 +189,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
     ///
     /// # Args
     /// * `server_addrs` - The network addresses of the servers.
-    /// * `server_sizes` - The sizes in amount of paremters per server.
+    /// * `server_sizes` - The sizes in amount of parameters per server.
     /// * `server_ordering` - The layer ordering per server.
     /// * `trainer_spec` - The specification for the new trainer.
     ///
@@ -213,7 +213,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
     }
 
     /// Tells the worker to switch algorithm to parameter server
-    /// by switch this particular node into a `ParameterServer`.
+    /// by switching this particular node into a `ParameterServer`.
     ///
     /// Consumes `self` and yields a new `ParameterServerHandle`.
     ///

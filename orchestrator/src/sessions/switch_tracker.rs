@@ -28,8 +28,8 @@ impl SwitchTracker {
         }
     }
 
-    /// Records a new loss onto the tracker and decides weather to
-    /// switch algorithms or continue trianing under the same algorithm.
+    /// Records a new loss onto the tracker and decides whether to
+    /// switch algorithms or continue training under the same algorithm.
     ///
     /// # Args
     /// * `loss` - The new loss to accumulate.
