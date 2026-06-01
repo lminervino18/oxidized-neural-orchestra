@@ -95,10 +95,7 @@ pub enum LogLevel {
     Error,
 }
 
-enum StartupResult {
-    Ok(Session),
-    Err(String),
-}
+type StartupResult = Result<Session, String>;
 
 /// Full state for the training dashboard screen.
 pub struct TrainingState {

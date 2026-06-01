@@ -1,9 +1,19 @@
-use comms::{TransportLayer, WorkerEvent, WorkerHandle};
+use comms::{NetRtp, ParamServerHandle, WorkerEvent, WorkerHandle, specs::server::ServerSpec};
 use log::{debug, error, info, warn};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use super::{TrainingEvent, WorkerRequest};
 use crate::{OrchErr, Result};
+
+/// The return type of the `handle_request` method.
+enum ReqResolution {
+    Upgrade {
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    },
+    Continue,
+    Halt,
+}
 
 /// The return type of the `handle_event` method.
 enum EventResolution {
@@ -12,19 +22,13 @@ enum EventResolution {
 }
 
 /// The worker handle manager.
-pub struct WorkerListener<T>
-where
-    T: TransportLayer,
-{
+pub struct WorkerListener {
     id: usize,
-    worker_handle: WorkerHandle<T>,
+    worker_handle: WorkerHandle<NetRtp>,
     stopping: bool,
 }
 
-impl<T> WorkerListener<T>
-where
-    T: TransportLayer,
-{
+impl WorkerListener {
     /// Creates a new `WorkerListener`.
     ///
     /// # Args
@@ -33,7 +37,7 @@ where
     ///
     /// # Returns
     /// A new `WorkerListener` instance.
-    pub fn new(id: usize, worker_handle: WorkerHandle<T>) -> Self {
+    pub fn new(id: usize, worker_handle: WorkerHandle<NetRtp>) -> Self {
         Self {
             id,
             worker_handle,
@@ -59,14 +63,29 @@ where
         loop {
             tokio::select! {
                 req = req_rx.recv() => {
-                    if let Some(req) = req {
-                        match self.handle_request(req, &event_tx).await {
-                            Ok(false) => break,
-                            Err(e) => {
-                                let _ = event_tx.send(TrainingEvent::Error(e)).await;
-                                break;
-                            }
-                            _ => {}
+                    let Some(req) = req else {
+                        continue;
+                    };
+
+                    match self.handle_request(req, &event_tx).await {
+                        Ok(ReqResolution::Continue) => {},
+                        Ok(ReqResolution::Halt) => break,
+                        Ok(ReqResolution::Upgrade { spec, ranges }) => {
+                            info!("upgrading worker {id}");
+
+                            let event = match self.handle_upgrade(spec, ranges).await {
+                                Ok(server_handle) => TrainingEvent::Upgrade {
+                                    server_handle: Box::new(server_handle)
+                                },
+                                Err(e) => TrainingEvent::Error(e),
+                            };
+
+                            let _ = event_tx.send(event).await;
+                            break
+                        },
+                        Err(e) => {
+                            let _ = event_tx.send(TrainingEvent::Error(e)).await;
+                            break;
                         }
                     }
                 },
@@ -104,10 +123,7 @@ where
         &mut self,
         req: WorkerRequest,
         event_tx: &Sender<TrainingEvent>,
-    ) -> Result<bool>
-    where
-        T: TransportLayer,
-    {
+    ) -> Result<ReqResolution> {
         let id = self.id;
 
         let should_continue = match req {
@@ -122,7 +138,7 @@ where
                 }
 
                 let _ = event_tx.send(event).await;
-                false
+                ReqResolution::Halt
             }
             WorkerRequest::Stop => {
                 if !self.stopping {
@@ -136,7 +152,7 @@ where
                     self.stopping = true;
                 }
 
-                true
+                ReqResolution::Continue
             }
             WorkerRequest::PullParams => {
                 info!("pulling parmaeters from worker {id}");
@@ -152,8 +168,31 @@ where
                     }
                 }
 
-                true
+                ReqResolution::Continue
             }
+            WorkerRequest::Switch {
+                server_addrs,
+                server_sizes,
+                server_ordering,
+                trainer_spec,
+            } => {
+                info!("switching worker {id}");
+
+                if let Err(e) = self
+                    .worker_handle
+                    .switch(server_addrs, server_sizes, server_ordering, *trainer_spec)
+                    .await
+                {
+                    let details = format!("failed to switch worker {id}: {e}");
+                    return Err(OrchErr::WorkerError { id, details });
+                }
+
+                ReqResolution::Continue
+            }
+            WorkerRequest::Upgrade { spec, ranges } => ReqResolution::Upgrade {
+                spec: *spec,
+                ranges,
+            },
         };
 
         Ok(should_continue)
@@ -167,10 +206,7 @@ where
     ///
     /// # Returns
     /// An `EventResolution` or an orch error if the received event is invalid.
-    fn handle_event(id: usize, event: WorkerEvent<'_>) -> Result<EventResolution>
-    where
-        T: TransportLayer,
-    {
+    fn handle_event(id: usize, event: WorkerEvent<'_>) -> Result<EventResolution> {
         match event {
             WorkerEvent::Loss(losses) => {
                 debug!("worker {id} reported {} losses", losses.len());
@@ -197,5 +233,27 @@ where
                 Err(OrchErr::WorkerError { id, details })
             }
         }
+    }
+
+    /// Sends an upgrade message to the worker.
+    ///
+    /// # Args
+    /// * `spec` - The specification for the server instanciation.
+    /// * `ranges` - The requested parameter ranges for this server.
+    ///
+    /// # Returns
+    /// The `ParamServerHandle` to communicate with the server or an orch err if occurred.
+    async fn handle_upgrade(
+        self,
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    ) -> Result<ParamServerHandle<NetRtp>> {
+        self.worker_handle
+            .upgrade(spec, ranges)
+            .await
+            .map_err(|e| OrchErr::WorkerError {
+                id: self.id,
+                details: e.to_string(),
+            })
     }
 }

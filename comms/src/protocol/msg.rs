@@ -4,6 +4,7 @@ use half::f16;
 use serde::{Deserialize, Serialize};
 
 use super::specs::{
+    machine_learning::TrainerSpec,
     node::{NodeSpec, StatRequest, StatResponse},
     server::ServerSpec,
 };
@@ -61,6 +62,7 @@ pub enum Command<'a> {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     Upgrade {
         spec: ServerSpec,

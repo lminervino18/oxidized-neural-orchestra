@@ -9,3 +9,6 @@ version = "0.1.0"
 [tool.maturin]
 python-packages = ["orchestra"]
 module-name = "orchestra._orchestra"
+
+[lints]
+workspace = true

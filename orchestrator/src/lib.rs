@@ -38,7 +38,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     validator.validate(&model, &training)?;
 
     let adapter = Adapter::new();
-    let (workers, servers) = adapter.adapt_configs(model.clone(), &training)?;
+    let (orch, workers, servers) = adapter.adapt_configs(model.clone(), &training)?;
 
     // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
     //       configurar esto, si tenemos tiempo y vemos que viene bien lo
@@ -54,15 +54,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
         )
     };
 
-    let session = Session::new(
-        workers,
-        servers,
-        Connector::new(transport_factory),
-        model,
-        training.algorithm.clone(),
-        training.dataset.x_size.get(),
-        training.early_stopping,
-    )?;
+    let session = Session::new(orch, workers, servers, Connector::new(transport_factory))?;
 
     if let Some((samples_bin, labels_bin)) = dataset_bin {
         remove_binary(&samples_bin);

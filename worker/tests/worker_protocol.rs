@@ -17,7 +17,6 @@ use worker::{
     workers::{ParamServerWorker, Worker},
 };
 
-#[allow(clippy::type_complexity)]
 fn channel_pair() -> (
     (ReadHalf<DuplexStream>, WriteHalf<DuplexStream>),
     (ReadHalf<DuplexStream>, WriteHalf<DuplexStream>),

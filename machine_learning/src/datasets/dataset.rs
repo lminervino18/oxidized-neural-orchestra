@@ -111,8 +111,20 @@ impl Dataset {
         })
     }
 
+    /// Retrieves both sizes for the samples and the labels.
+    ///
+    /// # Returns
+    /// The amout of samples and the amount of labels.
     pub fn sizes(&self) -> (NonZeroUsize, NonZeroUsize) {
         (self.x_size, self.y_size)
+    }
+
+    /// Consumes self and yields it's data source.
+    ///
+    /// # Returns
+    /// This dataset's data source.
+    pub fn into_src(self) -> DataSrc {
+        self.src
     }
 
     /// Creates a view over a certain batch of the dataset.

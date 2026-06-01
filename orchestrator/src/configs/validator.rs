@@ -83,21 +83,16 @@ impl Validator {
             return Err(OrchErr::InvalidConfig(text));
         }
 
-        match training.algorithm {
-            AlgorithmConfig::ParameterServer {
-                ref server_addrs, ..
-            } => {
-                if server_addrs.is_empty() {
-                    let text = "at least one server address is required".into();
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-            }
-            AlgorithmConfig::AllReduce => {
-                if training.worker_addrs.len() < 2 {
-                    let text = "all-reduce requires at least two worker addresses".into();
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-            }
+        if let AlgorithmConfig::ParameterServer {
+            ref server_addrs, ..
+        }
+        | AlgorithmConfig::StrategySwitch {
+            ref server_addrs, ..
+        } = training.algorithm
+            && server_addrs.is_empty()
+        {
+            let text = "at least one server address is required".into();
+            return Err(OrchErr::InvalidConfig(text));
         }
 
         let DatasetConfig {

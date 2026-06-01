@@ -410,7 +410,6 @@ mod tests {
         assert_eq!(conv.dilated, delta);
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn test_conv2d_forward(
         filters: usize,
         in_channels: usize,

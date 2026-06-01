@@ -48,9 +48,9 @@ impl InMemSrc {
     /// * `src` - The data to append.
     pub fn load(&mut self, src: DataSrc) {
         match src {
-            DataSrc::InMem(mut src) => {
-                self.samples.extend_from_slice(&mut src.samples);
-                self.labels.extend_from_slice(&mut src.labels)
+            DataSrc::InMem(src) => {
+                self.samples.extend_from_slice(&src.samples);
+                self.labels.extend_from_slice(&src.labels)
             }
         }
     }

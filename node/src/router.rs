@@ -3,13 +3,14 @@ use std::io;
 use comms::{
     Acceptor, Connection, Connector, OrchEvent, OrchHandle, TransportLayer, share_dataset,
     specs::{
+        machine_learning::TrainerSpec,
         node::{NodeSpec, StatRequest},
         server::ServerSpec,
         worker::WorkerSpec,
     },
 };
 use log::{error, info, warn};
-use machine_learning::{datasets::Dataset, training::Trainer};
+use machine_learning::datasets::Dataset;
 use parameter_server::service::{Server, ServerBuilder};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -183,15 +184,19 @@ where
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                trainer_spec,
             } => {
                 let trainer = worker.into_trainer();
+                let dataset = trainer.into_dataset();
+
                 let worker = self
                     .switch(
                         spec,
                         server_addrs,
                         server_sizes,
                         server_ordering,
-                        trainer,
+                        dataset,
+                        trainer_spec,
                         &mut orch_handle,
                     )
                     .await?;
@@ -247,7 +252,8 @@ where
     /// * `server_addrs` - The network addresses of the server nodes.
     /// * `server_sizes` - The sizes of each server node.
     /// * `server_ordering` - The ordering of server layers.
-    /// * `trainer` - The trainer used to train until now.
+    /// * `dataset` - The dataset that was being used by the worker until now.
+    /// * `trainer_spec` - The specification for the new trainer.
     /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
@@ -258,17 +264,20 @@ where
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-        trainer: Box<dyn Trainer>,
+        dataset: Dataset,
+        trainer_spec: TrainerSpec,
         orch_handle: &'a mut OrchHandle<T>,
     ) -> io::Result<ParamServerWorker<'a, T>> {
         let mut worker_builder = WorkerBuilder::new(&mut self.acceptor, self.connector.clone());
+
         let worker = worker_builder
             .build_switched(
                 spec,
                 server_addrs,
                 server_sizes,
                 server_ordering,
-                trainer,
+                dataset,
+                trainer_spec,
                 orch_handle,
             )
             .await?;

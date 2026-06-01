@@ -6,7 +6,8 @@ use std::{
     time::Duration,
 };
 
-use comms::floats::{Float01, FloatNonNegative, FloatPositive};
+use comms::floats::{Float01, FloatPositive};
+use log::info;
 use orchestrator::{CancelHandle, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
@@ -62,7 +63,10 @@ fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>)
 }
 
 fn main() -> io::Result<()> {
-    const WORKERS: usize = 3;
+    unsafe { env::set_var("RUST_LOG", "debug") };
+    env_logger::init();
+
+    const WORKERS: usize = 2;
     const SERVERS: usize = 2;
     const RELEASE: bool = false;
 
@@ -70,6 +74,26 @@ fn main() -> io::Result<()> {
 
     thread::sleep(Duration::from_secs(2));
     let (worker_addrs, server_addrs) = build_addresses(WORKERS, SERVERS);
+
+    let synchronizer_config = SynchronizerConfig::NonBlocking;
+    let store_config = StoreConfig::Wild;
+
+    #[allow(unused_variables)]
+    let parameter_server_config = AlgorithmConfig::ParameterServer {
+        server_addrs: server_addrs.clone(),
+        synchronizer: synchronizer_config,
+        store: store_config,
+    };
+
+    #[allow(unused_variables)]
+    let all_reduce_config = AlgorithmConfig::AllReduce;
+
+    #[allow(unused_variables)]
+    let strategy_switch_config = AlgorithmConfig::StrategySwitch {
+        server_addrs,
+        synchronizer: synchronizer_config,
+        store: store_config,
+    };
 
     let model_config = ModelConfig {
         layers: vec![
@@ -97,19 +121,9 @@ fn main() -> io::Result<()> {
         ],
     };
 
-    let algorithm_config = if !server_addrs.is_empty() {
-        AlgorithmConfig::ParameterServer {
-            server_addrs,
-            synchronizer: SynchronizerConfig::NonBlocking,
-            store: StoreConfig::Wild,
-        }
-    } else {
-        AlgorithmConfig::AllReduce
-    };
-
     let training_config = TrainingConfig {
         worker_addrs,
-        algorithm: algorithm_config,
+        algorithm: strategy_switch_config,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
@@ -164,13 +178,10 @@ fn main() -> io::Result<()> {
         },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(1000).unwrap(),
+        max_epochs: NonZeroUsize::new(100).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
-        // early_stopping: None,
-        early_stopping: Some(EarlyStoppingConfig {
-            tolerance: FloatNonNegative::new(0.5).unwrap(),
-        }),
+        early_stopping: None,
     };
 
     let session = train(model_config, training_config).unwrap();
@@ -180,24 +191,24 @@ fn main() -> io::Result<()> {
     loop {
         match rx.blocking_recv() {
             Some(orchestrator::TrainingEvent::PublishedLosses { losses, worker_id }) => {
-                println!("losses {worker_id}: {losses:?}")
+                info!("losses: {worker_id}: {losses:?}");
             }
             Some(orchestrator::TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
             }) => {
-                println!("params: {:?}", trained.params);
-                println!("stop reason: {reason:?}");
+                info!("params: {:?}", trained.params);
+                info!("stop reason: {reason:?}");
 
                 trained
                     .save_safetensors(MODEL_OUTPUT_PATH)
                     .expect("failed to save model");
 
-                println!("saved model to {MODEL_OUTPUT_PATH}");
+                info!("saved model to {MODEL_OUTPUT_PATH}");
                 break;
             }
             None => break,
-            res => println!("result: {res:?}"),
+            res => info!("result: {res:?}"),
         }
     }
 

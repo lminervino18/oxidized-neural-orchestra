@@ -5,6 +5,7 @@ use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset,
     specs::{
+        machine_learning::TrainerSpec,
         node::{NodeSpec, StatRequest, StatResponse},
         server::ServerSpec,
     },
@@ -33,6 +34,7 @@ pub enum OrchEvent {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     Upgrade {
         spec: ServerSpec,
@@ -114,10 +116,12 @@ where
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                trainer_spec,
             }) => OrchEvent::Switch {
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                trainer_spec,
             },
             Msg::Control(Command::ShareDataset) => OrchEvent::ShareDataset,
             msg => {

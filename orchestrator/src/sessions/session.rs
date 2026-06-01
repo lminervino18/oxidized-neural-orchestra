@@ -1,10 +1,8 @@
 use std::{collections::HashSet, io::SeekFrom, path::Path, thread};
 
 use comms::{
-    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle,
-    protocol::Entity,
+    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle, protocol::Entity,
     share_dataset,
-    specs::{server::ServerSpec, worker::WorkerSpec},
 };
 use futures::future;
 use log::{debug, error, info};
@@ -19,53 +17,31 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
 };
 
-use super::TrainedModel;
+use super::{EventListener, TrainedModel, WorkerListener, WorkerRequest};
 use crate::{
     OrchErr, Result, StopReason, TrainingEvent,
-    configs::{AlgorithmConfig, EarlyStoppingConfig, ModelConfig, Partition},
-    sessions::{EventListener, WorkerListener, WorkerRequest},
+    configs::{
+        AlgorithmConfig, OrchAdapt, Partition, ServerAdapt, StrategySwitchTracking, WorkerAdapt,
+    },
+    sessions::{ConvergenceTracker, LossRecorder},
 };
-
-/// A handle that lets any caller request an early stop of an ongoing training session.
-pub struct CancelHandle(Sender<()>);
-
-impl CancelHandle {
-    /// Creates a matched `(CancelHandle, Receiver)` pair.
-    ///
-    /// The caller retains the `CancelHandle` and passes the `Receiver` to
-    /// `Session::event_listener`. Calling `stop()` on the handle signals
-    /// the session to stop at the next epoch boundary.
-    pub fn pair() -> (Self, Receiver<()>) {
-        let (tx, rx) = mpsc::channel(1);
-        (Self(tx), rx)
-    }
-
-    pub fn stop(&self) {
-        let _ = self.0.try_send(());
-    }
-}
 
 /// An ongoing training session.
 pub struct Session {
     runtime: Runtime,
+    orch_adapt: OrchAdapt,
     worker_handles: Vec<WorkerHandle<NetRtp>>,
     server_handles: Vec<ParamServerHandle<NetRtp>>,
-    model: ModelConfig,
-    algorithm: AlgorithmConfig,
-    input_size: usize,
-    early_stopping: Option<EarlyStoppingConfig>,
 }
 
 impl Session {
     /// Creates a new session by connecting to all workers and servers.
     ///
     /// # Args
+    /// * `orch` - The orchestrator's values for orchestrating the session.
     /// * `workers` - The workers' network addresses, specifications and dataset partitions.
     /// * `servers` - The servers' network addresses and specifications.
     /// * `connector` - The network connector.
-    /// * `model` - The model's architecture configuration.
-    /// * `training` - The model's training configuration.
-    /// * `input_size` - The model's input size.
     ///
     /// # Returns
     /// A ready session with all connections established.
@@ -73,13 +49,10 @@ impl Session {
     /// # Errors
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
     pub fn new<F>(
-        workers: Vec<(String, WorkerSpec, Partition<'_>)>,
-        servers: Vec<(String, ServerSpec)>,
+        orch: OrchAdapt,
+        workers: Vec<WorkerAdapt<'_>>,
+        servers: Vec<ServerAdapt>,
         connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
-        model: ModelConfig,
-        algorithm: AlgorithmConfig,
-        input_size: usize,
-        early_stopping: Option<EarlyStoppingConfig>,
     ) -> Result<Self>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
@@ -87,7 +60,7 @@ impl Session {
         let runtime = Builder::new_multi_thread().enable_all().build()?;
         let (nworkers, nservers) = (workers.len(), servers.len());
 
-        let server_handles = match algorithm {
+        let server_handles = match orch.algorithm_config {
             AlgorithmConfig::ParameterServer { .. } => {
                 info!("connecting to {nservers} servers");
                 let server_handles = runtime.block_on(Self::create_servers(servers, &connector))?;
@@ -101,15 +74,14 @@ impl Session {
         let worker_handles = runtime.block_on(Self::create_workers(workers, &connector))?;
         info!("successfully created workers");
 
-        Ok(Self {
+        let session = Self {
             runtime,
+            orch_adapt: orch,
             worker_handles,
             server_handles,
-            model,
-            algorithm,
-            input_size,
-            early_stopping,
-        })
+        };
+
+        Ok(session)
     }
 
     /// Consumes `self` and creates an event listener for this training session.
@@ -129,11 +101,16 @@ impl Session {
         let Self {
             runtime,
             worker_handles,
-            server_handles,
-            model,
-            algorithm,
-            input_size,
-            early_stopping,
+            mut server_handles,
+            orch_adapt:
+                OrchAdapt {
+                    input_size,
+                    loss_recorder,
+                    convergence_tracker,
+                    model_config,
+                    algorithm_config,
+                    switch_tracking,
+                },
         } = self;
 
         let run_loop_fut = async move {
@@ -144,8 +121,11 @@ impl Session {
                 &mut event_rx,
                 &event_tx,
                 cancel_rx,
-                early_stopping,
+                loss_recorder,
+                convergence_tracker,
                 &user_event_tx,
+                switch_tracking,
+                &mut server_handles,
             )
             .await
             else {
@@ -153,7 +133,7 @@ impl Session {
             };
 
             let params = Self::finalize_training(
-                algorithm,
+                algorithm_config,
                 server_handles,
                 &user_event_tx,
                 &mut req_txs,
@@ -161,19 +141,16 @@ impl Session {
             )
             .await;
 
-            info!("received {} total parameters", params.len());
+            let nparams = params.len();
+            info!("received {nparams} total parameters");
 
-            let trained_model = TrainedModel {
+            let model = TrainedModel {
                 params,
-                model,
-                input_size,
+                model: model_config,
+                input_size: input_size.get(),
             };
 
-            let event = TrainingEvent::TrainingComplete {
-                model: trained_model,
-                stop_reason,
-            };
-
+            let event = TrainingEvent::TrainingComplete { model, stop_reason };
             let _ = user_event_tx.send(event).await;
         };
 
@@ -189,30 +166,36 @@ impl Session {
     /// * `event_rx` - The worker listener event receiver.
     /// * `event_tx` - The event producer for the worker listeners.
     /// * `cancel_rx` - The user's halt event receiver.
-    /// * `early_stopping` - The early stopping mechanism configuration.
+    /// * `loss_recorder` - The workers' loss recorder.
+    /// * `convergence_tracker` - A tracker device to track model convergence.
     /// * `user_event_tx` - The user event producer.
+    /// * `switch_tracking` - The strategy switch tracking metadata.
+    /// * `server_handles` - The server handles session vec.
     ///
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
-    async fn start_training<T>(
-        worker_handles: Vec<WorkerHandle<T>>,
+    async fn start_training(
+        worker_handles: Vec<WorkerHandle<NetRtp>>,
         event_rx: &mut Receiver<TrainingEvent>,
         event_tx: &Sender<TrainingEvent>,
         cancel_rx: Receiver<()>,
-        early_stopping: Option<EarlyStoppingConfig>,
+        loss_recorder: LossRecorder,
+        convergence_tracker: Option<ConvergenceTracker>,
         user_event_tx: &Sender<TrainingEvent>,
-    ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>)
-    where
-        T: TransportLayer + 'static,
-    {
+        switch_tracking: Option<StrategySwitchTracking>,
+        server_handles: &mut Vec<ParamServerHandle<NetRtp>>,
+    ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>) {
         let mut req_txs = Self::spawn_worker_listeners(worker_handles, event_tx);
 
         let mut event_listener = EventListener::new(
             cancel_rx,
             &mut req_txs,
-            early_stopping,
+            server_handles,
+            loss_recorder,
+            convergence_tracker,
             event_rx,
             user_event_tx.clone(),
+            switch_tracking,
         );
 
         (event_listener.listen().await, req_txs)
@@ -246,6 +229,12 @@ impl Session {
             AlgorithmConfig::AllReduce => {
                 Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
             }
+            AlgorithmConfig::StrategySwitch { .. } if server_handles.is_empty() => {
+                Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
+            }
+            AlgorithmConfig::StrategySwitch { .. } => {
+                Self::finalize_parameter_server(server_handles, user_event_tx).await
+            }
         }
     }
 
@@ -257,13 +246,10 @@ impl Session {
     ///
     /// # Returns
     /// A list of senders to make requests to the listeners.
-    fn spawn_worker_listeners<T>(
-        worker_handles: Vec<WorkerHandle<T>>,
+    fn spawn_worker_listeners(
+        worker_handles: Vec<WorkerHandle<NetRtp>>,
         event_tx: &Sender<TrainingEvent>,
-    ) -> Vec<Sender<WorkerRequest>>
-    where
-        T: TransportLayer + 'static,
-    {
+    ) -> Vec<Sender<WorkerRequest>> {
         let mut req_txs = Vec::with_capacity(worker_handles.len());
 
         for (i, worker_handle) in worker_handles.into_iter().enumerate() {
@@ -381,16 +367,19 @@ impl Session {
     ///
     /// # Returns
     /// The worker handles or an orch error if occurred.
-    async fn create_servers<F>(
-        servers: Vec<(String, ServerSpec)>,
+    async fn create_servers<I, F>(
+        servers: I,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<ParamServerHandle<NetRtp>>>
     where
+        I: IntoIterator<Item = ServerAdapt>,
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
-        let mut handles = Vec::with_capacity(servers.len());
+        let mut handles = Vec::new();
 
-        for (i, (addr, spec)) in servers.into_iter().enumerate() {
+        for (i, ServerAdapt { addr, spec }) in servers.into_iter().enumerate() {
+            debug!("connecting to server at {addr}");
+
             let stream =
                 TcpStream::connect(&addr)
                     .await
@@ -421,19 +410,26 @@ impl Session {
     ///
     /// # Returns
     /// The worker handles or an orch error if occurred.
-    async fn create_workers<'a, F>(
-        workers: Vec<(String, WorkerSpec, Partition<'a>)>,
+    async fn create_workers<'a, F, I>(
+        workers: I,
         connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
     ) -> Result<Vec<WorkerHandle<NetRtp>>>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+        I: IntoIterator<Item = WorkerAdapt<'a>>,
     {
         const CHUNK_SIZE: usize = 8192;
 
         let futs = workers
             .into_iter()
             .enumerate()
-            .map(|(i, (addr, spec, partition))| async move {
+            .map(|(i, adapt)| async move {
+                let WorkerAdapt {
+                    addr,
+                    spec,
+                    partition,
+                } = adapt;
+
                 debug!("connecting to worker at {addr}");
 
                 let stream =
@@ -513,7 +509,6 @@ impl Session {
     ///
     /// # Returns
     /// An orch error if occurred.
-    #[allow(clippy::too_many_arguments)]
     async fn send_local_partition<T>(
         worker_handle: &mut WorkerHandle<T>,
         samples_path: &Path,
