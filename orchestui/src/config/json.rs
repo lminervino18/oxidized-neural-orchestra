@@ -49,9 +49,12 @@ pub fn load_training(path: &str) -> Result<TrainingJson, String> {
         serde_json::from_str(&content).map_err(|e| format!("invalid training config: {e}"))?;
 
     let (worker_count, server_count) = match &config.algorithm {
-        AlgorithmConfig::ParameterServer { server_addrs, .. }
-        | AlgorithmConfig::StrategySwitch { server_addrs, .. } => {
+        AlgorithmConfig::ParameterServer { server_addrs, .. } => {
             (config.worker_addrs.len(), server_addrs.len())
+        }
+        AlgorithmConfig::StrategySwitch { server_addrs, .. } => {
+            // All nodes start as AllReduce workers; server_addrs nodes are upgraded later.
+            (config.worker_addrs.len() + server_addrs.len(), 0)
         }
         AlgorithmConfig::AllReduce => (config.worker_addrs.len(), 0),
     };
@@ -61,4 +64,83 @@ pub fn load_training(path: &str) -> Result<TrainingJson, String> {
         worker_count,
         server_count,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strategy_switch_worker_count_includes_server_addrs() {
+        let json = r#"{
+            "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001"],
+            "algorithm": {
+                "strategy_switch": {
+                    "server_addrs": ["127.0.0.1:40000"],
+                    "synchronizer": "non_blocking",
+                    "store": "wild"
+                }
+            },
+            "serializer": "base",
+            "dataset": {
+                "src": { "inline": { "samples": [0.1, 0.2, 0.3, 0.4], "labels": [0.3] } },
+                "x_size": 4,
+                "y_size": 1
+            },
+            "optimizer": { "gradient_descent": { "lr": 0.01 } },
+            "loss_fn": "mse",
+            "batch_size": 4,
+            "max_epochs": 10,
+            "offline_epochs": 0,
+            "seed": null,
+            "early_stopping": null
+        }"#;
+
+        let config: TrainingConfig = serde_json::from_str(json).expect("parse failed");
+
+        if let AlgorithmConfig::StrategySwitch { server_addrs, .. } = &config.algorithm {
+            let worker_count = config.worker_addrs.len() + server_addrs.len();
+            assert_eq!(worker_count, 3);
+        } else {
+            panic!("expected StrategySwitch");
+        }
+    }
+
+    #[test]
+    fn parameter_server_worker_count_excludes_server_addrs() {
+        let json = r#"{
+            "worker_addrs": ["127.0.0.1:50000"],
+            "algorithm": {
+                "parameter_server": {
+                    "server_addrs": ["127.0.0.1:40000", "127.0.0.1:40001"],
+                    "synchronizer": "barrier",
+                    "store": "blocking"
+                }
+            },
+            "serializer": "base",
+            "dataset": {
+                "src": { "inline": { "samples": [0.1, 0.2], "labels": [0.3] } },
+                "x_size": 2,
+                "y_size": 1
+            },
+            "optimizer": { "gradient_descent": { "lr": 0.01 } },
+            "loss_fn": "mse",
+            "batch_size": 4,
+            "max_epochs": 10,
+            "offline_epochs": 0,
+            "seed": null,
+            "early_stopping": null
+        }"#;
+
+        let config: TrainingConfig = serde_json::from_str(json).expect("parse failed");
+
+        if let AlgorithmConfig::ParameterServer { server_addrs, .. } = &config.algorithm {
+            let worker_count = config.worker_addrs.len();
+            let server_count = server_addrs.len();
+            assert_eq!(worker_count, 1);
+            assert_eq!(server_count, 2);
+        } else {
+            panic!("expected ParameterServer");
+        }
+    }
 }
