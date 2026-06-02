@@ -58,10 +58,9 @@ impl Adapter {
                 synchronizer,
                 store,
             } => {
-                let mut orch = self.adapt_non_strategy_switch_orch(&model, training)?;
-                let (servers, server_sizes, server_ordering, layer_offsets) =
+                let orch = self.adapt_non_strategy_switch_orch(&model, training)?;
+                let (servers, server_sizes, server_ordering, _) =
                     self.adapt_servers(&model, training, server_addrs, synchronizer, store)?;
-                orch.layer_param_offsets = layer_offsets;
 
                 let partitions =
                     self.adapt_dataset_partitions(&training.dataset, training.worker_addrs.len())?;
@@ -139,6 +138,17 @@ impl Adapter {
             ConvergenceTracker::new(winsize, cfg.tolerance)
         });
 
+        let layer_param_offsets = if let AlgorithmConfig::ParameterServer {
+            ref server_addrs, ..
+        } = training.algorithm
+        {
+            let (_, _, _, offsets, _) =
+                self.adapt_param_gens(model, training, server_addrs.len())?;
+            offsets
+        } else {
+            Vec::new()
+        };
+
         let adapt = OrchAdapt {
             input_size: training.dataset.x_size,
             loss_recorder: LossRecorder::new(nworkers),
@@ -146,7 +156,7 @@ impl Adapter {
             switch_tracking: None,
             model_config: model.clone(),
             algorithm_config: training.algorithm.clone(),
-            layer_param_offsets: Vec::new(),
+            layer_param_offsets,
         };
 
         Ok(adapt)
