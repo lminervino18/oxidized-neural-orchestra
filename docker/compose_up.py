@@ -13,16 +13,14 @@ BASE_DIR = Path(__file__).resolve().parent
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--workers", type=int, required=True, help="The amount of workers to use")
-    parser.add_argument("--servers", type=int, required=True, help="The amount of servers to use")
+    parser.add_argument("--nodes", type=int, required=True, help="The amount of nodes to use")
     parser.add_argument("--release", action="store_true", help="The compilation mode for the rust compiler")
 
     args = parser.parse_args()
 
     env = {
         **os.environ,
-        "WORKERS": str(args.workers),
-        "SERVERS": str(args.servers),
+        "NODES": str(args.nodes),
         "RELEASE": str(args.release).lower(),
     }
 
@@ -30,8 +28,10 @@ def main():
     subprocess.run([BASE_DIR / "gen_compose.py"], env=env, check=True)
     subprocess.run(["sudo", "-E", BASE_DIR / "fill_hosts.py"], env=env, check=True)
 
-    compose_file_path = BASE_DIR.parent / "compose.yaml"
-    subprocess.run(["docker", "compose", "-f", compose_file_path, "up", "--build", "-d", "--remove-orphans"])
+    project_root = BASE_DIR.parent
+    compose_file_path = project_root / "compose.yaml"
+    cmd = ["docker", "compose", "-f", compose_file_path, "up", "--build", "-d", "--remove-orphans"]
+    subprocess.run(cmd, cwd=project_root)
 
 
 if __name__ == "__main__":
