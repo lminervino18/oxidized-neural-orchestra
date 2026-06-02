@@ -12,6 +12,9 @@ use configs::{Adapter, DataSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
 pub use error::{OrchErr, Result};
 pub use sessions::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
+use tokio::runtime::Runtime;
+
+use crate::configs::StatRequester;
 
 /// Starts the distributed training process and returns an active session.
 ///
@@ -37,9 +40,6 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 
-    let adapter = Adapter::new();
-    let (orch, workers, servers) = adapter.adapt_configs(model.clone(), &training)?;
-
     // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
     //       configurar esto, si tenemos tiempo y vemos que viene bien lo
     //       podemos mover y que sea parte de un `CommsConfig`.
@@ -53,6 +53,14 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
             4,
         )
     };
+    let mut connector = Connector::new(transport_factory);
+
+    let runtime = Runtime::new()?;
+    let mut stat_requester = StatRequester::new(&mut connector);
+    let stats = runtime.block_on(stat_requester.obtain_stats(&training.addrs))?;
+
+    let adapter = Adapter::new();
+    let (orch, workers, servers) = adapter.adapt_configs(model.clone(), &training, stats)?;
 
     let session = Session::new(orch, workers, servers, Connector::new(transport_factory))?;
 

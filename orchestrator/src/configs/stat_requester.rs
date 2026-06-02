@@ -17,15 +17,15 @@ type W = OwnedWriteHalf;
 const PING_ROUNDS: usize = 10;
 
 /// Obtains the statistics from the nodes in the network.
-pub struct StatRequester<T, F>
+pub struct StatRequester<'a, T, F>
 where
     T: TransportLayer,
     F: Fn(R, W) -> T,
 {
-    connector: Connector<R, W, T, F>,
+    connector: &'a mut Connector<R, W, T, F>,
 }
 
-impl<T, F> StatRequester<T, F>
+impl<'a, T, F> StatRequester<'a, T, F>
 where
     T: TransportLayer,
     F: Fn(R, W) -> T,
@@ -37,7 +37,7 @@ where
     ///
     /// # Returns
     /// A new `Resolver` instance.
-    pub fn new(connector: Connector<R, W, T, F>) -> Self {
+    pub fn new(connector: &'a mut Connector<R, W, T, F>) -> Self {
         Self { connector }
     }
 

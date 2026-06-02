@@ -16,6 +16,7 @@ pub enum OrchErr {
     ServerError(String),
     SafeTensors(safetensors::SafeTensorError),
     InvalidRequest(WorkerRequest),
+    Adapting(String),
     Io(io::Error),
 }
 
@@ -33,6 +34,7 @@ impl Display for OrchErr {
             Self::WorkerError { id, details: msg } => {
                 format!("worker {id} error: {msg}")
             }
+            Self::Adapting(msg) => format!("an error occurred while adapting configs: {msg}"),
             Self::InvalidRequest(req) => format!("invalid worker request: {req:?}"),
             Self::SafeTensors(e) => format!("safetensors error: {e}"),
             Self::ServerError(msg) => format!("server error: {msg}"),

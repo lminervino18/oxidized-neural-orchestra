@@ -16,8 +16,8 @@ pub struct Calculator {
 /// the network addresses of the nodes per role.
 #[derive(Default)]
 pub struct RoleAssignment {
-    pub servers: Vec<String>,
-    pub workers: Vec<String>,
+    pub server_addrs: Vec<String>,
+    pub worker_addrs: Vec<String>,
 }
 
 impl Calculator {
@@ -50,9 +50,9 @@ impl Calculator {
 
         for (i, addr) in self.addrs().enumerate() {
             let buf = if server_addrs.contains(&i) {
-                &mut assignment.servers
+                &mut assignment.server_addrs
             } else {
-                &mut assignment.workers
+                &mut assignment.worker_addrs
             };
 
             buf.push(addr.to_string());
