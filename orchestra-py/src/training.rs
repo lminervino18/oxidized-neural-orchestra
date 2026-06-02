@@ -1,28 +1,23 @@
-use std::{num::NonZeroUsize, thread};
+use std::thread;
 
-use comms::floats::{FloatNonNegative, FloatPositive};
 use orchestrator::{
-    configs::{
-        AlgorithmConfig, DataSrc, DatasetConfig, EarlyStoppingConfig, LossFnConfig,
-        OptimizerConfig, SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
-    },
+    configs::{AlgorithmConfig, TrainingConfig},
     train, CancelHandle,
 };
-use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
 use crate::{
     arch::Sequential,
-    datasets::{InlineDataset, LocalDataset},
-    loss_fns::{CrossEntropy, Mse},
-    optimizers::GradientDescent,
-    serializer::{BaseSerializer, SparseSerializer},
+    convert::{
+        extract_dataset, extract_early_stopping, extract_loss_fn, extract_optimizer,
+        extract_serializer, extract_store, extract_synchronizer, parse_nonzero,
+    },
     session::Session,
-    store::{BlockingStore, WildStore},
-    sync::{BarrierSync, NonBlockingSync},
 };
 
-/// Opaque training configuration produced by `parameter_server(...)` or `all_reduce(...)`.
+/// Opaque training configuration produced by `parameter_server(...)`, `all_reduce(...)`,
+/// or `strategy_switch(...)`.
 #[pyclass]
 pub struct PyTrainingConfig {
     pub inner: TrainingConfig,
@@ -52,9 +47,7 @@ pub struct PyTrainingConfig {
 ///
 /// # Errors
 /// Raises a `ValueError` if required fields are invalid.
-/// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
-/// Raises a `TypeError` if `loss_fn` is not `Mse()` or `CrossEntropy()`.
-/// Raises a `TypeError` if `serializer` is not `BaseSerializer()` or `SparseSerializer(r=...)`.
+/// Raises a `TypeError` if any argument has an unsupported type.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
@@ -75,7 +68,7 @@ pub fn parameter_server(
     worker_addrs: Vec<String>,
     server_addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,
-    optimizer: PyRef<GradientDescent>,
+    optimizer: &Bound<'_, PyAny>,
     loss_fn: &Bound<'_, PyAny>,
     sync: &Bound<'_, PyAny>,
     store: &Bound<'_, PyAny>,
@@ -86,120 +79,27 @@ pub fn parameter_server(
     seed: Option<u64>,
     early_stopping_tolerance: Option<f64>,
 ) -> PyResult<PyTrainingConfig> {
-    let max_epochs_nz = NonZeroUsize::new(max_epochs)
-        .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
-
-    let batch_size_nz = NonZeroUsize::new(batch_size)
-        .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
-
-    let early_stopping = match early_stopping_tolerance {
-        Some(tolerance) if tolerance.is_sign_negative() || tolerance == 0.0 => {
-            return Err(PyValueError::new_err(
-                "early stopping tolerance must be a non negative number",
-            ))
-        }
-        Some(tolerance) => {
-            let tolerance = FloatNonNegative::new(tolerance).unwrap();
-            Some(EarlyStoppingConfig { tolerance })
-        }
-        None => None,
-    };
-
-    let synchronizer = if sync.is_instance_of::<BarrierSync>() {
-        SynchronizerConfig::Barrier
-    } else if sync.is_instance_of::<NonBlockingSync>() {
-        SynchronizerConfig::NonBlocking
-    } else {
-        return Err(PyTypeError::new_err(
-            "sync must be BarrierSync() or NonBlockingSync()",
-        ));
-    };
-
-    let store_cfg = if store.is_instance_of::<BlockingStore>() {
-        StoreConfig::Blocking
-    } else if store.is_instance_of::<WildStore>() {
-        StoreConfig::Wild
-    } else {
-        return Err(PyTypeError::new_err(
-            "store must be BlockingStore() or WildStore()",
-        ));
-    };
-
-    let loss_fn_cfg = if loss_fn.is_instance_of::<Mse>() {
-        LossFnConfig::Mse
-    } else if loss_fn.is_instance_of::<CrossEntropy>() {
-        LossFnConfig::CrossEntropy
-    } else {
-        return Err(PyTypeError::new_err(
-            "loss_fn must be Mse() or CrossEntropy()",
-        ));
-    };
-
-    let serializer_cfg = match serializer {
-        None => SerializerConfig::Base,
-        Some(serializer) if serializer.is_instance_of::<BaseSerializer>() => SerializerConfig::Base,
-        Some(serializer) => {
-            if let Ok(sparse) = serializer.extract::<PyRef<SparseSerializer>>() {
-                SerializerConfig::SparseCapable { r: sparse.r }
-            } else {
-                return Err(PyTypeError::new_err(
-                    "serializer must be BaseSerializer() or SparseSerializer(r=...)",
-                ));
-            }
-        }
-    };
-
-    let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
-        DatasetConfig {
-            src: DataSrc::Inline {
-                samples: d.samples.clone(),
-                labels: d.labels.clone(),
-            },
-            x_size: d.x_size,
-            y_size: d.y_size,
-        }
-    } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
-        DatasetConfig {
-            src: DataSrc::Local {
-                samples_path: d.samples_path.clone(),
-                labels_path: d.labels_path.clone(),
-            },
-            x_size: d.x_size,
-            y_size: d.y_size,
-        }
-    } else {
-        return Err(PyTypeError::new_err(
-            "dataset must be an InlineDataset or LocalDataset",
-        ));
-    };
-
+    let max_epochs_nz = parse_nonzero(max_epochs, "max_epochs")?;
+    let batch_size_nz = parse_nonzero(batch_size, "batch_size")?;
     let worker_count = worker_addrs.len();
-
-    if optimizer.lr <= 0.0 {
-        return Err(PyValueError::new_err(
-            "learning rate must be a positive number",
-        ));
-    }
 
     Ok(PyTrainingConfig {
         inner: TrainingConfig {
             worker_addrs,
             algorithm: AlgorithmConfig::ParameterServer {
                 server_addrs,
-                synchronizer,
-                store: store_cfg,
+                synchronizer: extract_synchronizer(sync)?,
+                store: extract_store(store)?,
             },
-            serializer: serializer_cfg,
-            dataset: dataset_config,
-            optimizer: OptimizerConfig::GradientDescent {
-                lr: FloatPositive::new(optimizer.lr).unwrap(),
-            },
-            loss_fn: loss_fn_cfg,
+            serializer: extract_serializer(serializer)?,
+            dataset: extract_dataset(dataset)?,
+            optimizer: extract_optimizer(optimizer)?,
+            loss_fn: extract_loss_fn(loss_fn)?,
             batch_size: batch_size_nz,
             max_epochs: max_epochs_nz,
             offline_epochs,
             seed,
-            early_stopping,
+            early_stopping: extract_early_stopping(early_stopping_tolerance)?,
         },
         max_epochs,
         worker_count,
@@ -225,9 +125,7 @@ pub fn parameter_server(
 ///
 /// # Errors
 /// Raises a `ValueError` if required fields are invalid.
-/// Raises a `TypeError` if `dataset` is not an `InlineDataset` or `LocalDataset`.
-/// Raises a `TypeError` if `loss_fn` is not `Mse()` or `CrossEntropy()`.
-/// Raises a `TypeError` if `serializer` is not `BaseSerializer()` or `SparseSerializer(r=...)`.
+/// Raises a `TypeError` if any argument has an unsupported type.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
@@ -244,7 +142,7 @@ pub fn parameter_server(
 pub fn all_reduce(
     worker_addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,
-    optimizer: PyRef<GradientDescent>,
+    optimizer: &Bound<'_, PyAny>,
     loss_fn: &Bound<'_, PyAny>,
     max_epochs: usize,
     batch_size: usize,
@@ -253,96 +151,23 @@ pub fn all_reduce(
     seed: Option<u64>,
     early_stopping_tolerance: Option<f64>,
 ) -> PyResult<PyTrainingConfig> {
-    let max_epochs_nz = NonZeroUsize::new(max_epochs)
-        .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
-
-    let batch_size_nz = NonZeroUsize::new(batch_size)
-        .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
-
-    let early_stopping = match early_stopping_tolerance {
-        Some(tolerance) if tolerance.is_sign_negative() || tolerance == 0.0 => {
-            return Err(PyValueError::new_err(
-                "early stopping tolerance must be a non negative number",
-            ))
-        }
-        Some(tolerance) => {
-            let tolerance = FloatNonNegative::new(tolerance).unwrap();
-            Some(EarlyStoppingConfig { tolerance })
-        }
-        None => None,
-    };
-
-    let loss_fn_cfg = if loss_fn.is_instance_of::<Mse>() {
-        LossFnConfig::Mse
-    } else if loss_fn.is_instance_of::<CrossEntropy>() {
-        LossFnConfig::CrossEntropy
-    } else {
-        return Err(PyTypeError::new_err(
-            "loss_fn must be Mse() or CrossEntropy()",
-        ));
-    };
-
-    let serializer_cfg = match serializer {
-        None => SerializerConfig::Base,
-        Some(serializer) if serializer.is_instance_of::<BaseSerializer>() => SerializerConfig::Base,
-        Some(serializer) => {
-            if let Ok(sparse) = serializer.extract::<PyRef<SparseSerializer>>() {
-                SerializerConfig::SparseCapable { r: sparse.r }
-            } else {
-                return Err(PyTypeError::new_err(
-                    "serializer must be BaseSerializer() or SparseSerializer(r=...)",
-                ));
-            }
-        }
-    };
-
-    let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
-        DatasetConfig {
-            src: DataSrc::Inline {
-                samples: d.samples.clone(),
-                labels: d.labels.clone(),
-            },
-            x_size: d.x_size,
-            y_size: d.y_size,
-        }
-    } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
-        DatasetConfig {
-            src: DataSrc::Local {
-                samples_path: d.samples_path.clone(),
-                labels_path: d.labels_path.clone(),
-            },
-            x_size: d.x_size,
-            y_size: d.y_size,
-        }
-    } else {
-        return Err(PyTypeError::new_err(
-            "dataset must be an InlineDataset or LocalDataset",
-        ));
-    };
-
+    let max_epochs_nz = parse_nonzero(max_epochs, "max_epochs")?;
+    let batch_size_nz = parse_nonzero(batch_size, "batch_size")?;
     let worker_count = worker_addrs.len();
-
-    if optimizer.lr <= 0.0 {
-        return Err(PyValueError::new_err(
-            "learning rate must be a positive number",
-        ));
-    }
 
     Ok(PyTrainingConfig {
         inner: TrainingConfig {
             worker_addrs,
             algorithm: AlgorithmConfig::AllReduce,
-            serializer: serializer_cfg,
-            dataset: dataset_config,
-            optimizer: OptimizerConfig::GradientDescent {
-                lr: FloatPositive::new(optimizer.lr).unwrap(),
-            },
-            loss_fn: loss_fn_cfg,
+            serializer: extract_serializer(serializer)?,
+            dataset: extract_dataset(dataset)?,
+            optimizer: extract_optimizer(optimizer)?,
+            loss_fn: extract_loss_fn(loss_fn)?,
             batch_size: batch_size_nz,
             max_epochs: max_epochs_nz,
             offline_epochs,
             seed,
-            early_stopping,
+            early_stopping: extract_early_stopping(early_stopping_tolerance)?,
         },
         max_epochs,
         worker_count,
@@ -376,7 +201,7 @@ pub fn all_reduce(
 ///
 /// # Errors
 /// Raises a `ValueError` if required fields are invalid.
-/// Raises a `TypeError` if any argument has the wrong type.
+/// Raises a `TypeError` if any argument has an unsupported type.
 #[pyfunction]
 #[pyo3(signature = (
     worker_addrs,
@@ -397,7 +222,7 @@ pub fn strategy_switch(
     worker_addrs: Vec<String>,
     server_addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,
-    optimizer: PyRef<GradientDescent>,
+    optimizer: &Bound<'_, PyAny>,
     loss_fn: &Bound<'_, PyAny>,
     sync: &Bound<'_, PyAny>,
     store: &Bound<'_, PyAny>,
@@ -408,99 +233,8 @@ pub fn strategy_switch(
     seed: Option<u64>,
     early_stopping_tolerance: Option<f64>,
 ) -> PyResult<PyTrainingConfig> {
-    let max_epochs_nz = NonZeroUsize::new(max_epochs)
-        .ok_or_else(|| PyValueError::new_err("max_epochs must be greater than 0"))?;
-
-    let batch_size_nz = NonZeroUsize::new(batch_size)
-        .ok_or_else(|| PyValueError::new_err("batch_size must be greater than 0"))?;
-
-    let early_stopping = match early_stopping_tolerance {
-        Some(tolerance) if tolerance.is_sign_negative() || tolerance == 0.0 => {
-            return Err(PyValueError::new_err(
-                "early stopping tolerance must be a non negative number",
-            ))
-        }
-        Some(tolerance) => {
-            let tolerance = FloatNonNegative::new(tolerance).unwrap();
-            Some(EarlyStoppingConfig { tolerance })
-        }
-        None => None,
-    };
-
-    let synchronizer = if sync.is_instance_of::<BarrierSync>() {
-        SynchronizerConfig::Barrier
-    } else if sync.is_instance_of::<NonBlockingSync>() {
-        SynchronizerConfig::NonBlocking
-    } else {
-        return Err(PyTypeError::new_err(
-            "sync must be BarrierSync() or NonBlockingSync()",
-        ));
-    };
-
-    let store_cfg = if store.is_instance_of::<BlockingStore>() {
-        StoreConfig::Blocking
-    } else if store.is_instance_of::<WildStore>() {
-        StoreConfig::Wild
-    } else {
-        return Err(PyTypeError::new_err(
-            "store must be BlockingStore() or WildStore()",
-        ));
-    };
-
-    let loss_fn_cfg = if loss_fn.is_instance_of::<Mse>() {
-        LossFnConfig::Mse
-    } else if loss_fn.is_instance_of::<CrossEntropy>() {
-        LossFnConfig::CrossEntropy
-    } else {
-        return Err(PyTypeError::new_err(
-            "loss_fn must be Mse() or CrossEntropy()",
-        ));
-    };
-
-    let serializer_cfg = match serializer {
-        None => SerializerConfig::Base,
-        Some(serializer) if serializer.is_instance_of::<BaseSerializer>() => SerializerConfig::Base,
-        Some(serializer) => {
-            if let Ok(sparse) = serializer.extract::<PyRef<SparseSerializer>>() {
-                SerializerConfig::SparseCapable { r: sparse.r }
-            } else {
-                return Err(PyTypeError::new_err(
-                    "serializer must be BaseSerializer() or SparseSerializer(r=...)",
-                ));
-            }
-        }
-    };
-
-    let dataset_config = if let Ok(d) = dataset.extract::<PyRef<InlineDataset>>() {
-        DatasetConfig {
-            src: DataSrc::Inline {
-                samples: d.samples.clone(),
-                labels: d.labels.clone(),
-            },
-            x_size: d.x_size,
-            y_size: d.y_size,
-        }
-    } else if let Ok(d) = dataset.extract::<PyRef<LocalDataset>>() {
-        DatasetConfig {
-            src: DataSrc::Local {
-                samples_path: d.samples_path.clone(),
-                labels_path: d.labels_path.clone(),
-            },
-            x_size: d.x_size,
-            y_size: d.y_size,
-        }
-    } else {
-        return Err(PyTypeError::new_err(
-            "dataset must be an InlineDataset or LocalDataset",
-        ));
-    };
-
-    if optimizer.lr <= 0.0 {
-        return Err(PyValueError::new_err(
-            "learning rate must be a positive number",
-        ));
-    }
-
+    let max_epochs_nz = parse_nonzero(max_epochs, "max_epochs")?;
+    let batch_size_nz = parse_nonzero(batch_size, "batch_size")?;
     // All nodes start as AllReduce workers, so worker_count is the full entity count.
     let worker_count = worker_addrs.len() + server_addrs.len();
 
@@ -509,20 +243,18 @@ pub fn strategy_switch(
             worker_addrs,
             algorithm: AlgorithmConfig::StrategySwitch {
                 server_addrs,
-                synchronizer,
-                store: store_cfg,
+                synchronizer: extract_synchronizer(sync)?,
+                store: extract_store(store)?,
             },
-            serializer: serializer_cfg,
-            dataset: dataset_config,
-            optimizer: OptimizerConfig::GradientDescent {
-                lr: FloatPositive::new(optimizer.lr).unwrap(),
-            },
-            loss_fn: loss_fn_cfg,
+            serializer: extract_serializer(serializer)?,
+            dataset: extract_dataset(dataset)?,
+            optimizer: extract_optimizer(optimizer)?,
+            loss_fn: extract_loss_fn(loss_fn)?,
             batch_size: batch_size_nz,
             max_epochs: max_epochs_nz,
             offline_epochs,
             seed,
-            early_stopping,
+            early_stopping: extract_early_stopping(early_stopping_tolerance)?,
         },
         max_epochs,
         worker_count,
