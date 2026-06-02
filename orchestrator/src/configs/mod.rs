@@ -65,7 +65,5 @@ pub struct OrchAdapt {
     pub switch_tracking: Option<StrategySwitchTracking>,
     pub model_config: ModelConfig,
     pub algorithm_config: AlgorithmConfig,
-    /// Per-layer parameter location within its server's buffer: (server_id, start, end).
-    /// Empty for AllReduce training.
     pub layer_param_offsets: Vec<(usize, usize, usize)>,
 }
