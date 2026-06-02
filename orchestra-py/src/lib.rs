@@ -1,5 +1,6 @@
 mod activations;
 mod arch;
+mod convert;
 mod datasets;
 mod initialization;
 mod loss_fns;
