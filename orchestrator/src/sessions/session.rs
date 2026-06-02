@@ -315,13 +315,13 @@ impl Session {
             }
         }
 
-        let total: usize = layer_offsets.iter().map(|&(_, s, e)| e - s).sum();
+        let total: usize = layer_offsets.iter().map(|&(_, start, end)| end - start).sum();
         let mut model_params = Vec::with_capacity(total);
 
         for (layer_i, &(server_id, start, end)) in layer_offsets.iter().enumerate() {
-            if let Some(ref sp) = server_params[server_id] {
+            if let Some(ref params) = server_params[server_id] {
                 debug!("layer {layer_i}: server {server_id} [{start}..{end}]");
-                model_params.extend_from_slice(&sp[start..end]);
+                model_params.extend_from_slice(&params[start..end]);
             }
         }
 
