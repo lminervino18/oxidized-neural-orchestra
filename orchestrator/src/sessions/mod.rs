@@ -62,6 +62,9 @@ pub enum TrainingEvent {
     Upgrade {
         server_handle: Box<ParamServerHandle<NetRtp>>,
     },
+    SwitchedToServer {
+        worker_id: usize,
+    },
     Error(OrchErr),
 }
 
