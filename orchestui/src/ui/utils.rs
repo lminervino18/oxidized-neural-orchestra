@@ -1,5 +1,15 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 
+/// Returns a `Rect` of exactly `width × height` cells, centered inside `r`.
+pub fn centered_rect_fixed(width: u16, height: u16, r: Rect) -> Rect {
+    Rect {
+        x: r.x + r.width.saturating_sub(width) / 2,
+        y: r.y + r.height.saturating_sub(height) / 2,
+        width: width.min(r.width),
+        height: height.min(r.height),
+    }
+}
+
 /// Returns a centered sub-rectangle of `r` with the given percentage dimensions.
 ///
 /// # Args
