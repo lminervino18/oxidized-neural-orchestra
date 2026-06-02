@@ -10,10 +10,26 @@ import json
 
 d = json.load(open('$ORCHESTUI_DIR/training.json'))
 algo = d.get('algorithm', {})
-ps = algo.get('parameter_server', {}) if isinstance(algo, dict) else {}
 
-nworkers = len(d.get('worker_addrs', []))
-nservers = len(ps.get('server_addrs', []))
+worker_addrs = d.get('worker_addrs', [])
+
+if isinstance(algo, dict):
+    ps  = algo.get('parameter_server', {})
+    ss  = algo.get('strategy_switch', {})
+    # PS: workers + servers are separate containers
+    if ps:
+        nworkers = len(worker_addrs)
+        nservers = len(ps.get('server_addrs', []))
+    # StrategySwitch: ALL nodes start as workers (server_addrs are worker containers too)
+    elif ss:
+        nworkers = len(worker_addrs) + len(ss.get('server_addrs', []))
+        nservers = 0
+    else:
+        nworkers = len(worker_addrs)
+        nservers = 0
+else:
+    nworkers = len(worker_addrs)
+    nservers = 0
 
 print(nworkers, nservers)
 ")
