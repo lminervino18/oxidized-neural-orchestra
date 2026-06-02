@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    configs::{DataSrc, ModelConfig, TrainingConfig},
+    configs::{AlgorithmConfig, DataSrc, ModelConfig, TrainingConfig},
     dataset_format::DatasetFormat,
     CancelHandle, Session, StopReason, TrainedModel, TrainingEvent,
 };
@@ -19,7 +19,7 @@ use crate::ui::{
         confirm_quit::draw_confirm_quit, confirm_stop::draw_confirm_stop,
         converting::draw_converting, header::draw_header, log_panel::draw_log,
         loss_chart::draw_charts, params_panel::draw_params, save_popup::draw_save_popup,
-        workers_table::draw_workers_table,
+        topology::draw_topology, workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
     theme::Theme,
@@ -34,6 +34,23 @@ pub const WORKER_COLORS: &[Color] = &[
     Color::Rgb(255, 255, 0),
     Color::Rgb(255, 130, 0),
 ];
+
+/// Which training algorithm the session is using.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlgorithmKind {
+    AllReduce,
+    ParameterServer,
+    StrategySwitch,
+}
+
+/// Which view is currently active on the training screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrainingView {
+    /// Standard dashboard with charts, workers table, and log panel.
+    Dashboard,
+    /// Full-canvas topology visualization of workers and servers.
+    Topology,
+}
 
 /// The current phase of the training session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +119,10 @@ pub struct TrainingState {
     pub workers_total: usize,
     pub servers_total: usize,
     pub optimizer_label: String,
+    /// Training algorithm used in this session.
+    pub algorithm: AlgorithmKind,
+    /// Currently active view: dashboard or topology.
+    pub view: TrainingView,
     pub early_stopping_label: Option<String>,
     pub max_epochs: usize,
     pub phase: Phase,
@@ -145,6 +166,12 @@ impl TrainingState {
         workers_total: usize,
         servers_total: usize,
     ) -> Self {
+        let algorithm = match &training.algorithm {
+            AlgorithmConfig::AllReduce => AlgorithmKind::AllReduce,
+            AlgorithmConfig::ParameterServer { .. } => AlgorithmKind::ParameterServer,
+            AlgorithmConfig::StrategySwitch { .. } => AlgorithmKind::StrategySwitch,
+        };
+
         let optimizer_label = format!("{:?}", training.optimizer)
             .split_whitespace()
             .next()
@@ -205,6 +232,8 @@ impl TrainingState {
             workers_total,
             servers_total,
             optimizer_label,
+            algorithm,
+            view: TrainingView::Dashboard,
             early_stopping_label,
             max_epochs,
             phase: initial_phase,
@@ -475,6 +504,13 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
     }
 
     match (key, state.confirm_quit, state.is_active()) {
+        (KeyCode::Char('v'), ConfirmQuit::Hidden, _) => {
+            state.view = match state.view {
+                TrainingView::Dashboard => TrainingView::Topology,
+                TrainingView::Topology => TrainingView::Dashboard,
+            };
+            None
+        }
         (KeyCode::Left, ConfirmQuit::Hidden, _) => {
             state.prev_worker();
             None
@@ -532,29 +568,42 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     draw_header(f, rows[0], state);
 
-    let body = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
-        .split(rows[1]);
+    match state.view {
+        TrainingView::Topology => {
+            // Extend the canvas over both body and log rows for maximum space.
+            let full_body = ratatui::layout::Rect {
+                y: rows[1].y,
+                height: rows[1].height + rows[2].height,
+                ..rows[1]
+            };
+            draw_topology(f, full_body, state);
+        }
+        TrainingView::Dashboard => {
+            let body = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+                .split(rows[1]);
 
-    draw_charts(f, body[0], state);
+            draw_charts(f, body[0], state);
 
-    let right = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(if state.final_trained.is_some() {
-            vec![Constraint::Min(4), Constraint::Length(5)]
-        } else {
-            vec![Constraint::Min(4)]
-        })
-        .split(body[1]);
+            let right = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(if state.final_trained.is_some() {
+                    vec![Constraint::Min(4), Constraint::Length(5)]
+                } else {
+                    vec![Constraint::Min(4)]
+                })
+                .split(body[1]);
 
-    draw_workers_table(f, right[0], state);
+            draw_workers_table(f, right[0], state);
 
-    if state.final_trained.is_some() {
-        draw_params(f, right[1], state);
+            if state.final_trained.is_some() {
+                draw_params(f, right[1], state);
+            }
+
+            draw_log(f, rows[2], state);
+        }
     }
-
-    draw_log(f, rows[2], state);
 
     if state.phase == Phase::Converting {
         draw_converting(f, area, state);
