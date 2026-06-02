@@ -73,6 +73,8 @@ impl WorkerListener {
                         Ok(ReqResolution::Upgrade { spec, ranges }) => {
                             info!("upgrading worker {id}");
 
+                            let _ = event_tx.send(TrainingEvent::SwitchedToServer { worker_id: id }).await;
+
                             let event = match self.handle_upgrade(spec, ranges).await {
                                 Ok(server_handle) => TrainingEvent::Upgrade {
                                     server_handle: Box::new(server_handle)
