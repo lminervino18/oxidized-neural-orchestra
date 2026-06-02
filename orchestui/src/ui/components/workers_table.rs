@@ -90,7 +90,9 @@ fn draw_table(f: &mut Frame, area: Rect, state: &TrainingState) {
         .map(|w| {
             let is_selected = w.id == state.selected_worker;
 
-            let status_cell = if w.done {
+            let status_cell = if w.became_server {
+                Cell::from("server").style(Theme::accent_cyan())
+            } else if w.done {
                 Cell::from("done").style(Theme::muted())
             } else {
                 Cell::from("active").style(Theme::ok())
