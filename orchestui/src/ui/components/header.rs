@@ -57,7 +57,20 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         )
     };
 
-    let workers_done = state.workers_done();
+    // After a StrategySwitch, some workers became servers — show the real counts.
+    let ps_servers = if state.ps_server_count > 0 {
+        state.ps_server_count
+    } else {
+        state.servers_total
+    };
+    let effective_total = state.workers_total - state.ps_server_count;
+    let workers_active = state.workers.iter().filter(|w| !w.done && !w.became_server).count();
+
+    let workers_str = if state.phase == Phase::Finished {
+        format!("workers {effective_total}/{effective_total}")
+    } else {
+        format!("workers {workers_active}/{effective_total}")
+    };
 
     let mut spans = vec![
         Span::styled(" ONO  ", Theme::title().add_modifier(Modifier::BOLD)),
@@ -66,18 +79,12 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Span::styled("  │  ", Theme::muted()),
         Span::styled(format!("elapsed {}", state.elapsed_str()), Theme::dim()),
         Span::styled("  │  ", Theme::muted()),
-        Span::styled(
-            format!("workers {}/{}", workers_done, state.workers_total),
-            Theme::dim(),
-        ),
+        Span::styled(workers_str, Theme::dim()),
         Span::styled("  │  ", Theme::muted()),
     ];
 
-    if state.servers_total > 0 {
-        spans.push(Span::styled(
-            format!("servers {}", state.servers_total),
-            Theme::dim(),
-        ));
+    if ps_servers > 0 {
+        spans.push(Span::styled(format!("servers {ps_servers}"), Theme::dim()));
         spans.push(Span::styled("  │  ", Theme::muted()));
     }
 
