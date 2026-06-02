@@ -101,6 +101,8 @@ pub struct WorkerState {
     pub last_loss: Option<f64>,
     /// Whether the worker has disconnected.
     pub done: bool,
+    /// True when this worker upgraded to a PS server during StrategySwitch.
+    pub became_server: bool,
 }
 
 /// Severity level for log entries.
@@ -123,6 +125,9 @@ pub struct TrainingState {
     pub algorithm: AlgorithmKind,
     /// Currently active view: dashboard or topology.
     pub view: TrainingView,
+    /// For StrategySwitch: how many workers have upgraded to PS servers.
+    /// Zero until the switch fires; then equals the number of server nodes.
+    pub ps_server_count: usize,
     pub early_stopping_label: Option<String>,
     pub max_epochs: usize,
     pub phase: Phase,
@@ -210,6 +215,7 @@ impl TrainingState {
                 epochs_done: 0,
                 last_loss: None,
                 done: false,
+                became_server: false,
             })
             .collect();
 
@@ -234,6 +240,7 @@ impl TrainingState {
             optimizer_label,
             algorithm,
             view: TrainingView::Dashboard,
+            ps_server_count: 0,
             early_stopping_label,
             max_epochs,
             phase: initial_phase,
@@ -339,6 +346,22 @@ impl TrainingState {
                 }
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
+            TrainingEvent::SwitchedToServer { worker_id } => {
+                if worker_id < self.workers.len() {
+                    self.workers[worker_id].done = true;
+                    self.workers[worker_id].became_server = true;
+                }
+                self.ps_server_count =
+                    self.workers.iter().filter(|w| w.became_server).count();
+                let n_servers = self.ps_server_count;
+                let n_workers = self.workers_total - n_servers;
+                self.push_log(
+                    LogLevel::Info,
+                    format!(
+                        "worker {worker_id} → parameter server  ({n_servers} converted, {n_workers} workers remain)"
+                    ),
+                );
+            }
             TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
@@ -381,11 +404,6 @@ impl TrainingState {
     pub fn elapsed_str(&self) -> String {
         let s = self.started_at.elapsed().as_secs();
         format!("{:02}:{:02}", s / 60, s % 60)
-    }
-
-    /// Returns the number of workers that have finished.
-    pub fn workers_done(&self) -> usize {
-        self.workers.iter().filter(|w| w.done).count()
     }
 
     /// Returns `true` if the session is still converting, connecting, or training.
@@ -610,11 +628,11 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     }
 
     if state.confirm_quit == ConfirmQuit::Visible {
-        draw_confirm_quit(f, area);
+        draw_confirm_quit(f);
     }
 
     if state.confirm_stop == ConfirmStop::Visible {
-        draw_confirm_stop(f, area);
+        draw_confirm_stop(f);
     }
 
     if let SavePopup::Visible(ref path) = state.save_popup {
