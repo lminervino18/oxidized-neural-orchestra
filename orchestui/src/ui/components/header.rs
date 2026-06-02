@@ -8,7 +8,7 @@ use ratatui::{
 
 use orchestrator::StopReason;
 
-use crate::ui::screens::training::{Phase, TrainingState};
+use crate::ui::screens::training::{Phase, TrainingState, TrainingView};
 use crate::ui::theme::Theme;
 use crate::ui::utils::fmt_loss;
 
@@ -35,12 +35,26 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Phase::Error => Span::styled("ERROR", Theme::error()),
     };
 
+    let view_hint = match state.view {
+        TrainingView::Dashboard => "  [v] topology",
+        TrainingView::Topology => "  [v] dashboard",
+    };
+
     let hint = if state.final_trained.is_some() {
-        Span::styled("  [q] menu  [←/→] worker  [s] save", Theme::muted())
+        Span::styled(
+            format!("  [q] menu  [←/→] worker  [s] save{view_hint}"),
+            Theme::muted(),
+        )
     } else if state.is_active() {
-        Span::styled("  [q] leave  [←/→] worker  [x] stop", Theme::muted())
+        Span::styled(
+            format!("  [q] leave  [←/→] worker  [x] stop{view_hint}"),
+            Theme::muted(),
+        )
     } else {
-        Span::styled("  [q] menu  [←/→] worker", Theme::muted())
+        Span::styled(
+            format!("  [q] menu  [←/→] worker{view_hint}"),
+            Theme::muted(),
+        )
     };
 
     let workers_done = state.workers_done();
