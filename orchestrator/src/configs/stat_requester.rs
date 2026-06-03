@@ -102,7 +102,7 @@ where
             let ping_req = StatRequest::Ping {
                 addrs: addrs[..id].to_vec(),
                 rounds: PING_ROUNDS,
-                incoming: addrs.len() - id,
+                incoming: addrs.len() - id - 1,
             };
 
             node_handle.push_stats(vec![ping_req]).await?;

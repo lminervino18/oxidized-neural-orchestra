@@ -6,7 +6,7 @@ use comms::{
     specs::node::{Stat, StatRequest, StatResponse},
 };
 use futures::future;
-use log::warn;
+use log::{debug, warn};
 use tokio::{
     net::{
         TcpStream,
@@ -110,10 +110,13 @@ where
         rounds: usize,
         incoming: usize,
     ) -> StatResponse {
+        debug!("Serving ping");
         let (mut ping_handles, mut pong_handles) = self.establish_ping_conns(addrs, incoming).await;
+        debug!("done with connections");
         let mut rtts = HashMap::new();
 
-        for _ in 0..rounds {
+        for i in 0..rounds {
+            debug!("Serving ping round {i}/{rounds}");
             self.serve_ping_round(&mut ping_handles, &mut pong_handles, &mut rtts)
                 .await;
         }

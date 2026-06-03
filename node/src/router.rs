@@ -9,7 +9,7 @@ use comms::{
         worker::WorkerSpec,
     },
 };
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use machine_learning::datasets::Dataset;
 use parameter_server::service::{Server, ServerBuilder};
 use tokio::{
@@ -93,6 +93,8 @@ where
     /// * `orch_handle` - The newly connected orchestrator's handle.
     async fn handle_orch(&mut self, mut orch_handle: OrchHandle<T>) {
         while let Ok(event) = orch_handle.recv_event().await {
+            debug!("Received {event:?} from orchestrator");
+
             match event {
                 OrchEvent::Create { spec } => {
                     if let Err(e) = self.route(spec, orch_handle).await {
@@ -298,9 +300,10 @@ where
     async fn upgrade(
         &mut self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
+        mut orch_handle: OrchHandle<T>,
         dataset: Dataset,
     ) -> io::Result<Box<dyn Server<T>>> {
+        orch_handle.upgraded().await?;
         const CHUNK_SIZE: usize = 1 << 12;
 
         let mut partitions = dataset.partition(spec.nworkers);

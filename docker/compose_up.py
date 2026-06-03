@@ -7,7 +7,10 @@ from pathlib import Path
 
 
 # The directory containing this exact script.
-BASE_DIR = Path(__file__).resolve().parent
+DOCKER_DIR = Path(__file__).resolve().parent
+
+# The project's directory.
+ROOT_DIR = DOCKER_DIR.parent
 
 
 def main():
@@ -25,13 +28,11 @@ def main():
     }
 
     subprocess.run(["sudo", "-v"], check=True)
-    subprocess.run([BASE_DIR / "gen_compose.py"], env=env, check=True)
-    subprocess.run(["sudo", "-E", BASE_DIR / "fill_hosts.py"], env=env, check=True)
+    subprocess.run([DOCKER_DIR / "gen_compose.py"], env=env, check=True, cwd=ROOT_DIR)
+    subprocess.run(["sudo", "-E", DOCKER_DIR / "fill_hosts.py"], env=env, check=True)
 
-    project_root = BASE_DIR.parent
-    compose_file_path = project_root / "compose.yaml"
-    cmd = ["docker", "compose", "-f", compose_file_path, "up", "--build", "-d", "--remove-orphans"]
-    subprocess.run(cmd, cwd=project_root)
+    cmd = ["docker", "compose", "-f", "compose.yaml", "up", "--build", "-d", "--remove-orphans"]
+    subprocess.run(cmd, cwd=ROOT_DIR)
 
 
 if __name__ == "__main__":

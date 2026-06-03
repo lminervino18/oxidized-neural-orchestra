@@ -55,14 +55,14 @@ fn main() -> io::Result<()> {
     unsafe { env::set_var("RUST_LOG", "debug") };
     env_logger::init();
 
-    const WORKERS: usize = 3;
+    const WORKERS: usize = 2;
     const SERVERS: usize = 2;
     const NODES: usize = WORKERS + SERVERS;
     const RELEASE: bool = false;
 
     setup_docker(NODES, RELEASE)?;
 
-    thread::sleep(Duration::from_secs(2));
+    thread::sleep(Duration::from_secs(4));
     let addrs = build_addresses(NODES);
 
     let synchronizer_config = SynchronizerConfig::NonBlocking;
@@ -87,26 +87,15 @@ fn main() -> io::Result<()> {
 
     let model_config = ModelConfig {
         layers: vec![
-            LayerConfig::Conv {
-                input_dim: (
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                ),
-                kernel_dim: (
-                    NonZeroUsize::new(5).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                ),
-                stride: NonZeroUsize::new(1).unwrap(),
-                padding: 0,
+            LayerConfig::Dense {
+                output_size: NonZeroUsize::new(2).unwrap(),
                 init: ParamGenConfig::Kaiming,
-                act_fn: None,
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
             LayerConfig::Dense {
-                output_size: NonZeroUsize::new(4).unwrap(),
+                output_size: NonZeroUsize::new(1).unwrap(),
                 init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Softmax),
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
         ],
     };
@@ -120,47 +109,20 @@ fn main() -> io::Result<()> {
         dataset: DatasetConfig {
             src: DataSrc::Inline {
                 samples: vec![
-                    0.0, 1.0, 0.0, //
-                    1.0, 1.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 0.0, 0.0, //
-                    1.0, 0.0, 1.0, // plus sign
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, //
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, // dot
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, // cross
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, //
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, // box
+                    0.0, 0.0, //
+                    0.0, 1.0, //
+                    1.0, 0.0, //
+                    1.0, 1.0, //
                 ],
                 labels: vec![
-                    1.0, 0.0, 0.0, 0.0, // plus sign
-                    0.0, 1.0, 0.0, 0.0, // dot
-                    0.0, 0.0, 1.0, 0.0, // cross
-                    0.0, 0.0, 0.0, 1.0, // box
+                    0.0, //
+                    1.0, //
+                    1.0, //
+                    0.0, //
                 ],
             },
-            x_size: NonZeroUsize::new(18).unwrap(),
-            y_size: NonZeroUsize::new(4).unwrap(),
+            x_size: NonZeroUsize::new(2).unwrap(),
+            y_size: NonZeroUsize::new(1).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
             lr: FloatPositive::new(1.0).unwrap(),
@@ -168,7 +130,7 @@ fn main() -> io::Result<()> {
         },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(100).unwrap(),
+        max_epochs: NonZeroUsize::new(400).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
         early_stopping: None,

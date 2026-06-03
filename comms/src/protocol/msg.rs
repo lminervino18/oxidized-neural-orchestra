@@ -68,6 +68,7 @@ pub enum Command<'a> {
         spec: ServerSpec,
         ranges: Vec<(usize, usize)>,
     },
+    Upgraded,
 }
 
 /// The application layer message for the entire system.

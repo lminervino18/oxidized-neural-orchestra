@@ -96,7 +96,7 @@ impl<T: TransportLayer> NodeHandle<T> {
             Msg::Control(Command::StatsResponse { stats }) => Ok(stats),
             msg => {
                 let text = format!("Expected stats from worker {}, got: {msg:?}", self.id);
-                return Err(io::Error::other(text));
+                Err(io::Error::other(text))
             }
         }
     }

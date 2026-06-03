@@ -2,10 +2,6 @@
 
 import os
 import json
-from pathlib import Path
-
-# The directory containing this exact script.
-BASE_DIR = Path(__file__).resolve().parent
 
 # base port for nodes.
 BASE_PORT = 40_000
@@ -90,9 +86,8 @@ def main():
     release = os.environ["RELEASE"].lower() == "true"
 
     docker_compose = generate_compose(nodes, release)
-    output_path = BASE_DIR / "compose.yaml"
 
-    with open(output_path, "w") as f:
+    with open("compose.yaml", "w") as f:
         json.dump(docker_compose, f, indent=2)
 
 

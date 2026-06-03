@@ -11,6 +11,7 @@ use comms::Connector;
 use configs::{Adapter, DataSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
 pub use error::{OrchErr, Result};
+use log::debug;
 pub use sessions::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
 use tokio::runtime::Runtime;
 
@@ -37,6 +38,7 @@ use crate::configs::StatRequester;
 pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session> {
     let dataset_bin = generate_binary_dataset(&mut training.dataset.src);
 
+    debug!("Validating configs");
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 
@@ -55,10 +57,12 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     };
     let mut connector = Connector::new(transport_factory);
 
+    debug!("Requesting stats");
     let runtime = Runtime::new()?;
     let mut stat_requester = StatRequester::new(&mut connector);
     let stats = runtime.block_on(stat_requester.obtain_stats(&training.addrs))?;
 
+    debug!("Adapting configs");
     let adapter = Adapter::new();
     let (orch, workers, servers) = adapter.adapt_configs(model.clone(), &training, stats)?;
 

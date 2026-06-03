@@ -411,7 +411,7 @@ impl Adapter {
         let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
 
         let algorithm_spec = AlgorithmSpec::AllReduce {
-            worker_addrs: training.addrs.to_vec(),
+            worker_addrs: worker_addrs.clone(),
             param_gen: ParamGenSpec::Chained {
                 specs: param_gen_specs,
             },
