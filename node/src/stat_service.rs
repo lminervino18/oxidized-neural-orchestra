@@ -227,11 +227,11 @@ where
         rtts: &mut HashMap<String, Vec<Duration>>,
     ) {
         let ping_futs = ping_handles
-            .into_iter()
+            .iter_mut()
             .map(async |addr_handle| self.ping_node(&mut addr_handle.handle).await);
 
         let pong_futs = pong_handles
-            .into_iter()
+            .iter_mut()
             .map(async |node_handle| self.pong_node(node_handle).await);
 
         let (pings, pongs) = tokio::join!(future::join_all(ping_futs), future::join_all(pong_futs));
