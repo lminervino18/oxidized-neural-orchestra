@@ -76,7 +76,7 @@ impl Adapter {
 
                 let orch = self.adapt_non_strategy_switch_orch(&model, training)?;
 
-                let (servers, server_sizes, server_ordering) =
+                let (servers, server_sizes, server_ordering, _) =
                     self.adapt_servers(&model, training, &server_addrs, synchronizer, store)?;
 
                 let partitions =
@@ -160,16 +160,12 @@ impl Adapter {
             ConvergenceTracker::new(winsize, cfg.tolerance)
         });
 
-        let layer_param_offsets = if let AlgorithmConfig::ParameterServer {
-            ref server_addrs, ..
-        } = training.algorithm
-        {
-            let (_, _, _, offsets, _) =
-                self.adapt_param_gens(model, training, server_addrs.len())?;
-            offsets
-        } else {
-            Vec::new()
-        };
+        let layer_param_offsets =
+            if let AlgorithmConfig::ParameterServer { nservers, .. } = training.algorithm {
+                self.adapt_param_gens(model, training, nservers.get())?.3
+            } else {
+                Vec::new()
+            };
 
         let adapt = OrchAdapt {
             input_size: training.dataset.x_size,
@@ -498,7 +494,12 @@ impl Adapter {
         server_addrs: &[String],
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
-    ) -> Result<(Vec<ServerAdapt>, Vec<usize>, Vec<usize>, Vec<(usize, usize, usize)>)> {
+    ) -> Result<(
+        Vec<ServerAdapt>,
+        Vec<usize>,
+        Vec<usize>,
+        Vec<(usize, usize, usize)>,
+    )> {
         let (param_gens, server_sizes, server_ordering, layer_offsets, _) =
             self.adapt_param_gens(model, training, server_addrs.len())?;
 
