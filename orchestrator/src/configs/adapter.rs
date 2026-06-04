@@ -59,7 +59,7 @@ impl Adapter {
                 store,
             } => {
                 let orch = self.adapt_non_strategy_switch_orch(&model, training)?;
-                let (servers, server_sizes, server_ordering) =
+                let (servers, server_sizes, server_ordering, _) =
                     self.adapt_servers(&model, training, server_addrs, synchronizer, store)?;
 
                 let partitions =
@@ -138,6 +138,17 @@ impl Adapter {
             ConvergenceTracker::new(winsize, cfg.tolerance)
         });
 
+        let layer_param_offsets = if let AlgorithmConfig::ParameterServer {
+            ref server_addrs, ..
+        } = training.algorithm
+        {
+            let (_, _, _, offsets, _) =
+                self.adapt_param_gens(model, training, server_addrs.len())?;
+            offsets
+        } else {
+            Vec::new()
+        };
+
         let adapt = OrchAdapt {
             input_size: training.dataset.x_size,
             loss_recorder: LossRecorder::new(nworkers),
@@ -145,6 +156,7 @@ impl Adapter {
             switch_tracking: None,
             model_config: model.clone(),
             algorithm_config: training.algorithm.clone(),
+            layer_param_offsets,
         };
 
         Ok(adapt)
@@ -186,8 +198,8 @@ impl Adapter {
         let tracker = SwitchTracker::new(winsize, 0.01);
 
         let trainer_spec = self.adapt_trainer(model, training);
-        let (_, _, _, param_ranges) = self.adapt_param_gens(model, training, nservers)?;
-        let (servers, server_sizes, server_ordering) =
+        let (_, _, _, _, param_ranges) = self.adapt_param_gens(model, training, nservers)?;
+        let (servers, server_sizes, server_ordering, layer_offsets) =
             self.adapt_servers(model, training, server_addrs, synchronizer, store)?;
 
         let switches = (0..nworkers).map(|_| WorkerPostAction::Switch {
@@ -214,6 +226,7 @@ impl Adapter {
             switch_tracking: Some(tracking),
             model_config: model.clone(),
             algorithm_config: training.algorithm.clone(),
+            layer_param_offsets: layer_offsets,
         };
 
         Ok(adapt)
@@ -470,7 +483,8 @@ impl Adapter {
     /// * `store` - The store's configuration.
     ///
     /// # Returns
-    /// The servers' specifications, resolved addresses, sizes and layers' ordering.
+    /// The servers' specifications, resolved addresses, sizes, layers' ordering and per-layer
+    /// parameter offsets within each server's buffer.
     ///
     /// # Errors
     /// Returns an `OrchErr` if any address cannot be resolved.
@@ -481,8 +495,8 @@ impl Adapter {
         server_addrs: &[String],
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
-    ) -> Result<(Vec<ServerAdapt>, Vec<usize>, Vec<usize>)> {
-        let (param_gens, server_sizes, server_ordering, _) =
+    ) -> Result<(Vec<ServerAdapt>, Vec<usize>, Vec<usize>, Vec<(usize, usize, usize)>)> {
+        let (param_gens, server_sizes, server_ordering, layer_offsets, _) =
             self.adapt_param_gens(model, training, server_addrs.len())?;
 
         let nworkers = training.worker_addrs.len();
@@ -518,7 +532,7 @@ impl Adapter {
             .into_iter()
             .unzip();
 
-        Ok((servers, server_sizes, server_ordering))
+        Ok((servers, server_sizes, server_ordering, layer_offsets))
     }
 
     /// Adapts the parameter generators and partitions the layers to minimize the
@@ -530,7 +544,8 @@ impl Adapter {
     /// * `nservers` - The amount of servers.
     ///
     /// # Returns
-    /// The param generator specifications, the server sizes, server orderings and the parameter ranges.
+    /// The param generator specifications, the server sizes, server orderings, the per-layer
+    /// parameter offsets within each server's buffer, and the parameter ranges.
     fn adapt_param_gens(
         &self,
         model: &ModelConfig,
@@ -540,6 +555,7 @@ impl Adapter {
         Vec<ParamGenSpec>,
         Vec<usize>,
         Vec<usize>,
+        Vec<(usize, usize, usize)>,
         Vec<Vec<(usize, usize)>>,
     )> {
         let (_, param_gens) = self.adapt_layers(model, training.dataset.x_size);
@@ -556,10 +572,16 @@ impl Adapter {
 
         let param_gen_bins = balanced_partitions(items, nservers);
         let mut server_ordering = vec![0; nlayers];
+        let mut layer_offsets = vec![(0usize, 0usize, 0usize); nlayers];
+        let mut server_cursors = vec![0usize; nservers];
 
         for (server_i, bin) in param_gen_bins.iter().enumerate() {
-            for &(layer_i, ..) in bin {
-                server_ordering[layer_i] = server_i;
+            for (layer_i, spec) in bin {
+                let size = spec.size();
+                let start = server_cursors[server_i];
+                server_ordering[*layer_i] = server_i;
+                layer_offsets[*layer_i] = (server_i, start, start + size);
+                server_cursors[server_i] += size;
             }
         }
 
@@ -595,6 +617,7 @@ impl Adapter {
             param_gen_specs,
             server_sizes,
             server_ordering,
+            layer_offsets,
             server_ranges,
         ))
     }
