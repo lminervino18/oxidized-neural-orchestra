@@ -67,4 +67,5 @@ pub struct OrchAdapt {
     pub switch_tracking: Option<StrategySwitchTracking>,
     pub model_config: ModelConfig,
     pub algorithm_config: AlgorithmConfig,
+    pub layer_param_offsets: Vec<(usize, usize, usize)>,
 }
