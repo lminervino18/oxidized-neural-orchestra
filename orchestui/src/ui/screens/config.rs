@@ -13,8 +13,8 @@ use crate::{config::json, ui::screens::menu::MenuState};
 
 use super::{Action, Screen};
 
-const DEFAULT_MODEL_PATH: &str = "orchestui/model.json";
-const DEFAULT_TRAINING_PATH: &str = "orchestui/training.json";
+const DEFAULT_MODEL_PATH: &str = "model.json";
+const DEFAULT_TRAINING_PATH: &str = "training.json";
 
 const EXAMPLE_MODEL: &str = concat!(
     "{\n",
