@@ -68,55 +68,40 @@ Training begins as All-Reduce and, once gradients converge, the orchestrator pro
 
 ---
 
-## Running Locally
+## Running
+
+O.N.O is a **distributed** system: every machine runs the same `node` binary, and one orchestrator connects to all of them, hands each its role, and drives training. Roles are **not** hardcoded — a node becomes a worker or a parameter server from the spec it receives on connection.
 
 ### Prerequisites
 - Rust toolchain (`rustup`)
-- Python 3.12+
-- `maturin` (`pipx install maturin`)
-- Docker + Docker Compose (for distributed mode)
+- Python 3.12+ and `maturin` (`pipx install maturin`) — only for `orchestra-py`
+- Docker + Docker Compose — only to simulate a cluster on one machine
 
----
+### 1. Start the nodes
 
-### Option 1 — TUI (`orchestui`)
-
-The interactive terminal dashboard. Requires `model.json` and `training.json` config files.
+On every machine that hosts a node, run the `node` binary with the port to listen on (`HOST` defaults to `0.0.0.0`):
 ```bash
-cargo run -p orchestui
+PORT=40000 cargo run -p node --release
 ```
+Run one per machine — or several on one machine, each on a different port. List every node's `host:port` in the `addrs` field of your `training.json`.
 
-When the TUI opens, enter the paths to your config files (leave blank to use the defaults `orchestui/model.json` / `orchestui/training.json`):
-```
-model.json path:    orchestui/model.json
-training.json path: orchestui/training.json
-```
+### 2. Drive the training
 
-Press `?` at either prompt to see an inline config example. Example config files are provided in `orchestui/`.
+From any machine that can reach the nodes, pick one interface:
 
----
+- **TUI** (`orchestui`):
+  ```bash
+  cargo run -p orchestui --release
+  ```
+  Enter the paths to your `model.json` / `training.json` (blank uses `model.json` / `training.json` in the current directory; press `?` for an inline example).
 
-### Option 2 — Python (`orchestra-py`)
+- **Python** (`orchestra-py`):
+  ```bash
+  cd orchestra-py && maturin develop && cd ..
+  python3 orchestra-py/local.py
+  ```
 
-Install the module and run the example script — containers are started first via Docker:
-```bash
-cd orchestra-py
-python3 -m venv ../.venv
-source ../.venv/bin/activate
-maturin develop
-cd ..
-python3 docker/compose_up.py --nodes 6
-source .venv/bin/activate && python3 orchestra-py/local.py
-```
-
----
-
-### Option 3 — Headless Rust (`orchestrator`)
-
-Start the node containers, then run the orchestrator binary against your config files:
-```bash
-python3 docker/compose_up.py --nodes N --release
-cargo run -p orchestrator -- model.json training.json
-```
+The orchestrator reads `addrs` from the config, connects to each node, and assigns roles automatically.
 
 ---
 
@@ -142,19 +127,18 @@ cargo run -p orchestrator -- model.json training.json
 
 ---
 
-## Docker Configuration
+## Simulating Locally with Docker
 
-All node containers are identical and started with a single node count:
+To run a whole cluster on a single machine, Docker can spin up `N` identical node containers:
 ```bash
 python3 docker/compose_up.py --nodes N [--release]
 ```
 
-This script:
-1. Generates `compose.yaml` via `docker/gen_compose.py`
-2. Fills `/etc/hosts` with `node-*` entries (requires sudo once)
-3. Runs `docker compose up --build -d --remove-orphans`
+This generates `compose.yaml` via `docker/gen_compose.py`, maps `node-i → 127.0.0.1` in `/etc/hosts` (requires sudo once) so the same `node-i:4000i` address resolves both from the host and between containers, and starts the containers — node `i` listens on port `40000 + i`. Then drive the run with `orchestui` or `orchestra-py` as above, pointing `addrs` at `node-0:40000`, `node-1:40001`, …
 
-All containers use the same `node/Dockerfile` and are addressed as `node-i:4000i` (node `i` listens on port `40000 + i`). The orchestrator assigns each node its worker or server role at connection time — no role is hardcoded.
+The `orchestui/run.sh` helper does it end to end: it reads the node count from `training.json`, brings the containers up, and opens the TUI.
+
+You can also bring up a **single** node to try things out — with Docker (`--nodes 1`) or without (`PORT=40000 cargo run -p node`) — but the system is built to run distributed across machines.
 
 ---
 
@@ -303,7 +287,6 @@ trained.save_safetensors("weights.safetensors")
 | Parameter Server | ✅ |
 | All-Reduce | ✅ |
 | Strategy Switch | ✅ |
-| Max Pooling | 🚧 (in progress) |
 
 ---
 
