@@ -88,6 +88,15 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         spans.push(Span::styled("  │  ", Theme::muted()));
     }
 
+    // Transient badge shown right after a worker starts converting to a server.
+    if let Some(wid) = state.converting_worker() {
+        spans.push(Span::styled(
+            format!("⟳ converting worker {wid} → PS"),
+            Theme::accent_magenta().add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::styled("  │  ", Theme::muted()));
+    }
+
     spans.push(Span::styled(
         format!("avg loss {}", avg_loss_str(state)),
         Theme::dim(),

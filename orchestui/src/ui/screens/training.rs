@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossterm::event::KeyCode;
 use orchestrator::{
@@ -128,6 +128,9 @@ pub struct TrainingState {
     /// For StrategySwitch: how many workers have upgraded to PS servers.
     /// Zero until the switch fires; then equals the number of server nodes.
     pub ps_server_count: usize,
+    /// Worker id and start time of the most recent worker → server conversion.
+    /// Drives the transient "converting" badge in the header.
+    pub last_conversion: Option<(usize, Instant)>,
     pub early_stopping_label: Option<String>,
     pub max_epochs: usize,
     pub phase: Phase,
@@ -241,6 +244,7 @@ impl TrainingState {
             algorithm,
             view: TrainingView::Dashboard,
             ps_server_count: 0,
+            last_conversion: None,
             early_stopping_label,
             max_epochs,
             phase: initial_phase,
@@ -351,6 +355,7 @@ impl TrainingState {
                     self.workers[worker_id].done = true;
                     self.workers[worker_id].became_server = true;
                 }
+                self.last_conversion = Some((worker_id, Instant::now()));
                 self.ps_server_count =
                     self.workers.iter().filter(|w| w.became_server).count();
                 let n_servers = self.ps_server_count;
@@ -358,7 +363,7 @@ impl TrainingState {
                 self.push_log(
                     LogLevel::Info,
                     format!(
-                        "worker {worker_id} → parameter server  ({n_servers} converted, {n_workers} workers remain)"
+                        "worker {worker_id} converting to parameter server  ({n_servers} converted, {n_workers} workers remain)"
                     ),
                 );
             }
@@ -404,6 +409,15 @@ impl TrainingState {
     pub fn elapsed_str(&self) -> String {
         let s = self.started_at.elapsed().as_secs();
         format!("{:02}:{:02}", s / 60, s % 60)
+    }
+
+    /// Returns the id of the worker currently converting to a parameter server,
+    /// if the most recent conversion started within the badge display window.
+    pub fn converting_worker(&self) -> Option<usize> {
+        const BADGE_WINDOW: Duration = Duration::from_secs(5);
+
+        self.last_conversion
+            .and_then(|(id, at)| (at.elapsed() < BADGE_WINDOW).then_some(id))
     }
 
     /// Returns `true` if the session is still converting, connecting, or training.
