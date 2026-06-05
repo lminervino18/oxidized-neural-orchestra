@@ -92,13 +92,13 @@ pub enum StoreConfig {
 #[serde(rename_all = "snake_case")]
 pub enum AlgorithmConfig {
     ParameterServer {
-        server_addrs: Vec<String>,
+        nservers: NonZeroUsize,
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
     AllReduce,
     StrategySwitch {
-        server_addrs: Vec<String>,
+        nservers: NonZeroUsize,
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     },
@@ -118,7 +118,7 @@ pub enum SerializerConfig {
 /// The `Training` configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrainingConfig {
-    pub worker_addrs: Vec<String>,
+    pub addrs: Vec<String>,
     pub algorithm: AlgorithmConfig,
     #[serde(default)]
     pub serializer: SerializerConfig,

@@ -93,6 +93,7 @@ impl<'a> EventListener<'a> {
             }
         }
 
+        println!("exited EventListener::listen");
         Some(self.stop_reason.unwrap_or_default())
     }
 
@@ -116,10 +117,10 @@ impl<'a> EventListener<'a> {
                 let _ = self.event_tx.send(event).await;
                 Some(true)
             }
-            TrainingEvent::Upgrade { server_handle } => {
+            TrainingEvent::Upgraded { server_handle } => {
                 self.server_handles.push(*server_handle);
                 self.workers_left = self.workers_left.saturating_sub(1);
-                Some(true)
+                Some(self.workers_left > 0)
             }
             other => {
                 let is_err = matches!(other, TrainingEvent::Error(..));

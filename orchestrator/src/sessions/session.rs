@@ -110,6 +110,7 @@ impl Session {
                     model_config,
                     algorithm_config,
                     switch_tracking,
+                    layer_param_offsets,
                 },
         } = self;
 
@@ -138,6 +139,7 @@ impl Session {
                 &user_event_tx,
                 &mut req_txs,
                 &mut event_rx,
+                &layer_param_offsets,
             )
             .await;
 
@@ -209,6 +211,7 @@ impl Session {
     /// * `user_event_tx` - The user event notifier.
     /// * `req_txs` - The request senders for the worker listeners.
     /// * `event_rx` - The worker listener event consumer.
+    /// * `layer_offsets` - Per-layer parameter locations: (server_id, start, end) within each server's buffer.
     ///
     /// # Returns
     /// The trained parameters of the model.
@@ -218,13 +221,14 @@ impl Session {
         user_event_tx: &Sender<TrainingEvent>,
         req_txs: &mut [Sender<WorkerRequest>],
         event_rx: &mut Receiver<TrainingEvent>,
+        layer_offsets: &[(usize, usize, usize)],
     ) -> Vec<f32>
     where
         T: TransportLayer + 'static,
     {
         match algorithm {
             AlgorithmConfig::ParameterServer { .. } => {
-                Self::finalize_parameter_server(server_handles, user_event_tx).await
+                Self::finalize_parameter_server(server_handles, layer_offsets, user_event_tx).await
             }
             AlgorithmConfig::AllReduce => {
                 Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
@@ -233,7 +237,7 @@ impl Session {
                 Self::finalize_all_reduce(req_txs, event_rx, user_event_tx).await
             }
             AlgorithmConfig::StrategySwitch { .. } => {
-                Self::finalize_parameter_server(server_handles, user_event_tx).await
+                Self::finalize_parameter_server(server_handles, layer_offsets, user_event_tx).await
             }
         }
     }
@@ -264,31 +268,39 @@ impl Session {
     }
 
     /// Finalizes a training using parameter server. Retrieves the parameters from
-    /// all the servers.
+    /// all the servers and reassembles them in the original layer order.
+    ///
+    /// Layers are distributed across servers by `balanced_partitions`, so pulling
+    /// server-by-server and concatenating naively produces a shuffled parameter
+    /// vector. This function collects each server's buffer first, then walks the
+    /// `layer_offsets` table to copy each layer's slice into the output in the
+    /// correct order.
     ///
     /// # Args
     /// * `server_handles` - The handles for communicating with the servers.
+    /// * `layer_offsets` - Per-layer locations: `(server_id, start, end)` within
+    ///   each server's parameter buffer, indexed by layer index.
     /// * `user_event_tx` - The user sender for communicating if an error occurred.
     ///
     /// # Returns
-    /// The trained parameters of the model.
+    /// The trained parameters of the model in layer order.
     async fn finalize_parameter_server<T>(
         server_handles: Vec<ParamServerHandle<T>>,
+        layer_offsets: &[(usize, usize, usize)],
         user_event_tx: &Sender<TrainingEvent>,
     ) -> Vec<f32>
     where
         T: TransportLayer,
     {
-        // TODO: This implementation is wrong, the model layers aren't ordered
-        //       this way, the parameters are all shuffled up.
-
         debug!("all workers done, reading final params from all servers");
-        let mut model_params = Vec::new();
+        let nservers = server_handles.len();
+        let mut server_params: Vec<Option<Vec<f32>>> = vec![None; nservers];
 
         for (i, mut server_handle) in server_handles.into_iter().enumerate() {
             match server_handle.pull_params().await {
                 Ok(params) => {
-                    model_params.extend_from_slice(params);
+                    debug!("server {i}: pulled {} params", params.len());
+                    server_params[i] = Some(params.to_vec());
 
                     if let Err(e) = server_handle.disconnect().await {
                         error!("Failed to disconnect server {i}: {e}");
@@ -300,6 +312,16 @@ impl Session {
                     let event = TrainingEvent::Error(err);
                     let _ = user_event_tx.send(event).await;
                 }
+            }
+        }
+
+        let total: usize = layer_offsets.iter().map(|&(_, start, end)| end - start).sum();
+        let mut model_params = Vec::with_capacity(total);
+
+        for (layer_i, &(server_id, start, end)) in layer_offsets.iter().enumerate() {
+            if let Some(ref params) = server_params[server_id] {
+                debug!("layer {layer_i}: server {server_id} [{start}..{end}]");
+                model_params.extend_from_slice(&params[start..end]);
             }
         }
 

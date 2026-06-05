@@ -59,7 +59,7 @@ pub enum TrainingEvent {
     Disconnect {
         worker_id: usize,
     },
-    Upgrade {
+    Upgraded {
         server_handle: Box<ParamServerHandle<NetRtp>>,
     },
     SwitchedToServer {

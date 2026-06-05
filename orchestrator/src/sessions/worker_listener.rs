@@ -1,4 +1,4 @@
-use comms::{NetRtp, ParamServerHandle, WorkerEvent, WorkerHandle, specs::server::ServerSpec};
+use comms::{NetRtp, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -7,10 +7,6 @@ use crate::{OrchErr, Result};
 
 /// The return type of the `handle_request` method.
 enum ReqResolution {
-    Upgrade {
-        spec: ServerSpec,
-        ranges: Vec<(usize, usize)>,
-    },
     Continue,
     Halt,
 }
@@ -18,6 +14,7 @@ enum ReqResolution {
 /// The return type of the `handle_event` method.
 enum EventResolution {
     NotifyOrch(TrainingEvent),
+    Upgraded,
     Exit,
 }
 
@@ -68,34 +65,32 @@ impl WorkerListener {
                     };
 
                     match self.handle_request(req, &event_tx).await {
-                        Ok(ReqResolution::Continue) => {},
-                        Ok(ReqResolution::Halt) => break,
-                        Ok(ReqResolution::Upgrade { spec, ranges }) => {
-                            info!("upgrading worker {id}");
-
-                            let _ = event_tx.send(TrainingEvent::SwitchedToServer { worker_id: id }).await;
-
-                            let event = match self.handle_upgrade(spec, ranges).await {
-                                Ok(server_handle) => TrainingEvent::Upgrade {
-                                    server_handle: Box::new(server_handle)
-                                },
-                                Err(e) => TrainingEvent::Error(e),
-                            };
-
-                            let _ = event_tx.send(event).await;
-                            break
-                        },
+                        Ok(ReqResolution::Continue) => continue,
+                        Ok(ReqResolution::Halt) => {}
                         Err(e) => {
                             let _ = event_tx.send(TrainingEvent::Error(e)).await;
-                            break;
                         }
                     }
+
+                    break;
                 },
                 event = self.worker_handle.recv_event() => match event {
                     Ok(event) => match Self::handle_event(id, event) {
                         Ok(EventResolution::Exit) => break,
                         Ok(EventResolution::NotifyOrch(event)) => {
                             let _ = event_tx.send(event).await;
+                        }
+                        Ok(EventResolution::Upgraded) => {
+                            info!("upgraded worker {id}");
+
+                            let _ = event_tx
+                                .send(TrainingEvent::SwitchedToServer { worker_id: id })
+                                .await;
+
+                            let server_handle = Box::new(self.worker_handle.upgrade_handle());
+                            let event = TrainingEvent::Upgraded { server_handle };
+                            let _ = event_tx.send(event).await;
+                            break;
                         }
                         Err(e) => {
                             let _ = event_tx.send(TrainingEvent::Error(e)).await;
@@ -191,10 +186,16 @@ impl WorkerListener {
 
                 ReqResolution::Continue
             }
-            WorkerRequest::Upgrade { spec, ranges } => ReqResolution::Upgrade {
-                spec: *spec,
-                ranges,
-            },
+            WorkerRequest::Upgrade { spec, ranges } => {
+                info!("upgrading worker {id}");
+
+                if let Err(e) = self.worker_handle.upgrade(*spec, ranges).await {
+                    let details = format!("failed to upgrade worker{id}: {e}");
+                    return Err(OrchErr::WorkerError { id, details });
+                }
+
+                ReqResolution::Continue
+            }
         };
 
         Ok(should_continue)
@@ -229,33 +230,15 @@ impl WorkerListener {
                 info!("worker {id} disconnected");
                 Ok(EventResolution::Exit)
             }
+            WorkerEvent::Upgraded => {
+                info!("worker {id} upgraded");
+                Ok(EventResolution::Upgraded)
+            }
             _ => {
                 warn!("worker {id}: unexpected event {event:?}");
                 let details = format!("invalid event from worker {id}: {event:?}");
                 Err(OrchErr::WorkerError { id, details })
             }
         }
-    }
-
-    /// Sends an upgrade message to the worker.
-    ///
-    /// # Args
-    /// * `spec` - The specification for the server instanciation.
-    /// * `ranges` - The requested parameter ranges for this server.
-    ///
-    /// # Returns
-    /// The `ParamServerHandle` to communicate with the server or an orch err if occurred.
-    async fn handle_upgrade(
-        self,
-        spec: ServerSpec,
-        ranges: Vec<(usize, usize)>,
-    ) -> Result<ParamServerHandle<NetRtp>> {
-        self.worker_handle
-            .upgrade(spec, ranges)
-            .await
-            .map_err(|e| OrchErr::WorkerError {
-                id: self.id,
-                details: e.to_string(),
-            })
     }
 }

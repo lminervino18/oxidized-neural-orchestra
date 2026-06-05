@@ -26,6 +26,53 @@ pub enum PyActFn {
     Sigmoid(f32),
 }
 
+/// Converts a Python initializer object to a `PyInit`.
+///
+/// Returns a `TypeError` if the object is not a recognised initializer.
+pub fn extract_init(obj: &Bound<'_, PyAny>) -> PyResult<PyInit> {
+    if obj.is_instance_of::<Kaiming>() {
+        Ok(PyInit::Kaiming)
+    } else if obj.is_instance_of::<Xavier>() {
+        Ok(PyInit::Xavier)
+    } else if obj.is_instance_of::<Lecun>() {
+        Ok(PyInit::Lecun)
+    } else if obj.is_instance_of::<XavierUniform>() {
+        Ok(PyInit::XavierUniform)
+    } else if obj.is_instance_of::<LecunUniform>() {
+        Ok(PyInit::LecunUniform)
+    } else if let Ok(c) = obj.extract::<PyRef<Const>>() {
+        Ok(PyInit::Const(c.value))
+    } else if let Ok(u) = obj.extract::<PyRef<Uniform>>() {
+        Ok(PyInit::Uniform(u.low, u.high))
+    } else if let Ok(u) = obj.extract::<PyRef<UniformInclusive>>() {
+        Ok(PyInit::UniformInclusive(u.low, u.high))
+    } else if let Ok(n) = obj.extract::<PyRef<Normal>>() {
+        Ok(PyInit::Normal(n.mean, n.std_dev))
+    } else {
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "init must be a parameter initializer",
+        ))
+    }
+}
+
+/// Converts an optional Python activation function object to a `PyActFn`.
+///
+/// Returns a `TypeError` if the object is not a recognised activation function.
+pub fn extract_act_fn(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<PyActFn>> {
+    match obj {
+        None => Ok(None),
+        Some(a) => {
+            if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
+                Ok(Some(PyActFn::Sigmoid(s.amp)))
+            } else {
+                Err(pyo3::exceptions::PyTypeError::new_err(
+                    "act_fn must be an activation function or None",
+                ))
+            }
+        }
+    }
+}
+
 /// A fully-connected dense layer.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
@@ -62,73 +109,20 @@ impl Dense {
             pyo3::exceptions::PyValueError::new_err("output_size must be greater than 0")
         })?;
 
-        let init = if init.is_instance_of::<Kaiming>() {
-            PyInit::Kaiming
-        } else if init.is_instance_of::<Xavier>() {
-            PyInit::Xavier
-        } else if init.is_instance_of::<Lecun>() {
-            PyInit::Lecun
-        } else if init.is_instance_of::<XavierUniform>() {
-            PyInit::XavierUniform
-        } else if init.is_instance_of::<LecunUniform>() {
-            PyInit::LecunUniform
-        } else if let Ok(c) = init.extract::<PyRef<Const>>() {
-            PyInit::Const(c.value)
-        } else if let Ok(u) = init.extract::<PyRef<Uniform>>() {
-            PyInit::Uniform(u.low, u.high)
-        } else if let Ok(u) = init.extract::<PyRef<UniformInclusive>>() {
-            PyInit::UniformInclusive(u.low, u.high)
-        } else if let Ok(n) = init.extract::<PyRef<Normal>>() {
-            PyInit::Normal(n.mean, n.std_dev)
-        } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be a parameter initializer",
-            ));
-        };
-
-        let act_fn = match act_fn {
-            None => None,
-            Some(a) => {
-                if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
-                    Some(PyActFn::Sigmoid(s.amp))
-                } else {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "act_fn must be an activation function or None",
-                    ));
-                }
-            }
-        };
-
         Ok(Self {
             output_size,
-            init,
-            act_fn,
+            init: extract_init(init)?,
+            act_fn: extract_act_fn(act_fn)?,
         })
     }
 }
 
 impl Dense {
     pub fn to_layer_config(&self) -> LayerConfig {
-        let init = match self.init {
-            PyInit::Kaiming => ParamGenConfig::Kaiming,
-            PyInit::Xavier => ParamGenConfig::Xavier,
-            PyInit::Lecun => ParamGenConfig::Lecun,
-            PyInit::XavierUniform => ParamGenConfig::XavierUniform,
-            PyInit::LecunUniform => ParamGenConfig::LecunUniform,
-            PyInit::Const(v) => ParamGenConfig::Const { value: v },
-            PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low, high },
-            PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low, high },
-            PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean, std_dev },
-        };
-
-        let act_fn = self.act_fn.as_ref().map(|a| match a {
-            PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
-        });
-
         LayerConfig::Dense {
             output_size: self.output_size,
-            init,
-            act_fn,
+            init: py_init_to_config(&self.init),
+            act_fn: self.act_fn.as_ref().map(py_act_fn_to_config),
         }
     }
 }
@@ -178,91 +172,34 @@ impl Conv2d {
                 .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("{name} must be > 0")))
         };
 
-        let input_dim = (
-            make_nonzero(input_dim.0, "input_dim.channels")?,
-            make_nonzero(input_dim.1, "input_dim.height")?,
-            make_nonzero(input_dim.2, "input_dim.width")?,
-        );
-        let kernel_dim = (
-            make_nonzero(kernel_dim.0, "kernel_dim.filters")?,
-            make_nonzero(kernel_dim.1, "kernel_dim.in_channels")?,
-            make_nonzero(kernel_dim.2, "kernel_dim.kernel_size")?,
-        );
-        let stride = make_nonzero(stride, "stride")?;
-
-        let init = if init.is_instance_of::<Kaiming>() {
-            PyInit::Kaiming
-        } else if init.is_instance_of::<Xavier>() {
-            PyInit::Xavier
-        } else if init.is_instance_of::<Lecun>() {
-            PyInit::Lecun
-        } else if init.is_instance_of::<XavierUniform>() {
-            PyInit::XavierUniform
-        } else if init.is_instance_of::<LecunUniform>() {
-            PyInit::LecunUniform
-        } else if let Ok(c) = init.extract::<PyRef<Const>>() {
-            PyInit::Const(c.value)
-        } else if let Ok(u) = init.extract::<PyRef<Uniform>>() {
-            PyInit::Uniform(u.low, u.high)
-        } else if let Ok(u) = init.extract::<PyRef<UniformInclusive>>() {
-            PyInit::UniformInclusive(u.low, u.high)
-        } else if let Ok(n) = init.extract::<PyRef<Normal>>() {
-            PyInit::Normal(n.mean, n.std_dev)
-        } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be a parameter initializer",
-            ));
-        };
-
-        let act_fn = match act_fn {
-            None => None,
-            Some(a) => {
-                if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
-                    Some(PyActFn::Sigmoid(s.amp))
-                } else {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "act_fn must be an activation function or None",
-                    ));
-                }
-            }
-        };
-
         Ok(Self {
-            input_dim,
-            kernel_dim,
-            stride,
+            input_dim: (
+                make_nonzero(input_dim.0, "input_dim.channels")?,
+                make_nonzero(input_dim.1, "input_dim.height")?,
+                make_nonzero(input_dim.2, "input_dim.width")?,
+            ),
+            kernel_dim: (
+                make_nonzero(kernel_dim.0, "kernel_dim.filters")?,
+                make_nonzero(kernel_dim.1, "kernel_dim.in_channels")?,
+                make_nonzero(kernel_dim.2, "kernel_dim.kernel_size")?,
+            ),
+            stride: make_nonzero(stride, "stride")?,
             padding,
-            init,
-            act_fn,
+            init: extract_init(init)?,
+            act_fn: extract_act_fn(act_fn)?,
         })
     }
 }
 
 impl Conv2d {
     pub fn to_layer_config(&self) -> LayerConfig {
-        let init = match self.init {
-            PyInit::Kaiming => ParamGenConfig::Kaiming,
-            PyInit::Xavier => ParamGenConfig::Xavier,
-            PyInit::Lecun => ParamGenConfig::Lecun,
-            PyInit::XavierUniform => ParamGenConfig::XavierUniform,
-            PyInit::LecunUniform => ParamGenConfig::LecunUniform,
-            PyInit::Const(v) => ParamGenConfig::Const { value: v },
-            PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low, high },
-            PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low, high },
-            PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean, std_dev },
-        };
-
-        let act_fn = self.act_fn.as_ref().map(|a| match a {
-            PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
-        });
-
         LayerConfig::Conv {
             input_dim: self.input_dim,
             kernel_dim: self.kernel_dim,
             stride: self.stride,
             padding: self.padding,
-            init,
-            act_fn,
+            init: py_init_to_config(&self.init),
+            act_fn: self.act_fn.as_ref().map(py_act_fn_to_config),
         }
     }
 }
@@ -314,5 +251,25 @@ impl Sequential {
                 layers: layer_configs?,
             },
         })
+    }
+}
+
+fn py_init_to_config(init: &PyInit) -> ParamGenConfig {
+    match init {
+        PyInit::Kaiming => ParamGenConfig::Kaiming,
+        PyInit::Xavier => ParamGenConfig::Xavier,
+        PyInit::Lecun => ParamGenConfig::Lecun,
+        PyInit::XavierUniform => ParamGenConfig::XavierUniform,
+        PyInit::LecunUniform => ParamGenConfig::LecunUniform,
+        PyInit::Const(v) => ParamGenConfig::Const { value: *v },
+        PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low: *low, high: *high },
+        PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low: *low, high: *high },
+        PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean: *mean, std_dev: *std_dev },
+    }
+}
+
+fn py_act_fn_to_config(act_fn: &PyActFn) -> ActFnConfig {
+    match act_fn {
+        PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
     }
 }

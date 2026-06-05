@@ -3,9 +3,11 @@ use std::{borrow::Cow, io};
 use half::f16;
 use serde::{Deserialize, Serialize};
 
-use crate::specs::machine_learning::TrainerSpec;
-
-use super::specs::{node::NodeSpec, server::ServerSpec};
+use super::specs::{
+    machine_learning::TrainerSpec,
+    node::{NodeSpec, StatRequest, StatResponse},
+    server::ServerSpec,
+};
 
 pub type Header = u32;
 pub const HEADER_SIZE: usize = size_of::<Header>();
@@ -22,9 +24,10 @@ pub enum Payload<'a> {
 /// An enum of the different types of entities in the system.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Entity {
-    Worker { id: usize },
-    ParamServer { id: usize },
+    Node { id: usize },
     Orchestrator,
+    ParamServer { id: usize },
+    Worker { id: usize },
 }
 
 /// The command for the `Control` variant of the `Msg` enum.
@@ -35,28 +38,37 @@ pub enum Command<'a> {
     CreateNode {
         spec: NodeSpec,
     },
+    Disconnect,
+    Done,
+    Eof,
+    Ping,
+    Pong,
+    ReportLoss {
+        losses: Cow<'a, [f64]>,
+    },
+    RequestParams,
     ShareDataset,
     ShareDatasetSize {
         size: usize,
     },
-    Upgrade {
-        spec: ServerSpec,
-        ranges: Vec<(usize, usize)>,
+    StatsRequest {
+        reqs: Vec<StatRequest>,
     },
+    StatsResponse {
+        stats: Vec<StatResponse>,
+    },
+    StopAfterEpoch,
     Switch {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
         trainer_spec: TrainerSpec,
     },
-    ReportLoss {
-        losses: Cow<'a, [f64]>,
+    Upgrade {
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
     },
-    RequestParams,
-    StopAfterEpoch,
-    Disconnect,
-    Done,
-    Eof,
+    Upgraded,
 }
 
 /// The application layer message for the entire system.

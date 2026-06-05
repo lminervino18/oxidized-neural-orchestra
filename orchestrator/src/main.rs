@@ -11,8 +11,7 @@ use log::info;
 use orchestrator::{CancelHandle, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
-const SERVER_BASE_PORT: usize = 40_000;
-const WORKER_BASE_PORT: usize = 50_000;
+const NODE_BASE_PORT: usize = 40_000;
 
 // The file path for the compose up script file.
 const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/compose_up.py");
@@ -20,20 +19,17 @@ const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/
 /// Sets up the docker containers for simulated execution of the system.
 ///
 /// # Args
-/// * `workers` - The amount of workers to use.
-/// * `servers` - The amount of servers to use.
+/// * `nodes` - The amount of nodes to use.
 /// * `release` - The compilation mode for the rust compiler.
 ///
 /// # Returns
 /// The exit status of the compose script.
-fn setup_docker(workers: usize, servers: usize, release: bool) -> io::Result<ExitStatus> {
+fn setup_docker(nodes: usize, release: bool) -> io::Result<ExitStatus> {
     let mut cmd = Command::new("python3");
 
     cmd.arg(COMPOSE_FILE_PATH)
-        .arg("--workers")
-        .arg(workers.to_string())
-        .arg("--servers")
-        .arg(servers.to_string());
+        .arg("--nodes")
+        .arg(nodes.to_string());
 
     if release {
         cmd.arg("--release");
@@ -42,24 +38,17 @@ fn setup_docker(workers: usize, servers: usize, release: bool) -> io::Result<Exi
     cmd.spawn()?.wait()
 }
 
-/// Builds the addresses for both workers and servers.
+/// Builds the addresses for nodes.
 ///
 /// # Args
-/// * `workers` - The amount of workers to use.
-/// * `servers` - The amount of servers to use.
+/// * `nodes` - The amount of nodes to use.
 ///
 /// # Returns
 /// A tuple of lists of addresses.
-fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>) {
-    let worker_addrs = (0..workers)
-        .map(|i| format!("worker-{i}:{}", WORKER_BASE_PORT + i))
-        .collect();
-
-    let server_addrs = (0..servers)
-        .map(|i| format!("server-{i}:{}", SERVER_BASE_PORT + i))
-        .collect();
-
-    (worker_addrs, server_addrs)
+fn build_addresses(nodes: usize) -> Vec<String> {
+    (0..nodes)
+        .map(|i| format!("node-{i}:{}", NODE_BASE_PORT + i))
+        .collect()
 }
 
 fn main() -> io::Result<()> {
@@ -68,19 +57,20 @@ fn main() -> io::Result<()> {
 
     const WORKERS: usize = 2;
     const SERVERS: usize = 2;
+    const NODES: usize = WORKERS + SERVERS;
     const RELEASE: bool = false;
 
-    setup_docker(WORKERS, SERVERS, RELEASE)?;
+    setup_docker(NODES, RELEASE)?;
 
-    thread::sleep(Duration::from_secs(2));
-    let (worker_addrs, server_addrs) = build_addresses(WORKERS, SERVERS);
+    thread::sleep(Duration::from_secs(4));
+    let addrs = build_addresses(NODES);
 
     let synchronizer_config = SynchronizerConfig::NonBlocking;
     let store_config = StoreConfig::Wild;
 
     #[allow(unused_variables)]
     let parameter_server_config = AlgorithmConfig::ParameterServer {
-        server_addrs: server_addrs.clone(),
+        nservers: NonZeroUsize::new(SERVERS).unwrap(),
         synchronizer: synchronizer_config,
         store: store_config,
     };
@@ -90,39 +80,28 @@ fn main() -> io::Result<()> {
 
     #[allow(unused_variables)]
     let strategy_switch_config = AlgorithmConfig::StrategySwitch {
-        server_addrs,
+        nservers: NonZeroUsize::new(SERVERS).unwrap(),
         synchronizer: synchronizer_config,
         store: store_config,
     };
 
     let model_config = ModelConfig {
         layers: vec![
-            LayerConfig::Conv {
-                input_dim: (
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                ),
-                kernel_dim: (
-                    NonZeroUsize::new(5).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                ),
-                stride: NonZeroUsize::new(1).unwrap(),
-                padding: 0,
+            LayerConfig::Dense {
+                output_size: NonZeroUsize::new(2).unwrap(),
                 init: ParamGenConfig::Kaiming,
-                act_fn: None,
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
             LayerConfig::Dense {
-                output_size: NonZeroUsize::new(4).unwrap(),
+                output_size: NonZeroUsize::new(1).unwrap(),
                 init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Softmax),
+                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
             },
         ],
     };
 
     let training_config = TrainingConfig {
-        worker_addrs,
+        addrs,
         algorithm: strategy_switch_config,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
@@ -130,47 +109,20 @@ fn main() -> io::Result<()> {
         dataset: DatasetConfig {
             src: DataSrc::Inline {
                 samples: vec![
-                    0.0, 1.0, 0.0, //
-                    1.0, 1.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 0.0, 0.0, //
-                    1.0, 0.0, 1.0, // plus sign
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, //
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, // dot
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, // cross
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, //
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, // box
+                    0.0, 0.0, //
+                    0.0, 1.0, //
+                    1.0, 0.0, //
+                    1.0, 1.0, //
                 ],
                 labels: vec![
-                    1.0, 0.0, 0.0, 0.0, // plus sign
-                    0.0, 1.0, 0.0, 0.0, // dot
-                    0.0, 0.0, 1.0, 0.0, // cross
-                    0.0, 0.0, 0.0, 1.0, // box
+                    0.0, //
+                    1.0, //
+                    1.0, //
+                    0.0, //
                 ],
             },
-            x_size: NonZeroUsize::new(18).unwrap(),
-            y_size: NonZeroUsize::new(4).unwrap(),
+            x_size: NonZeroUsize::new(2).unwrap(),
+            y_size: NonZeroUsize::new(1).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
             lr: FloatPositive::new(1.0).unwrap(),
@@ -178,7 +130,7 @@ fn main() -> io::Result<()> {
         },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(100).unwrap(),
+        max_epochs: NonZeroUsize::new(400).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
         early_stopping: None,

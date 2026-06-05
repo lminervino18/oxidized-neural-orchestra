@@ -1,6 +1,7 @@
 mod adapter;
 mod model;
 mod partition;
+mod stat_requester;
 mod training;
 mod validator;
 
@@ -11,6 +12,7 @@ use comms::specs::{machine_learning::TrainerSpec, server::ServerSpec, worker::Wo
 pub use adapter::Adapter;
 pub use model::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
 pub use partition::Partition;
+pub use stat_requester::StatRequester;
 pub use training::{
     AlgorithmConfig, DataSrc, DatasetConfig, EarlyStoppingConfig, LossFnConfig, OptimizerConfig,
     SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
@@ -65,4 +67,5 @@ pub struct OrchAdapt {
     pub switch_tracking: Option<StrategySwitchTracking>,
     pub model_config: ModelConfig,
     pub algorithm_config: AlgorithmConfig,
+    pub layer_param_offsets: Vec<(usize, usize, usize)>,
 }
