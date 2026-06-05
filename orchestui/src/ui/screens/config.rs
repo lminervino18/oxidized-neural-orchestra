@@ -13,8 +13,8 @@ use crate::{config::json, ui::screens::menu::MenuState};
 
 use super::{Action, Screen};
 
-const DEFAULT_MODEL_PATH: &str = "model.json";
-const DEFAULT_TRAINING_PATH: &str = "training.json";
+const DEFAULT_MODEL_PATH: &str = "orchestui/model.json";
+const DEFAULT_TRAINING_PATH: &str = "orchestui/training.json";
 
 const EXAMPLE_MODEL: &str = concat!(
     "{\n",
@@ -51,17 +51,17 @@ const EXAMPLE_MODEL: &str = concat!(
 
 const EXAMPLE_TRAINING: &str = concat!(
     "{\n",
-    "  \"worker_addrs\": [\"worker-0:50000\", \"worker-1:50001\"],\n",
+    "  \"addrs\": [\"node-0:40000\", \"node-1:40001\", \"node-2:40002\"],\n",
     "  \"algorithm\": {\n",
     "    \"parameter_server\": {\n",
-    "      \"server_addrs\": [\"server-0:40000\", \"server-1:40001\"],\n",
+    "      \"nservers\": 1,\n",
     "      \"synchronizer\": \"non_blocking\",\n",
     "      \"store\": \"blocking\"\n",
     "    }\n",
     "  },\n",
     "  \"serializer\": { \"sparse_capable\": { \"r\": 0.95 } },\n",
     "  \"dataset\": {\n",
-    "    \"src\": { \"local\": { \"path\": \"data.csv\" } },\n",
+    "    \"src\": { \"local\": { \"samples_path\": \"x.bin\", \"labels_path\": \"y.bin\" } },\n",
     "    \"x_size\": 2,\n",
     "    \"y_size\": 1\n",
     "  },\n",
@@ -73,12 +73,13 @@ const EXAMPLE_TRAINING: &str = concat!(
     "  \"seed\": null\n",
     "}\n",
     "\n",
+    "algorithm: \"all_reduce\" | { \"parameter_server\": {..} }\n",
+    "  | { \"strategy_switch\": {..} }\n",
+    "nservers: how many of the addrs become servers\n",
     "serializer: \"base\" | { \"sparse_capable\": { \"r\": 0.0..1.0 } }\n",
     "synchronizer: \"barrier\" | \"non_blocking\"\n",
-    "store: blocking | wild\n",
-    "optimizer types: gradient_descent\n",
-    "server_addrs: one or more parameter servers\n",
-    "  parameters are distributed via bin-packing",
+    "store: \"blocking\" | \"wild\"\n",
+    "optimizer types: gradient_descent",
 );
 
 #[derive(Debug, Clone, PartialEq)]
@@ -254,10 +255,14 @@ fn handle_training_path(state: &mut ConfigState, key: KeyCode) -> Option<Action>
     }
 }
 
-/// Returns the ghost-text suffix to append when the current path ends with '/'.
-fn path_ghost<'a>(current: &str, default_file: &'a str) -> &'a str {
-    if current.ends_with('/') {
-        default_file
+/// Returns the ghost-text suffix to suggest. When the input is empty it offers
+/// the full default path; when it ends with '/' it offers just the default file
+/// name to append after the typed directory; otherwise nothing.
+fn path_ghost<'a>(current: &str, default_path: &'a str) -> &'a str {
+    if current.is_empty() {
+        default_path
+    } else if current.ends_with('/') {
+        default_path.rsplit('/').next().unwrap_or(default_path)
     } else {
         ""
     }
