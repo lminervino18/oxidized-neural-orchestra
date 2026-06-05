@@ -116,7 +116,11 @@ impl<'a> EventListener<'a> {
                 let _ = self.event_tx.send(event).await;
                 Some(true)
             }
-            TrainingEvent::Upgraded { server_handle } => {
+            TrainingEvent::Upgraded {
+                server_handle,
+                worker_id,
+            } => {
+                info!("worker {worker_id} upgraded to parameter server");
                 self.server_handles.push(*server_handle);
                 self.workers_left = self.workers_left.saturating_sub(1);
                 Some(self.workers_left > 0)
@@ -182,7 +186,7 @@ impl<'a> EventListener<'a> {
     /// # Args
     /// * `post_actions` - The action that each worker needs to take in order to switch algorithm.
     async fn broadcast_switch(&mut self, post_actions: Vec<WorkerPostAction>) {
-        for (tx, action) in self.req_txs.iter_mut().zip(post_actions) {
+        for (worker_id, (tx, action)) in self.req_txs.iter_mut().zip(post_actions).enumerate() {
             let req = match action {
                 WorkerPostAction::Switch {
                     server_addrs,
@@ -195,10 +199,17 @@ impl<'a> EventListener<'a> {
                     server_ordering,
                     trainer_spec: Box::new(trainer_spec),
                 },
-                WorkerPostAction::Upgrade { spec, ranges } => WorkerRequest::Upgrade {
-                    spec: Box::new(spec),
-                    ranges,
-                },
+                WorkerPostAction::Upgrade { spec, ranges } => {
+                    // The orchestrator initiates the upgrade here, so it also tells
+                    // the UI that this worker started switching into a server.
+                    let event = TrainingEvent::Upgrading { worker_id };
+                    let _ = self.event_tx.send(event).await;
+
+                    WorkerRequest::Upgrade {
+                        spec: Box::new(spec),
+                        ranges,
+                    }
+                }
             };
 
             let _ = tx.send(req).await;

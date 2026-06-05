@@ -28,8 +28,8 @@ const ZONE_LO: f64 = 20.0;
 const ZONE_HI: f64 = 80.0;
 
 /// Aspect ratio correction so circles look roughly round on typical terminals.
-/// y_orbit = x_orbit × ASPECT.
-const ASPECT: f64 = 0.60;
+/// y_orbit = x_orbit × ASPECT. Higher makes the ring taller / less flat.
+const ASPECT: f64 = 0.70;
 
 /// Minimum gap between the edges of two adjacent nodes (canvas units).
 const NODE_GAP: f64 = 3.0;
@@ -38,8 +38,6 @@ const NODE_GAP: f64 = 3.0;
 
 const COLOR_DONE: Color = Color::Rgb(40, 140, 255);
 const COLOR_SERVER: Color = Color::Rgb(0, 210, 210);
-/// Amber used for a worker mid-conversion into a parameter server.
-const COLOR_CONVERTING: Color = Color::Rgb(255, 190, 30);
 const COLOR_CONN: Color = Color::Rgb(0, 55, 0);
 const COLOR_PARTICLE: Color = Color::Rgb(255, 200, 0);
 const ANIM_PERIOD_MS: u128 = 1800;
@@ -107,8 +105,7 @@ struct Connection {
 // ── Dynamic radius helpers ────────────────────────────────────────────────────
 
 /// Target center-to-center distance as a multiple of node diameter.
-/// 2.5 × gives roughly 1.5 × diameter of empty space between node edges.
-const SEPARATION: f64 = 2.5;
+const SEPARATION: f64 = 2.1;
 
 /// Returns `(radius, orbit)` for `n` nodes in an AllReduce ring.
 ///
@@ -117,31 +114,34 @@ const SEPARATION: f64 = 2.5;
 /// the safe zone.
 fn allreduce_params(n: usize) -> (f64, f64) {
     if n <= 1 {
-        return (7.0, 0.0);
+        return (14.0, 0.0);
     }
-    let max_orbit = (ZONE_HI - CY) / ASPECT; // ≈ 50.8
 
-    // Try radii from large to small; pick the first that fits.
-    for &r in &[7.0_f64, 5.5, 4.5, 3.5, 2.5] {
+    // Try radii from large to small; pick the largest whose ring fits the zone.
+    // Small topologies get big nodes; they shrink as the ring grows, never overlapping.
+    for &r in &[14.0_f64, 12.0, 10.0, 8.0, 6.5, 5.0, 4.0, 3.0, 2.5] {
         // orbit so that adjacent node centres are SEPARATION × diameter apart
         let orbit = SEPARATION * r / (PI / n as f64).sin();
+        // the whole node (centre + radius) must stay inside the vertical zone
+        let max_orbit = (ZONE_HI - CY - r) / ASPECT;
         if orbit <= max_orbit {
-            return (r, orbit.max(15.0));
+            return (r, orbit.max(12.0));
         }
     }
 
-    (2.5, max_orbit)
+    let r = 2.5;
+    (r, (ZONE_HI - CY - r) / ASPECT)
 }
 
 /// Returns the largest node radius that allows stacking `max_dim` nodes
 /// vertically within `ZONE_LO..ZONE_HI` without overlap.
 fn ps_node_radius(max_dim: usize) -> f64 {
     if max_dim <= 1 {
-        return 9.5;
+        return 11.0;
     }
     let available = ZONE_HI - ZONE_LO;
     let max_r = (available / (max_dim - 1) as f64 - NODE_GAP) / 2.0;
-    max_r.min(9.5).max(2.0)
+    max_r.min(11.0).max(2.0)
 }
 
 // ── Layout computation ────────────────────────────────────────────────────────
@@ -472,14 +472,6 @@ fn draw_legend(ctx: &mut Context, state: &TrainingState) {
     }
 
     ctx.print(base_x, base_y, Span::styled("● done (blue)", Style::default().fg(COLOR_DONE)));
-
-    if state.algorithm == AlgorithmKind::StrategySwitch {
-        ctx.print(
-            base_x,
-            base_y - 2.5,
-            Span::styled("◐ converting → PS", Style::default().fg(COLOR_CONVERTING)),
-        );
-    }
 }
 
 // ── Color resolution ──────────────────────────────────────────────────────────
@@ -506,10 +498,6 @@ fn node_color(node: &NodeInfo, state: &TrainingState, phase: Phase) -> Color {
     }
 
     let worker = state.workers.get(wi);
-
-    if worker.map_or(false, |w| w.converting) {
-        return COLOR_CONVERTING;
-    }
 
     if worker.map_or(false, |w| w.done) {
         return COLOR_DONE;

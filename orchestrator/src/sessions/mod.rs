@@ -59,16 +59,14 @@ pub enum TrainingEvent {
     Disconnect {
         worker_id: usize,
     },
-    Upgraded {
-        server_handle: Box<ParamServerHandle<NetRtp>>,
-    },
-    /// A worker has started converting into a parameter server; the upgrade is
-    /// in flight and not yet confirmed.
-    WorkerConverting {
+    /// A worker has started upgrading into a parameter server: the upgrade
+    /// request was sent and is not yet confirmed. Drives the transient
+    /// "switching" indicator in the UI.
+    Upgrading {
         worker_id: usize,
     },
-    /// A worker finished converting and is now serving as a parameter server.
-    WorkerConverted {
+    Upgraded {
+        server_handle: Box<ParamServerHandle<NetRtp>>,
         worker_id: usize,
     },
     Error(OrchErr),

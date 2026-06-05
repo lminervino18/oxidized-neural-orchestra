@@ -90,9 +90,7 @@ fn draw_table(f: &mut Frame, area: Rect, state: &TrainingState) {
         .map(|w| {
             let is_selected = w.id == state.selected_worker;
 
-            let status_cell = if w.converting {
-                Cell::from("converting").style(Theme::accent_magenta())
-            } else if w.became_server {
+            let status_cell = if w.became_server {
                 Cell::from("server").style(Theme::accent_cyan())
             } else if w.done {
                 Cell::from("done").style(Theme::muted())
@@ -124,7 +122,7 @@ fn draw_table(f: &mut Frame, area: Rect, state: &TrainingState) {
             Constraint::Length(4),
             Constraint::Length(10),
             Constraint::Length(14),
-            Constraint::Length(11),
+            Constraint::Length(8),
         ],
     )
     .header(header)

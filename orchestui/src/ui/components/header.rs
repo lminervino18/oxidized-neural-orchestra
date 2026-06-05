@@ -67,7 +67,7 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
     let workers_active = state
         .workers
         .iter()
-        .filter(|w| !w.done && !w.became_server && !w.converting)
+        .filter(|w| !w.done && !w.became_server)
         .count();
 
     let workers_str = if state.phase == Phase::Finished {
@@ -92,17 +92,10 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         spans.push(Span::styled("  │  ", Theme::muted()));
     }
 
-    // Badge shown while one or more workers are converting into servers,
-    // between their `WorkerConverting` and `WorkerConverted` events.
-    let converting = state.converting_workers();
-    if !converting.is_empty() {
-        let ids = converting
-            .iter()
-            .map(|id| format!("W{id}"))
-            .collect::<Vec<_>>()
-            .join(", ");
+    // Transient badge shown right after a worker starts switching into a server.
+    if let Some(wid) = state.switching_worker() {
         spans.push(Span::styled(
-            format!("⟳ converting {ids} → PS"),
+            format!("⟳ switching W{wid} → PS"),
             Theme::accent_magenta().add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled("  │  ", Theme::muted()));

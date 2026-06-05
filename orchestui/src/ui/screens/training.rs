@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossterm::event::KeyCode;
 use orchestrator::{
@@ -103,9 +103,6 @@ pub struct WorkerState {
     pub done: bool,
     /// True when this worker upgraded to a PS server during StrategySwitch.
     pub became_server: bool,
-    /// True while the worker is converting into a server (upgrade in flight,
-    /// after `WorkerConverting` and before `WorkerConverted`).
-    pub converting: bool,
 }
 
 /// Severity level for log entries.
@@ -131,6 +128,9 @@ pub struct TrainingState {
     /// For StrategySwitch: how many workers have upgraded to PS servers.
     /// Zero until the switch fires; then equals the number of server nodes.
     pub ps_server_count: usize,
+    /// Worker id and start time of the most recent upgrade, used to render a
+    /// transient "switching to server" badge in the header.
+    pub last_upgrade: Option<(usize, Instant)>,
     pub early_stopping_label: Option<String>,
     pub max_epochs: usize,
     pub phase: Phase,
@@ -219,7 +219,6 @@ impl TrainingState {
                 last_loss: None,
                 done: false,
                 became_server: false,
-                converting: false,
             })
             .collect();
 
@@ -245,6 +244,7 @@ impl TrainingState {
             algorithm,
             view: TrainingView::Dashboard,
             ps_server_count: 0,
+            last_upgrade: None,
             early_stopping_label,
             max_epochs,
             phase: initial_phase,
@@ -350,21 +350,12 @@ impl TrainingState {
                 }
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
-            TrainingEvent::WorkerConverting { worker_id } => {
+            TrainingEvent::Upgrading { worker_id } => {
                 if worker_id < self.workers.len() {
-                    self.workers[worker_id].converting = true;
-                }
-                self.push_log(
-                    LogLevel::Info,
-                    format!("worker {worker_id} converting to parameter server..."),
-                );
-            }
-            TrainingEvent::WorkerConverted { worker_id } => {
-                if worker_id < self.workers.len() {
-                    self.workers[worker_id].converting = false;
                     self.workers[worker_id].became_server = true;
                     self.workers[worker_id].done = true;
                 }
+                self.last_upgrade = Some((worker_id, Instant::now()));
                 self.ps_server_count =
                     self.workers.iter().filter(|w| w.became_server).count();
                 let n_servers = self.ps_server_count;
@@ -372,7 +363,7 @@ impl TrainingState {
                 self.push_log(
                     LogLevel::Info,
                     format!(
-                        "worker {worker_id} is now a parameter server  ({n_servers} converted, {n_workers} workers remain)"
+                        "worker {worker_id} switching to parameter server  ({n_servers} servers, {n_workers} workers)"
                     ),
                 );
             }
@@ -420,14 +411,13 @@ impl TrainingState {
         format!("{:02}:{:02}", s / 60, s % 60)
     }
 
-    /// Returns the ids of all workers currently converting into parameter servers
-    /// (after `WorkerConverting`, before `WorkerConverted`).
-    pub fn converting_workers(&self) -> Vec<usize> {
-        self.workers
-            .iter()
-            .filter(|w| w.converting)
-            .map(|w| w.id)
-            .collect()
+    /// Returns the id of the worker that just started switching into a server,
+    /// while it is within the short badge-display window.
+    pub fn switching_worker(&self) -> Option<usize> {
+        const BADGE_WINDOW: Duration = Duration::from_secs(5);
+
+        self.last_upgrade
+            .and_then(|(id, at)| (at.elapsed() < BADGE_WINDOW).then_some(id))
     }
 
     /// Returns `true` if the session is still converting, connecting, or training.
