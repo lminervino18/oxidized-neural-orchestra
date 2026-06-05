@@ -241,11 +241,8 @@ where
             let AddressedHandle { addr, .. } = &ping_handles[i - removed];
 
             match ping {
-                Ok(dur) if let Some(durs) = rtts.get_mut(addr) => {
-                    durs.push(dur);
-                }
                 Ok(dur) => {
-                    rtts.insert(addr.clone(), vec![dur]);
+                    rtts.entry(addr.clone()).or_default().push(dur);
                 }
                 Err(e) => {
                     warn!("ping failed for node {addr}: {e}");
