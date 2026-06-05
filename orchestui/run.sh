@@ -5,39 +5,15 @@ ORCHESTUI_DIR="$ROOT/orchestui"
 
 RELEASE="--release"
 
-read NWORKERS NSERVERS < <(python3 -c "
-import json
+# Node-agnostic setup: every node is an identical container and the orchestrator
+# assigns server/worker roles at runtime. We only need the total node count,
+# which is the number of addresses listed in training.json (the same file the
+# TUI loads by default, from the orchestui/ directory).
+NNODES=$(python3 -c "import json; print(len(json.load(open('$ORCHESTUI_DIR/training.json'))['addrs']))")
 
-d = json.load(open('$ORCHESTUI_DIR/training.json'))
-algo = d.get('algorithm', {})
-
-worker_addrs = d.get('worker_addrs', [])
-
-if isinstance(algo, dict):
-    ps  = algo.get('parameter_server', {})
-    ss  = algo.get('strategy_switch', {})
-    # PS: workers + servers are separate containers
-    if ps:
-        nworkers = len(worker_addrs)
-        nservers = len(ps.get('server_addrs', []))
-    # StrategySwitch: ALL nodes start as workers (server_addrs are worker containers too)
-    elif ss:
-        nworkers = len(worker_addrs) + len(ss.get('server_addrs', []))
-        nservers = 0
-    else:
-        nworkers = len(worker_addrs)
-        nservers = 0
-else:
-    nworkers = len(worker_addrs)
-    nservers = 0
-
-print(nworkers, nservers)
-")
-
-# Bring up workers and servers via Docker
+# Bring up all nodes via Docker.
 python3 "$ROOT/docker/compose_up.py" \
-  --workers "$NWORKERS" \
-  --servers "$NSERVERS" \
+  --nodes "$NNODES" \
   $RELEASE
 
 sleep 2
@@ -50,6 +26,7 @@ setsid gnome-terminal --title="docker-logs" -- bash -c "
 
 sleep 0.5
 
-# Run TUI in current terminal
+# Run the TUI from the repo root; by default it loads orchestui/model.json and
+# orchestui/training.json (relative to the root).
 cd "$ROOT"
 RUST_LOG=info cargo run ${RELEASE:+--release} -p orchestui 2>/tmp/ono-orchestrator.log
