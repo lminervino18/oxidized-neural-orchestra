@@ -28,8 +28,8 @@ pub struct PyTrainingConfig {
 /// Builds a Parameter Server training configuration.
 ///
 /// # Args
-/// * `worker_addrs` - List of worker addresses (e.g. `["127.0.0.1:50000"]`).
-/// * `server_addrs` - List of parameter server addresses.
+/// * `addrs` - List of node network addresses (e.g. `["127.0.0.1:50000"]`).
+/// * `nservers` - The amount of server nodes (must be lower than the amount of given addresses).
 /// * `dataset` - The dataset to train on. Accepts either an `InlineDataset` or a `LocalDataset`.
 /// * `optimizer` - The optimizer to use.
 /// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`.
@@ -50,8 +50,8 @@ pub struct PyTrainingConfig {
 /// Raises a `TypeError` if any argument has an unsupported type.
 #[pyfunction]
 #[pyo3(signature = (
-    worker_addrs,
-    server_addrs,
+    addrs,
+    nservers,
     dataset,
     optimizer,
     loss_fn,
@@ -65,8 +65,8 @@ pub struct PyTrainingConfig {
     early_stopping_tolerance = None,
 ))]
 pub fn parameter_server(
-    worker_addrs: Vec<String>,
-    server_addrs: Vec<String>,
+    addrs: Vec<String>,
+    nservers: usize,
     dataset: &Bound<'_, PyAny>,
     optimizer: &Bound<'_, PyAny>,
     loss_fn: &Bound<'_, PyAny>,
@@ -79,15 +79,16 @@ pub fn parameter_server(
     seed: Option<u64>,
     early_stopping_tolerance: Option<f64>,
 ) -> PyResult<PyTrainingConfig> {
+    let nservers_nz = parse_nonzero(nservers, "nservers")?;
     let max_epochs_nz = parse_nonzero(max_epochs, "max_epochs")?;
     let batch_size_nz = parse_nonzero(batch_size, "batch_size")?;
-    let worker_count = worker_addrs.len();
+    let worker_count = addrs.len() - nservers;
 
     Ok(PyTrainingConfig {
         inner: TrainingConfig {
-            worker_addrs,
+            addrs,
             algorithm: AlgorithmConfig::ParameterServer {
-                server_addrs,
+                nservers: nservers_nz,
                 synchronizer: extract_synchronizer(sync)?,
                 store: extract_store(store)?,
             },
@@ -109,7 +110,7 @@ pub fn parameter_server(
 /// Builds an All-Reduce training configuration.
 ///
 /// # Args
-/// * `worker_addrs` - List of worker addresses (e.g. `["127.0.0.1:50000"]`).
+/// * `addrs` - List of node network addresses (e.g. `["127.0.0.1:50000"]`).
 /// * `dataset` - The dataset to train on. Accepts either an `InlineDataset` or a `LocalDataset`.
 /// * `optimizer` - The optimizer to use.
 /// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`.
@@ -128,7 +129,7 @@ pub fn parameter_server(
 /// Raises a `TypeError` if any argument has an unsupported type.
 #[pyfunction]
 #[pyo3(signature = (
-    worker_addrs,
+    addrs,
     dataset,
     optimizer,
     loss_fn,
@@ -140,7 +141,7 @@ pub fn parameter_server(
     early_stopping_tolerance = None,
 ))]
 pub fn all_reduce(
-    worker_addrs: Vec<String>,
+    addrs: Vec<String>,
     dataset: &Bound<'_, PyAny>,
     optimizer: &Bound<'_, PyAny>,
     loss_fn: &Bound<'_, PyAny>,
@@ -153,11 +154,11 @@ pub fn all_reduce(
 ) -> PyResult<PyTrainingConfig> {
     let max_epochs_nz = parse_nonzero(max_epochs, "max_epochs")?;
     let batch_size_nz = parse_nonzero(batch_size, "batch_size")?;
-    let worker_count = worker_addrs.len();
+    let worker_count = addrs.len();
 
     Ok(PyTrainingConfig {
         inner: TrainingConfig {
-            worker_addrs,
+            addrs,
             algorithm: AlgorithmConfig::AllReduce,
             serializer: extract_serializer(serializer)?,
             dataset: extract_dataset(dataset)?,
@@ -178,12 +179,10 @@ pub fn all_reduce(
 ///
 /// Starts with AllReduce (all nodes participate) and switches to Parameter Server
 /// once the training's relative loss improvement drops below the internal threshold.
-/// The `server_addrs` nodes begin as AllReduce workers and are upgraded to Parameter
-/// Servers when the switch triggers.
 ///
 /// # Args
-/// * `worker_addrs` - List of permanent worker addresses (e.g. `["127.0.0.1:50000"]`).
-/// * `server_addrs` - List of addresses that will become parameter servers after the switch.
+/// * `addrs` - List of node network addresses (e.g. `["127.0.0.1:50000"]`).
+/// * `nservers` - The amount of server nodes (must be lower than the amount of given addresses).
 /// * `dataset` - The dataset to train on. Accepts either an `InlineDataset` or a `LocalDataset`.
 /// * `optimizer` - The optimizer to use.
 /// * `loss_fn` - The loss function to use. Accepts either `Mse()` or `CrossEntropy()`.
@@ -204,8 +203,8 @@ pub fn all_reduce(
 /// Raises a `TypeError` if any argument has an unsupported type.
 #[pyfunction]
 #[pyo3(signature = (
-    worker_addrs,
-    server_addrs,
+    addrs,
+    nservers,
     dataset,
     optimizer,
     loss_fn,
@@ -219,8 +218,8 @@ pub fn all_reduce(
     early_stopping_tolerance = None,
 ))]
 pub fn strategy_switch(
-    worker_addrs: Vec<String>,
-    server_addrs: Vec<String>,
+    addrs: Vec<String>,
+    nservers: usize,
     dataset: &Bound<'_, PyAny>,
     optimizer: &Bound<'_, PyAny>,
     loss_fn: &Bound<'_, PyAny>,
@@ -233,16 +232,16 @@ pub fn strategy_switch(
     seed: Option<u64>,
     early_stopping_tolerance: Option<f64>,
 ) -> PyResult<PyTrainingConfig> {
+    let nservers_nz = parse_nonzero(nservers, "nservers")?;
     let max_epochs_nz = parse_nonzero(max_epochs, "max_epochs")?;
     let batch_size_nz = parse_nonzero(batch_size, "batch_size")?;
-    // All nodes start as AllReduce workers, so worker_count is the full entity count.
-    let worker_count = worker_addrs.len() + server_addrs.len();
+    let worker_count = addrs.len();
 
     Ok(PyTrainingConfig {
         inner: TrainingConfig {
-            worker_addrs,
+            addrs,
             algorithm: AlgorithmConfig::StrategySwitch {
-                server_addrs,
+                nservers: nservers_nz,
                 synchronizer: extract_synchronizer(sync)?,
                 store: extract_store(store)?,
             },

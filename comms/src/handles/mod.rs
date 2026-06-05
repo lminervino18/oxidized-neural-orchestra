@@ -7,7 +7,7 @@ mod worker;
 
 use compressor::{CompressedGrad, Compressor};
 pub use dataset_source::DatasetSrc;
-pub use node::NodeHandle;
+pub use node::{NodeEvent, NodeHandle};
 pub use orchestrator::{OrchEvent, OrchHandle};
 pub use parameter_server::ParamServerHandle;
 pub use worker::{WorkerEvent, WorkerHandle};

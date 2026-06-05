@@ -7,20 +7,21 @@ START_TAG = f"# {TAG} - START"
 END_TAG = f"# {TAG} - END"
 
 
-def build_host_block(workers: int, servers: int) -> str:
+def build_host_block(nodes: int) -> str:
     """
     Builds the translation string to incorporate to the /etc/hosts file.
 
     # Args
-    * `workers` - The amount of workers to use to train.
-    * `servers` - The amount of servers to use to train.
+    * `nodes` - The amount of nodes to use to train.
 
     # Returns
-    The content to write/replace in the /etc/hosts file.
+    The content to write in the /etc/hosts file.
     """
-    worker_translations = "\n".join(f"127.0.0.1 worker-{i}" for i in range(workers))
-    server_translations = "\n".join(f"127.0.0.1 server-{i}" for i in range(servers))
-    return "\n".join((START_TAG, worker_translations, server_translations, END_TAG)) + "\n"
+    if nodes == 0:
+        return ""
+
+    worker_translations = "\n".join(f"127.0.0.1 node-{i}" for i in range(nodes))
+    return "\n".join((START_TAG, worker_translations, END_TAG)) + "\n"
 
 
 def insert_block(hosts: str, block: str) -> str:
@@ -40,14 +41,16 @@ def insert_block(hosts: str, block: str) -> str:
     if start != -1 and end != -1:
         hosts = hosts[:start] + hosts[end + len(END_TAG) :]
 
+    if len(block) == 0:
+        return hosts.rstrip() + "\n"
+
     return hosts.rstrip() + "\n\n" + block
 
 
 def main():
-    workers = int(os.environ["WORKERS"])
-    servers = int(os.environ["SERVERS"])
+    nodes = int(os.environ["NODES"])
 
-    block = build_host_block(workers, servers)
+    block = build_host_block(nodes)
     hosts_file_path = "/etc/hosts"
     tmp_hosts_file_path = f"{hosts_file_path}.tmp"
 

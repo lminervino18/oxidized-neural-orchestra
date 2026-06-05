@@ -1,6 +1,6 @@
 use std::fs;
 
-use super::{AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
+use super::{DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
 use crate::{
     configs::training::DataSrc,
     error::{OrchErr, Result},
@@ -78,20 +78,8 @@ impl Validator {
     /// # Errors
     /// An `OrchErr` if any training invariant is unmet.
     fn validate_training(&self, training: &TrainingConfig) -> Result<()> {
-        if training.worker_addrs.is_empty() {
-            let text = "at least one worker address is required".into();
-            return Err(OrchErr::InvalidConfig(text));
-        }
-
-        if let AlgorithmConfig::ParameterServer {
-            ref server_addrs, ..
-        }
-        | AlgorithmConfig::StrategySwitch {
-            ref server_addrs, ..
-        } = training.algorithm
-            && server_addrs.is_empty()
-        {
-            let text = "at least one server address is required".into();
+        if training.addrs.is_empty() {
+            let text = "at least one network address is required".into();
             return Err(OrchErr::InvalidConfig(text));
         }
 

@@ -29,6 +29,7 @@ pub enum WorkerEvent<'a> {
     RequestParams,
     Disconnect,
     Done,
+    Upgraded,
 }
 
 impl<T: TransportLayer> WorkerHandle<T> {
@@ -91,6 +92,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
                 sparse::grad_lift_into(&mut self.grad, grad).map_err(io::Error::other)?;
                 WorkerEvent::Grad(&self.grad)
             }
+            Msg::Control(Command::Upgraded) => WorkerEvent::Upgraded,
             Msg::Control(Command::ReportLoss { losses }) => WorkerEvent::Loss(losses.into_owned()),
             Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
@@ -215,8 +217,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// Tells the worker to switch algorithm to parameter server
     /// by switching this particular node into a `ParameterServer`.
     ///
-    /// Consumes `self` and yields a new `ParameterServerHandle`.
-    ///
     /// # Args
     /// * `spec` - The server specification.
     /// * `ranges` - The ranges of parameters to store as a server.
@@ -224,14 +224,20 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// # Returns
     /// A new `ParameterServerHandle` instance that shares the old transport connection.
     pub async fn upgrade(
-        mut self,
+        &mut self,
         spec: ServerSpec,
         ranges: Vec<(usize, usize)>,
-    ) -> io::Result<ParamServerHandle<T>> {
+    ) -> io::Result<()> {
         let msg = Msg::Control(Command::Upgrade { spec, ranges });
-        self.transport.send(&msg).await?;
+        self.transport.send(&msg).await
+    }
 
-        Ok(ParamServerHandle::new(self.id, self.transport))
+    /// Upgrades `self` and yields a `ParamServerHandle` using the same transport layer.
+    ///
+    /// # Returns
+    /// A new `ParamServerHandle` instance.
+    pub fn upgrade_handle(self) -> ParamServerHandle<T> {
+        ParamServerHandle::new(self.id, self.transport)
     }
 
     /// Tells the worker to stop it's execution.

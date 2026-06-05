@@ -2,7 +2,7 @@ mod acceptor;
 mod connector;
 
 use crate::{
-    handles::{OrchHandle, ParamServerHandle, WorkerHandle},
+    handles::{NodeHandle, OrchHandle, ParamServerHandle, WorkerHandle},
     transport::TransportLayer,
 };
 
@@ -11,8 +11,12 @@ pub use connector::Connector;
 
 /// The different connection types.
 #[allow(clippy::large_enum_variant)]
-pub enum Connection<T: TransportLayer> {
+pub enum Connection<T>
+where
+    T: TransportLayer,
+{
+    Node(NodeHandle<T>),
     Worker(WorkerHandle<T>),
     ParamServer(ParamServerHandle<T>),
-    Orchestrator(OrchHandle<T>),
+    Orch(OrchHandle<T>),
 }

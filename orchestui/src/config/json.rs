@@ -47,16 +47,13 @@ pub fn load_training(path: &str) -> Result<TrainingJson, String> {
     let content = fs::read_to_string(path).map_err(|e| format!("cannot read '{path}': {e}"))?;
     let config: TrainingConfig =
         serde_json::from_str(&content).map_err(|e| format!("invalid training config: {e}"))?;
+    let naddrs = config.addrs.len();
 
     let (worker_count, server_count) = match &config.algorithm {
-        AlgorithmConfig::ParameterServer { server_addrs, .. } => {
-            (config.worker_addrs.len(), server_addrs.len())
+        AlgorithmConfig::ParameterServer { nservers, .. } => {
+            (naddrs.saturating_sub(nservers.get()), nservers.get())
         }
-        AlgorithmConfig::StrategySwitch { server_addrs, .. } => {
-            // All nodes start as AllReduce workers; server_addrs nodes are upgraded later.
-            (config.worker_addrs.len() + server_addrs.len(), 0)
-        }
-        AlgorithmConfig::AllReduce => (config.worker_addrs.len(), 0),
+        _ => (naddrs, 0),
     };
 
     Ok(TrainingJson {
@@ -98,8 +95,8 @@ mod tests {
 
         let config: TrainingConfig = serde_json::from_str(json).expect("parse failed");
 
-        if let AlgorithmConfig::StrategySwitch { server_addrs, .. } = &config.algorithm {
-            let worker_count = config.worker_addrs.len() + server_addrs.len();
+        if let AlgorithmConfig::StrategySwitch { .. } = &config.algorithm {
+            let worker_count = config.addrs.len();
             assert_eq!(worker_count, 3);
         } else {
             panic!("expected StrategySwitch");
@@ -134,9 +131,9 @@ mod tests {
 
         let config: TrainingConfig = serde_json::from_str(json).expect("parse failed");
 
-        if let AlgorithmConfig::ParameterServer { server_addrs, .. } = &config.algorithm {
-            let worker_count = config.worker_addrs.len();
-            let server_count = server_addrs.len();
+        if let AlgorithmConfig::ParameterServer { nservers, .. } = &config.algorithm {
+            let worker_count = config.addrs.len();
+            let server_count = nservers.get();
             assert_eq!(worker_count, 1);
             assert_eq!(server_count, 2);
         } else {
