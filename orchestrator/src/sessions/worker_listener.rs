@@ -83,10 +83,6 @@ impl WorkerListener {
                         Ok(EventResolution::Upgraded) => {
                             info!("upgraded worker {id}");
 
-                            let _ = event_tx
-                                .send(TrainingEvent::SwitchedToServer { worker_id: id })
-                                .await;
-
                             let server_handle = Box::new(self.worker_handle.upgrade_handle());
                             let event = TrainingEvent::Upgraded { server_handle };
                             let _ = event_tx.send(event).await;
@@ -193,6 +189,13 @@ impl WorkerListener {
                     let details = format!("failed to upgrade worker{id}: {e}");
                     return Err(OrchErr::WorkerError { id, details });
                 }
+
+                // Notify the UI that the conversion has started so it can render a
+                // "converting" indicator. The actual server handle arrives later via
+                // the worker's `Upgraded` event.
+                let _ = event_tx
+                    .send(TrainingEvent::SwitchedToServer { worker_id: id })
+                    .await;
 
                 ReqResolution::Continue
             }
