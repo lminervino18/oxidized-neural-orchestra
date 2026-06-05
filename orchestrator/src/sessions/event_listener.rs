@@ -93,7 +93,6 @@ impl<'a> EventListener<'a> {
             }
         }
 
-        println!("exited EventListener::listen");
         Some(self.stop_reason.unwrap_or_default())
     }
 
