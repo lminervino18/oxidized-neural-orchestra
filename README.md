@@ -15,10 +15,11 @@
 
 ## Overview
 
-**O.N.O** is a fully distributed system for training neural networks, built from scratch in Rust. It supports two distributed training algorithms:
+**O.N.O** is a fully distributed system for training neural networks, built from scratch in Rust. It supports three distributed training algorithms:
 
 - **Parameter Server** — workers push gradients to centralized parameter servers, which apply updates and return the new parameters.
 - **All-Reduce** — workers exchange and reduce gradients directly with each other, with no central server.
+- **Strategy Switch** — starts as All-Reduce and automatically promotes workers into parameter servers once gradients converge.
 
 The system exposes three interfaces:
 - **`orchestui`** — an interactive TUI to configure and monitor training in real time
@@ -61,6 +62,10 @@ Workers train locally on their data partition and push gradients to the paramete
 
 Workers exchange and reduce gradients directly with each other — no parameter server needed. Each worker ends up with the same averaged gradient and applies it locally.
 
+### Strategy Switch
+
+Training begins as All-Reduce and, once gradients converge, the orchestrator promotes a subset of workers into parameter servers and continues as Parameter Server — combining the warm-up speed of All-Reduce with the scalability of Parameter Server.
+
 ---
 
 ## Running Locally
@@ -80,7 +85,7 @@ The interactive terminal dashboard. Requires `model.json` and `training.json` co
 cargo run -p orchestui
 ```
 
-When the TUI opens, enter the paths to your config files (leave blank to use `model.json` / `training.json` in the current directory):
+When the TUI opens, enter the paths to your config files (leave blank to use the defaults `orchestui/model.json` / `orchestui/training.json`):
 ```
 model.json path:    orchestui/model.json
 training.json path: orchestui/training.json
@@ -99,7 +104,7 @@ python3 -m venv ../.venv
 source ../.venv/bin/activate
 maturin develop
 cd ..
-python3 docker/compose_up.py --workers 3 --servers 3
+python3 docker/compose_up.py --nodes 6
 source .venv/bin/activate && python3 orchestra-py/local.py
 ```
 
@@ -109,25 +114,47 @@ source .venv/bin/activate && python3 orchestra-py/local.py
 
 Start the node containers, then run the orchestrator binary against your config files:
 ```bash
-python3 docker/compose_up.py --workers N --servers M --release
+python3 docker/compose_up.py --nodes N --release
 cargo run -p orchestrator -- model.json training.json
 ```
 
 ---
 
+## The TUI
+
+`orchestui` is an interactive dashboard to configure runs and watch training live.
+
+**Main menu** — start a run, browse the trained-model repository, or quit.
+
+![Main menu](assets/tui-menu.png)
+
+**Topology — All-Reduce** — workers arranged in a ring, gradients flowing around it.
+
+![All-Reduce topology](assets/tui-ar.png)
+
+**Topology — Parameter Server** — workers on the left, servers on the right, with gradients and parameters streaming between them.
+
+![Parameter Server topology](assets/tui-ps.png)
+
+**Dashboard** — average and per-worker loss charts, a progress bar, the worker table, and a live event log.
+
+![Dashboard](assets/tui-dashboard.png)
+
+---
+
 ## Docker Configuration
 
-All node containers (workers and servers) are started with:
+All node containers are identical and started with a single node count:
 ```bash
-python3 docker/compose_up.py --workers N --servers M [--release]
+python3 docker/compose_up.py --nodes N [--release]
 ```
 
 This script:
 1. Generates `compose.yaml` via `docker/gen_compose.py`
-2. Fills `/etc/hosts` with `worker-*` / `server-*` entries (requires sudo once)
+2. Fills `/etc/hosts` with `node-*` entries (requires sudo once)
 3. Runs `docker compose up --build -d --remove-orphans`
 
-All containers use the same `node/Dockerfile`. Server addresses start at port `40000`, worker addresses at `50000`. Address lists are generated automatically — no hardcoding needed.
+All containers use the same `node/Dockerfile` and are addressed as `node-i:4000i` (node `i` listens on port `40000 + i`). The orchestrator assigns each node its worker or server role at connection time — no role is hardcoded.
 
 ---
 
@@ -151,10 +178,10 @@ Two algorithm options — pick one:
 **Parameter Server:**
 ```json
 {
-  "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+  "addrs": ["node-0:40000", "node-1:40001", "node-2:40002", "node-3:40003", "node-4:40004"],
   "algorithm": {
     "parameter_server": {
-      "server_addrs": ["127.0.0.1:40000", "127.0.0.1:40001"],
+      "nservers": 2,
       "synchronizer": "barrier",
       "store": "blocking"
     }
@@ -182,7 +209,7 @@ Two algorithm options — pick one:
 **All-Reduce:**
 ```json
 {
-  "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+  "addrs": ["node-0:40000", "node-1:40001", "node-2:40002"],
   "algorithm": "all_reduce",
   "dataset": { ... },
   "optimizer": { "gradient_descent": { "lr": 0.01 } },
@@ -193,8 +220,9 @@ Two algorithm options — pick one:
 }
 ```
 
-Synchronizer options (PS only): `"barrier"` | `"non_blocking"`  
-Store options (PS only): `"blocking"` | `"wild"`  
+`addrs` lists every node; `nservers` (PS / Strategy Switch) sets how many of them become servers — the rest are workers.  
+Synchronizer options (PS / Strategy Switch): `"barrier"` | `"non_blocking"`  
+Store options (PS / Strategy Switch): `"blocking"` | `"wild"`  
 `seed`, `serializer`, `early_stopping`, and `act_fn` are optional — omit them to use defaults.  
 For a local dataset use `"src": { "local": { "samples_path": "...", "labels_path": "..." } }` instead of `inline`.
 
@@ -224,8 +252,8 @@ samples = [1.0, 2.0, 3.0, 4.0]
 labels  = [2.0, 4.0, 6.0, 8.0]
 
 training = parameter_server(
-    worker_addrs=["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
-    server_addrs=["127.0.0.1:40000", "127.0.0.1:40001"],
+    addrs=["node-0:40000", "node-1:40001", "node-2:40002", "node-3:40003", "node-4:40004"],
+    nservers=2,
     dataset=InlineDataset(samples, labels, x_size=1, y_size=1),
     optimizer=GradientDescent(lr=0.01),
     loss_fn=Mse(),
@@ -252,7 +280,7 @@ from orchestra.loss_fns import Mse
 model = Sequential([Dense(8, Kaiming()), Dense(1, Kaiming())])
 
 training = all_reduce(
-    worker_addrs=["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+    addrs=["node-0:40000", "node-1:40001", "node-2:40002"],
     dataset=InlineDataset(samples, labels, x_size=1, y_size=1),
     optimizer=GradientDescent(lr=0.01),
     loss_fn=Mse(),
@@ -274,7 +302,8 @@ trained.save_safetensors("weights.safetensors")
 | Global architecture | ✅ |
 | Parameter Server | ✅ |
 | All-Reduce | ✅ |
-| Strategy Switch | 🔲 |
+| Strategy Switch | ✅ |
+| Max Pooling | 🚧 (in progress) |
 
 ---
 
