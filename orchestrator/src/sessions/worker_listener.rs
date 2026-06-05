@@ -83,6 +83,13 @@ impl WorkerListener {
                         Ok(EventResolution::Upgraded) => {
                             info!("upgraded worker {id}");
 
+                            // Tell the UI the conversion finished before handing the
+                            // server handle over to the event listener, so the node
+                            // transitions converting → server in the right order.
+                            let _ = event_tx
+                                .send(TrainingEvent::WorkerConverted { worker_id: id })
+                                .await;
+
                             let server_handle = Box::new(self.worker_handle.upgrade_handle());
                             let event = TrainingEvent::Upgraded { server_handle };
                             let _ = event_tx.send(event).await;
@@ -191,10 +198,10 @@ impl WorkerListener {
                 }
 
                 // Notify the UI that the conversion has started so it can render a
-                // "converting" indicator. The actual server handle arrives later via
-                // the worker's `Upgraded` event.
+                // "converting" state. The completion is reported later, when the
+                // worker confirms with its `Upgraded` event.
                 let _ = event_tx
-                    .send(TrainingEvent::SwitchedToServer { worker_id: id })
+                    .send(TrainingEvent::WorkerConverting { worker_id: id })
                     .await;
 
                 ReqResolution::Continue

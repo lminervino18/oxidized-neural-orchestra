@@ -38,6 +38,8 @@ const NODE_GAP: f64 = 3.0;
 
 const COLOR_DONE: Color = Color::Rgb(40, 140, 255);
 const COLOR_SERVER: Color = Color::Rgb(0, 210, 210);
+/// Amber used for a worker mid-conversion into a parameter server.
+const COLOR_CONVERTING: Color = Color::Rgb(255, 190, 30);
 const COLOR_CONN: Color = Color::Rgb(0, 55, 0);
 const COLOR_PARTICLE: Color = Color::Rgb(255, 200, 0);
 const ANIM_PERIOD_MS: u128 = 1800;
@@ -470,6 +472,14 @@ fn draw_legend(ctx: &mut Context, state: &TrainingState) {
     }
 
     ctx.print(base_x, base_y, Span::styled("● done (blue)", Style::default().fg(COLOR_DONE)));
+
+    if state.algorithm == AlgorithmKind::StrategySwitch {
+        ctx.print(
+            base_x,
+            base_y - 2.5,
+            Span::styled("◐ converting → PS", Style::default().fg(COLOR_CONVERTING)),
+        );
+    }
 }
 
 // ── Color resolution ──────────────────────────────────────────────────────────
@@ -496,6 +506,10 @@ fn node_color(node: &NodeInfo, state: &TrainingState, phase: Phase) -> Color {
     }
 
     let worker = state.workers.get(wi);
+
+    if worker.map_or(false, |w| w.converting) {
+        return COLOR_CONVERTING;
+    }
 
     if worker.map_or(false, |w| w.done) {
         return COLOR_DONE;

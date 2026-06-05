@@ -62,7 +62,13 @@ pub enum TrainingEvent {
     Upgraded {
         server_handle: Box<ParamServerHandle<NetRtp>>,
     },
-    SwitchedToServer {
+    /// A worker has started converting into a parameter server; the upgrade is
+    /// in flight and not yet confirmed.
+    WorkerConverting {
+        worker_id: usize,
+    },
+    /// A worker finished converting and is now serving as a parameter server.
+    WorkerConverted {
         worker_id: usize,
     },
     Error(OrchErr),
