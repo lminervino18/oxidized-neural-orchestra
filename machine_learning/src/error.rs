@@ -17,6 +17,7 @@ pub enum MlErr {
     MatrixError(ndarray::ShapeError),
     Conv3dError(ndarray_conv::Error<3>),
     Conv2dError(ndarray_conv::Error<2>),
+    EmptyEpoch,
 }
 
 impl Display for MlErr {
@@ -33,6 +34,9 @@ impl Display for MlErr {
             }
             MlErr::Conv2dError(conv2d_error) => {
                 format!("convolution operation failed: {conv2d_error}")
+            }
+            MlErr::EmptyEpoch => {
+                format!("this epoch has no batches")
             }
         };
 
