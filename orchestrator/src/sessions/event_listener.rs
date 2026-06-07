@@ -200,8 +200,6 @@ impl<'a> EventListener<'a> {
                     trainer_spec: Box::new(trainer_spec),
                 },
                 WorkerPostAction::Upgrade { spec, ranges } => {
-                    // The orchestrator initiates the upgrade here, so it also tells
-                    // the UI that this worker started switching into a server.
                     let event = TrainingEvent::Upgrading { worker_id };
                     let _ = self.event_tx.send(event).await;
 

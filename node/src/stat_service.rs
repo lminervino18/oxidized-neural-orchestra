@@ -241,8 +241,6 @@ where
             let AddressedHandle { addr, .. } = &ping_handles[i - removed];
 
             match ping {
-                // Clone the address into the map only when it's a new entry, so an
-                // existing key isn't cloned again on every round.
                 Ok(dur) => match rtts.get_mut(addr) {
                     Some(durs) => durs.push(dur),
                     None => {

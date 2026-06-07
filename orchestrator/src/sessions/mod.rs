@@ -59,9 +59,6 @@ pub enum TrainingEvent {
     Disconnect {
         worker_id: usize,
     },
-    /// A worker has started upgrading into a parameter server: the upgrade
-    /// request was sent and is not yet confirmed. Drives the transient
-    /// "switching" indicator in the UI.
     Upgrading {
         worker_id: usize,
     },
