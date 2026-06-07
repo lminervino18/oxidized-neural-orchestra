@@ -35,9 +35,7 @@ impl Display for MlErr {
             MlErr::Conv2dError(conv2d_error) => {
                 format!("convolution operation failed: {conv2d_error}")
             }
-            MlErr::EmptyEpoch => {
-                format!("this epoch has no batches")
-            }
+            MlErr::EmptyEpoch => "this epoch has no batches".to_string(),
         };
 
         write!(f, "{s}")

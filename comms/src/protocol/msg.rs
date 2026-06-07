@@ -194,10 +194,7 @@ where
         where
             A: SeqAccess<'de>,
         {
-            let mut values = match seq.size_hint() {
-                Some(size) => Vec::with_capacity(size),
-                None => Vec::new(),
-            };
+            let mut values = seq.size_hint().map(Vec::with_capacity).unwrap_or_default();
 
             while let Some(loss) = seq.next_element::<Option<_>>()? {
                 values.push(loss.unwrap_or(f64::NAN));
