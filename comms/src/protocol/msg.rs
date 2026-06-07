@@ -1,7 +1,14 @@
-use std::{borrow::Cow, io};
+use std::{
+    borrow::Cow,
+    fmt::{self, Formatter},
+    io,
+};
 
 use half::f16;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{SeqAccess, Visitor},
+};
 
 use super::specs::{
     machine_learning::TrainerSpec,
@@ -44,6 +51,7 @@ pub enum Command<'a> {
     Ping,
     Pong,
     ReportLoss {
+        #[serde(deserialize_with = "deserialize_null_as_nan")]
         losses: Cow<'a, [f64]>,
     },
     RequestParams,
@@ -160,4 +168,41 @@ impl<'a> Msg<'a> {
             byte => Msg::invalid_kind_byte(byte),
         }
     }
+}
+
+/// Deserializes the `ReportLoss` variant of the `Command` variant of messages.
+///
+/// # Args
+/// * `deserializer` - The deserializar that serde will use to deserialize the loss report.
+///
+/// # Returns
+/// Will always return the loss report, this deserialization can't fail.
+fn deserialize_null_as_nan<'de, 'a, D>(deserializer: D) -> Result<Cow<'a, [f64]>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct LossVisitor;
+
+    impl<'de> Visitor<'de> for LossVisitor {
+        type Value = Vec<f64>;
+
+        fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+            formatter.write_str("a sequence of float elements which may include nulls")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut values = seq.size_hint().map(Vec::with_capacity).unwrap_or_default();
+
+            while let Some(loss) = seq.next_element::<Option<_>>()? {
+                values.push(loss.unwrap_or(f64::NAN));
+            }
+
+            Ok(values)
+        }
+    }
+
+    deserializer.deserialize_seq(LossVisitor).map(Cow::Owned)
 }
