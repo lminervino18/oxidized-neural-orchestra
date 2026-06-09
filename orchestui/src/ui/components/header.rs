@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::Rect,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
@@ -40,21 +40,12 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         TrainingView::Topology => "  [v] dashboard",
     };
 
-    let hint = if state.final_trained.is_some() {
-        Span::styled(
-            format!("  [q] menu  [←/→] worker  [s] save{view_hint}"),
-            Theme::muted(),
-        )
+    let hint_text = if state.final_trained.is_some() {
+        format!("  [q] menu  [←/→] worker  [s] save{view_hint}")
     } else if state.is_active() {
-        Span::styled(
-            format!("  [q] leave  [←/→] worker  [x] stop{view_hint}"),
-            Theme::muted(),
-        )
+        format!("  [q] leave  [←/→] worker  [x] stop{view_hint}")
     } else {
-        Span::styled(
-            format!("  [q] menu  [←/→] worker{view_hint}"),
-            Theme::muted(),
-        )
+        format!("  [q] menu  [←/→] worker{view_hint}")
     };
 
     // After a StrategySwitch, some workers became servers — show the real counts.
@@ -107,7 +98,7 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
     ));
     spans.push(Span::styled("  │  ", Theme::muted()));
     spans.push(Span::styled(
-        format!("optimizer {}", state.optimizer_label),
+        format!("optimizer {}", truncate(&state.optimizer_label, 20)),
         Theme::dim(),
     ));
 
@@ -116,18 +107,37 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         spans.push(Span::styled(format!("early stop tol {tol}"), Theme::dim()));
     }
 
-    spans.push(hint);
+    // The status info (left) is allowed to clip; the hints (right) are anchored
+    // to the right edge in their own column so they never fall off-screen.
+    let hint_w = hint_text.chars().count() as u16 + 1;
 
-    let line = Line::from(spans);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border());
+    let inner = block.inner(area);
+    f.render_widget(block, area);
 
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(hint_w)])
+        .split(inner);
+
+    f.render_widget(Paragraph::new(Line::from(spans)), cols[0]);
     f.render_widget(
-        Paragraph::new(line).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Theme::border()),
-        ),
-        area,
+        Paragraph::new(Span::styled(hint_text, Theme::muted())).alignment(Alignment::Right),
+        cols[1],
     );
+}
+
+/// Truncates `s` to at most `max` characters, appending `…` when shortened.
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
 }
 
 fn avg_loss_str(state: &TrainingState) -> String {
