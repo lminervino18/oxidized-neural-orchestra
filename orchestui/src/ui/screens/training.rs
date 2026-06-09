@@ -358,6 +358,11 @@ impl TrainingState {
                 self.last_upgrade = Some((worker_id, Instant::now()));
                 self.ps_server_count =
                     self.workers.iter().filter(|w| w.became_server).count();
+                // If the chart was focused on the worker that just upgraded,
+                // move focus to an active worker so no server shows in graphs.
+                if self.selected_worker == worker_id {
+                    self.next_worker();
+                }
                 let n_servers = self.ps_server_count;
                 let n_workers = self.workers_total - n_servers;
                 self.push_log(
@@ -430,15 +435,24 @@ impl TrainingState {
 
     /// Computes the average loss series across all workers.
     pub fn avg_loss_series(&self) -> Vec<(f64, f64)> {
-        let max_len = self.loss_series.iter().map(|s| s.len()).max().unwrap_or(0);
+        // Workers that upgraded to parameter servers stop publishing losses;
+        // their stale series must not pollute the average.
+        let active: Vec<&Vec<(f64, f64)>> = self
+            .loss_series
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !self.is_server_worker(*idx))
+            .map(|(_, s)| s)
+            .collect();
+
+        let max_len = active.iter().map(|s| s.len()).max().unwrap_or(0);
         if max_len == 0 {
             return Vec::new();
         }
 
         (0..max_len)
             .filter_map(|i| {
-                let values: Vec<f64> = self
-                    .loss_series
+                let values: Vec<f64> = active
                     .iter()
                     .filter_map(|s| s.get(i).map(|(_, y)| *y))
                     .collect();
@@ -447,8 +461,7 @@ impl TrainingState {
                     return None;
                 }
 
-                let epoch = self
-                    .loss_series
+                let epoch = active
                     .iter()
                     .find_map(|s| s.get(i).map(|(x, _)| *x))
                     .unwrap_or(i as f64 + 1.0);
@@ -458,18 +471,38 @@ impl TrainingState {
             .collect()
     }
 
-    /// Advances the selected worker to the next one (wrapping).
+    /// Returns `true` if the worker at `id` has upgraded into a parameter server.
+    fn is_server_worker(&self, id: usize) -> bool {
+        self.workers.get(id).map_or(false, |w| w.became_server)
+    }
+
+    /// Advances the selected worker to the next one, skipping any that have
+    /// upgraded into servers (wrapping).
     pub fn next_worker(&mut self) {
-        if self.workers_total > 0 {
-            self.selected_worker = (self.selected_worker + 1) % self.workers_total;
+        let n = self.workers_total;
+        if n == 0 {
+            return;
+        }
+        for _ in 0..n {
+            self.selected_worker = (self.selected_worker + 1) % n;
+            if !self.is_server_worker(self.selected_worker) {
+                return;
+            }
         }
     }
 
-    /// Moves the selected worker to the previous one (wrapping).
+    /// Moves the selected worker to the previous one, skipping any that have
+    /// upgraded into servers (wrapping).
     pub fn prev_worker(&mut self) {
-        if self.workers_total > 0 {
-            self.selected_worker =
-                (self.selected_worker + self.workers_total - 1) % self.workers_total;
+        let n = self.workers_total;
+        if n == 0 {
+            return;
+        }
+        for _ in 0..n {
+            self.selected_worker = (self.selected_worker + n - 1) % n;
+            if !self.is_server_worker(self.selected_worker) {
+                return;
+            }
         }
     }
 }
