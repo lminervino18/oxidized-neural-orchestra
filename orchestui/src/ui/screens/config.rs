@@ -285,7 +285,7 @@ fn try_load(state: &mut ConfigState) -> Option<Action> {
         Ok(d) => d,
         Err(e) => {
             state.step = Step::InvalidConfig {
-                reason: format!("model.json: {e}"),
+                reason: format!("{model_path}: {e}"),
             };
             return None;
         }
@@ -295,7 +295,7 @@ fn try_load(state: &mut ConfigState) -> Option<Action> {
         Ok(d) => d,
         Err(e) => {
             state.step = Step::InvalidConfig {
-                reason: format!("training.json: {e}"),
+                reason: format!("{training_path}: {e}"),
             };
             return None;
         }
