@@ -6,11 +6,7 @@ use comms::{OrchHandle, ParamServerHandle, WorkerEvent, WorkerHandle, floats::Fl
 use machine_learning::{initialization::ConstParamGen, optimization::GradientDescent};
 use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 
-use crate::{
-    service::ParameterServer,
-    storage::{BlockingStore, StoreHandle},
-    synchronization::BarrierSync,
-};
+use crate::{service::ParameterServer, storage::BlockingStore, synchronization::BarrierSync};
 
 fn channel_pair() -> (
     (ReadHalf<DuplexStream>, WriteHalf<DuplexStream>),
@@ -90,11 +86,10 @@ async fn test_lineal_convergence() -> io::Result<()> {
     let mut param_gen = ConstParamGen::new(0.5, NPARAMS);
     let optimizer_factory = |_| GradientDescent::new(FloatPositive::new(0.1).unwrap());
     let store = BlockingStore::new(shard_size, &mut param_gen, optimizer_factory);
-    let handle = StoreHandle::new(store);
-    let synchronizer = BarrierSync::new(1);
+    let synchronizer = BarrierSync::new(NonZeroUsize::new(1).unwrap());
     let transport = comms::build_simple_transport(sv_orch_rx, sv_orch_tx);
     let orch_handle = OrchHandle::new(transport);
-    let mut server = ParameterServer::new(handle, synchronizer, orch_handle);
+    let mut server = ParameterServer::new(store, synchronizer, orch_handle);
 
     let transport = comms::build_simple_transport(sv_rx, sv_tx);
     let worker_handle = WorkerHandle::new(0, transport);

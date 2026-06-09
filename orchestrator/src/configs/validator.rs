@@ -1,10 +1,7 @@
 use std::fs;
 
-use super::{DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
-use crate::{
-    configs::training::DataSrc,
-    error::{OrchErr, Result},
-};
+use super::{AlgorithmConfig, DataSrc, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
+use crate::error::{OrchErr, Result};
 
 /// Validates orchestrator configs before adaptation, ensuring all invariants
 /// are met before the training commences.
@@ -48,8 +45,8 @@ impl Validator {
             ));
         }
 
-        for l in &model.layers {
-            match l {
+        for layer in &model.layers {
+            match layer {
                 LayerConfig::Dense { .. } => {
                     continue;
                 }
@@ -75,11 +72,21 @@ impl Validator {
 
     /// Validates the training's configuration.
     ///
+    /// * `training` - The training configuration.
+    ///
     /// # Errors
     /// An `OrchErr` if any training invariant is unmet.
     fn validate_training(&self, training: &TrainingConfig) -> Result<()> {
         if training.addrs.is_empty() {
             let text = "at least one network address is required".into();
+            return Err(OrchErr::InvalidConfig(text));
+        }
+
+        if let AlgorithmConfig::ParameterServer { nservers, .. }
+        | AlgorithmConfig::StrategySwitch { nservers, .. } = training.algorithm
+            && training.addrs.len().saturating_sub(nservers.get()) == 0
+        {
+            let text = "the amount of workers must be a positive number".into();
             return Err(OrchErr::InvalidConfig(text));
         }
 

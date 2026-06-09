@@ -3,7 +3,7 @@ use std::{
     num::NonZeroUsize,
     process::{Command, ExitStatus},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use comms::floats::{Float01, FloatPositive};
@@ -113,7 +113,7 @@ fn main() -> io::Result<()> {
 
     let training_config = TrainingConfig {
         addrs,
-        algorithm: all_reduce_config,
+        algorithm: parameter_server_config,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
@@ -174,6 +174,7 @@ fn main() -> io::Result<()> {
         early_stopping: None,
     };
 
+    let start = Instant::now();
     let session = train(model_config, training_config).unwrap();
     let (_cancel, cancel_rx) = CancelHandle::pair();
     let mut rx = session.event_listener(cancel_rx);
@@ -202,5 +203,6 @@ fn main() -> io::Result<()> {
         }
     }
 
+    println!("took: {} seconds", start.elapsed().as_secs_f32());
     Ok(())
 }
