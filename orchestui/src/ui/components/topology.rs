@@ -4,7 +4,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        canvas::{Canvas, Circle, Context, Line as CanvasLine},
+        canvas::{Canvas, Circle, Context, Line as CanvasLine, Points},
         Block, Borders,
     },
     Frame,
@@ -50,6 +50,11 @@ pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &Trainin
     let is_active = state.is_active();
     let phase = state.phase;
 
+    // Canvas units per text row: lets us space the node's inner lines exactly
+    // one row apart regardless of terminal height.
+    let inner_h = area.height.saturating_sub(2).max(1) as f64;
+    let row = 100.0 / inner_h;
+
     let canvas = Canvas::default()
         .block(topology_block(state))
         .x_bounds([0.0, 200.0])
@@ -57,7 +62,7 @@ pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &Trainin
         .paint(|ctx| {
             draw_connections(ctx, &nodes, &conns, elapsed_ms, is_active, phase);
             draw_shapes(ctx, state, &nodes, phase, radius);
-            draw_node_content(ctx, state, &nodes, phase, radius);
+            draw_node_content(ctx, state, &nodes, phase, radius, row);
             draw_static_labels(ctx, state, &nodes, radius);
         });
 
@@ -341,9 +346,22 @@ fn draw_shapes(
             ctx.draw(&CanvasLine { x1: x - hw, y1: y - hh, x2: x - hw, y2: y + hh, color });
             ctx.draw(&CanvasLine { x1: x + hw, y1: y - hh, x2: x + hw, y2: y + hh, color });
         } else {
-            ctx.draw(&Circle { x: node.x, y: node.y, radius, color });
+            draw_dense_circle(ctx, node.x, node.y, radius, color);
         }
     }
+}
+
+/// Draws a circle outline as a dense ring of points so the contour reads as a
+/// compact, continuous line with no gaps at any radius.
+fn draw_dense_circle(ctx: &mut Context, cx: f64, cy: f64, r: f64, color: Color) {
+    let steps = ((2.0 * PI * r) * 3.0).ceil().max(60.0) as usize;
+    let coords: Vec<(f64, f64)> = (0..steps)
+        .map(|i| {
+            let a = (i as f64) / (steps as f64) * 2.0 * PI;
+            (cx + r * a.cos(), cy + r * a.sin())
+        })
+        .collect();
+    ctx.draw(&Points { coords: &coords, color });
 }
 
 // ── Node text content (scaled to radius) ─────────────────────────────────────
@@ -354,24 +372,29 @@ fn draw_node_content(
     nodes: &[NodeInfo],
     phase: Phase,
     radius: f64,
+    row: f64,
 ) {
     for node in nodes {
         let color = node_color(node, state, phase);
         let bold = Style::default().fg(color).add_modifier(Modifier::BOLD);
 
-        // Determine text tiers based on how big the node is
-        let show_epoch = radius >= 7.0;
-        let show_loss  = radius >= 5.0;
+        // Text tiers depend both on the node radius and on how many text rows
+        // actually fit inside it, so lines never overflow the shape on short
+        // terminals (where a single row spans many canvas units).
+        let half_rows = radius / row;
+        let show_epoch = radius >= 7.0 && half_rows >= 1.5;
+        let show_loss = radius >= 5.0 && half_rows >= 0.9;
         let show_label = radius >= 3.5;
 
         if !show_label {
             continue;
         }
 
-        // Vertical offsets scale with radius so text stays inside the circle/rect
-        let label_dy = radius * 0.40;
-        let loss_dy  = 0.0;
-        let epoch_dy = -(radius * 0.38);
+        // The lines sit exactly one text row apart, centered on the node:
+        // loss stays at the center, the label one row above, epoch one below.
+        let label_dy = if show_loss { row } else { 0.0 };
+        let loss_dy = 0.0;
+        let epoch_dy = -row;
 
         let label = node.label.clone();
         ctx.print(lcx(node.x, label.len()), node.y + label_dy, Span::styled(label, bold));
