@@ -139,8 +139,13 @@ fn ps_node_radius(max_dim: usize) -> f64 {
     if max_dim <= 1 {
         return 11.0;
     }
+    // `vspread` insets the centers by one radius on each side, so the real
+    // center-to-center spacing is `(available - 2r) / (n - 1)`. Solving
+    // `spacing >= 2r + NODE_GAP` for `r` yields this closed form, which keeps
+    // nodes as large as possible while guaranteeing they never overlap.
     let available = ZONE_HI - ZONE_LO;
-    let max_r = (available / (max_dim - 1) as f64 - NODE_GAP) / 2.0;
+    let n = max_dim as f64;
+    let max_r = (available - (n - 1.0) * NODE_GAP) / (2.0 * n);
     max_r.min(11.0).max(2.0)
 }
 
