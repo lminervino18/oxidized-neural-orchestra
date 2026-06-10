@@ -8,7 +8,7 @@ use std::{
 
 use comms::floats::{Float01, FloatPositive};
 use log::info;
-use orchestrator::{CancelHandle, configs::*, train};
+use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
 const NODE_BASE_PORT: usize = 40_000;
@@ -65,14 +65,11 @@ fn main() -> io::Result<()> {
     thread::sleep(Duration::from_secs(4));
     let addrs = build_addresses(NODES);
 
-    let synchronizer_config = SynchronizerConfig::NonBlocking;
-    let store_config = StoreConfig::Wild;
-
     #[allow(unused_variables)]
     let parameter_server_config = AlgorithmConfig::ParameterServer {
         nservers: NonZeroUsize::new(SERVERS).unwrap(),
-        synchronizer: synchronizer_config,
-        store: store_config,
+        synchronizer: SynchronizerConfig::NonBlocking,
+        store: StoreConfig::Wild,
     };
 
     #[allow(unused_variables)]
@@ -81,8 +78,8 @@ fn main() -> io::Result<()> {
     #[allow(unused_variables)]
     let strategy_switch_config = AlgorithmConfig::StrategySwitch {
         nservers: NonZeroUsize::new(SERVERS).unwrap(),
-        synchronizer: synchronizer_config,
-        store: store_config,
+        synchronizer: SynchronizerConfig::Barrier,
+        store: StoreConfig::Blocking,
     };
 
     let model_config = ModelConfig {
@@ -181,10 +178,10 @@ fn main() -> io::Result<()> {
 
     loop {
         match rx.blocking_recv() {
-            Some(orchestrator::TrainingEvent::PublishedLosses { losses, worker_id }) => {
+            Some(TrainingEvent::PublishedLosses { losses, worker_id }) => {
                 info!("losses: {worker_id}: {losses:?}");
             }
-            Some(orchestrator::TrainingEvent::TrainingComplete {
+            Some(TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
             }) => {

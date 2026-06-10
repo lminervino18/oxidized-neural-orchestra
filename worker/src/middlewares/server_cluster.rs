@@ -105,6 +105,7 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn disconnect(&mut self) -> io::Result<()> {
+        self.cluster.discard_one().await?;
         self.cluster.disconnect().await
     }
 }
