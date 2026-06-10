@@ -1,6 +1,7 @@
 mod conv2d;
 mod dense;
 mod layer;
+mod relu;
 mod reshape;
 mod sigmoid;
 mod softmax;
@@ -12,6 +13,7 @@ pub(super) use conv2d::Conv2d;
 pub(super) use dense::Dense;
 pub use layer::Layer;
 use ndarray::{Array, Dimension, IntoDimension};
+pub(super) use relu::ReLU;
 pub(super) use reshape::Reshape;
 pub(super) use sigmoid::Sigmoid;
 pub(super) use softmax::Softmax;

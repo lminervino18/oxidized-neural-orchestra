@@ -1,6 +1,6 @@
 use ndarray::{Data, RawData, prelude::*};
 
-use super::{Conv2d, Dense, Sigmoid, Softmax, Tanh};
+use super::{Conv2d, Dense, ReLU, Sigmoid, Softmax, Tanh};
 use crate::{MlErr, Result, arch::layers::Reshape};
 
 /// An indirection layer to prevent leaking the
@@ -10,6 +10,7 @@ enum Inner {
     Dense(Dense),
     Sigmoid(Sigmoid),
     Tanh(Tanh),
+    ReLU(ReLU),
     Conv2d(Box<Conv2d>),
     Softmax(Softmax),
     Reshape(Reshape),
@@ -86,6 +87,14 @@ impl Layer {
         Self(Inner::Tanh(Tanh::new(amp)))
     }
 
+    /// Creates a new `Layer::ReLU` layer.
+    ///
+    /// # Returns
+    /// A new `Layer` instance.
+    pub fn relu() -> Self {
+        Self(Inner::ReLU(ReLU::new()))
+    }
+
     /// Creates a new `Layer::Reshape` layer that reshapes 2D tensors into 4D ones.
     ///
     /// # Arguments
@@ -123,6 +132,7 @@ impl Layer {
             Dense(layer) => layer.size(),
             Sigmoid(layer) => layer.size(),
             Tanh(layer) => layer.size(),
+            ReLU(layer) => layer.size(),
             Conv2d(layer) => layer.size(),
             Softmax(layer) => layer.size(),
             Reshape(layer) => layer.size(),
@@ -146,6 +156,7 @@ impl Layer {
             Dense(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
             Sigmoid(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
             Tanh(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
+            ReLU(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
             Conv2d(layer) => layer.forward(params, try_cast_dim(x)?)?.into_dyn(),
             Softmax(layer) => layer.forward(try_cast_dim(x)?)?.into_dyn(),
             Reshape(layer) => layer.forward(x)?,
@@ -175,6 +186,7 @@ impl Layer {
             Dense(layer) => layer.backward(params, grad, try_cast_dim(d)?)?.into_dyn(),
             Sigmoid(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
             Tanh(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
+            ReLU(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
             Softmax(layer) => layer.backward(try_cast_dim(d)?)?.into_dyn(),
             Reshape(layer) => layer.backward(try_cast_dim(d)?)?,
         };

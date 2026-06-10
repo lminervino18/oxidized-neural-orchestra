@@ -24,6 +24,7 @@ pub enum ActFnConfig {
     Sigmoid { amp: f32 },
     Softmax,
     Tanh { amp: f32 },
+    ReLU,
 }
 
 /// The `Layer` configuration.

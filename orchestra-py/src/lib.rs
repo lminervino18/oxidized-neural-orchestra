@@ -21,6 +21,7 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<activations::Sigmoid>()?;
     m.add_class::<activations::Tanh>()?;
+    m.add_class::<activations::ReLU>()?;
 
     m.add_class::<initialization::Kaiming>()?;
     m.add_class::<initialization::Xavier>()?;

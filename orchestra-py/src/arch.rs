@@ -3,10 +3,8 @@ use std::num::NonZeroUsize;
 use orchestrator::configs::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
 use pyo3::{exceptions::PyTypeError, prelude::*};
 
-use crate::activations::Tanh;
-
 use super::{
-    activations::Sigmoid,
+    activations::{ReLU, Sigmoid, Tanh},
     initialization::{
         Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier,
         XavierUniform,
@@ -30,6 +28,7 @@ pub enum PyInit {
 pub enum PyActFn {
     Sigmoid(f32),
     Tanh(f32),
+    ReLU,
 }
 
 /// Converts a Python initializer object to a `PyInit`.
@@ -70,6 +69,8 @@ pub fn extract_act_fn(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<PyActFn
                 Ok(Some(PyActFn::Sigmoid(s.amp)))
             } else if let Ok(t) = a.extract::<PyRef<Tanh>>() {
                 Ok(Some(PyActFn::Tanh(t.amp)))
+            } else if let Ok(_) = a.extract::<PyRef<ReLU>>() {
+                Ok(Some(PyActFn::ReLU))
             } else {
                 Err(PyTypeError::new_err(
                     "act_fn must be an activation function or None",
@@ -288,5 +289,6 @@ fn py_act_fn_to_config(act_fn: &PyActFn) -> ActFnConfig {
     match act_fn {
         PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
         PyActFn::Tanh(amp) => ActFnConfig::Tanh { amp: *amp },
+        PyActFn::ReLU => ActFnConfig::ReLU,
     }
 }

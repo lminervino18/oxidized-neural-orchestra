@@ -55,6 +55,7 @@ impl ParamGenSpec {
 pub enum ActFnSpec {
     Sigmoid { amp: f32 },
     Tanh { amp: f32 },
+    ReLU,
     Softmax,
 }
 

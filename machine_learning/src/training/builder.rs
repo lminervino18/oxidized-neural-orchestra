@@ -184,6 +184,7 @@ impl TrainerBuilder {
             ActFnSpec::Sigmoid { amp } => Layer::sigmoid(amp),
             ActFnSpec::Softmax => Layer::softmax(),
             ActFnSpec::Tanh { amp } => Layer::tanh(amp),
+            ActFnSpec::ReLU => Layer::relu(),
         }
     }
 

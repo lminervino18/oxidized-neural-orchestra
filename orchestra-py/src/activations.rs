@@ -45,3 +45,20 @@ impl Tanh {
         Self { amp }
     }
 }
+
+/// Rectified Linear Unit activation function.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct ReLU;
+
+#[pymethods]
+impl ReLU {
+    /// Creates a new relu activation configuration.
+    ///
+    /// # Returns
+    /// A relu activation configuration.
+    #[new]
+    pub fn new() -> Self {
+        Self
+    }
+}
