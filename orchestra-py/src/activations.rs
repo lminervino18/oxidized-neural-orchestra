@@ -22,3 +22,26 @@ impl Sigmoid {
         Self { amp }
     }
 }
+
+/// Hyperbolic tangent activation function.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct Tanh {
+    pub amp: f32,
+}
+
+#[pymethods]
+impl Tanh {
+    /// Creates a new tanh activation configuration.
+    ///
+    /// # Args
+    /// * `amp` - Amplitude of the tanh. Defaults to `1.0`.
+    ///
+    /// # Returns
+    /// A tanh activation configuration.
+    #[new]
+    #[pyo3(signature = (amp = 1.0))]
+    pub fn new(amp: f32) -> Self {
+        Self { amp }
+    }
+}

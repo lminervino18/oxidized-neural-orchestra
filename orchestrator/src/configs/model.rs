@@ -23,6 +23,7 @@ pub enum ParamGenConfig {
 pub enum ActFnConfig {
     Sigmoid { amp: f32 },
     Softmax,
+    Tanh { amp: f32 },
 }
 
 /// The `Layer` configuration.

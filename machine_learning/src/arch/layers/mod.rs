@@ -4,6 +4,7 @@ mod layer;
 mod reshape;
 mod sigmoid;
 mod softmax;
+mod tanh;
 
 use std::mem;
 
@@ -14,6 +15,7 @@ use ndarray::{Array, Dimension, IntoDimension};
 pub(super) use reshape::Reshape;
 pub(super) use sigmoid::Sigmoid;
 pub(super) use softmax::Softmax;
+pub(super) use tanh::Tanh;
 
 /// A trait whose sole purpose is to give the ndarray::ArrayX
 /// types a way to resize their inner memory regions inplace.

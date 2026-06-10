@@ -1087,6 +1087,7 @@ impl Adapter {
         match act_fn {
             ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
             ActFnConfig::Softmax => ActFnSpec::Softmax,
+            ActFnConfig::Tanh { amp } => ActFnSpec::Tanh { amp },
         }
     }
 }

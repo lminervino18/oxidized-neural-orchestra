@@ -54,6 +54,7 @@ impl ParamGenSpec {
 #[serde(rename_all = "snake_case")]
 pub enum ActFnSpec {
     Sigmoid { amp: f32 },
+    Tanh { amp: f32 },
     Softmax,
 }
 
