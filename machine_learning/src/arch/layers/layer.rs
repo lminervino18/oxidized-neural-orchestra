@@ -1,3 +1,4 @@
+use comms::floats::Float01;
 use ndarray::{Data, RawData, prelude::*};
 
 use super::{Conv2d, Dense, ReLU, Sigmoid, Softmax, Tanh};
@@ -89,10 +90,13 @@ impl Layer {
 
     /// Creates a new `Layer::ReLU` layer.
     ///
+    /// # Args
+    /// * `slope` - The coefficient of leakiness, default relu is `0.0`.
+    ///
     /// # Returns
     /// A new `Layer` instance.
-    pub fn relu() -> Self {
-        Self(Inner::ReLU(ReLU::new()))
+    pub fn relu(slope: Float01) -> Self {
+        Self(Inner::ReLU(ReLU::new(slope)))
     }
 
     /// Creates a new `Layer::Reshape` layer that reshapes 2D tensors into 4D ones.

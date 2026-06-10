@@ -1,7 +1,11 @@
 use std::num::NonZeroUsize;
 
+use comms::floats::Float01;
 use orchestrator::configs::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
-use pyo3::{exceptions::PyTypeError, prelude::*};
+use pyo3::{
+    exceptions::{PyTypeError, PyValueError},
+    prelude::*,
+};
 
 use super::{
     activations::{ReLU, Sigmoid, Tanh},
@@ -28,7 +32,7 @@ pub enum PyInit {
 pub enum PyActFn {
     Sigmoid(f32),
     Tanh(f32),
-    ReLU,
+    ReLU(Float01),
 }
 
 /// Converts a Python initializer object to a `PyInit`.
@@ -69,8 +73,14 @@ pub fn extract_act_fn(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<PyActFn
                 Ok(Some(PyActFn::Sigmoid(s.amp)))
             } else if let Ok(t) = a.extract::<PyRef<Tanh>>() {
                 Ok(Some(PyActFn::Tanh(t.amp)))
-            } else if let Ok(_) = a.extract::<PyRef<ReLU>>() {
-                Ok(Some(PyActFn::ReLU))
+            } else if let Ok(r) = a.extract::<PyRef<ReLU>>() {
+                let Some(slope) = Float01::new(r.slope) else {
+                    return Err(PyTypeError::new_err(
+                        "ReLu's slope must be a float between 0 and 1",
+                    ));
+                };
+
+                Ok(Some(PyActFn::ReLU(slope)))
             } else {
                 Err(PyTypeError::new_err(
                     "act_fn must be an activation function or None",
@@ -112,9 +122,8 @@ impl Dense {
         init: &Bound<'_, PyAny>,
         act_fn: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let output_size = NonZeroUsize::new(output_size).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("output_size must be greater than 0")
-        })?;
+        let output_size = NonZeroUsize::new(output_size)
+            .ok_or_else(|| PyValueError::new_err("output_size must be greater than 0"))?;
 
         Ok(Self {
             output_size,
@@ -175,9 +184,7 @@ impl Conv2d {
         act_fn: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let make_nonzero = |v: usize, name: &'static str| {
-            NonZeroUsize::new(v).ok_or_else(|| {
-                pyo3::exceptions::PyValueError::new_err(format!("{name} must be > 0"))
-            })
+            NonZeroUsize::new(v).ok_or_else(|| PyValueError::new_err(format!("{name} must be > 0")))
         };
 
         Ok(Self {
@@ -234,9 +241,7 @@ impl Sequential {
     #[new]
     pub fn new(layers: Vec<Bound<'_, PyAny>>) -> PyResult<Self> {
         if layers.is_empty() {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "model must have at least one layer",
-            ));
+            return Err(PyValueError::new_err("model must have at least one layer"));
         }
 
         let layer_configs: PyResult<Vec<_>> = layers
@@ -289,6 +294,6 @@ fn py_act_fn_to_config(act_fn: &PyActFn) -> ActFnConfig {
     match act_fn {
         PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
         PyActFn::Tanh(amp) => ActFnConfig::Tanh { amp: *amp },
-        PyActFn::ReLU => ActFnConfig::ReLU,
+        PyActFn::ReLU(slope) => ActFnConfig::ReLU { slope: *slope },
     }
 }

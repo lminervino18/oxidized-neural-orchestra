@@ -1088,7 +1088,7 @@ impl Adapter {
             ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
             ActFnConfig::Softmax => ActFnSpec::Softmax,
             ActFnConfig::Tanh { amp } => ActFnSpec::Tanh { amp },
-            ActFnConfig::ReLU => ActFnSpec::ReLU,
+            ActFnConfig::ReLU { slope } => ActFnSpec::ReLU { slope },
         }
     }
 }

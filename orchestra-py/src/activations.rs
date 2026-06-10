@@ -49,16 +49,21 @@ impl Tanh {
 /// Rectified Linear Unit activation function.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct ReLU;
+pub struct ReLU {
+    pub slope: f32,
+}
 
 #[pymethods]
 impl ReLU {
     /// Creates a new relu activation configuration.
     ///
+    /// # Args
+    /// * `slope` - The coefficient of leakiness, default relu is `0.0`.
+    ///
     /// # Returns
     /// A relu activation configuration.
     #[new]
-    pub fn new() -> Self {
-        Self
+    pub fn new(slope: f32) -> Self {
+        Self { slope }
     }
 }

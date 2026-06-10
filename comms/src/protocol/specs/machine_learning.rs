@@ -55,7 +55,7 @@ impl ParamGenSpec {
 pub enum ActFnSpec {
     Sigmoid { amp: f32 },
     Tanh { amp: f32 },
-    ReLU,
+    ReLU { slope: Float01 },
     Softmax,
 }
 
