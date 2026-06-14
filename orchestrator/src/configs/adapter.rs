@@ -522,7 +522,7 @@ impl Adapter {
                     nworkers,
                     param_gen: param_gen_spec,
                     optimizer: self.adapt_optimizer(training.optimizer),
-                    synchronizer: self.adapt_synchronizer(&synchronizer, nworkers),
+                    synchronizer: self.adapt_synchronizer(&synchronizer, nworkers)?,
                     store: self.adapt_store(&store),
                     seed: training.seed,
                 };
@@ -635,18 +635,23 @@ impl Adapter {
     /// * `worker_amount` - The total number of workers.
     ///
     /// # Returns
-    /// The synchronizer's specification.
+    /// The synchronizer's specification or an invalid config error if the `worker_amount` is 0.
     fn adapt_synchronizer(
         &self,
         synchronizer: &SynchronizerConfig,
         worker_amount: usize,
-    ) -> SynchronizerSpec {
-        match *synchronizer {
-            SynchronizerConfig::Barrier => SynchronizerSpec::Barrier {
-                barrier_size: worker_amount,
-            },
+    ) -> Result<SynchronizerSpec> {
+        let Some(barrier_size) = NonZeroUsize::new(worker_amount) else {
+            let text = "the amount of workers must be a positive number".into();
+            return Err(OrchErr::InvalidConfig(text));
+        };
+
+        let spec = match *synchronizer {
+            SynchronizerConfig::Barrier => SynchronizerSpec::Barrier { barrier_size },
             SynchronizerConfig::NonBlocking => SynchronizerSpec::NonBlocking,
-        }
+        };
+
+        Ok(spec)
     }
 
     /// Adapts a `StoreConfig` into a `StoreSpec`.
@@ -1087,6 +1092,8 @@ impl Adapter {
         match act_fn {
             ActFnConfig::Sigmoid { amp } => ActFnSpec::Sigmoid { amp },
             ActFnConfig::Softmax => ActFnSpec::Softmax,
+            ActFnConfig::Tanh { amp } => ActFnSpec::Tanh { amp },
+            ActFnConfig::ReLU { slope } => ActFnSpec::ReLU { slope },
         }
     }
 }

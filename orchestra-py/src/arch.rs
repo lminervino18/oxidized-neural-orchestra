@@ -1,11 +1,18 @@
 use std::num::NonZeroUsize;
 
+use comms::floats::Float01;
 use orchestrator::configs::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
-use pyo3::prelude::*;
+use pyo3::{
+    exceptions::{PyTypeError, PyValueError},
+    prelude::*,
+};
 
-use crate::activations::Sigmoid;
-use crate::initialization::{
-    Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier, XavierUniform,
+use super::{
+    activations::{ReLU, Sigmoid, Tanh},
+    initialization::{
+        Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier,
+        XavierUniform,
+    },
 };
 
 #[derive(Clone)]
@@ -24,6 +31,8 @@ pub enum PyInit {
 #[derive(Clone)]
 pub enum PyActFn {
     Sigmoid(f32),
+    Tanh(f32),
+    ReLU(Float01),
 }
 
 /// Converts a Python initializer object to a `PyInit`.
@@ -49,9 +58,7 @@ pub fn extract_init(obj: &Bound<'_, PyAny>) -> PyResult<PyInit> {
     } else if let Ok(n) = obj.extract::<PyRef<Normal>>() {
         Ok(PyInit::Normal(n.mean, n.std_dev))
     } else {
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            "init must be a parameter initializer",
-        ))
+        Err(PyTypeError::new_err("init must be a parameter initializer"))
     }
 }
 
@@ -64,8 +71,18 @@ pub fn extract_act_fn(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<PyActFn
         Some(a) => {
             if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
                 Ok(Some(PyActFn::Sigmoid(s.amp)))
+            } else if let Ok(t) = a.extract::<PyRef<Tanh>>() {
+                Ok(Some(PyActFn::Tanh(t.amp)))
+            } else if let Ok(r) = a.extract::<PyRef<ReLU>>() {
+                let Some(slope) = Float01::new(r.slope) else {
+                    return Err(PyTypeError::new_err(
+                        "ReLu's slope must be a float between 0 and 1",
+                    ));
+                };
+
+                Ok(Some(PyActFn::ReLU(slope)))
             } else {
-                Err(pyo3::exceptions::PyTypeError::new_err(
+                Err(PyTypeError::new_err(
                     "act_fn must be an activation function or None",
                 ))
             }
@@ -105,9 +122,8 @@ impl Dense {
         init: &Bound<'_, PyAny>,
         act_fn: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let output_size = NonZeroUsize::new(output_size).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("output_size must be greater than 0")
-        })?;
+        let output_size = NonZeroUsize::new(output_size)
+            .ok_or_else(|| PyValueError::new_err("output_size must be greater than 0"))?;
 
         Ok(Self {
             output_size,
@@ -168,8 +184,7 @@ impl Conv2d {
         act_fn: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let make_nonzero = |v: usize, name: &'static str| {
-            NonZeroUsize::new(v)
-                .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("{name} must be > 0")))
+            NonZeroUsize::new(v).ok_or_else(|| PyValueError::new_err(format!("{name} must be > 0")))
         };
 
         Ok(Self {
@@ -226,9 +241,7 @@ impl Sequential {
     #[new]
     pub fn new(layers: Vec<Bound<'_, PyAny>>) -> PyResult<Self> {
         if layers.is_empty() {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "model must have at least one layer",
-            ));
+            return Err(PyValueError::new_err("model must have at least one layer"));
         }
 
         let layer_configs: PyResult<Vec<_>> = layers
@@ -239,7 +252,7 @@ impl Sequential {
                 } else if let Ok(c) = l.extract::<PyRef<Conv2d>>() {
                     Ok(c.to_layer_config())
                 } else {
-                    Err(pyo3::exceptions::PyTypeError::new_err(
+                    Err(PyTypeError::new_err(
                         "each layer must be a Dense or Conv2d instance",
                     ))
                 }
@@ -262,14 +275,25 @@ fn py_init_to_config(init: &PyInit) -> ParamGenConfig {
         PyInit::XavierUniform => ParamGenConfig::XavierUniform,
         PyInit::LecunUniform => ParamGenConfig::LecunUniform,
         PyInit::Const(v) => ParamGenConfig::Const { value: *v },
-        PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low: *low, high: *high },
-        PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low: *low, high: *high },
-        PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean: *mean, std_dev: *std_dev },
+        PyInit::Uniform(low, high) => ParamGenConfig::Uniform {
+            low: *low,
+            high: *high,
+        },
+        PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive {
+            low: *low,
+            high: *high,
+        },
+        PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal {
+            mean: *mean,
+            std_dev: *std_dev,
+        },
     }
 }
 
 fn py_act_fn_to_config(act_fn: &PyActFn) -> ActFnConfig {
     match act_fn {
         PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
+        PyActFn::Tanh(amp) => ActFnConfig::Tanh { amp: *amp },
+        PyActFn::ReLU(slope) => ActFnConfig::ReLU { slope: *slope },
     }
 }

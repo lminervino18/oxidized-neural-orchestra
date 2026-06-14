@@ -1,5 +1,6 @@
 use std::num::NonZeroUsize;
 
+use comms::floats::Float01;
 use serde::{Deserialize, Serialize};
 
 /// The `ParamGen` configuration.
@@ -23,6 +24,8 @@ pub enum ParamGenConfig {
 pub enum ActFnConfig {
     Sigmoid { amp: f32 },
     Softmax,
+    Tanh { amp: f32 },
+    ReLU { slope: Float01 },
 }
 
 /// The `Layer` configuration.

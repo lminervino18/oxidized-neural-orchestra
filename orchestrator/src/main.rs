@@ -3,12 +3,12 @@ use std::{
     num::NonZeroUsize,
     process::{Command, ExitStatus},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use comms::floats::{Float01, FloatPositive};
 use log::info;
-use orchestrator::{CancelHandle, configs::*, train};
+use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
 const NODE_BASE_PORT: usize = 40_000;
@@ -65,14 +65,11 @@ fn main() -> io::Result<()> {
     thread::sleep(Duration::from_secs(4));
     let addrs = build_addresses(NODES);
 
-    let synchronizer_config = SynchronizerConfig::NonBlocking;
-    let store_config = StoreConfig::Wild;
-
     #[allow(unused_variables)]
     let parameter_server_config = AlgorithmConfig::ParameterServer {
         nservers: NonZeroUsize::new(SERVERS).unwrap(),
-        synchronizer: synchronizer_config,
-        store: store_config,
+        synchronizer: SynchronizerConfig::NonBlocking,
+        store: StoreConfig::Wild,
     };
 
     #[allow(unused_variables)]
@@ -81,71 +78,110 @@ fn main() -> io::Result<()> {
     #[allow(unused_variables)]
     let strategy_switch_config = AlgorithmConfig::StrategySwitch {
         nservers: NonZeroUsize::new(SERVERS).unwrap(),
-        synchronizer: synchronizer_config,
-        store: store_config,
+        synchronizer: SynchronizerConfig::Barrier,
+        store: StoreConfig::Blocking,
     };
 
     let model_config = ModelConfig {
         layers: vec![
-            LayerConfig::Dense {
-                output_size: NonZeroUsize::new(2).unwrap(),
+            LayerConfig::Conv {
+                input_dim: (
+                    NonZeroUsize::new(2).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                ),
+                kernel_dim: (
+                    NonZeroUsize::new(5).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
+                ),
+                stride: NonZeroUsize::new(1).unwrap(),
+                padding: 0,
                 init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+                act_fn: None,
             },
             LayerConfig::Dense {
-                output_size: NonZeroUsize::new(1).unwrap(),
+                output_size: NonZeroUsize::new(4).unwrap(),
                 init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Sigmoid { amp: 1.0 }),
+                act_fn: Some(ActFnConfig::Softmax),
             },
         ],
     };
 
     let training_config = TrainingConfig {
         addrs,
-        algorithm: strategy_switch_config,
+        algorithm: parameter_server_config,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
         dataset: DatasetConfig {
             src: DataSrc::Inline {
                 samples: vec![
-                    0.0, 0.0, //
-                    0.0, 1.0, //
-                    1.0, 0.0, //
-                    1.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    1.0, 1.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    //
+                    1.0, 0.0, 1.0, //
+                    0.0, 0.0, 0.0, //
+                    1.0, 0.0, 1.0, // plus sign
+                    //
+                    0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, //
+                    0.0, 0.0, 0.0, //
+                    //
+                    1.0, 1.0, 1.0, //
+                    1.0, 0.0, 1.0, //
+                    1.0, 1.0, 1.0, // dot
+                    //
+                    1.0, 0.0, 1.0, //
+                    0.0, 1.0, 0.0, //
+                    1.0, 0.0, 1.0, //
+                    //
+                    0.0, 1.0, 0.0, //
+                    1.0, 0.0, 1.0, //
+                    0.0, 1.0, 0.0, // cross
+                    //
+                    1.0, 1.0, 1.0, //
+                    1.0, 0.0, 1.0, //
+                    1.0, 1.0, 1.0, //
+                    //
+                    0.0, 0.0, 0.0, //
+                    0.0, 1.0, 0.0, //
+                    0.0, 0.0, 0.0, // box
                 ],
                 labels: vec![
-                    0.0, //
-                    1.0, //
-                    1.0, //
-                    0.0, //
+                    1.0, 0.0, 0.0, 0.0, // plus sign
+                    0.0, 1.0, 0.0, 0.0, // dot
+                    0.0, 0.0, 1.0, 0.0, // cross
+                    0.0, 0.0, 0.0, 1.0, // box
                 ],
             },
-            x_size: NonZeroUsize::new(2).unwrap(),
-            y_size: NonZeroUsize::new(1).unwrap(),
+            x_size: NonZeroUsize::new(18).unwrap(),
+            y_size: NonZeroUsize::new(4).unwrap(),
         },
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
             lr: FloatPositive::new(1.0).unwrap(),
-            mu: Float01::new(0.9).unwrap(),
+            mu: Float01::new(0.95).unwrap(),
         },
         loss_fn: LossFnConfig::Mse,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(400).unwrap(),
+        max_epochs: NonZeroUsize::new(300).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
         early_stopping: None,
     };
 
+    let start = Instant::now();
     let session = train(model_config, training_config).unwrap();
     let (_cancel, cancel_rx) = CancelHandle::pair();
     let mut rx = session.event_listener(cancel_rx);
 
     loop {
         match rx.blocking_recv() {
-            Some(orchestrator::TrainingEvent::PublishedLosses { losses, worker_id }) => {
+            Some(TrainingEvent::PublishedLosses { losses, worker_id }) => {
                 info!("losses: {worker_id}: {losses:?}");
             }
-            Some(orchestrator::TrainingEvent::TrainingComplete {
+            Some(TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
             }) => {
@@ -164,5 +200,6 @@ fn main() -> io::Result<()> {
         }
     }
 
+    println!("took: {} seconds", start.elapsed().as_secs_f32());
     Ok(())
 }

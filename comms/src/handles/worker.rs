@@ -93,7 +93,15 @@ impl<T: TransportLayer> WorkerHandle<T> {
                 WorkerEvent::Grad(&self.grad)
             }
             Msg::Control(Command::Upgraded) => WorkerEvent::Upgraded,
-            Msg::Control(Command::ReportLoss { losses }) => WorkerEvent::Loss(losses.into_owned()),
+            Msg::Control(Command::ReportLoss { losses }) => {
+                // TODO: Ver donde atajamos esto, capaz aca no es el mejor lugar.
+                //       De momento esta aca si me olvido de pensar donde dejarlo.
+                if losses.iter().any(|l| !l.is_finite()) {
+                    return Err(io::Error::other("loss diverged: NaN or Inf detected"));
+                }
+
+                WorkerEvent::Loss(losses.into_owned())
+            }
             Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
             Msg::Control(Command::Done) => WorkerEvent::Done,

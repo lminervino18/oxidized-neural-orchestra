@@ -20,7 +20,7 @@ where
         return Vec::new();
     }
 
-    if graph.len() > usize::BITS as usize {
+    if graph.len() >= usize::BITS as usize {
         return Vec::new();
     }
 

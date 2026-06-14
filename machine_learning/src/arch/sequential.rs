@@ -144,6 +144,10 @@ impl Sequential {
             param_manager.zero_grad();
         }
 
+        if num_batches == 0 {
+            return Err(MlErr::EmptyEpoch);
+        }
+
         Ok(total_loss / num_batches as f64)
     }
 }

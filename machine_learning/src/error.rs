@@ -3,6 +3,8 @@ use std::{
     fmt::{self, Display},
 };
 
+use ndarray::ShapeError;
+
 /// The result type for the `machine_learning` module.
 pub type Result<T> = std::result::Result<T, MlErr>;
 
@@ -14,9 +16,10 @@ pub enum MlErr {
         got: usize,
         expected: usize,
     },
-    MatrixError(ndarray::ShapeError),
+    MatrixError(ShapeError),
     Conv3dError(ndarray_conv::Error<3>),
     Conv2dError(ndarray_conv::Error<2>),
+    EmptyEpoch,
 }
 
 impl Display for MlErr {
@@ -34,6 +37,7 @@ impl Display for MlErr {
             MlErr::Conv2dError(conv2d_error) => {
                 format!("convolution operation failed: {conv2d_error}")
             }
+            MlErr::EmptyEpoch => "this epoch has no batches".to_string(),
         };
 
         write!(f, "{s}")
@@ -42,8 +46,8 @@ impl Display for MlErr {
 
 impl Error for MlErr {}
 
-impl From<ndarray::ShapeError> for MlErr {
-    fn from(value: ndarray::ShapeError) -> Self {
+impl From<ShapeError> for MlErr {
+    fn from(value: ShapeError) -> Self {
         MlErr::MatrixError(value)
     }
 }

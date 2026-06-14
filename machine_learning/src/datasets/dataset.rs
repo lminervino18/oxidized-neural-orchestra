@@ -81,10 +81,12 @@ impl Dataset {
         &'a self,
         batch_size: NonZeroUsize,
     ) -> impl Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)> + 'a {
-        (0..self.rows).step_by(batch_size.get()).map(move |start| {
-            let n = (start + batch_size.get()).min(self.rows) - start;
-            self.view_batch(start, n)
-        })
+        (0..self.rows)
+            .step_by(batch_size.get())
+            .filter_map(move |start| {
+                let n = (start + batch_size.get()).min(self.rows) - start;
+                (n > 0).then_some(self.view_batch(start, n))
+            })
     }
 
     /// Partitions the dataset into n parts minimizing the size between them all.

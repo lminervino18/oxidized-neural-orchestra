@@ -14,7 +14,7 @@ use machine_learning::{
 
 use super::{ParameterServer, Server};
 use crate::{
-    storage::{BlockingStore, Store, StoreHandle, WildStore},
+    storage::{BlockingStore, Store, WildStore},
     synchronization::{BarrierSync, NoBlockingSync, Synchronizer},
 };
 
@@ -166,7 +166,7 @@ where
         let cores = thread::available_parallelism().unwrap_or(DEFAULT_CORE_COUNT);
         let max_shard_amount = cores.saturating_mul(SHARD_AMOUNT_FACTOR);
         let shard_amount = nparams.min(max_shard_amount);
-        let shard_size = NonZeroUsize::new(shard_amount.get().div_ceil(nparams.get())).unwrap();
+        let shard_size = NonZeroUsize::new(nparams.get().div_ceil(shard_amount.get())).unwrap();
 
         match spec.store {
             StoreSpec::Blocking => {
@@ -229,8 +229,7 @@ where
         PS: Store + Send + Sync + 'static,
         Sy: Synchronizer + Send + Sync + 'static,
     {
-        let handle = StoreHandle::new(store);
-        let pserver = ParameterServer::new(handle, synchronizer, orch_handle);
+        let pserver = ParameterServer::new(store, synchronizer, orch_handle);
         Box::new(pserver)
     }
 }
