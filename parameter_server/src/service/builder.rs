@@ -1,7 +1,7 @@
 use std::{io, num::NonZeroUsize, thread};
 
 use comms::{
-    Acceptor, Connection, OrchHandle, TransportLayer,
+    Acceptor, Connection, OrchHandle, TransportLayer, WorkerHandle,
     specs::{
         machine_learning::OptimizerSpec,
         server::{ServerSpec, StoreSpec, SynchronizerSpec},
@@ -14,7 +14,7 @@ use machine_learning::{
 
 use super::{ParameterServer, Server};
 use crate::{
-    storage::{BlockingStore, Store, StoreHandle, WildStore},
+    storage::{BlockingStore, Store, WildStore},
     synchronization::{BarrierSync, NoBlockingSync, Synchronizer},
 };
 
@@ -53,7 +53,7 @@ where
     /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
-    /// A new Server or a `RandErr` if the specification has
+    /// A new `Server` or a `RandErr` if the specification has
     /// invalid `RandParamGen` construction values.
     pub async fn build(
         &mut self,
@@ -63,16 +63,39 @@ where
     where
         T: TransportLayer,
     {
+        self.build_with(spec, orch_handle, async |_| Ok(())).await
+    }
+
+    /// Builds a new `Server` following a spec and calling connection_hook for each new connection
+    /// before spawning the inner worker handler into the server.
+    ///
+    /// # Args
+    /// * `spec`- The specification of the parameter serve.r
+    /// * `orch_handle` - THe handle for communicating with the orchestrator.
+    ///
+    /// # Returns
+    ///  A new Server or a `RandErr` if the specification has
+    /// invalid `RandParamGen` construction values.
+    pub async fn build_with<G>(
+        &mut self,
+        spec: ServerSpec,
+        orch_handle: OrchHandle<T>,
+        mut connection_hook: G,
+    ) -> io::Result<Box<dyn Server<T>>>
+    where
+        G: AsyncFnMut(&mut WorkerHandle<T>) -> io::Result<()>,
+    {
         let nworkers = spec.nworkers;
         let mut server = self
             .resolve_optimizer(spec, orch_handle)
             .map_err(io::Error::other)?;
 
         for _ in 0..nworkers {
-            let Connection::Worker(worker_handle) = self.acceptor.accept().await? else {
+            let Connection::Worker(mut worker_handle) = self.acceptor.accept().await? else {
                 return Err(io::Error::other("Unexpected non worker connection"));
             };
 
+            connection_hook(&mut worker_handle).await?;
             server.spawn(worker_handle);
         }
 
@@ -143,7 +166,7 @@ where
         let cores = thread::available_parallelism().unwrap_or(DEFAULT_CORE_COUNT);
         let max_shard_amount = cores.saturating_mul(SHARD_AMOUNT_FACTOR);
         let shard_amount = nparams.min(max_shard_amount);
-        let shard_size = NonZeroUsize::new(shard_amount.get().div_ceil(nparams.get())).unwrap();
+        let shard_size = NonZeroUsize::new(nparams.get().div_ceil(shard_amount.get())).unwrap();
 
         match spec.store {
             StoreSpec::Blocking => {
@@ -206,8 +229,7 @@ where
         PS: Store + Send + Sync + 'static,
         Sy: Synchronizer + Send + Sync + 'static,
     {
-        let handle = StoreHandle::new(store);
-        let pserver = ParameterServer::new(handle, synchronizer, orch_handle);
+        let pserver = ParameterServer::new(store, synchronizer, orch_handle);
         Box::new(pserver)
     }
 }

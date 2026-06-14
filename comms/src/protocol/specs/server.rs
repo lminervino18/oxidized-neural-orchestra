@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use serde::{Deserialize, Serialize};
 
 use super::machine_learning::{OptimizerSpec, ParamGenSpec};
@@ -6,7 +8,7 @@ use super::machine_learning::{OptimizerSpec, ParamGenSpec};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SynchronizerSpec {
-    Barrier { barrier_size: usize },
+    Barrier { barrier_size: NonZeroUsize },
     NonBlocking,
 }
 
@@ -19,7 +21,7 @@ pub enum StoreSpec {
 }
 
 /// The specification for the `Server` trait.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerSpec {
     pub id: usize,
     pub nworkers: usize,

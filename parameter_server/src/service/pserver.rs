@@ -5,10 +5,7 @@ use log::{debug, error, info, warn};
 use tokio::task::JoinSet;
 
 use super::Server;
-use crate::{
-    storage::{Store, StoreHandle},
-    synchronization::Synchronizer,
-};
+use crate::{storage::Store, synchronization::Synchronizer};
 
 /// The central server structure, it handles task management and io between workers.
 pub struct ParameterServer<PS, Sy, T>
@@ -18,7 +15,7 @@ where
     T: TransportLayer,
 {
     tasks: JoinSet<io::Result<()>>,
-    handle: StoreHandle<PS>,
+    store: PS,
     synchronizer: Sy,
     orch_handle: OrchHandle<T>,
 }
@@ -32,15 +29,15 @@ where
     /// Creates a new `ParameterServer`.
     ///
     /// # Args
-    /// * `handle` - The underlying parameter store to use behind a handle.
+    /// * `store` - The underlying parameter store to use.
     /// * `synchronizer` - The synchronizer to use.
     ///
     /// # Returns
     /// A new `ParameterServer` instance.
-    pub fn new(handle: StoreHandle<PS>, synchronizer: Sy, orch_handle: OrchHandle<T>) -> Self {
+    pub fn new(store: PS, synchronizer: Sy, orch_handle: OrchHandle<T>) -> Self {
         Self {
             tasks: JoinSet::new(),
-            handle,
+            store,
             synchronizer,
             orch_handle,
         }
@@ -72,20 +69,27 @@ where
             }
         }
 
-        // SAFETY: This parameter vector is the same size as
+        let nparams = self.store.len();
+        let mut params = vec![0.0; nparams];
+
+        // SAFETY: The parameter vector is the same size as
         //         the amount of parameters in the storage.
-        let nparams = self.handle.len();
-        let mut params = vec![0.; nparams];
-        self.handle.pull_params(&mut params).await.unwrap();
+        self.store.pull_params(&mut params).unwrap();
+        self.orch_handle.push_params(&mut params).await?;
 
         loop {
-            match self.orch_handle.recv_event().await? {
+            println!("waiting for orch request");
+            let event = self.orch_handle.recv_event().await?;
+            println!("received from orch: {event:?}");
+
+            match event {
                 OrchEvent::Disconnect => break,
-                OrchEvent::RequestParams => self.orch_handle.push_params(&mut params).await?,
+                // OrchEvent::RequestParams => self.orch_handle.push_params(&mut params).await?,
                 event => warn!("Unexpected OrchEvent: {event:?}"),
             }
         }
 
+        println!("exited orch request loop");
         Ok(())
     }
 }
@@ -105,16 +109,17 @@ where
         T: TransportLayer + Send + 'static,
     {
         let id = self.tasks.len() + 1;
-        let handle = self.handle.clone();
+        let store = self.store.clone();
         let synchronizer = self.synchronizer.clone();
 
         let task = async move {
-            let nparams = handle.len();
+            let nparams = store.len();
             let mut params = vec![0.0; nparams];
 
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
-            handle.pull_params(&mut params).await.unwrap();
+            store.pull_params(&mut params).unwrap();
+            worker_handle.push_params(&mut params).await?;
 
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
@@ -130,9 +135,11 @@ where
                         // SAFETY: We checked that the gradient is the same
                         //         size as the buffer and the storage.
                         synchronizer
-                            .step(&handle, grad, &mut params)
+                            .step(&store, grad, &mut params)
                             .await
                             .map_err(io::Error::other)?;
+
+                        worker_handle.push_params(&mut params).await?;
                     }
                     WorkerEvent::Disconnect => {
                         info!(worker_id = id; "gracefully disconnecting worker");

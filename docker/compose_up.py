@@ -7,31 +7,32 @@ from pathlib import Path
 
 
 # The directory containing this exact script.
-BASE_DIR = Path(__file__).resolve().parent
+DOCKER_DIR = Path(__file__).resolve().parent
+
+# The project's directory.
+ROOT_DIR = DOCKER_DIR.parent
 
 
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--workers", type=int, required=True, help="The amount of workers to use")
-    parser.add_argument("--servers", type=int, required=True, help="The amount of servers to use")
+    parser.add_argument("--nodes", type=int, required=True, help="The amount of nodes to use")
     parser.add_argument("--release", action="store_true", help="The compilation mode for the rust compiler")
 
     args = parser.parse_args()
 
     env = {
         **os.environ,
-        "WORKERS": str(args.workers),
-        "SERVERS": str(args.servers),
+        "NODES": str(args.nodes),
         "RELEASE": str(args.release).lower(),
     }
 
     subprocess.run(["sudo", "-v"], check=True)
-    subprocess.run([BASE_DIR / "gen_compose.py"], env=env, check=True)
-    subprocess.run(["sudo", "-E", BASE_DIR / "fill_hosts.py"], env=env, check=True)
+    subprocess.run([DOCKER_DIR / "gen_compose.py"], env=env, check=True, cwd=ROOT_DIR)
+    subprocess.run(["sudo", "-E", DOCKER_DIR / "fill_hosts.py"], env=env, check=True)
 
-    compose_file_path = BASE_DIR.parent / "compose.yaml"
-    subprocess.run(["docker", "compose", "-f", compose_file_path, "up", "--build", "-d", "--remove-orphans"])
+    cmd = ["docker", "compose", "-f", "compose.yaml", "up", "--build", "-d", "--remove-orphans"]
+    subprocess.run(cmd, cwd=ROOT_DIR)
 
 
 if __name__ == "__main__":

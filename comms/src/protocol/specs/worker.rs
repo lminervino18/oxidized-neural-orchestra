@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::machine_learning::{
-    ParamGenSpec, {DatasetSpec, TrainerSpec},
-};
+use super::machine_learning::{ParamGenSpec, TrainerSpec};
 use crate::floats::Float01;
 
 /// Distributed training algorithm selection.
@@ -30,11 +28,10 @@ pub enum SerializerSpec {
 }
 
 /// The specification for the `Worker`.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerSpec {
     pub worker_id: usize,
     pub trainer: TrainerSpec,
-    pub dataset: DatasetSpec,
     pub algorithm: AlgorithmSpec,
     pub serializer: SerializerSpec,
     pub seed: Option<u64>,

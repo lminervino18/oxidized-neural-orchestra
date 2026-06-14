@@ -1,10 +1,10 @@
 use std::{env, fs::File, io::Read, num::NonZeroUsize, path::PathBuf};
 
-use comms::floats::FloatPositive;
+use comms::{DatasetSrc, floats::FloatPositive};
 use machine_learning::{
-    arch::{Sequential, layers::Layer, loss::CrossEntropy},
-    dataset::{Dataset, DatasetSrc},
-    models::{make_nielsen_mnist_model, some_other_mnist_model},
+    arch::loss::CrossEntropy,
+    datasets::{DataSrc, Dataset},
+    models::make_nielsen_mnist_model,
     optimization::GradientDescent,
     param_manager::{ParamManager, ParamsMetadata},
     training::{BackpropTrainer, TrainResult, Trainer},
@@ -157,8 +157,8 @@ fn make_mnist_dataset(size: Option<usize>, samples_path: &str, labels_path: &str
         .map(|bytes| f32::from_le_bytes(bytes.try_into().unwrap()))
         .collect();
 
-    Dataset::new(
-        DatasetSrc::inmem(samples, labels),
+    Dataset::loaded(
+        DataSrc::inmem(samples, labels),
         NonZeroUsize::new(SAMPLE_SIZE).unwrap(),
         NonZeroUsize::new(LABEL_SIZE).unwrap(),
     )

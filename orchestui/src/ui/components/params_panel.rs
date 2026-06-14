@@ -6,8 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::screens::training::TrainingState;
-use crate::ui::theme::Theme;
+use crate::ui::{screens::training::TrainingState, theme::Theme};
 
 /// Draws the final parameters preview panel shown after training completes.
 ///
@@ -17,7 +16,7 @@ use crate::ui::theme::Theme;
 /// * `state` - The current training screen state.
 pub fn draw_params(f: &mut Frame, area: Rect, state: &TrainingState) {
     let trained = state.final_trained.as_ref().unwrap();
-    let params = trained.params();
+    let params = &trained.params;
 
     let preview: String = params
         .iter()

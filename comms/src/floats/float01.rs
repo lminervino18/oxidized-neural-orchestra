@@ -3,7 +3,7 @@ use std::ops::Deref;
 use serde::{Deserialize, Deserializer, Serialize, de};
 
 /// A float with a value between `0.0` and `1.0`.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Default, Debug, Clone, Copy, Serialize, PartialEq)]
 #[serde(transparent)]
 pub struct Float01 {
     value: f32,

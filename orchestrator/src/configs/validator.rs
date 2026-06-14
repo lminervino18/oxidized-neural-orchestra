@@ -1,10 +1,7 @@
 use std::fs;
 
-use super::{AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
-use crate::{
-    configs::training::DatasetSrc,
-    error::{OrchErr, Result},
-};
+use super::{AlgorithmConfig, DataSrc, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
+use crate::error::{OrchErr, Result};
 
 /// Validates orchestrator configs before adaptation, ensuring all invariants
 /// are met before the training commences.
@@ -48,24 +45,23 @@ impl Validator {
             ));
         }
 
-        for l in &model.layers {
-            match l {
+        for layer in &model.layers {
+            match layer {
                 LayerConfig::Dense { .. } => {
                     continue;
                 }
                 LayerConfig::Conv {
-                    input_dim,
-                    kernel_dim,
+                    input_dim: (_, height, width),
+                    kernel_dim: (_, _, size),
                     padding,
                     ..
                 } => {
-                    // input_dim = 9, padding = 1, kernel dim = 16 -> true... wtf ?
-                    if (input_dim.1.get() + 2 * padding - kernel_dim.2.get()) <= 0
-                        || input_dim.2.get() + 2 * padding - kernel_dim.2.get() <= 0
-                    {
-                        return Err(OrchErr::InvalidConfig(
-                            "conv layer input_dim + 2 * padding - kernel_size must be greater than 0 for both height and width".into(),
-                        ));
+                    let remaining_height = (height.get() + 2 * padding).saturating_sub(size.get());
+                    let remaining_width = (width.get() + 2 * padding).saturating_sub(size.get());
+
+                    if remaining_height == 0 || remaining_width == 0 {
+                        let details = "conv layer input_dim + 2 * padding - kernel_size must be greater than 0 for both height and width";
+                        return Err(OrchErr::InvalidConfig(details.into()));
                     }
                 }
             }
@@ -76,29 +72,22 @@ impl Validator {
 
     /// Validates the training's configuration.
     ///
+    /// * `training` - The training configuration.
+    ///
     /// # Errors
     /// An `OrchErr` if any training invariant is unmet.
     fn validate_training(&self, training: &TrainingConfig) -> Result<()> {
-        if training.worker_addrs.is_empty() {
-            let text = "at least one worker address is required".into();
+        if training.addrs.is_empty() {
+            let text = "at least one network address is required".into();
             return Err(OrchErr::InvalidConfig(text));
         }
 
-        match training.algorithm {
-            AlgorithmConfig::ParameterServer {
-                ref server_addrs, ..
-            } => {
-                if server_addrs.is_empty() {
-                    let text = "at least one server address is required".into();
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-            }
-            AlgorithmConfig::AllReduce => {
-                if training.worker_addrs.len() < 2 {
-                    let text = "all-reduce requires at least two worker addresses".into();
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-            }
+        if let AlgorithmConfig::ParameterServer { nservers, .. }
+        | AlgorithmConfig::StrategySwitch { nservers, .. } = training.algorithm
+            && training.addrs.len().saturating_sub(nservers.get()) == 0
+        {
+            let text = "the amount of workers must be a positive number".into();
+            return Err(OrchErr::InvalidConfig(text));
         }
 
         let DatasetConfig {
@@ -113,7 +102,7 @@ impl Validator {
         };
 
         let samples = match src {
-            DatasetSrc::Inline { samples, labels } => {
+            DataSrc::Inline { samples, labels } => {
                 let len = samples.len() + labels.len();
 
                 if len % row_size != 0 {
@@ -127,7 +116,7 @@ impl Validator {
                 // SAFETY: row_size is a positive integer.
                 len / row_size.get()
             }
-            DatasetSrc::Local {
+            DataSrc::Local {
                 samples_path,
                 labels_path,
             } => {

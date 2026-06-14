@@ -3,7 +3,7 @@ ARG PKG=node
 ARG MODE
 
 # 1. Install cargo-chef.
-FROM rust:1.92 AS chef
+FROM rust:1.96 AS chef
 RUN cargo install cargo-chef
 WORKDIR /app
 

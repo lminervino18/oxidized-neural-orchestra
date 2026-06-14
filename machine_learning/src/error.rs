@@ -4,6 +4,8 @@ use std::{
     panic::Location,
 };
 
+use ndarray::ShapeError;
+
 /// The result type for the `machine_learning` module.
 pub type Result<T> = std::result::Result<T, MlErr>;
 
@@ -17,7 +19,7 @@ pub enum MlErr {
         location: &'static Location<'static>,
     },
     MatrixError {
-        source: ndarray::ShapeError,
+        source: ShapeError,
         location: &'static Location<'static>,
     },
     Conv3dError {
@@ -28,6 +30,7 @@ pub enum MlErr {
         source: ndarray_conv::Error<2>,
         location: &'static Location<'static>,
     },
+    EmptyEpoch,
 }
 
 impl MlErr {
@@ -42,7 +45,7 @@ impl MlErr {
     }
 
     #[track_caller]
-    pub fn matrix_error(source: ndarray::ShapeError) -> MlErr {
+    pub fn matrix_error(source: ShapeError) -> MlErr {
         MlErr::MatrixError {
             source,
             location: Location::caller(),
@@ -68,6 +71,7 @@ impl Display for MlErr {
             MlErr::Conv2dError { source, location } => {
                 format!("convolution operation failed: {source} at {location}")
             }
+            MlErr::EmptyEpoch => "this epoch has no batches".to_string(),
         };
 
         write!(f, "{s}")
@@ -76,8 +80,8 @@ impl Display for MlErr {
 
 impl Error for MlErr {}
 
-impl From<ndarray::ShapeError> for MlErr {
-    fn from(value: ndarray::ShapeError) -> Self {
+impl From<ShapeError> for MlErr {
+    fn from(value: ShapeError) -> Self {
         MlErr::MatrixError {
             source: value,
             location: Location::caller(),

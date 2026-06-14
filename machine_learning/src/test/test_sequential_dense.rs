@@ -10,7 +10,7 @@ use crate::{
         layers::Layer,
         loss::{LossFn, Mse},
     },
-    dataset::{Dataset, DatasetSrc},
+    datasets::{DataSrc, Dataset},
     optimization::GradientDescent,
     param_manager::{ParamManager, ParamsMetadata},
     test::gen_params_grads,
@@ -29,7 +29,7 @@ fn test_machine_learning00_linear_convergence() {
 
     let x_size = NonZeroUsize::new(1).unwrap();
     let y_size = NonZeroUsize::new(1).unwrap();
-    let dataset = Dataset::new(DatasetSrc::inmem(x.into(), y.into()), x_size, y_size);
+    let dataset = Dataset::loaded(DataSrc::inmem(x.into(), y.into()), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(100).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
@@ -86,7 +86,7 @@ fn test_machine_learning01_and2_gate_convergence() {
 
     let x_size = NonZeroUsize::new(2).unwrap();
     let y_size = NonZeroUsize::new(1).unwrap();
-    let dataset = Dataset::new(DatasetSrc::inmem(x.into(), y.into()), x_size, y_size);
+    let dataset = Dataset::loaded(DataSrc::inmem(x.into(), y.into()), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
@@ -152,7 +152,7 @@ fn test_machine_learning02_and3_gate_convergence() {
 
     let x_size = NonZeroUsize::new(3).unwrap();
     let y_size = NonZeroUsize::new(1).unwrap();
-    let dataset = Dataset::new(DatasetSrc::inmem(x.into(), y.into()), x_size, y_size);
+    let dataset = Dataset::loaded(DataSrc::inmem(x.into(), y.into()), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(2000).unwrap();
     let batch_size = NonZeroUsize::new(8).unwrap();
@@ -214,7 +214,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
 
     let x_size = NonZeroUsize::new(2).unwrap();
     let y_size = NonZeroUsize::new(1).unwrap();
-    let dataset = Dataset::new(DatasetSrc::inmem(x.into(), y.into()), x_size, y_size);
+    let dataset = Dataset::loaded(DataSrc::inmem(x.into(), y.into()), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(4).unwrap();
@@ -293,7 +293,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
 
     let x_size = NonZeroUsize::new(4).unwrap();
     let y_size = NonZeroUsize::new(1).unwrap();
-    let dataset = Dataset::new(DatasetSrc::inmem(x.into(), y.into()), x_size, y_size);
+    let dataset = Dataset::loaded(DataSrc::inmem(x.into(), y.into()), x_size, y_size);
     let offline_epochs = 0;
     let max_epochs = NonZeroUsize::new(1000).unwrap();
     let batch_size = NonZeroUsize::new(16).unwrap();

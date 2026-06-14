@@ -10,7 +10,7 @@ use crate::{
         layers::Layer,
         loss::{CrossEntropy, LossFn, Mse},
     },
-    dataset::{Dataset, DatasetSrc},
+    datasets::{DataSrc, Dataset},
     optimization::GradientDescent,
     param_manager::{ParamManager, ParamsMetadata},
     test::gen_params_grads,
@@ -44,8 +44,8 @@ fn test_conv_dense(
 
     let x_size = NonZeroUsize::new(input_height * input_width * in_channels).unwrap();
     let y_size = NonZeroUsize::new(y_size).unwrap();
-    let dataset = Dataset::new(
-        DatasetSrc::inmem(symbols.into(), labels.into()),
+    let dataset = Dataset::loaded(
+        DataSrc::inmem(symbols.into(), labels.into()),
         x_size,
         y_size,
     );
@@ -279,8 +279,8 @@ fn test_machine_learning_dimensionality_correctness() {
     let nreal_layers = 2;
     let ordering = vec![0; nreal_layers];
 
-    let dataset = Dataset::new(
-        DatasetSrc::inmem(samples, labels),
+    let dataset = Dataset::loaded(
+        DataSrc::inmem(samples, labels),
         NonZeroUsize::new(x_size).unwrap(),
         NonZeroUsize::new(y_size).unwrap(),
     );
@@ -361,8 +361,8 @@ fn test_machine_learning_dimensionality_correctness_with_max_pooling() {
     let nreal_layers = 2;
     let ordering = vec![0; nreal_layers];
 
-    let dataset = Dataset::new(
-        DatasetSrc::inmem(samples, labels),
+    let dataset = Dataset::loaded(
+        DataSrc::inmem(samples, labels),
         NonZeroUsize::new(x_size).unwrap(),
         NonZeroUsize::new(y_size).unwrap(),
     );

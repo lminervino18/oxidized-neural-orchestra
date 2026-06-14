@@ -1,4 +1,5 @@
 mod router;
+mod stat_service;
 
 use std::{env, io, time::Duration};
 

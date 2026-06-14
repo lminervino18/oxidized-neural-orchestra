@@ -6,6 +6,7 @@ use super::TransportLayer;
 use crate::protocol::Msg;
 
 /// The `Retryer` retries sending and receiving messages using exponential backoff.
+#[derive(Debug)]
 pub struct Retryer<L: TransportLayer> {
     base_retry_dur: Duration,
     retry_coef: u32,
