@@ -4,6 +4,7 @@ use comms::floats::FloatPositive;
 use machine_learning::{
     arch::{Sequential, layers::Layer, loss::CrossEntropy},
     dataset::{Dataset, DatasetSrc},
+    models::{make_nielsen_mnist_model, some_other_mnist_model},
     optimization::GradientDescent,
     param_manager::{ParamManager, ParamsMetadata},
     training::{BackpropTrainer, TrainResult, Trainer},
@@ -27,8 +28,7 @@ fn main() {
         env::set_var("RUST_BACKTRACE", "1");
     }
 
-    let layers = make_layers();
-    let mut model = Sequential::new(layers);
+    let mut model = make_nielsen_mnist_model();
 
     let train_size = None; // whole dataset
     let train_dataset = make_mnist_dataset(train_size, TRAIN_SAMPLES_STR, TRAIN_LABELS_STR);
@@ -127,59 +127,6 @@ fn gen_params_grads(server_sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>
             )
         })
         .collect()
-}
-
-fn make_layers() -> Vec<Layer> {
-    let conv_filters = 10; // nielsen quiere 20 pero no se lo damos
-    let conv_kernel_size = 5;
-    let conv_stride = 1;
-    let conv_padding = 0;
-
-    let conv_output_height = (INPUT_HEIGHT + 2 * conv_padding - conv_kernel_size) / conv_stride + 1;
-    let conv_output_width = (INPUT_WIDTH + 2 * conv_padding - conv_kernel_size) / conv_stride + 1;
-
-    let max_pooling_filter_size = 2;
-    let max_pooling_stride = 2;
-    let max_pooling_padding = 0;
-
-    let max_pooling_output_height = (conv_output_height + 2 * max_pooling_padding
-        - max_pooling_filter_size)
-        / max_pooling_stride
-        + 1;
-    let max_pooling_output_width = (conv_output_width + 2 * max_pooling_padding
-        - max_pooling_filter_size)
-        / max_pooling_stride
-        + 1;
-
-    let layers = vec![
-        Layer::two_d_to4d(IN_CHANNELS, INPUT_HEIGHT, INPUT_WIDTH),
-        Layer::conv2d(
-            conv_filters,
-            IN_CHANNELS,
-            conv_kernel_size,
-            conv_stride,
-            conv_padding,
-        ),
-        Layer::max_pooling(
-            max_pooling_filter_size,
-            max_pooling_stride,
-            max_pooling_padding,
-        ),
-        Layer::four_d_to2d(
-            conv_filters,
-            max_pooling_output_height,
-            max_pooling_output_width,
-        ),
-        Layer::dense((
-            conv_filters * max_pooling_output_height * max_pooling_output_width,
-            100,
-        )),
-        Layer::sigmoid(1.),
-        Layer::dense((100, LABEL_SIZE)),
-        Layer::softmax(),
-    ];
-
-    layers
 }
 
 fn make_mnist_dataset(size: Option<usize>, samples_path: &str, labels_path: &str) -> Dataset {
