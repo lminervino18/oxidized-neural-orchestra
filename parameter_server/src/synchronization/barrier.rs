@@ -29,7 +29,11 @@ impl BarrierSync {
 
 impl Drop for BarrierSync {
     fn drop(&mut self) {
-        self.barrier.acquire();
+        let barrier = &mut self.barrier;
+
+        if Arc::strong_count(&barrier) > 1 {
+            barrier.acquire();
+        }
     }
 }
 
