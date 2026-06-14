@@ -1,3 +1,3 @@
-from orchestra._orchestra import ReLU, Sigmoid, Tanh
+from orchestra._orchestra import ReLU, Sigmoid, Softmax, Tanh
 
-__all__ = ["ReLU", "Sigmoid", "Tanh"]
+__all__ = ["ReLU", "Sigmoid", "Softmax", "Tanh"]

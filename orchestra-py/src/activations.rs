@@ -67,3 +67,20 @@ impl ReLU {
         Self { slope }
     }
 }
+
+/// Softmax activation function.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct Softmax;
+
+#[pymethods]
+impl Softmax {
+    /// Creates a new softmax activation configuration.
+    ///
+    /// # Returns
+    /// A softmax activation configuration.
+    #[new]
+    pub fn new() -> Self {
+        Self
+    }
+}

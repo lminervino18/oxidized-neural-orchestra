@@ -8,7 +8,7 @@ use pyo3::{
 };
 
 use super::{
-    activations::{ReLU, Sigmoid, Tanh},
+    activations::{ReLU, Sigmoid, Softmax, Tanh},
     initialization::{
         Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier,
         XavierUniform,
@@ -33,6 +33,7 @@ pub enum PyActFn {
     Sigmoid(f32),
     Tanh(f32),
     ReLU(Float01),
+    Softmax,
 }
 
 /// Converts a Python initializer object to a `PyInit`.
@@ -81,6 +82,8 @@ pub fn extract_act_fn(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<PyActFn
                 };
 
                 Ok(Some(PyActFn::ReLU(slope)))
+            } else if a.is_instance_of::<Softmax>() {
+                Ok(Some(PyActFn::Softmax))
             } else {
                 Err(PyTypeError::new_err(
                     "act_fn must be an activation function or None",
@@ -295,5 +298,6 @@ fn py_act_fn_to_config(act_fn: &PyActFn) -> ActFnConfig {
         PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
         PyActFn::Tanh(amp) => ActFnConfig::Tanh { amp: *amp },
         PyActFn::ReLU(slope) => ActFnConfig::ReLU { slope: *slope },
+        PyActFn::Softmax => ActFnConfig::Softmax,
     }
 }
