@@ -1,6 +1,7 @@
 mod conv2d;
 mod dense;
 mod layer;
+mod max_pooling;
 mod relu;
 mod reshape;
 mod sigmoid;
@@ -12,6 +13,7 @@ use std::mem;
 pub(super) use conv2d::Conv2d;
 pub(super) use dense::Dense;
 pub use layer::Layer;
+pub(super) use max_pooling::MaxPooling;
 use ndarray::{Array, Dimension, IntoDimension};
 pub(super) use relu::ReLU;
 pub(super) use reshape::Reshape;
