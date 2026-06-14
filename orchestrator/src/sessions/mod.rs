@@ -59,8 +59,12 @@ pub enum TrainingEvent {
     Disconnect {
         worker_id: usize,
     },
+    Upgrading {
+        worker_id: usize,
+    },
     Upgraded {
         server_handle: Box<ParamServerHandle<NetRtp>>,
+        worker_id: usize,
     },
     Error(OrchErr),
 }

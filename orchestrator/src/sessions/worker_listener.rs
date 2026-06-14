@@ -66,7 +66,7 @@ impl WorkerListener {
 
                     match self.handle_request(req, &event_tx).await {
                         Ok(ReqResolution::Continue) => continue,
-                        Ok(ReqResolution::Halt) => {},
+                        Ok(ReqResolution::Halt) => {}
                         Err(e) => {
                             let _ = event_tx.send(TrainingEvent::Error(e)).await;
                         }
@@ -84,7 +84,10 @@ impl WorkerListener {
                             info!("upgraded worker {id}");
 
                             let server_handle = Box::new(self.worker_handle.upgrade_handle());
-                            let event = TrainingEvent::Upgraded { server_handle };
+                            let event = TrainingEvent::Upgraded {
+                                server_handle,
+                                worker_id: id,
+                            };
                             let _ = event_tx.send(event).await;
                             break;
                         }
