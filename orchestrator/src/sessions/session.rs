@@ -293,36 +293,58 @@ impl Session {
         T: TransportLayer,
     {
         debug!("all workers done, reading final params from all servers");
-        let nservers = server_handles.len();
-        let mut server_params: Vec<Option<Vec<f32>>> = vec![None; nservers];
+        let mut server_params = Vec::with_capacity(server_handles.len());
+
+        let req_err = async |i, e| {
+            let details = format!("unexpected error from server {i}: {e}");
+            let err = OrchErr::ServerError(details);
+            let event = TrainingEvent::Error(err);
+            let _ = user_event_tx.send(event).await;
+        };
 
         for (i, mut server_handle) in server_handles.into_iter().enumerate() {
-            match server_handle.pull_params().await {
-                Ok(params) => {
-                    debug!("server {i}: pulled {} params", params.len());
-                    server_params[i] = Some(params.to_vec());
-
-                    if let Err(e) = server_handle.disconnect().await {
-                        error!("Failed to disconnect server {i}: {e}");
-                    }
+            // TODO: Acá eventualmente hay que ver como manejamos las caídas de
+            //       los servidores. Capaz conviene tener a mano al Acceptor y
+            //       en caso de que un servidor no responda que se vuelva a
+            //       levantar o algo.
+            //
+            //       Hay que ver cómo también resolvemos tema caídas simultaneas.
+            //       Si se corta el internet por ejemplo por un rato después se
+            //       van a intentar reconectar varios y necesitamos saber quién
+            //       es quién.
+            loop {
+                if let Err(e) = server_handle.req_params().await {
+                    req_err(i, e).await;
+                    continue;
                 }
-                Err(e) => {
-                    let details = format!("unexpected error from server {i}: {e}");
-                    let err = OrchErr::ServerError(details);
-                    let event = TrainingEvent::Error(err);
-                    let _ = user_event_tx.send(event).await;
+
+                match server_handle.pull_params().await {
+                    Ok(params) => {
+                        debug!("server {i}: pulled {} params", params.len());
+                        server_params.push(params.to_vec());
+
+                        if let Err(e) = server_handle.disconnect().await {
+                            error!("Failed to disconnect server {i}: {e}");
+                        }
+
+                        break;
+                    }
+                    Err(e) => req_err(i, e).await,
                 }
             }
         }
 
-        let total: usize = layer_offsets.iter().map(|&(_, start, end)| end - start).sum();
+        let total: usize = layer_offsets
+            .iter()
+            .map(|&(_, start, end)| end - start)
+            .sum();
+
         let mut model_params = Vec::with_capacity(total);
 
         for (layer_i, &(server_id, start, end)) in layer_offsets.iter().enumerate() {
-            if let Some(ref params) = server_params[server_id] {
-                debug!("layer {layer_i}: server {server_id} [{start}..{end}]");
-                model_params.extend_from_slice(&params[start..end]);
-            }
+            let params = &server_params[server_id];
+            debug!("layer {layer_i}: server {server_id} [{start}..{end}]");
+            model_params.extend_from_slice(&params[start..end]);
         }
 
         model_params

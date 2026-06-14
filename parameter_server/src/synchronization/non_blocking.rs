@@ -1,5 +1,7 @@
+use tokio::task;
+
 use super::Synchronizer;
-use crate::storage::{Result, Store, StoreHandle};
+use crate::storage::{Result, Store};
 
 /// Skips synchronization between workers for it's operations, will process incoming gradients immediately.
 #[derive(Clone)]
@@ -16,13 +18,15 @@ impl NoBlockingSync {
 }
 
 impl Synchronizer for NoBlockingSync {
-    async fn step<S>(&self, handle: &StoreHandle<S>, grad: &[f32], params: &mut [f32]) -> Result<()>
+    async fn step<PS>(&self, handle: &PS, grad: &[f32], params: &mut [f32]) -> Result<()>
     where
-        S: Store + Send + Sync,
+        PS: Store + Send + Sync,
     {
-        handle.accumulate(grad).await?;
-        handle.update_params().await;
-        handle.pull_params(params).await?;
-        Ok(())
+        task::block_in_place(|| {
+            handle.accumulate(grad)?;
+            handle.update_params();
+            handle.pull_params(params)?;
+            Ok(())
+        })
     }
 }
