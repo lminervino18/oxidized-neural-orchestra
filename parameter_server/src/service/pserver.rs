@@ -75,21 +75,17 @@ where
         // SAFETY: The parameter vector is the same size as
         //         the amount of parameters in the storage.
         self.store.pull_params(&mut params).unwrap();
-        self.orch_handle.push_params(&mut params).await?;
 
         loop {
-            println!("waiting for orch request");
             let event = self.orch_handle.recv_event().await?;
-            println!("received from orch: {event:?}");
 
             match event {
                 OrchEvent::Disconnect => break,
-                // OrchEvent::RequestParams => self.orch_handle.push_params(&mut params).await?,
+                OrchEvent::RequestParams => self.orch_handle.push_params(&mut params).await?,
                 event => warn!("Unexpected OrchEvent: {event:?}"),
             }
         }
 
-        println!("exited orch request loop");
         Ok(())
     }
 }
