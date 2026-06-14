@@ -22,6 +22,7 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<activations::Sigmoid>()?;
     m.add_class::<activations::Tanh>()?;
     m.add_class::<activations::ReLU>()?;
+    m.add_class::<activations::Softmax>()?;
 
     m.add_class::<initialization::Kaiming>()?;
     m.add_class::<initialization::Xavier>()?;
@@ -37,6 +38,8 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<datasets::LocalDataset>()?;
 
     m.add_class::<optimizers::GradientDescent>()?;
+    m.add_class::<optimizers::GradientDescentWithMomentum>()?;
+    m.add_class::<optimizers::Adam>()?;
 
     m.add_class::<loss_fns::Mse>()?;
     m.add_class::<loss_fns::CrossEntropy>()?;

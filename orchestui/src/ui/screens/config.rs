@@ -40,7 +40,9 @@ const EXAMPLE_MODEL: &str = concat!(
     "init values: const, uniform, uniform_inclusive,\n",
     "  xavier_uniform, lecun_uniform, normal,\n",
     "  kaiming, xavier, lecun\n",
-    "act_fn values: { \"sigmoid\": { \"amp\": 1.0 } }\n",
+    "act_fn values:\n",
+    "  { \"sigmoid\": { \"amp\": 1.0 } }, { \"tanh\": { \"amp\": 1.0 } },\n",
+    "  { \"relu\": { \"slope\": 0.0 } }, \"softmax\"\n",
     "  set to null to disable\n",
     "\n",
     "conv example:\n",
@@ -79,7 +81,12 @@ const EXAMPLE_TRAINING: &str = concat!(
     "serializer: \"base\" | { \"sparse_capable\": { \"r\": 0.0..1.0 } }\n",
     "synchronizer: \"barrier\" | \"non_blocking\"\n",
     "store: \"blocking\" | \"wild\"\n",
-    "optimizer types: gradient_descent",
+    "optimizer types:\n",
+    "  { \"gradient_descent\": { \"lr\": 0.01 } },\n",
+    "  { \"gradient_descent_with_momentum\": { \"lr\": 0.01, \"mu\": 0.9 } },\n",
+    "  { \"adam\": { \"lr\": 0.001, \"b1\": 0.9, \"b2\": 0.999, \"eps\": 1e-8 } }\n",
+    "server_addrs: one or more parameter servers\n",
+    "  parameters are distributed via bin-packing",
 );
 
 #[derive(Debug, Clone, PartialEq)]

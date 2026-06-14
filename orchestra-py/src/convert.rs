@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use comms::floats::{FloatNonNegative, FloatPositive};
+use comms::floats::{Float01, FloatNonNegative, FloatPositive};
 use orchestrator::configs::{
     DataSrc, DatasetConfig, EarlyStoppingConfig, LossFnConfig, OptimizerConfig, SerializerConfig,
     StoreConfig, SynchronizerConfig,
@@ -13,7 +13,7 @@ use pyo3::{
 use super::{
     datasets::{InlineDataset, LocalDataset},
     loss_fns::{CrossEntropy, Mse},
-    optimizers::GradientDescent,
+    optimizers::{Adam, GradientDescent, GradientDescentWithMomentum},
     serializer::{BaseSerializer, SparseSerializer},
     store::{BlockingStore, WildStore},
     sync::{BarrierSync, NonBlockingSync},
@@ -40,23 +40,43 @@ pub fn extract_early_stopping(tolerance: Option<f64>) -> PyResult<Option<EarlySt
     }
 }
 
+/// Validates that a value is strictly positive, returning a `ValueError` otherwise.
+fn extract_positive(value: f32, name: &str) -> PyResult<FloatPositive> {
+    FloatPositive::new(value)
+        .ok_or_else(|| PyValueError::new_err(format!("{name} must be a positive number")))
+}
+
+/// Validates that a value is between `0.0` and `1.0`, returning a `ValueError` otherwise.
+fn extract_unit(value: f32, name: &str) -> PyResult<Float01> {
+    Float01::new(value)
+        .ok_or_else(|| PyValueError::new_err(format!("{name} must be between 0.0 and 1.0")))
+}
+
 /// Converts a Python optimizer object to an `OptimizerConfig`.
 ///
 /// Returns a `TypeError` if the object is not a recognised optimizer, or a
-/// `ValueError` if the learning rate is not positive.
+/// `ValueError` if any hyperparameter is out of range.
 pub fn extract_optimizer(obj: &Bound<'_, PyAny>) -> PyResult<OptimizerConfig> {
     if let Ok(gd) = obj.extract::<PyRef<GradientDescent>>() {
-        if gd.lr <= 0.0 {
-            return Err(PyValueError::new_err(
-                "learning rate must be a positive number",
-            ));
-        }
         Ok(OptimizerConfig::GradientDescent {
-            lr: FloatPositive::new(gd.lr).unwrap(),
+            lr: extract_positive(gd.lr, "learning rate")?,
+        })
+    } else if let Ok(gdm) = obj.extract::<PyRef<GradientDescentWithMomentum>>() {
+        Ok(OptimizerConfig::GradientDescentWithMomentum {
+            lr: extract_positive(gdm.lr, "learning rate")?,
+            mu: extract_unit(gdm.mu, "momentum")?,
+        })
+    } else if let Ok(adam) = obj.extract::<PyRef<Adam>>() {
+        Ok(OptimizerConfig::Adam {
+            lr: extract_positive(adam.lr, "learning rate")?,
+            b1: extract_unit(adam.b1, "b1")?,
+            b2: extract_unit(adam.b2, "b2")?,
+            eps: extract_positive(adam.eps, "eps")?,
         })
     } else {
         Err(PyTypeError::new_err(
-            "optimizer must be GradientDescent(lr=...)",
+            "optimizer must be GradientDescent(lr=...), \
+             GradientDescentWithMomentum(lr=..., mu=...) or Adam(lr=..., b1=..., b2=..., eps=...)",
         ))
     }
 }
