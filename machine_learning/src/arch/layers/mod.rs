@@ -1,9 +1,11 @@
 mod conv2d;
 mod dense;
 mod layer;
+mod relu;
 mod reshape;
 mod sigmoid;
 mod softmax;
+mod tanh;
 
 use std::mem;
 
@@ -11,9 +13,11 @@ pub(super) use conv2d::Conv2d;
 pub(super) use dense::Dense;
 pub use layer::Layer;
 use ndarray::{Array, Dimension, IntoDimension};
+pub(super) use relu::ReLU;
 pub(super) use reshape::Reshape;
 pub(super) use sigmoid::Sigmoid;
 pub(super) use softmax::Softmax;
+pub(super) use tanh::Tanh;
 
 /// A trait whose sole purpose is to give the ndarray::ArrayX
 /// types a way to resize their inner memory regions inplace.

@@ -5,15 +5,19 @@ use orchestrator::configs::{
     DataSrc, DatasetConfig, EarlyStoppingConfig, LossFnConfig, OptimizerConfig, SerializerConfig,
     StoreConfig, SynchronizerConfig,
 };
-use pyo3::exceptions::{PyTypeError, PyValueError};
-use pyo3::prelude::*;
+use pyo3::{
+    exceptions::{PyTypeError, PyValueError},
+    prelude::*,
+};
 
-use crate::datasets::{InlineDataset, LocalDataset};
-use crate::loss_fns::{CrossEntropy, Mse};
-use crate::optimizers::GradientDescent;
-use crate::serializer::{BaseSerializer, SparseSerializer};
-use crate::store::{BlockingStore, WildStore};
-use crate::sync::{BarrierSync, NonBlockingSync};
+use super::{
+    datasets::{InlineDataset, LocalDataset},
+    loss_fns::{CrossEntropy, Mse},
+    optimizers::GradientDescent,
+    serializer::{BaseSerializer, SparseSerializer},
+    store::{BlockingStore, WildStore},
+    sync::{BarrierSync, NonBlockingSync},
+};
 
 /// Converts a `usize` to `NonZeroUsize`, returning a `ValueError` if it is zero.
 pub fn parse_nonzero(n: usize, name: &'static str) -> PyResult<NonZeroUsize> {
@@ -24,9 +28,7 @@ pub fn parse_nonzero(n: usize, name: &'static str) -> PyResult<NonZeroUsize> {
 /// Converts an optional early-stopping tolerance to an `EarlyStoppingConfig`.
 ///
 /// Returns a `ValueError` if the tolerance is zero or negative.
-pub fn extract_early_stopping(
-    tolerance: Option<f64>,
-) -> PyResult<Option<EarlyStoppingConfig>> {
+pub fn extract_early_stopping(tolerance: Option<f64>) -> PyResult<Option<EarlyStoppingConfig>> {
     match tolerance {
         Some(t) if t.is_sign_negative() || t == 0.0 => Err(PyValueError::new_err(
             "early stopping tolerance must be a non negative number",
@@ -53,7 +55,9 @@ pub fn extract_optimizer(obj: &Bound<'_, PyAny>) -> PyResult<OptimizerConfig> {
             lr: FloatPositive::new(gd.lr).unwrap(),
         })
     } else {
-        Err(PyTypeError::new_err("optimizer must be GradientDescent(lr=...)"))
+        Err(PyTypeError::new_err(
+            "optimizer must be GradientDescent(lr=...)",
+        ))
     }
 }
 
@@ -66,7 +70,9 @@ pub fn extract_loss_fn(obj: &Bound<'_, PyAny>) -> PyResult<LossFnConfig> {
     } else if obj.is_instance_of::<CrossEntropy>() {
         Ok(LossFnConfig::CrossEntropy)
     } else {
-        Err(PyTypeError::new_err("loss_fn must be Mse() or CrossEntropy()"))
+        Err(PyTypeError::new_err(
+            "loss_fn must be Mse() or CrossEntropy()",
+        ))
     }
 }
 
@@ -114,7 +120,9 @@ pub fn extract_store(obj: &Bound<'_, PyAny>) -> PyResult<StoreConfig> {
     } else if obj.is_instance_of::<WildStore>() {
         Ok(StoreConfig::Wild)
     } else {
-        Err(PyTypeError::new_err("store must be BlockingStore() or WildStore()"))
+        Err(PyTypeError::new_err(
+            "store must be BlockingStore() or WildStore()",
+        ))
     }
 }
 
