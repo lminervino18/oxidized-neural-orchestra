@@ -1060,10 +1060,8 @@ impl Adapter {
 
                 let layer_size = filters * channels * kernel_size * kernel_size + filters;
                 let input_dim = (input_dim.0.get(), input_dim.1.get(), input_dim.2.get());
-                let output_height = (input_dim.1 + 2 * padding - kernel_size) / stride + 1;
-                let output_width = (input_dim.2 + 2 * padding - kernel_size) / stride + 1;
-                let output_size = output_height * output_width * filters;
-                let sizes = (input_size.get(), layer_size, output_size);
+                let output_size = layer.output_size();
+                let sizes = (input_size.get(), layer_size, output_size.get());
 
                 (
                     LayerSpec::Conv {
@@ -1074,8 +1072,7 @@ impl Adapter {
                         act_fn: act_fn_spec,
                     },
                     self.adapt_param_gen(init, sizes),
-                    // SAFETY: input config has already been validated at this point.
-                    NonZeroUsize::new(output_size).unwrap(),
+                    output_size,
                 )
             }
         }
