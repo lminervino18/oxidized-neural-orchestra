@@ -39,6 +39,14 @@ where
         }
     }
 
+    /// The server's id.
+    ///
+    /// # Returns
+    /// The id number of the server.
+    pub fn id(&self) -> usize {
+        self.id
+    }
+
     /// Enables the sparse gradient capability for this handle.
     ///
     /// # Args
