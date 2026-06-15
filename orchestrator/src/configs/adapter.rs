@@ -150,7 +150,14 @@ impl Adapter {
         model: &ModelConfig,
         training: &TrainingConfig,
     ) -> Result<OrchAdapt> {
-        let Some(nworkers) = NonZeroUsize::new(training.addrs.len()) else {
+        let nworkers = match training.algorithm {
+            AlgorithmConfig::ParameterServer { nservers, .. } => {
+                training.addrs.len().saturating_sub(nservers.get())
+            }
+            _ => training.addrs.len(),
+        };
+
+        let Some(nworkers) = NonZeroUsize::new(nworkers) else {
             let text = "The amount of workers must be positive";
             return Err(OrchErr::InvalidConfig(text.into()));
         };
