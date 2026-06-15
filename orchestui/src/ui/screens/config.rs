@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Padding, Paragraph, Wrap},
     Frame,
 };
 
@@ -451,6 +451,7 @@ fn draw_path_input(
     let input_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Theme::border())
+        .padding(Padding::new(1, 0, 0, 0))
         .title(format!(" {label} "))
         .title_style(Theme::title());
 
