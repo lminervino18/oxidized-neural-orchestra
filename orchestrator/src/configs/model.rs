@@ -51,6 +51,47 @@ pub enum LayerConfig {
     },
 }
 
+impl LayerConfig {
+    /// The amount of values this layer produces.
+    ///
+    /// # Returns
+    /// The layer's output size.
+    pub fn output_size(&self) -> NonZeroUsize {
+        match *self {
+            LayerConfig::Dense { output_size, .. } => output_size,
+            LayerConfig::Conv {
+                input_dim,
+                kernel_dim,
+                stride,
+                padding,
+                ..
+            } => {
+                let (filters, _, kernel_size) =
+                    (kernel_dim.0.get(), kernel_dim.1.get(), kernel_dim.2.get());
+                let output_height =
+                    (input_dim.1.get() + 2 * padding).saturating_sub(kernel_size) / stride.get() + 1;
+                let output_width =
+                    (input_dim.2.get() + 2 * padding).saturating_sub(kernel_size) / stride.get() + 1;
+
+                NonZeroUsize::new(output_height * output_width * filters).unwrap()
+            }
+        }
+    }
+
+    /// The flattened input size this layer expects, when it is fixed by the layer itself.
+    ///
+    /// # Returns
+    /// `Some(size)` for layers with a fixed input shape (`Conv`), `None` otherwise.
+    pub fn expected_input_size(&self) -> Option<NonZeroUsize> {
+        match *self {
+            LayerConfig::Conv { input_dim, .. } => {
+                NonZeroUsize::new(input_dim.0.get() * input_dim.1.get() * input_dim.2.get())
+            }
+            LayerConfig::Dense { .. } => None,
+        }
+    }
+}
+
 /// The `Model` configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

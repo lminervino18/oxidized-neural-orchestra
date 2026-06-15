@@ -28,6 +28,43 @@ impl Validator {
     pub fn validate(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<()> {
         self.validate_model(model)?;
         self.validate_training(training)?;
+        self.validate_dimensions(model, training)?;
+        Ok(())
+    }
+
+    /// Validates that the model's layer dimensions are consistent with the dataset.
+    ///
+    /// # Args
+    /// * `model` - The model architecture and initialization configuration.
+    /// * `training` - The training configuration.
+    ///
+    /// # Errors
+    /// An `OrchErr` if a layer's expected input does not match the size it receives,
+    /// or if the model's output size does not match the dataset's `y_size`.
+    fn validate_dimensions(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<()> {
+        let mut input_size = training.dataset.x_size;
+
+        for layer in &model.layers {
+            if let Some(expected) = layer.expected_input_size()
+                && expected != input_size
+            {
+                let text = format!(
+                    "layer expects an input of {expected} but the incoming size is {input_size}"
+                );
+                return Err(OrchErr::InvalidConfig(text));
+            }
+
+            input_size = layer.output_size();
+        }
+
+        if input_size != training.dataset.y_size {
+            let text = format!(
+                "the model's output size ({input_size}) must match the dataset's y_size ({})",
+                training.dataset.y_size
+            );
+            return Err(OrchErr::InvalidConfig(text));
+        }
+
         Ok(())
     }
 
