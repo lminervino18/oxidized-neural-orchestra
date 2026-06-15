@@ -57,6 +57,7 @@ pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &Trainin
 
     let canvas = Canvas::default()
         .block(topology_block(state))
+        .background_color(Theme::BG)
         .x_bounds([0.0, 200.0])
         .y_bounds([0.0, 100.0])
         .paint(|ctx| {
