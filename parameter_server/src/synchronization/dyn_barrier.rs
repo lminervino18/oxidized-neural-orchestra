@@ -24,12 +24,12 @@ impl DynBarrier {
     ///
     /// # Returns
     /// A new `DynBarrier` instance.
-    pub fn new(n: NonZeroUsize) -> Self {
+    pub fn new(size: NonZeroUsize) -> Self {
         let shared_state = BarrierSharedState {
             generation: 0,
             leader_gen: 0,
-            remaining: n.get(),
-            size: n.get(),
+            remaining: size.get(),
+            size: size.get(),
         };
 
         Self {
@@ -84,7 +84,7 @@ impl DynBarrier {
     /// and wakes up all threads registered to the condition variable.
     ///
     /// # Args
-    /// * `state` - The state to mutate by advancing the counters.
+    /// * `guard` - The barrier's mutable state guard.
     fn advance(&self, guard: &mut MutexGuard<BarrierSharedState>) {
         guard.generation += 1;
         guard.remaining = guard.size;
