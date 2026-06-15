@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, num::NonZeroUsize};
 
 use comms::{NetRtp, ParamServerHandle};
 use log::info;
@@ -144,7 +144,11 @@ impl<'a> EventListener<'a> {
             self.loss_recorder.record(worker_id, last);
         }
 
-        let Some(loss) = self.loss_recorder.max() else {
+        let Some(workers) = NonZeroUsize::new(self.workers_left) else {
+            return;
+        };
+
+        let Some(loss) = self.loss_recorder.max(workers) else {
             return;
         };
 
