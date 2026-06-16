@@ -11,7 +11,7 @@ enum Inner {
     Dense(Dense),
     Sigmoid(Sigmoid),
     Conv2d(Box<Conv2d>),
-    MaxPooling(MaxPooling),
+    MaxPooling(Box<MaxPooling>),
     Tanh(Tanh),
     ReLU(ReLU),
     Softmax(Softmax),
@@ -83,11 +83,11 @@ impl Layer {
     /// # Returns
     /// A new `Layer` instance.
     pub fn max_pooling(filter_size: usize, stride: usize, padding: usize) -> Self {
-        Self(Inner::MaxPooling(MaxPooling::new(
+        Self(Inner::MaxPooling(Box::new(MaxPooling::new(
             filter_size,
             stride,
             padding,
-        )))
+        ))))
     }
 
     /// Creates a new `Layer::Softmax` layer.
