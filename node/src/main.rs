@@ -13,7 +13,12 @@ use router::NodeRouter;
 const DEFAULT_HOST: &str = "0.0.0.0";
 
 /// The timeout duration for the reliable transport.
-const NETWORK_TIMEOUT: Duration = Duration::from_secs(5);
+///
+/// A worker trains a full epoch over its partition between messages, so for
+/// heavier models (conv/max pooling on MNIST) a peer can legitimately stay
+/// silent for far longer than a few seconds. The timeout must comfortably
+/// exceed the slowest per-epoch compute to avoid declaring a busy node dead.
+const NETWORK_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// The starting sleep duration for exponential backoff.
 const NETWORK_EXP_BACKOFF_BASE: Duration = Duration::from_secs(2);
