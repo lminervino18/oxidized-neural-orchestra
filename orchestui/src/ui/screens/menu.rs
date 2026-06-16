@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Paragraph},
     Frame,
 };
 
@@ -93,7 +93,7 @@ pub fn draw(f: &mut Frame, state: &MenuState) {
         .constraints([
             Constraint::Length(12),
             Constraint::Length(1),
-            Constraint::Length(MENU_ITEMS.len() as u16 * 2 + 2),
+            Constraint::Length(MENU_ITEMS.len() as u16 * 2),
             Constraint::Min(0),
             Constraint::Length(1),
         ])
@@ -114,16 +114,6 @@ fn draw_logo(f: &mut Frame, area: Rect) {
 }
 
 fn draw_menu(f: &mut Frame, area: Rect, state: &MenuState) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Theme::border())
-        .title(" MENU ")
-        .title_alignment(Alignment::Center)
-        .title_style(Theme::title());
-
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-
     let item_areas = Layout::default()
         .direction(Direction::Vertical)
         .constraints(
@@ -132,22 +122,19 @@ fn draw_menu(f: &mut Frame, area: Rect, state: &MenuState) {
                 .map(|_| Constraint::Length(2))
                 .collect::<Vec<_>>(),
         )
-        .split(inner);
+        .split(area);
 
     for (i, (label, item_area)) in MENU_ITEMS.iter().zip(item_areas.iter()).enumerate() {
-        let is_selected = i == state.selected;
-        let (prefix, style) = if is_selected {
-            ("▶ ", Theme::title().add_modifier(Modifier::BOLD))
+        let line = if i == state.selected {
+            Line::from(Span::styled(
+                format!("▶  {label}  ◀"),
+                Theme::title().add_modifier(Modifier::BOLD),
+            ))
         } else {
-            ("  ", Theme::dim())
+            Line::from(Span::styled(*label, Theme::dim()))
         };
 
-        let line = Line::from(vec![
-            Span::styled(prefix, style),
-            Span::styled(*label, style),
-        ]);
-
-        f.render_widget(Paragraph::new(line).wrap(Wrap { trim: true }), *item_area);
+        f.render_widget(Paragraph::new(line).alignment(Alignment::Center), *item_area);
     }
 }
 

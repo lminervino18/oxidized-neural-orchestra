@@ -6,6 +6,9 @@
 .idea/
 .vscode/
 
+# AI CLI tooling local state
+.antigravitycli/
+
 # OS metadata
 .DS_Store
 
