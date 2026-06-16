@@ -123,7 +123,7 @@ impl TrainerBuilder {
             LayerSpec::Dense { dim, act_fn } => {
                 if matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
                     let last = last.unwrap();
-                    let (out_c, out_h, out_w) = match last {
+                    let (out_h, out_w, out_c) = match last {
                         LayerSpec::Conv {
                             input_dim,
                             kernel_dim,
@@ -161,7 +161,7 @@ impl TrainerBuilder {
                 padding,
                 act_fn,
             } => {
-                if matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
+                if !matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
                     layers.push(Layer::two_d_to4d(input_dim.0, input_dim.1, input_dim.2))
                 }
 
@@ -207,7 +207,7 @@ impl TrainerBuilder {
         if let Some(spec) = act_fn {
             if matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
                 let last = last.unwrap();
-                let (out_c, out_h, out_w) = match last {
+                let (out_h, out_w, out_c) = match last {
                     LayerSpec::Conv {
                         input_dim,
                         kernel_dim,
@@ -313,6 +313,11 @@ impl TrainerBuilder {
         O: Optimizer + Send + 'static,
         L: LossFn + Send + 'static,
     {
+        println!("layers:\n");
+        for layer in &layers {
+            println!("{layer:?}");
+        }
+
         let model = Sequential::new(layers);
         let DatasetSpec { x_size, y_size } = spec.dataset;
         let dataset = Dataset::new(x_size, y_size);
