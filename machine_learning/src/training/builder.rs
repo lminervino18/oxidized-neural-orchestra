@@ -144,7 +144,7 @@ impl TrainerBuilder {
                             padding,
                             ..
                         } => {
-                            self.spatial_size(input_dim, filter_size, stride, padding, input_dim.2)
+                            self.spatial_size(input_dim, filter_size, stride, padding, input_dim.0)
                         }
                         _ => unreachable!(),
                     };
@@ -238,7 +238,9 @@ impl TrainerBuilder {
         padding: usize,
         out_channels: usize,
     ) -> (usize, usize, usize) {
-        let calc_dim = |in_dim: usize| (in_dim + 2 * padding) - (square_filter_size) / stride + 1;
+        let calc_dim = |in_dim: usize| {
+            ((in_dim + 2 * padding).saturating_sub(square_filter_size)) / stride + 1
+        };
 
         let output_height = calc_dim(input_dim.1);
         let output_width = calc_dim(input_dim.2);
@@ -313,11 +315,6 @@ impl TrainerBuilder {
         O: Optimizer + Send + 'static,
         L: LossFn + Send + 'static,
     {
-        println!("layers:\n");
-        for layer in &layers {
-            println!("{layer:?}");
-        }
-
         let model = Sequential::new(layers);
         let DatasetSpec { x_size, y_size } = spec.dataset;
         let dataset = Dataset::new(x_size, y_size);
