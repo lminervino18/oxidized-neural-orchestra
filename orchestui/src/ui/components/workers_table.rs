@@ -12,7 +12,7 @@ use crate::ui::{
     utils::fmt_loss,
 };
 
-const BAR_WIDTH: usize = 30;
+const MAX_BAR_WIDTH: usize = 30;
 
 /// Draws the global training progress bar followed by the workers status table.
 ///
@@ -38,18 +38,28 @@ fn draw_progress_bar(f: &mut Frame, area: Rect, state: &TrainingState) {
     let current = state
         .workers
         .iter()
+        .filter(|w| !w.became_server)
         .map(|w| w.epochs_done)
         .max()
         .unwrap_or(0);
 
     let max = state.max_epochs;
-    let filled = (current * BAR_WIDTH)
+    let pct = (current * 100).checked_div(max).unwrap_or_default();
+    let counts = format!("  {current}/{max}  ({pct}%)");
+
+    // Size the bar to whatever space is left after the counts label, so it never
+    // pushes the percentage off the right edge of a narrow panel.
+    let inner_w = area.width.saturating_sub(2) as usize;
+    let bar_width = inner_w
+        .saturating_sub(counts.chars().count())
+        .clamp(4, MAX_BAR_WIDTH);
+
+    let filled = (current * bar_width)
         .checked_div(max)
         .unwrap_or_default()
-        .min(BAR_WIDTH);
+        .min(bar_width);
 
-    let empty = BAR_WIDTH - filled;
-    let pct = (current * 100).checked_div(max).unwrap_or_default();
+    let empty = bar_width - filled;
 
     let bar_style = if state.phase == Phase::Finished {
         Theme::accent_magenta()
@@ -60,7 +70,7 @@ fn draw_progress_bar(f: &mut Frame, area: Rect, state: &TrainingState) {
     let line = Line::from(vec![
         Span::styled("█".repeat(filled), bar_style),
         Span::styled("░".repeat(empty), Theme::muted()),
-        Span::styled(format!("  {current}/{max}  ({pct}%)"), Theme::dim()),
+        Span::styled(counts, Theme::dim()),
     ]);
 
     f.render_widget(
@@ -87,6 +97,7 @@ fn draw_table(f: &mut Frame, area: Rect, state: &TrainingState) {
     let rows: Vec<Row> = state
         .workers
         .iter()
+        .filter(|w| !w.became_server)
         .map(|w| {
             let is_selected = w.id == state.selected_worker;
 
