@@ -1,25 +1,18 @@
 use std::{collections::HashMap, num::NonZeroUsize};
 
 /// Records statistics of the worker losses.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct LossRecorder {
     losses: HashMap<usize, f64>,
-    n: NonZeroUsize,
 }
 
 impl LossRecorder {
     /// Creates a new `LossRecorder`.
     ///
-    /// # Args
-    /// * `n` - The amount of worker losses to track simultaneously.
-    ///
     /// # Returns
     /// A new `LossRecorder` instance.
-    pub fn new(n: NonZeroUsize) -> Self {
-        Self {
-            losses: HashMap::with_capacity(n.get()),
-            n,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Records a new loss for a worker.
@@ -35,21 +28,27 @@ impl LossRecorder {
 
     /// Gets the max loss of all the workers.
     ///
+    /// # Args
+    /// * `workers` - The amount of workers currently expected to report.
+    ///
     /// # Returns
     /// Either `Some(loss)` or `None` if not all workers have recorded losses.
-    pub fn max(&self) -> Option<f64> {
-        self.check_full()?;
+    pub fn max(&self, workers: NonZeroUsize) -> Option<f64> {
+        self.check_full(workers)?;
         self.losses.values().copied().max_by(f64::total_cmp)
     }
 
     /// Gets the mean loss of all the workers.
     ///
+    /// # Args
+    /// * `workers` - The amount of workers currently expected to report.
+    ///
     /// # Returns
     /// Either `Some(loss)` or `None` if not all workers have recorded losses.
-    pub fn mean(&self) -> Option<f64> {
-        self.check_full()?;
+    pub fn mean(&self, workers: NonZeroUsize) -> Option<f64> {
+        self.check_full(workers)?;
         let sum: f64 = self.losses.values().sum();
-        Some(sum / self.n.get() as f64)
+        Some(sum / workers.get() as f64)
     }
 
     /// Clears the inner state for the following recording.
@@ -59,9 +58,12 @@ impl LossRecorder {
 
     /// Checks wheather the inner losses map is full or not.
     ///
+    /// # Args
+    /// * `workers` - The amount of workers currently expected to report.
+    ///
     /// # Returns
     /// `Some(())` if it is, `None` otherwise.
-    fn check_full(&self) -> Option<()> {
-        (self.losses.len() == self.n.get()).then_some(())
+    fn check_full(&self, workers: NonZeroUsize) -> Option<()> {
+        (self.losses.len() == workers.get()).then_some(())
     }
 }

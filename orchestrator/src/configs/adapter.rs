@@ -150,18 +150,6 @@ impl Adapter {
         model: &ModelConfig,
         training: &TrainingConfig,
     ) -> Result<OrchAdapt> {
-        let nworkers = match training.algorithm {
-            AlgorithmConfig::ParameterServer { nservers, .. } => {
-                training.addrs.len().saturating_sub(nservers.get())
-            }
-            _ => training.addrs.len(),
-        };
-
-        let Some(nworkers) = NonZeroUsize::new(nworkers) else {
-            let text = "The amount of workers must be positive";
-            return Err(OrchErr::InvalidConfig(text.into()));
-        };
-
         let convergence_tracker = training.early_stopping.map(|cfg| {
             let winsize = GreaterThanOneUsize::new(3).unwrap();
             ConvergenceTracker::new(winsize, cfg.tolerance)
@@ -176,7 +164,7 @@ impl Adapter {
 
         let adapt = OrchAdapt {
             input_size: training.dataset.x_size,
-            loss_recorder: LossRecorder::new(nworkers),
+            loss_recorder: LossRecorder::new(),
             convergence_tracker,
             switch_tracking: None,
             model_config: model.clone(),
@@ -207,11 +195,6 @@ impl Adapter {
         synchronizer: SynchronizerConfig,
         store: StoreConfig,
     ) -> Result<OrchAdapt> {
-        let Some(nentities) = NonZeroUsize::new(training.addrs.len()) else {
-            let text = "The amount of entities must be positive";
-            return Err(OrchErr::InvalidConfig(text.into()));
-        };
-
         let convergence_tracker = training.early_stopping.map(|cfg| {
             let winsize = GreaterThanOneUsize::new(3).unwrap();
             ConvergenceTracker::new(winsize, cfg.tolerance)
@@ -263,7 +246,7 @@ impl Adapter {
 
         let adapt = OrchAdapt {
             input_size: training.dataset.x_size,
-            loss_recorder: LossRecorder::new(nentities),
+            loss_recorder: LossRecorder::new(),
             convergence_tracker,
             switch_tracking: Some(tracking),
             model_config: model.clone(),
