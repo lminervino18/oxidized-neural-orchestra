@@ -55,7 +55,7 @@ fn test_conv_dense(
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(1.).unwrap());
     let mut loss_fn = CrossEntropy::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -65,11 +65,11 @@ fn test_conv_dense(
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
     let ordering = [0, 0];
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
@@ -245,6 +245,133 @@ fn test_machine_learning08_3by3by2_filters1_kernel_size3_stride1_padding1() {
 }
 
 #[test]
+// este test es bastante frágil porq los samples son muy chiquitos
+fn test_machine_learning09_5by5by2_symbols_conv_max_pooling_dense_softmax() {
+    unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+
+    let samples = [
+        0.0, 1.0, 0.0, 0.0, 0.0, //
+        1.0, 1.0, 1.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        //
+        1.0, 0.0, 1.0, 1.0, 1.0, //
+        0.0, 0.0, 0.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, // plus sign
+        //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        //
+        1.0, 1.0, 1.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, // dot
+        //
+        1.0, 0.0, 1.0, 0.0, 0.0, //
+        0.0, 1.0, 0.0, 0.0, 0.0, //
+        1.0, 0.0, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        //
+        0.0, 1.0, 0.0, 1.0, 1.0, //
+        1.0, 0.0, 1.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, // cross
+        //
+        1.0, 1.0, 1.0, 0.0, 0.0, //
+        1.0, 0.0, 1.0, 0.0, 0.0, //
+        1.0, 1.0, 1.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        0.0, 0.0, 0.0, 0.0, 0.0, //
+        //
+        0.0, 0.0, 0.0, 1.0, 1.0, //
+        0.0, 1.0, 0.0, 1.0, 1.0, //
+        0.0, 0.0, 0.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, //
+        1.0, 1.0, 1.0, 1.0, 1.0, // box
+    ];
+    let labels = [
+        1.0, 0.0, 0.0, 0.0, // plus sign
+        0.0, 1.0, 0.0, 0.0, // dot
+        0.0, 0.0, 1.0, 0.0, // cross
+        0.0, 0.0, 0.0, 1.0, // box
+    ];
+
+    let in_channels = 2;
+    let input_height = 5;
+    let input_width = 5;
+
+    let x_size = in_channels * input_height * input_width;
+    let y_size = 4;
+
+    let mut model = Sequential::new(vec![
+        Layer::two_d_to4d(in_channels, input_height, input_width),
+        Layer::conv2d(5, in_channels, 2, 1, 0),
+        // está en pending evitar tener que hacer esto:
+        Layer::four_d_to2d(5, 4, 4),
+        Layer::sigmoid(1.),
+        Layer::two_d_to4d(5, 4, 4),
+        Layer::max_pooling(2, 2, 0),
+        Layer::four_d_to2d(5, 2, 2),
+        Layer::dense((20, 4)),
+        Layer::softmax(),
+    ]);
+    let nparams = model.size();
+    let nreal_layers = 2;
+    let ordering = vec![0; nreal_layers];
+
+    let dataset = Dataset::loaded(
+        DataSrc::inmem(samples.to_vec(), labels.to_vec()),
+        NonZeroUsize::new(x_size).unwrap(),
+        NonZeroUsize::new(y_size).unwrap(),
+    );
+
+    let offline_epochs = 0;
+    let max_epochs = NonZeroUsize::new(5000).unwrap();
+    let batch_size = NonZeroUsize::new(2).unwrap();
+    let optimizer = GradientDescent::new(FloatPositive::new(1.0).unwrap());
+    let mut loss_fn = CrossEntropy::new();
+    let mut rng = StdRng::seed_from_u64(2026);
+
+    let mut trainer = BackpropTrainer::new(
+        model.clone(),
+        vec![optimizer],
+        dataset,
+        loss_fn.clone(),
+        offline_epochs,
+        max_epochs,
+        batch_size,
+        rng.clone(),
+    );
+
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
+    let servers: Vec<_> = params_grads
+        .iter_mut()
+        .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
+        .collect();
+
+    let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
+    while !trainer.train(&mut param_manager).unwrap().was_last {}
+
+    let x = ArrayView2::from_shape((y_size, x_size), &samples).unwrap();
+    let y = ArrayView2::from_shape((y_size, y_size), &labels).unwrap();
+    let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
+
+    let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
+    println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
+    println!("loss: {loss}");
+    assert!(loss < 0.001);
+}
+
+#[test]
 fn test_machine_learning_dimensionality_correctness() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
 
@@ -290,7 +417,7 @@ fn test_machine_learning_dimensionality_correctness() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(1.).unwrap());
     let loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::seed_from_u64(2002);
 
     let mut trainer = BackpropTrainer::new(
         model,
@@ -300,10 +427,10 @@ fn test_machine_learning_dimensionality_correctness() {
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
@@ -372,7 +499,7 @@ fn test_machine_learning_dimensionality_correctness_with_max_pooling() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(1.).unwrap());
     let loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::seed_from_u64(2002);
 
     let mut trainer = BackpropTrainer::new(
         model,
@@ -382,10 +509,10 @@ fn test_machine_learning_dimensionality_correctness_with_max_pooling() {
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))

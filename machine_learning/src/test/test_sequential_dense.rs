@@ -35,7 +35,7 @@ fn test_machine_learning00_linear_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(0.1).unwrap());
     let mut loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -45,11 +45,11 @@ fn test_machine_learning00_linear_convergence() {
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
     let ordering = [0];
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
@@ -92,7 +92,7 @@ fn test_machine_learning01_and2_gate_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(1.).unwrap());
     let mut loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -102,11 +102,11 @@ fn test_machine_learning01_and2_gate_convergence() {
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
     let ordering = [0, 0];
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
@@ -158,7 +158,7 @@ fn test_machine_learning02_and3_gate_convergence() {
     let batch_size = NonZeroUsize::new(8).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(1.).unwrap());
     let mut loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -168,11 +168,11 @@ fn test_machine_learning02_and3_gate_convergence() {
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
     let ordering = [0, 0];
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
@@ -220,7 +220,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
     let batch_size = NonZeroUsize::new(4).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(1.).unwrap());
     let mut loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -230,11 +230,11 @@ fn test_machine_learning03_xor2_gate_convergence() {
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
     let ordering = [0, 0];
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, residual)| ParamsMetadata::new(params, grad, residual))
@@ -299,7 +299,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
     let batch_size = NonZeroUsize::new(16).unwrap();
     let optimizer = GradientDescent::new(FloatPositive::new(1.).unwrap());
     let mut loss_fn = Mse::new();
-    let rng = StdRng::from_os_rng();
+    let mut rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
         model.clone(),
@@ -309,11 +309,11 @@ fn test_machine_learning04_xor4_gate_convergence() {
         offline_epochs,
         max_epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
     let ordering = [0, 0, 0];
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut params_grads = gen_params_grads(&[nparams], &mut rng);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
