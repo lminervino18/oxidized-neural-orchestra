@@ -56,7 +56,6 @@ pub enum LayerConfig {
         filter_size: NonZeroUsize,
         stride: NonZeroUsize,
         padding: usize,
-        init: ParamGenConfig,
         #[serde(default)]
         act_fn: Option<ActFnConfig>,
     },
