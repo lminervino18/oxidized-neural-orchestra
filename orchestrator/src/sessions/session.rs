@@ -293,7 +293,7 @@ impl Session {
         T: TransportLayer,
     {
         debug!("all workers done, reading final params from all servers");
-        let mut server_params = Vec::with_capacity(server_handles.len());
+        let mut server_params = vec![Vec::new(); server_handles.len()];
 
         let req_err = async |i, e| {
             let details = format!("unexpected error from server {i}: {e}");
@@ -303,6 +303,7 @@ impl Session {
         };
 
         for (i, mut server_handle) in server_handles.into_iter().enumerate() {
+            let server_id = server_handle.id();
             // TODO: Acá eventualmente hay que ver como manejamos las caídas de
             //       los servidores. Capaz conviene tener a mano al Acceptor y
             //       en caso de que un servidor no responda que se vuelva a
@@ -321,7 +322,7 @@ impl Session {
                 match server_handle.pull_params().await {
                     Ok(params) => {
                         debug!("server {i}: pulled {} params", params.len());
-                        server_params.push(params.to_vec());
+                        server_params[server_id] = params.to_vec();
 
                         if let Err(e) = server_handle.disconnect().await {
                             error!("Failed to disconnect server {i}: {e}");

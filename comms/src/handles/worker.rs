@@ -236,6 +236,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
         spec: ServerSpec,
         ranges: Vec<(usize, usize)>,
     ) -> io::Result<()> {
+        self.id = spec.id;
         let msg = Msg::Control(Command::Upgrade { spec, ranges });
         self.transport.send(&msg).await
     }
