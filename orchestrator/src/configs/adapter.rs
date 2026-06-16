@@ -1082,6 +1082,33 @@ impl Adapter {
                     output_size,
                 )
             }
+            LayerConfig::MaxPooling {
+                input_dim,
+                filter_size,
+                stride,
+                padding,
+                init,
+                act_fn,
+            } => {
+                let act_fn_spec = act_fn.map(|act_fn| self.adapt_act_fn(act_fn));
+
+                let layer_size = 0;
+                let input_dim = (input_dim.0.get(), input_dim.1.get(), input_dim.2.get());
+                let output_size = layer.output_size();
+                let sizes = (input_size.get(), layer_size, output_size.get());
+
+                (
+                    LayerSpec::MaxPooling {
+                        input_dim,
+                        filter_size: filter_size.get(),
+                        stride: stride.get(),
+                        padding,
+                        act_fn: act_fn_spec,
+                    },
+                    self.adapt_param_gen(init, sizes),
+                    output_size,
+                )
+            }
         }
     }
 
