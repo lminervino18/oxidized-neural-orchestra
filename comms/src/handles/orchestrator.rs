@@ -4,7 +4,11 @@ use super::DatasetSrc;
 use crate::{
     protocol::{Command, Msg, Payload},
     share_dataset,
-    specs::{node::NodeSpec, server::ServerSpec},
+    specs::{
+        machine_learning::TrainerSpec,
+        node::{NodeSpec, StatRequest, StatResponse},
+        server::ServerSpec,
+    },
     transport::TransportLayer,
 };
 
@@ -16,14 +20,21 @@ pub struct OrchHandle<T: TransportLayer> {
 /// A notified orchestrator event.
 #[derive(Debug)]
 pub enum OrchEvent {
+    Create {
+        spec: NodeSpec,
+    },
     Disconnect,
     RequestParams,
     ShareDataset,
+    StatsRequest {
+        reqs: Vec<StatRequest>,
+    },
     Stop,
     Switch {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     Upgrade {
         spec: ServerSpec,
@@ -46,22 +57,6 @@ where
         Self { transport }
     }
 
-    /// Waits till the orchestrator sends the specification for this node.
-    ///
-    /// # Returns
-    /// The specification or an io error if occurred.
-    pub async fn pull_specification(&mut self) -> io::Result<NodeSpec> {
-        let spec = match self.transport.recv().await? {
-            Msg::Control(Command::CreateNode { spec }) => spec,
-            msg => {
-                let text = format!("Expected node specification from orchestrator, got: {msg:?}");
-                return Err(io::Error::other(text));
-            }
-        };
-
-        Ok(spec)
-    }
-
     /// Pushes the latest parameters to the orchestrator.
     ///
     /// # Args
@@ -82,14 +77,22 @@ where
     /// # Returns
     /// An io error if occurred.
     pub async fn push_losses(&mut self, losses: &[f64]) -> io::Result<()> {
-        if losses.iter().any(|l| !l.is_finite()) {
-            return Err(io::Error::other("loss diverged: NaN or Inf detected"));
-        }
-
         let msg = Msg::Control(Command::ReportLoss {
             losses: Cow::Borrowed(losses),
         });
 
+        self.transport.send(&msg).await
+    }
+
+    /// Pushes the given statistics onto the orchestrator.
+    ///
+    /// # Args
+    /// * `stats` - The statistic responses.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn push_stats(&mut self, stats: Vec<StatResponse>) -> io::Result<()> {
+        let msg = Msg::Control(Command::StatsResponse { stats });
         self.transport.send(&msg).await
     }
 
@@ -102,15 +105,19 @@ where
             Msg::Control(Command::Disconnect) => OrchEvent::Disconnect,
             Msg::Control(Command::RequestParams) => OrchEvent::RequestParams,
             Msg::Control(Command::StopAfterEpoch) => OrchEvent::Stop,
+            Msg::Control(Command::CreateNode { spec }) => OrchEvent::Create { spec },
             Msg::Control(Command::Upgrade { spec, ranges }) => OrchEvent::Upgrade { spec, ranges },
+            Msg::Control(Command::StatsRequest { reqs }) => OrchEvent::StatsRequest { reqs },
             Msg::Control(Command::Switch {
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                trainer_spec,
             }) => OrchEvent::Switch {
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                trainer_spec,
             },
             Msg::Control(Command::ShareDataset) => OrchEvent::ShareDataset,
             msg => {
@@ -120,6 +127,15 @@ where
         };
 
         Ok(event)
+    }
+
+    /// Tells the orchestrator that this worker has upgraded into a server succesfuly..
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn upgraded(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Upgraded);
+        self.transport.send(&msg).await
     }
 
     /// Tells the orchestrator that an entity has ended it's processing.

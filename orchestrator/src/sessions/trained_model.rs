@@ -78,6 +78,28 @@ impl TrainedModel {
                         out,
                     )
                 }
+                LayerConfig::MaxPooling {
+                    input_dim,
+                    filter_size,
+                    stride,
+                    padding,
+                    ..
+                } => {
+                    let in_channels = input_dim.0.get();
+                    let input_height = input_dim.1.get();
+                    let input_width = input_dim.2.get();
+                    let filter_size = filter_size.get();
+                    let stride = stride.get();
+
+                    let output_height = (input_height + 2 * padding - filter_size) / stride + 1;
+                    let output_width = (input_width + 2 * padding - filter_size) / stride + 1;
+
+                    let w_count = 0;
+                    let b_count = 0;
+                    let out = output_height * output_width * in_channels;
+
+                    (w_count, b_count, vec![0], vec![0], out)
+                }
             };
 
             let w_bytes = &params_bytes[offset * 4..(offset + w_count) * 4];

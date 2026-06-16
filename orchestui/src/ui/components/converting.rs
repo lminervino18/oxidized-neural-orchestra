@@ -31,6 +31,7 @@ pub fn draw_converting(f: &mut Frame, area: Rect, state: &TrainingState) {
     let elapsed = state.elapsed_str();
 
     let block = Block::default()
+        .style(Theme::base())
         .borders(Borders::ALL)
         .border_style(Theme::accent_cyan())
         .title(" Preparing Dataset ")

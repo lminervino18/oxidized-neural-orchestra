@@ -1,11 +1,18 @@
 use std::num::NonZeroUsize;
 
+use comms::floats::Float01;
 use orchestrator::configs::{ActFnConfig, LayerConfig, ModelConfig, ParamGenConfig};
-use pyo3::prelude::*;
+use pyo3::{
+    exceptions::{PyTypeError, PyValueError},
+    prelude::*,
+};
 
-use crate::activations::{Sigmoid, Softmax};
-use crate::initialization::{
-    Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier, XavierUniform,
+use super::{
+    activations::{ReLU, Sigmoid, Softmax, Tanh},
+    initialization::{
+        Const, Kaiming, Lecun, LecunUniform, Normal, Uniform, UniformInclusive, Xavier,
+        XavierUniform,
+    },
 };
 
 #[derive(Clone)]
@@ -24,7 +31,66 @@ pub enum PyInit {
 #[derive(Clone)]
 pub enum PyActFn {
     Sigmoid(f32),
+    Tanh(f32),
+    ReLU(Float01),
     Softmax,
+}
+
+/// Converts a Python initializer object to a `PyInit`.
+///
+/// Returns a `TypeError` if the object is not a recognised initializer.
+pub fn extract_init(obj: &Bound<'_, PyAny>) -> PyResult<PyInit> {
+    if obj.is_instance_of::<Kaiming>() {
+        Ok(PyInit::Kaiming)
+    } else if obj.is_instance_of::<Xavier>() {
+        Ok(PyInit::Xavier)
+    } else if obj.is_instance_of::<Lecun>() {
+        Ok(PyInit::Lecun)
+    } else if obj.is_instance_of::<XavierUniform>() {
+        Ok(PyInit::XavierUniform)
+    } else if obj.is_instance_of::<LecunUniform>() {
+        Ok(PyInit::LecunUniform)
+    } else if let Ok(c) = obj.extract::<PyRef<Const>>() {
+        Ok(PyInit::Const(c.value))
+    } else if let Ok(u) = obj.extract::<PyRef<Uniform>>() {
+        Ok(PyInit::Uniform(u.low, u.high))
+    } else if let Ok(u) = obj.extract::<PyRef<UniformInclusive>>() {
+        Ok(PyInit::UniformInclusive(u.low, u.high))
+    } else if let Ok(n) = obj.extract::<PyRef<Normal>>() {
+        Ok(PyInit::Normal(n.mean, n.std_dev))
+    } else {
+        Err(PyTypeError::new_err("init must be a parameter initializer"))
+    }
+}
+
+/// Converts an optional Python activation function object to a `PyActFn`.
+///
+/// Returns a `TypeError` if the object is not a recognised activation function.
+pub fn extract_act_fn(obj: Option<&Bound<'_, PyAny>>) -> PyResult<Option<PyActFn>> {
+    match obj {
+        None => Ok(None),
+        Some(a) => {
+            if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
+                Ok(Some(PyActFn::Sigmoid(s.amp)))
+            } else if let Ok(t) = a.extract::<PyRef<Tanh>>() {
+                Ok(Some(PyActFn::Tanh(t.amp)))
+            } else if let Ok(r) = a.extract::<PyRef<ReLU>>() {
+                let Some(slope) = Float01::new(r.slope) else {
+                    return Err(PyTypeError::new_err(
+                        "ReLu's slope must be a float between 0 and 1",
+                    ));
+                };
+
+                Ok(Some(PyActFn::ReLU(slope)))
+            } else if a.is_instance_of::<Softmax>() {
+                Ok(Some(PyActFn::Softmax))
+            } else {
+                Err(PyTypeError::new_err(
+                    "act_fn must be an activation function or None",
+                ))
+            }
+        }
+    }
 }
 
 /// A fully-connected dense layer.
@@ -59,80 +125,23 @@ impl Dense {
         init: &Bound<'_, PyAny>,
         act_fn: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let output_size = NonZeroUsize::new(output_size).ok_or_else(|| {
-            pyo3::exceptions::PyValueError::new_err("output_size must be greater than 0")
-        })?;
-
-        let init = if init.is_instance_of::<Kaiming>() {
-            PyInit::Kaiming
-        } else if init.is_instance_of::<Xavier>() {
-            PyInit::Xavier
-        } else if init.is_instance_of::<Lecun>() {
-            PyInit::Lecun
-        } else if init.is_instance_of::<XavierUniform>() {
-            PyInit::XavierUniform
-        } else if init.is_instance_of::<LecunUniform>() {
-            PyInit::LecunUniform
-        } else if let Ok(c) = init.extract::<PyRef<Const>>() {
-            PyInit::Const(c.value)
-        } else if let Ok(u) = init.extract::<PyRef<Uniform>>() {
-            PyInit::Uniform(u.low, u.high)
-        } else if let Ok(u) = init.extract::<PyRef<UniformInclusive>>() {
-            PyInit::UniformInclusive(u.low, u.high)
-        } else if let Ok(n) = init.extract::<PyRef<Normal>>() {
-            PyInit::Normal(n.mean, n.std_dev)
-        } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be a parameter initializer",
-            ));
-        };
-
-        let act_fn = match act_fn {
-            None => None,
-            Some(a) => {
-                if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
-                    Some(PyActFn::Sigmoid(s.amp))
-                } else if a.is_instance_of::<Softmax>() {
-                    Some(PyActFn::Softmax)
-                } else {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "act_fn must be an activation function or None",
-                    ));
-                }
-            }
-        };
+        let output_size = NonZeroUsize::new(output_size)
+            .ok_or_else(|| PyValueError::new_err("output_size must be greater than 0"))?;
 
         Ok(Self {
             output_size,
-            init,
-            act_fn,
+            init: extract_init(init)?,
+            act_fn: extract_act_fn(act_fn)?,
         })
     }
 }
 
 impl Dense {
     pub fn to_layer_config(&self) -> LayerConfig {
-        let init = match self.init {
-            PyInit::Kaiming => ParamGenConfig::Kaiming,
-            PyInit::Xavier => ParamGenConfig::Xavier,
-            PyInit::Lecun => ParamGenConfig::Lecun,
-            PyInit::XavierUniform => ParamGenConfig::XavierUniform,
-            PyInit::LecunUniform => ParamGenConfig::LecunUniform,
-            PyInit::Const(v) => ParamGenConfig::Const { value: v },
-            PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low, high },
-            PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low, high },
-            PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean, std_dev },
-        };
-
-        let act_fn = self.act_fn.as_ref().map(|a| match a {
-            PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
-            PyActFn::Softmax => ActFnConfig::Softmax,
-        });
-
         LayerConfig::Dense {
             output_size: self.output_size,
-            init,
-            act_fn,
+            init: py_init_to_config(&self.init),
+            act_fn: self.act_fn.as_ref().map(py_act_fn_to_config),
         }
     }
 }
@@ -178,98 +187,104 @@ impl Conv2d {
         act_fn: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let make_nonzero = |v: usize, name: &'static str| {
-            NonZeroUsize::new(v)
-                .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("{name} must be > 0")))
-        };
-
-        let input_dim = (
-            make_nonzero(input_dim.0, "input_dim.channels")?,
-            make_nonzero(input_dim.1, "input_dim.height")?,
-            make_nonzero(input_dim.2, "input_dim.width")?,
-        );
-        let kernel_dim = (
-            make_nonzero(kernel_dim.0, "kernel_dim.filters")?,
-            make_nonzero(kernel_dim.1, "kernel_dim.in_channels")?,
-            make_nonzero(kernel_dim.2, "kernel_dim.kernel_size")?,
-        );
-        let stride = make_nonzero(stride, "stride")?;
-
-        let init = if init.is_instance_of::<Kaiming>() {
-            PyInit::Kaiming
-        } else if init.is_instance_of::<Xavier>() {
-            PyInit::Xavier
-        } else if init.is_instance_of::<Lecun>() {
-            PyInit::Lecun
-        } else if init.is_instance_of::<XavierUniform>() {
-            PyInit::XavierUniform
-        } else if init.is_instance_of::<LecunUniform>() {
-            PyInit::LecunUniform
-        } else if let Ok(c) = init.extract::<PyRef<Const>>() {
-            PyInit::Const(c.value)
-        } else if let Ok(u) = init.extract::<PyRef<Uniform>>() {
-            PyInit::Uniform(u.low, u.high)
-        } else if let Ok(u) = init.extract::<PyRef<UniformInclusive>>() {
-            PyInit::UniformInclusive(u.low, u.high)
-        } else if let Ok(n) = init.extract::<PyRef<Normal>>() {
-            PyInit::Normal(n.mean, n.std_dev)
-        } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "init must be a parameter initializer",
-            ));
-        };
-
-        let act_fn = match act_fn {
-            None => None,
-            Some(a) => {
-                if let Ok(s) = a.extract::<PyRef<Sigmoid>>() {
-                    Some(PyActFn::Sigmoid(s.amp))
-                } else if a.is_instance_of::<Softmax>() {
-                    Some(PyActFn::Softmax)
-                } else {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "act_fn must be an activation function or None",
-                    ));
-                }
-            }
+            NonZeroUsize::new(v).ok_or_else(|| PyValueError::new_err(format!("{name} must be > 0")))
         };
 
         Ok(Self {
-            input_dim,
-            kernel_dim,
-            stride,
+            input_dim: (
+                make_nonzero(input_dim.0, "input_dim.channels")?,
+                make_nonzero(input_dim.1, "input_dim.height")?,
+                make_nonzero(input_dim.2, "input_dim.width")?,
+            ),
+            kernel_dim: (
+                make_nonzero(kernel_dim.0, "kernel_dim.filters")?,
+                make_nonzero(kernel_dim.1, "kernel_dim.in_channels")?,
+                make_nonzero(kernel_dim.2, "kernel_dim.kernel_size")?,
+            ),
+            stride: make_nonzero(stride, "stride")?,
             padding,
-            init,
-            act_fn,
+            init: extract_init(init)?,
+            act_fn: extract_act_fn(act_fn)?,
         })
     }
 }
 
 impl Conv2d {
     pub fn to_layer_config(&self) -> LayerConfig {
-        let init = match self.init {
-            PyInit::Kaiming => ParamGenConfig::Kaiming,
-            PyInit::Xavier => ParamGenConfig::Xavier,
-            PyInit::Lecun => ParamGenConfig::Lecun,
-            PyInit::XavierUniform => ParamGenConfig::XavierUniform,
-            PyInit::LecunUniform => ParamGenConfig::LecunUniform,
-            PyInit::Const(v) => ParamGenConfig::Const { value: v },
-            PyInit::Uniform(low, high) => ParamGenConfig::Uniform { low, high },
-            PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive { low, high },
-            PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal { mean, std_dev },
-        };
-
-        let act_fn = self.act_fn.as_ref().map(|a| match a {
-            PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
-            PyActFn::Softmax => ActFnConfig::Softmax,
-        });
-
         LayerConfig::Conv {
             input_dim: self.input_dim,
             kernel_dim: self.kernel_dim,
             stride: self.stride,
             padding: self.padding,
-            init,
-            act_fn,
+            init: py_init_to_config(&self.init),
+            act_fn: self.act_fn.as_ref().map(py_act_fn_to_config),
+        }
+    }
+}
+
+/// A 2D max pooling layer.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct MaxPooling {
+    pub input_dim: (NonZeroUsize, NonZeroUsize, NonZeroUsize),
+    pub filter_size: NonZeroUsize,
+    pub stride: NonZeroUsize,
+    pub padding: usize,
+    pub act_fn: Option<PyActFn>,
+}
+
+#[pymethods]
+impl MaxPooling {
+    /// Creates a MaxPooling layer configuration.
+    ///
+    /// # Args
+    /// * `input_dim` - Tuple `(in_channels, height, width)` of the input tensor.
+    /// * `filter_size` - Side of the square pooling window. Must be > 0.
+    /// * `stride` - Pooling stride. Must be > 0.
+    /// * `padding` - Zero-padding applied to each spatial side of the input.
+    /// * `act_fn` - Optional activation function (e.g. `Sigmoid()`). Defaults to `None`.
+    ///
+    /// # Returns
+    /// A MaxPooling layer configuration.
+    ///
+    /// # Errors
+    /// Raises a `ValueError` if any dimension, the filter size or the stride is zero.
+    /// Raises a `TypeError` if `act_fn` is not a supported type.
+    #[new]
+    #[pyo3(signature = (input_dim, filter_size, stride, padding, act_fn = None))]
+    pub fn new(
+        input_dim: (usize, usize, usize),
+        filter_size: usize,
+        stride: usize,
+        padding: usize,
+        act_fn: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
+        let make_nonzero = |v: usize, name: &'static str| {
+            NonZeroUsize::new(v).ok_or_else(|| PyValueError::new_err(format!("{name} must be > 0")))
+        };
+
+        Ok(Self {
+            input_dim: (
+                make_nonzero(input_dim.0, "input_dim.channels")?,
+                make_nonzero(input_dim.1, "input_dim.height")?,
+                make_nonzero(input_dim.2, "input_dim.width")?,
+            ),
+            filter_size: make_nonzero(filter_size, "filter_size")?,
+            stride: make_nonzero(stride, "stride")?,
+            padding,
+            act_fn: extract_act_fn(act_fn)?,
+        })
+    }
+}
+
+impl MaxPooling {
+    pub fn to_layer_config(&self) -> LayerConfig {
+        LayerConfig::MaxPooling {
+            input_dim: self.input_dim,
+            filter_size: self.filter_size,
+            stride: self.stride,
+            padding: self.padding,
+            act_fn: self.act_fn.as_ref().map(py_act_fn_to_config),
         }
     }
 }
@@ -285,20 +300,18 @@ impl Sequential {
     /// Creates a sequential model configuration.
     ///
     /// # Args
-    /// * `layers` - List of `Dense` or `Conv2d` layers. At least one required.
+    /// * `layers` - List of `Dense`, `Conv2d` or `MaxPooling` layers. At least one required.
     ///
     /// # Returns
     /// A sequential model configuration.
     ///
     /// # Errors
     /// Raises a `ValueError` if `layers` is empty.
-    /// Raises a `TypeError` if any element is not a `Dense` or `Conv2d` instance.
+    /// Raises a `TypeError` if any element is not a `Dense`, `Conv2d` or `MaxPooling` instance.
     #[new]
     pub fn new(layers: Vec<Bound<'_, PyAny>>) -> PyResult<Self> {
         if layers.is_empty() {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "model must have at least one layer",
-            ));
+            return Err(PyValueError::new_err("model must have at least one layer"));
         }
 
         let layer_configs: PyResult<Vec<_>> = layers
@@ -308,9 +321,11 @@ impl Sequential {
                     Ok(d.to_layer_config())
                 } else if let Ok(c) = l.extract::<PyRef<Conv2d>>() {
                     Ok(c.to_layer_config())
+                } else if let Ok(m) = l.extract::<PyRef<MaxPooling>>() {
+                    Ok(m.to_layer_config())
                 } else {
-                    Err(pyo3::exceptions::PyTypeError::new_err(
-                        "each layer must be a Dense or Conv2d instance",
+                    Err(PyTypeError::new_err(
+                        "each layer must be a Dense, Conv2d or MaxPooling instance",
                     ))
                 }
             })
@@ -321,5 +336,37 @@ impl Sequential {
                 layers: layer_configs?,
             },
         })
+    }
+}
+
+fn py_init_to_config(init: &PyInit) -> ParamGenConfig {
+    match init {
+        PyInit::Kaiming => ParamGenConfig::Kaiming,
+        PyInit::Xavier => ParamGenConfig::Xavier,
+        PyInit::Lecun => ParamGenConfig::Lecun,
+        PyInit::XavierUniform => ParamGenConfig::XavierUniform,
+        PyInit::LecunUniform => ParamGenConfig::LecunUniform,
+        PyInit::Const(v) => ParamGenConfig::Const { value: *v },
+        PyInit::Uniform(low, high) => ParamGenConfig::Uniform {
+            low: *low,
+            high: *high,
+        },
+        PyInit::UniformInclusive(low, high) => ParamGenConfig::UniformInclusive {
+            low: *low,
+            high: *high,
+        },
+        PyInit::Normal(mean, std_dev) => ParamGenConfig::Normal {
+            mean: *mean,
+            std_dev: *std_dev,
+        },
+    }
+}
+
+fn py_act_fn_to_config(act_fn: &PyActFn) -> ActFnConfig {
+    match act_fn {
+        PyActFn::Sigmoid(amp) => ActFnConfig::Sigmoid { amp: *amp },
+        PyActFn::Tanh(amp) => ActFnConfig::Tanh { amp: *amp },
+        PyActFn::ReLU(slope) => ActFnConfig::ReLU { slope: *slope },
+        PyActFn::Softmax => ActFnConfig::Softmax,
     }
 }

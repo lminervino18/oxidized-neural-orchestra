@@ -5,9 +5,11 @@ use tokio::io::AsyncRead;
 
 use super::{Compressor, compressor::CompressedGrad};
 use crate::{
+    ParamServerHandle,
     floats::Float01,
     protocol::{Command, Msg, Payload},
     share_dataset, sparse,
+    specs::{machine_learning::TrainerSpec, server::ServerSpec},
     transport::TransportLayer,
 };
 
@@ -27,6 +29,7 @@ pub enum WorkerEvent<'a> {
     RequestParams,
     Disconnect,
     Done,
+    Upgraded,
 }
 
 impl<T: TransportLayer> WorkerHandle<T> {
@@ -89,7 +92,16 @@ impl<T: TransportLayer> WorkerHandle<T> {
                 sparse::grad_lift_into(&mut self.grad, grad).map_err(io::Error::other)?;
                 WorkerEvent::Grad(&self.grad)
             }
-            Msg::Control(Command::ReportLoss { losses }) => WorkerEvent::Loss(losses.into_owned()),
+            Msg::Control(Command::Upgraded) => WorkerEvent::Upgraded,
+            Msg::Control(Command::ReportLoss { losses }) => {
+                // TODO: Ver donde atajamos esto, capaz aca no es el mejor lugar.
+                //       De momento esta aca si me olvido de pensar donde dejarlo.
+                if losses.iter().any(|l| !l.is_finite()) {
+                    return Err(io::Error::other("loss diverged: NaN or Inf detected"));
+                }
+
+                WorkerEvent::Loss(losses.into_owned())
+            }
             Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
             Msg::Control(Command::Done) => WorkerEvent::Done,
@@ -180,6 +192,60 @@ impl<T: TransportLayer> WorkerHandle<T> {
             &mut self.transport,
         )
         .await
+    }
+
+    /// Tells the worker to switch algorithm to parameter server
+    /// by switching this particular node into a `ParameterServerWorker`.
+    ///
+    /// # Args
+    /// * `server_addrs` - The network addresses of the servers.
+    /// * `server_sizes` - The sizes in amount of parameters per server.
+    /// * `server_ordering` - The layer ordering per server.
+    /// * `trainer_spec` - The specification for the new trainer.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn switch(
+        &mut self,
+        server_addrs: Vec<String>,
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
+    ) -> io::Result<()> {
+        let msg = Msg::Control(Command::Switch {
+            server_addrs,
+            server_sizes,
+            server_ordering,
+            trainer_spec,
+        });
+
+        self.transport.send(&msg).await
+    }
+
+    /// Tells the worker to switch algorithm to parameter server
+    /// by switching this particular node into a `ParameterServer`.
+    ///
+    /// # Args
+    /// * `spec` - The server specification.
+    /// * `ranges` - The ranges of parameters to store as a server.
+    ///
+    /// # Returns
+    /// A new `ParameterServerHandle` instance that shares the old transport connection.
+    pub async fn upgrade(
+        &mut self,
+        spec: ServerSpec,
+        ranges: Vec<(usize, usize)>,
+    ) -> io::Result<()> {
+        let msg = Msg::Control(Command::Upgrade { spec, ranges });
+        self.transport.send(&msg).await
+    }
+
+    /// Upgrades `self` and yields a `ParamServerHandle` using the same transport layer.
+    ///
+    /// # Returns
+    /// A new `ParamServerHandle` instance.
+    pub fn upgrade_handle(self) -> ParamServerHandle<T> {
+        ParamServerHandle::new(self.id, self.transport)
     }
 
     /// Tells the worker to stop it's execution.

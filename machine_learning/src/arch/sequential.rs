@@ -49,11 +49,9 @@ impl Sequential {
         let n = self.layers.len();
 
         for (i, layer) in self.layers.iter_mut().enumerate() {
-            let params = front.next(layer.size()).ok_or(MlErr::SizeMismatch {
-                what: "layers",
-                got: i,
-                expected: n,
-            })?;
+            let params = front
+                .next(layer.size())
+                .ok_or(MlErr::size_mismatch("layers", i, n))?;
 
             x = layer.forward(params, x)?;
         }
@@ -81,11 +79,9 @@ impl Sequential {
         let n = self.layers.len();
 
         for (i, layer) in self.layers.iter_mut().rev().enumerate() {
-            let (params, grad) = back.next(layer.size()).ok_or(MlErr::SizeMismatch {
-                what: "layers",
-                got: i,
-                expected: n,
-            })?;
+            let (params, grad) = back
+                .next(layer.size())
+                .ok_or(MlErr::size_mismatch("layers", i, n))?;
 
             d = layer.backward(params, grad, d)?;
         }
@@ -142,6 +138,10 @@ impl Sequential {
             param_manager.optimize(optimizers)?;
             param_manager.acc_residual();
             param_manager.zero_grad();
+        }
+
+        if num_batches == 0 {
+            return Err(MlErr::EmptyEpoch);
         }
 
         Ok(total_loss / num_batches as f64)

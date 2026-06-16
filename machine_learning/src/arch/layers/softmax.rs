@@ -28,7 +28,9 @@ impl Softmax {
             let mut activations_b = self.activations.slice_mut(s![b, ..]);
             let x_b = x.slice(s![b, ..]);
 
-            let exp_row = x_b.mapv(|x| x.exp());
+            // SAFETY: The inputed array should always have at least one column.
+            let max_val = x_b.iter().cloned().max_by(f32::total_cmp).unwrap();
+            let exp_row = x_b.mapv(|x| (x - max_val).exp());
             let one_over_z = 1. / exp_row.sum();
 
             azip!((a in &mut activations_b, &x in &exp_row) {

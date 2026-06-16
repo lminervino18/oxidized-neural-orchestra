@@ -1,5 +1,6 @@
 mod activations;
 mod arch;
+mod convert;
 mod datasets;
 mod initialization;
 mod loss_fns;
@@ -17,8 +18,11 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<arch::Sequential>()?;
     m.add_class::<arch::Dense>()?;
     m.add_class::<arch::Conv2d>()?;
+    m.add_class::<arch::MaxPooling>()?;
 
     m.add_class::<activations::Sigmoid>()?;
+    m.add_class::<activations::Tanh>()?;
+    m.add_class::<activations::ReLU>()?;
     m.add_class::<activations::Softmax>()?;
 
     m.add_class::<initialization::Kaiming>()?;
@@ -35,6 +39,8 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<datasets::LocalDataset>()?;
 
     m.add_class::<optimizers::GradientDescent>()?;
+    m.add_class::<optimizers::GradientDescentWithMomentum>()?;
+    m.add_class::<optimizers::Adam>()?;
 
     m.add_class::<loss_fns::Mse>()?;
     m.add_class::<loss_fns::CrossEntropy>()?;
@@ -54,6 +60,7 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<training::PyTrainingConfig>()?;
     m.add_function(wrap_pyfunction!(training::parameter_server, m)?)?;
     m.add_function(wrap_pyfunction!(training::all_reduce, m)?)?;
+    m.add_function(wrap_pyfunction!(training::strategy_switch, m)?)?;
     m.add_function(wrap_pyfunction!(training::orchestrate, m)?)?;
 
     Ok(())

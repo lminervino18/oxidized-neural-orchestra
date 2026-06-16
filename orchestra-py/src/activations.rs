@@ -23,14 +23,59 @@ impl Sigmoid {
     }
 }
 
-/// Softmax activation function (row-wise normalization).
+/// Hyperbolic tangent activation function.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct Tanh {
+    pub amp: f32,
+}
+
+#[pymethods]
+impl Tanh {
+    /// Creates a new tanh activation configuration.
+    ///
+    /// # Args
+    /// * `amp` - Amplitude of the tanh. Defaults to `1.0`.
+    ///
+    /// # Returns
+    /// A tanh activation configuration.
+    #[new]
+    #[pyo3(signature = (amp = 1.0))]
+    pub fn new(amp: f32) -> Self {
+        Self { amp }
+    }
+}
+
+/// Rectified Linear Unit activation function.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct ReLU {
+    pub slope: f32,
+}
+
+#[pymethods]
+impl ReLU {
+    /// Creates a new relu activation configuration.
+    ///
+    /// # Args
+    /// * `slope` - The coefficient of leakiness, default relu is `0.0`.
+    ///
+    /// # Returns
+    /// A relu activation configuration.
+    #[new]
+    pub fn new(slope: f32) -> Self {
+        Self { slope }
+    }
+}
+
+/// Softmax activation function.
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Softmax;
 
 #[pymethods]
 impl Softmax {
-    /// Creates a softmax activation configuration.
+    /// Creates a new softmax activation configuration.
     ///
     /// # Returns
     /// A softmax activation configuration.

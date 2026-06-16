@@ -1,9 +1,20 @@
-use std::{borrow::Cow, io};
+use std::{
+    borrow::Cow,
+    fmt::{self, Formatter},
+    io,
+};
 
 use half::f16;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{SeqAccess, Visitor},
+};
 
-use super::specs::{node::NodeSpec, server::ServerSpec};
+use super::specs::{
+    machine_learning::TrainerSpec,
+    node::{NodeSpec, StatRequest, StatResponse},
+    server::ServerSpec,
+};
 
 pub type Header = u32;
 pub const HEADER_SIZE: usize = size_of::<Header>();
@@ -20,9 +31,10 @@ pub enum Payload<'a> {
 /// An enum of the different types of entities in the system.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Entity {
-    Worker { id: usize },
-    ParamServer { id: usize },
+    Node { id: usize },
     Orchestrator,
+    ParamServer { id: usize },
+    Worker { id: usize },
 }
 
 /// The command for the `Control` variant of the `Msg` enum.
@@ -33,27 +45,38 @@ pub enum Command<'a> {
     CreateNode {
         spec: NodeSpec,
     },
+    Disconnect,
+    Done,
+    Eof,
+    Ping,
+    Pong,
+    ReportLoss {
+        #[serde(deserialize_with = "deserialize_null_as_nan")]
+        losses: Cow<'a, [f64]>,
+    },
+    RequestParams,
     ShareDataset,
     ShareDatasetSize {
         size: usize,
+    },
+    StatsRequest {
+        reqs: Vec<StatRequest>,
+    },
+    StatsResponse {
+        stats: Vec<StatResponse>,
+    },
+    StopAfterEpoch,
+    Switch {
+        server_addrs: Vec<String>,
+        server_sizes: Vec<usize>,
+        server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     Upgrade {
         spec: ServerSpec,
         ranges: Vec<(usize, usize)>,
     },
-    Switch {
-        server_addrs: Vec<String>,
-        server_sizes: Vec<usize>,
-        server_ordering: Vec<usize>,
-    },
-    ReportLoss {
-        losses: Cow<'a, [f64]>,
-    },
-    RequestParams,
-    StopAfterEpoch,
-    Disconnect,
-    Done,
-    Eof,
+    Upgraded,
 }
 
 /// The application layer message for the entire system.
@@ -145,4 +168,41 @@ impl<'a> Msg<'a> {
             byte => Msg::invalid_kind_byte(byte),
         }
     }
+}
+
+/// Deserializes the `ReportLoss` variant of the `Command` variant of messages.
+///
+/// # Args
+/// * `deserializer` - The deserializar that serde will use to deserialize the loss report.
+///
+/// # Returns
+/// Will always return the loss report, this deserialization can't fail.
+fn deserialize_null_as_nan<'de, 'a, D>(deserializer: D) -> Result<Cow<'a, [f64]>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct LossVisitor;
+
+    impl<'de> Visitor<'de> for LossVisitor {
+        type Value = Vec<f64>;
+
+        fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+            formatter.write_str("a sequence of float elements which may include nulls")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut values = seq.size_hint().map(Vec::with_capacity).unwrap_or_default();
+
+            while let Some(loss) = seq.next_element::<Option<_>>()? {
+                values.push(loss.unwrap_or(f64::NAN));
+            }
+
+            Ok(values)
+        }
+    }
+
+    deserializer.deserialize_seq(LossVisitor).map(Cow::Owned)
 }

@@ -1,11 +1,16 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchHandle, TransportLayer, share_dataset,
-    specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
+    Acceptor, Connection, Connector, OrchEvent, OrchHandle, TransportLayer, share_dataset,
+    specs::{
+        machine_learning::TrainerSpec,
+        node::{NodeSpec, StatRequest},
+        server::ServerSpec,
+        worker::WorkerSpec,
+    },
 };
-use log::{error, info, warn};
-use machine_learning::{datasets::Dataset, training::Trainer};
+use log::{debug, error, info, warn};
+use machine_learning::datasets::Dataset;
 use parameter_server::service::{Server, ServerBuilder};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -15,6 +20,8 @@ use worker::{
     builder::WorkerBuilder,
     workers::{ParamServerWorker, Run, Worker},
 };
+
+use crate::stat_service::StatService;
 
 /// Routes incoming orchestrator connections to the appropriate runtime role
 /// keeping the process alive across sequential sessions.
@@ -71,20 +78,61 @@ where
         loop {
             info!("awaiting connection");
 
-            let Connection::Orchestrator(mut orch_handle) = self.acceptor.accept().await? else {
+            let Connection::Orch(orch_handle) = self.acceptor.accept().await? else {
                 warn!("expected an orchestrator connection, got something else");
                 continue;
             };
 
-            let Ok(spec) = orch_handle.pull_specification().await else {
-                warn!("failed to get node specification");
-                continue;
-            };
-
-            if let Err(e) = self.route(spec, orch_handle).await {
-                error!("session failed with an error: {e}");
-            }
+            self.handle_orch(orch_handle).await;
         }
+    }
+
+    /// Handles an incoming orchestrator connection.
+    ///
+    /// # Args
+    /// * `orch_handle` - The newly connected orchestrator's handle.
+    async fn handle_orch(&mut self, mut orch_handle: OrchHandle<T>) {
+        while let Ok(event) = orch_handle.recv_event().await {
+            debug!("Received {event:?} from orchestrator");
+
+            match event {
+                OrchEvent::Create { spec } => {
+                    if let Err(e) = self.route(spec, orch_handle).await {
+                        error!("session failed with an error: {e}");
+                    }
+                }
+                OrchEvent::StatsRequest { reqs } => {
+                    if let Err(e) = self.service(reqs, orch_handle).await {
+                        error!("stat service failed with an error: {e}");
+                    }
+                }
+                OrchEvent::Disconnect => {}
+                _ => {
+                    warn!("received an unexpected orch event: {event:?}");
+                    continue;
+                }
+            }
+
+            break;
+        }
+    }
+
+    /// Services the requests the orchestrator asks for.
+    ///
+    /// # Args
+    /// * `reqs` - The requests the orchestrator made.
+    /// * `orch_handle` - The handle for communicating with the orchestrator.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    async fn service(
+        &mut self,
+        reqs: Vec<StatRequest>,
+        mut orch_handle: OrchHandle<T>,
+    ) -> io::Result<()> {
+        let mut service = StatService::new(&mut self.acceptor, &mut self.connector);
+        let stats = service.serve(reqs).await;
+        orch_handle.push_stats(stats).await
     }
 
     /// Given a node specification calls the correspondent run handler.
@@ -138,26 +186,31 @@ where
                 server_addrs,
                 server_sizes,
                 server_ordering,
+                trainer_spec,
             } => {
                 let trainer = worker.into_trainer();
-                let mut worker = self
+                let dataset = trainer.into_dataset();
+
+                let worker = self
                     .switch(
                         spec,
                         server_addrs,
                         server_sizes,
                         server_ordering,
-                        trainer,
+                        dataset,
+                        trainer_spec,
                         &mut orch_handle,
                     )
                     .await?;
 
-                worker.run().await.map(|_| ())
+                self.run_worker(Box::new(worker).as_mut()).await?;
+                Ok(())
             }
             Run::Upgrade { spec } => {
                 let trainer = worker.into_trainer();
                 let dataset = trainer.into_dataset();
                 let mut server = self.upgrade(spec, orch_handle, dataset).await?;
-                server.run().await
+                self.run_server(server.as_mut()).await
             }
         }
     }
@@ -201,7 +254,8 @@ where
     /// * `server_addrs` - The network addresses of the server nodes.
     /// * `server_sizes` - The sizes of each server node.
     /// * `server_ordering` - The ordering of server layers.
-    /// * `trainer` - The trainer used to train until now.
+    /// * `dataset` - The dataset that was being used by the worker until now.
+    /// * `trainer_spec` - The specification for the new trainer.
     /// * `orch_handle` - The handle for communicating with the orchestrator.
     ///
     /// # Returns
@@ -212,17 +266,20 @@ where
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
-        trainer: Box<dyn Trainer>,
+        dataset: Dataset,
+        trainer_spec: TrainerSpec,
         orch_handle: &'a mut OrchHandle<T>,
     ) -> io::Result<ParamServerWorker<'a, T>> {
         let mut worker_builder = WorkerBuilder::new(&mut self.acceptor, self.connector.clone());
+
         let worker = worker_builder
             .build_switched(
                 spec,
                 server_addrs,
                 server_sizes,
                 server_ordering,
-                trainer,
+                dataset,
+                trainer_spec,
                 orch_handle,
             )
             .await?;
@@ -243,9 +300,10 @@ where
     async fn upgrade(
         &mut self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
+        mut orch_handle: OrchHandle<T>,
         dataset: Dataset,
     ) -> io::Result<Box<dyn Server<T>>> {
+        orch_handle.upgraded().await?;
         const CHUNK_SIZE: usize = 1 << 12;
 
         let mut partitions = dataset.partition(spec.nworkers);

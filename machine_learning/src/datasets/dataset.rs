@@ -61,6 +61,11 @@ impl Dataset {
         self.src.load(src);
     }
 
+    /// Returns the number of rows in the dataset.
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
     /// Shuffles the rows in the dataset using a random number generator.
     ///
     /// # Args
@@ -81,10 +86,12 @@ impl Dataset {
         &'a self,
         batch_size: NonZeroUsize,
     ) -> impl Iterator<Item = (ArrayView2<'a, f32>, ArrayView2<'a, f32>)> + 'a {
-        (0..self.rows).step_by(batch_size.get()).map(move |start| {
-            let n = (start + batch_size.get()).min(self.rows) - start;
-            self.view_batch(start, n)
-        })
+        (0..self.rows)
+            .step_by(batch_size.get())
+            .filter_map(move |start| {
+                let n = (start + batch_size.get()).min(self.rows) - start;
+                (n > 0).then_some(self.view_batch(start, n))
+            })
     }
 
     /// Partitions the dataset into n parts minimizing the size between them all.
@@ -111,8 +118,20 @@ impl Dataset {
         })
     }
 
+    /// Retrieves both sizes for the samples and the labels.
+    ///
+    /// # Returns
+    /// The amout of samples and the amount of labels.
     pub fn sizes(&self) -> (NonZeroUsize, NonZeroUsize) {
         (self.x_size, self.y_size)
+    }
+
+    /// Consumes self and yields it's data source.
+    ///
+    /// # Returns
+    /// This dataset's data source.
+    pub fn into_src(self) -> DataSrc {
+        self.src
     }
 
     /// Creates a view over a certain batch of the dataset.
@@ -150,8 +169,9 @@ impl Dataset {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ndarray::aview2;
+
+    use super::*;
 
     #[test]
     fn test_dataset_inline_src_get_2rows() {

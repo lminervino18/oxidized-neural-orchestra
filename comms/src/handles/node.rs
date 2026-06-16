@@ -6,6 +6,7 @@ use crate::{
         Command, Msg,
         specs::{node::NodeSpec, server::ServerSpec, worker::WorkerSpec},
     },
+    specs::node::{StatRequest, StatResponse},
     transport::TransportLayer,
 };
 
@@ -16,6 +17,13 @@ use crate::{
 pub struct NodeHandle<T: TransportLayer> {
     id: usize,
     transport: T,
+}
+
+/// A notified node event.
+#[derive(Debug, Clone, Copy)]
+pub enum NodeEvent {
+    Ping,
+    Pong,
 }
 
 impl<T: TransportLayer> NodeHandle<T> {
@@ -64,6 +72,76 @@ impl<T: TransportLayer> NodeHandle<T> {
     /// An io error if occurred.
     async fn create(&mut self, spec: NodeSpec) -> io::Result<()> {
         let msg = Msg::Control(Command::CreateNode { spec });
+        self.transport.send(&msg).await
+    }
+
+    /// Requests that the node calculates the requested statistics.
+    ///
+    /// # Args
+    /// * `reqs` - The statistic calculation requests.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn push_stats(&mut self, reqs: Vec<StatRequest>) -> io::Result<()> {
+        let msg = Msg::Control(Command::StatsRequest { reqs });
+        self.transport.send(&msg).await
+    }
+
+    /// Waits for a stats response from the node.
+    ///
+    /// # Returns
+    /// The calculated statistics for the node or an io error if occurred.
+    pub async fn pull_stats(&mut self) -> io::Result<Vec<StatResponse>> {
+        match self.transport.recv().await? {
+            Msg::Control(Command::StatsResponse { stats }) => Ok(stats),
+            msg => {
+                let text = format!("Expected stats from worker {}, got: {msg:?}", self.id);
+                Err(io::Error::other(text))
+            }
+        }
+    }
+
+    /// Sends a ping request to the node.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn ping(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Ping);
+        self.transport.send(&msg).await
+    }
+
+    /// Responds to a ping request by sending a pong response.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn pong(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Pong);
+        self.transport.send(&msg).await
+    }
+
+    /// Blocks until receiving an event from a node.
+    ///
+    /// # Returns
+    /// A `NodeEvent` message or an io error if occurred.
+    pub async fn recv_event(&mut self) -> io::Result<NodeEvent> {
+        let event = match self.transport.recv().await? {
+            Msg::Control(Command::Ping) => NodeEvent::Ping,
+            Msg::Control(Command::Pong) => NodeEvent::Pong,
+            msg => {
+                let text = format!("Unexpected message from worker {}, got: {msg:?}", self.id);
+                return Err(io::Error::other(text));
+            }
+        };
+
+        Ok(event)
+    }
+
+    /// Disconncts the node.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn disconnect(&mut self) -> io::Result<()> {
+        let msg = Msg::Control(Command::Disconnect);
         self.transport.send(&msg).await
     }
 }

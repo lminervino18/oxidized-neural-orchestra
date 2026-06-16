@@ -623,6 +623,7 @@ version = "0.1.0"
 dependencies = [
  "comms",
  "env_logger",
+ "futures",
  "log",
  "machine_learning",
  "parameter_server",

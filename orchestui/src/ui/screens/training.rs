@@ -1,8 +1,8 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossterm::event::KeyCode;
 use orchestrator::{
-    configs::{DataSrc, ModelConfig, TrainingConfig},
+    configs::{AlgorithmConfig, DataSrc, ModelConfig, TrainingConfig},
     dataset_format::DatasetFormat,
     CancelHandle, Session, StopReason, TrainedModel, TrainingEvent,
 };
@@ -19,7 +19,7 @@ use crate::ui::{
         confirm_quit::draw_confirm_quit, confirm_stop::draw_confirm_stop,
         converting::draw_converting, header::draw_header, log_panel::draw_log,
         loss_chart::draw_charts, params_panel::draw_params, save_popup::draw_save_popup,
-        workers_table::draw_workers_table,
+        topology::draw_topology, workers_table::draw_workers_table,
     },
     screens::menu::MenuState,
     theme::Theme,
@@ -34,6 +34,23 @@ pub const WORKER_COLORS: &[Color] = &[
     Color::Rgb(255, 255, 0),
     Color::Rgb(255, 130, 0),
 ];
+
+/// Which training algorithm the session is using.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AlgorithmKind {
+    AllReduce,
+    ParameterServer,
+    StrategySwitch,
+}
+
+/// Which view is currently active on the training screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrainingView {
+    /// Standard dashboard with charts, workers table, and log panel.
+    Dashboard,
+    /// Full-canvas topology visualization of workers and servers.
+    Topology,
+}
 
 /// The current phase of the training session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +101,8 @@ pub struct WorkerState {
     pub last_loss: Option<f64>,
     /// Whether the worker has disconnected.
     pub done: bool,
+    /// True when this worker upgraded to a PS server during StrategySwitch.
+    pub became_server: bool,
 }
 
 /// Severity level for log entries.
@@ -95,16 +114,23 @@ pub enum LogLevel {
     Error,
 }
 
-enum StartupResult {
-    Ok(Session),
-    Err(String),
-}
+type StartupResult = Result<Session, String>;
 
 /// Full state for the training dashboard screen.
 pub struct TrainingState {
     pub workers_total: usize,
     pub servers_total: usize,
     pub optimizer_label: String,
+    /// Training algorithm used in this session.
+    pub algorithm: AlgorithmKind,
+    /// Currently active view: dashboard or topology.
+    pub view: TrainingView,
+    /// For StrategySwitch: how many workers have upgraded to PS servers.
+    /// Zero until the switch fires; then equals the number of server nodes.
+    pub ps_server_count: usize,
+    /// Worker id and start time of the most recent upgrade, used to render a
+    /// transient "switching to server" badge in the header.
+    pub last_upgrade: Option<(usize, Instant)>,
     pub early_stopping_label: Option<String>,
     pub max_epochs: usize,
     pub phase: Phase,
@@ -148,6 +174,12 @@ impl TrainingState {
         workers_total: usize,
         servers_total: usize,
     ) -> Self {
+        let algorithm = match &training.algorithm {
+            AlgorithmConfig::AllReduce => AlgorithmKind::AllReduce,
+            AlgorithmConfig::ParameterServer { .. } => AlgorithmKind::ParameterServer,
+            AlgorithmConfig::StrategySwitch { .. } => AlgorithmKind::StrategySwitch,
+        };
+
         let optimizer_label = format!("{:?}", training.optimizer)
             .split_whitespace()
             .next()
@@ -186,6 +218,7 @@ impl TrainingState {
                 epochs_done: 0,
                 last_loss: None,
                 done: false,
+                became_server: false,
             })
             .collect();
 
@@ -208,6 +241,10 @@ impl TrainingState {
             workers_total,
             servers_total,
             optimizer_label,
+            algorithm,
+            view: TrainingView::Dashboard,
+            ps_server_count: 0,
+            last_upgrade: None,
             early_stopping_label,
             max_epochs,
             phase: initial_phase,
@@ -313,6 +350,28 @@ impl TrainingState {
                 }
                 self.push_log(LogLevel::Info, format!("worker {worker_id} disconnected"));
             }
+            TrainingEvent::Upgrading { worker_id } => {
+                if worker_id < self.workers.len() {
+                    self.workers[worker_id].became_server = true;
+                    self.workers[worker_id].done = true;
+                }
+                self.last_upgrade = Some((worker_id, Instant::now()));
+                self.ps_server_count =
+                    self.workers.iter().filter(|w| w.became_server).count();
+                // If the chart was focused on the worker that just upgraded,
+                // move focus to an active worker so no server shows in graphs.
+                if self.selected_worker == worker_id {
+                    self.next_worker();
+                }
+                let n_servers = self.ps_server_count;
+                let n_workers = self.workers_total - n_servers;
+                self.push_log(
+                    LogLevel::Info,
+                    format!(
+                        "worker {worker_id} switching to parameter server  ({n_servers} servers, {n_workers} workers)"
+                    ),
+                );
+            }
             TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
@@ -357,9 +416,13 @@ impl TrainingState {
         format!("{:02}:{:02}", s / 60, s % 60)
     }
 
-    /// Returns the number of workers that have finished.
-    pub fn workers_done(&self) -> usize {
-        self.workers.iter().filter(|w| w.done).count()
+    /// Returns the id of the worker that just started switching into a server,
+    /// while it is within the short badge-display window.
+    pub fn switching_worker(&self) -> Option<usize> {
+        const BADGE_WINDOW: Duration = Duration::from_secs(5);
+
+        self.last_upgrade
+            .and_then(|(id, at)| (at.elapsed() < BADGE_WINDOW).then_some(id))
     }
 
     /// Returns `true` if the session is still converting, connecting, or training.
@@ -372,15 +435,24 @@ impl TrainingState {
 
     /// Computes the average loss series across all workers.
     pub fn avg_loss_series(&self) -> Vec<(f64, f64)> {
-        let max_len = self.loss_series.iter().map(|s| s.len()).max().unwrap_or(0);
+        // Workers that upgraded to parameter servers stop publishing losses;
+        // their stale series must not pollute the average.
+        let active: Vec<&Vec<(f64, f64)>> = self
+            .loss_series
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| !self.is_server_worker(*idx))
+            .map(|(_, s)| s)
+            .collect();
+
+        let max_len = active.iter().map(|s| s.len()).max().unwrap_or(0);
         if max_len == 0 {
             return Vec::new();
         }
 
         (0..max_len)
             .filter_map(|i| {
-                let values: Vec<f64> = self
-                    .loss_series
+                let values: Vec<f64> = active
                     .iter()
                     .filter_map(|s| s.get(i).map(|(_, y)| *y))
                     .collect();
@@ -389,8 +461,7 @@ impl TrainingState {
                     return None;
                 }
 
-                let epoch = self
-                    .loss_series
+                let epoch = active
                     .iter()
                     .find_map(|s| s.get(i).map(|(x, _)| *x))
                     .unwrap_or(i as f64 + 1.0);
@@ -400,18 +471,38 @@ impl TrainingState {
             .collect()
     }
 
-    /// Advances the selected worker to the next one (wrapping).
+    /// Returns `true` if the worker at `id` has upgraded into a parameter server.
+    fn is_server_worker(&self, id: usize) -> bool {
+        self.workers.get(id).map_or(false, |w| w.became_server)
+    }
+
+    /// Advances the selected worker to the next one, skipping any that have
+    /// upgraded into servers (wrapping).
     pub fn next_worker(&mut self) {
-        if self.workers_total > 0 {
-            self.selected_worker = (self.selected_worker + 1) % self.workers_total;
+        let n = self.workers_total;
+        if n == 0 {
+            return;
+        }
+        for _ in 0..n {
+            self.selected_worker = (self.selected_worker + 1) % n;
+            if !self.is_server_worker(self.selected_worker) {
+                return;
+            }
         }
     }
 
-    /// Moves the selected worker to the previous one (wrapping).
+    /// Moves the selected worker to the previous one, skipping any that have
+    /// upgraded into servers (wrapping).
     pub fn prev_worker(&mut self) {
-        if self.workers_total > 0 {
-            self.selected_worker =
-                (self.selected_worker + self.workers_total - 1) % self.workers_total;
+        let n = self.workers_total;
+        if n == 0 {
+            return;
+        }
+        for _ in 0..n {
+            self.selected_worker = (self.selected_worker + n - 1) % n;
+            if !self.is_server_worker(self.selected_worker) {
+                return;
+            }
         }
     }
 }
@@ -478,6 +569,13 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
     }
 
     match (key, state.confirm_quit, state.is_active()) {
+        (KeyCode::Char('v'), ConfirmQuit::Hidden, _) => {
+            state.view = match state.view {
+                TrainingView::Dashboard => TrainingView::Topology,
+                TrainingView::Topology => TrainingView::Dashboard,
+            };
+            None
+        }
         (KeyCode::Left, ConfirmQuit::Hidden, _) => {
             state.prev_worker();
             None
@@ -535,40 +633,53 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
 
     draw_header(f, rows[0], state);
 
-    let body = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
-        .split(rows[1]);
+    match state.view {
+        TrainingView::Topology => {
+            // Extend the canvas over both body and log rows for maximum space.
+            let full_body = ratatui::layout::Rect {
+                y: rows[1].y,
+                height: rows[1].height + rows[2].height,
+                ..rows[1]
+            };
+            draw_topology(f, full_body, state);
+        }
+        TrainingView::Dashboard => {
+            let body = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+                .split(rows[1]);
 
-    draw_charts(f, body[0], state);
+            draw_charts(f, body[0], state);
 
-    let right = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(if state.final_trained.is_some() {
-            vec![Constraint::Min(4), Constraint::Length(5)]
-        } else {
-            vec![Constraint::Min(4)]
-        })
-        .split(body[1]);
+            let right = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(if state.final_trained.is_some() {
+                    vec![Constraint::Min(4), Constraint::Length(5)]
+                } else {
+                    vec![Constraint::Min(4)]
+                })
+                .split(body[1]);
 
-    draw_workers_table(f, right[0], state);
+            draw_workers_table(f, right[0], state);
 
-    if state.final_trained.is_some() {
-        draw_params(f, right[1], state);
+            if state.final_trained.is_some() {
+                draw_params(f, right[1], state);
+            }
+
+            draw_log(f, rows[2], state);
+        }
     }
-
-    draw_log(f, rows[2], state);
 
     if state.phase == Phase::Converting {
         draw_converting(f, area, state);
     }
 
     if state.confirm_quit == ConfirmQuit::Visible {
-        draw_confirm_quit(f, area);
+        draw_confirm_quit(f);
     }
 
     if state.confirm_stop == ConfirmStop::Visible {
-        draw_confirm_stop(f, area);
+        draw_confirm_stop(f);
     }
 
     if let SavePopup::Visible(ref path) = state.save_popup {

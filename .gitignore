@@ -1,3 +1,6 @@
+# Datasets
+datasets/
+
 # Build output
 /target/
 
@@ -5,6 +8,9 @@
 *.swp
 .idea/
 .vscode/
+
+# AI CLI tooling local state
+.antigravitycli/
 
 # OS metadata
 .DS_Store
@@ -47,9 +53,6 @@ compose.yml
 model.json
 training.json
 
-# Manual benchmark investigation scripts
-benchmarks/manual/
-
 # Data directory contents (datasets, downloads, generated files)
 data/*
 !data/.gitkeep
@@ -64,7 +67,3 @@ issue.md
 
 # Local analysis docs (not for the repo)
 notebooks/mnist/conclusion.md
-
-# 
-benchmarks/manual/*
-benchmarks/*.md

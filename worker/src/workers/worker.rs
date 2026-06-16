@@ -1,6 +1,6 @@
 use std::io;
 
-use comms::specs::server::ServerSpec;
+use comms::specs::{machine_learning::TrainerSpec, server::ServerSpec};
 use machine_learning::training::Trainer;
 
 /// The result of running a worker instance.
@@ -11,6 +11,7 @@ pub enum Run {
         server_addrs: Vec<String>,
         server_sizes: Vec<usize>,
         server_ordering: Vec<usize>,
+        trainer_spec: TrainerSpec,
     },
     Upgrade {
         spec: ServerSpec,

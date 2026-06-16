@@ -1,10 +1,7 @@
 use std::fs;
 
-use super::{AlgorithmConfig, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
-use crate::{
-    configs::training::DataSrc,
-    error::{OrchErr, Result},
-};
+use super::{AlgorithmConfig, DataSrc, DatasetConfig, LayerConfig, ModelConfig, TrainingConfig};
+use crate::error::{OrchErr, Result};
 
 /// Validates orchestrator configs before adaptation, ensuring all invariants
 /// are met before the training commences.
@@ -31,6 +28,43 @@ impl Validator {
     pub fn validate(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<()> {
         self.validate_model(model)?;
         self.validate_training(training)?;
+        self.validate_dimensions(model, training)?;
+        Ok(())
+    }
+
+    /// Validates that the model's layer dimensions are consistent with the dataset.
+    ///
+    /// # Args
+    /// * `model` - The model architecture and initialization configuration.
+    /// * `training` - The training configuration.
+    ///
+    /// # Errors
+    /// An `OrchErr` if a layer's expected input does not match the size it receives,
+    /// or if the model's output size does not match the dataset's `y_size`.
+    fn validate_dimensions(&self, model: &ModelConfig, training: &TrainingConfig) -> Result<()> {
+        let mut input_size = training.dataset.x_size;
+
+        for layer in &model.layers {
+            if let Some(expected) = layer.expected_input_size()
+                && expected != input_size
+            {
+                let text = format!(
+                    "layer expects an input of {expected} but the incoming size is {input_size}"
+                );
+                return Err(OrchErr::InvalidConfig(text));
+            }
+
+            input_size = layer.output_size();
+        }
+
+        if input_size != training.dataset.y_size {
+            let text = format!(
+                "the model's output size ({input_size}) must match the dataset's y_size ({})",
+                training.dataset.y_size
+            );
+            return Err(OrchErr::InvalidConfig(text));
+        }
+
         Ok(())
     }
 
@@ -48,14 +82,20 @@ impl Validator {
             ));
         }
 
-        for l in &model.layers {
-            match l {
+        for layer in &model.layers {
+            match layer {
                 LayerConfig::Dense { .. } => {
                     continue;
                 }
                 LayerConfig::Conv {
                     input_dim: (_, height, width),
                     kernel_dim: (_, _, size),
+                    padding,
+                    ..
+                }
+                | LayerConfig::MaxPooling {
+                    input_dim: (_, height, width),
+                    filter_size: size,
                     padding,
                     ..
                 } => {
@@ -75,29 +115,22 @@ impl Validator {
 
     /// Validates the training's configuration.
     ///
+    /// * `training` - The training configuration.
+    ///
     /// # Errors
     /// An `OrchErr` if any training invariant is unmet.
     fn validate_training(&self, training: &TrainingConfig) -> Result<()> {
-        if training.worker_addrs.is_empty() {
-            let text = "at least one worker address is required".into();
+        if training.addrs.is_empty() {
+            let text = "at least one network address is required".into();
             return Err(OrchErr::InvalidConfig(text));
         }
 
-        match training.algorithm {
-            AlgorithmConfig::ParameterServer {
-                ref server_addrs, ..
-            } => {
-                if server_addrs.is_empty() {
-                    let text = "at least one server address is required".into();
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-            }
-            AlgorithmConfig::AllReduce => {
-                if training.worker_addrs.len() < 2 {
-                    let text = "all-reduce requires at least two worker addresses".into();
-                    return Err(OrchErr::InvalidConfig(text));
-                }
-            }
+        if let AlgorithmConfig::ParameterServer { nservers, .. }
+        | AlgorithmConfig::StrategySwitch { nservers, .. } = training.algorithm
+            && training.addrs.len().saturating_sub(nservers.get()) == 0
+        {
+            let text = "the amount of workers must be a positive number".into();
+            return Err(OrchErr::InvalidConfig(text));
         }
 
         let DatasetConfig {

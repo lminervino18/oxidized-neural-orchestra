@@ -7,7 +7,7 @@ use super::{BackpropTrainer, Trainer};
 use crate::{
     arch::{
         Sequential,
-        layers::Layer,
+        layers::{Inner, Layer},
         loss::{CrossEntropy, LossFn, Mse},
     },
     datasets::Dataset,
@@ -93,16 +93,13 @@ impl TrainerBuilder {
     where
         O: Optimizer + Send + 'static,
     {
+        let mut layers = vec![];
+
         let mut last = None;
-        let layers: Vec<_> = spec
-            .layers
-            .iter()
-            .flat_map(|layer_spec| {
-                let layers = self.resolve_layer(*layer_spec, last);
-                last = Some(layer_spec);
-                layers
-            })
-            .collect();
+        for spec in &spec.layers {
+            self.resolve_layer_into(*spec, last, &mut layers);
+            last = Some(*spec);
+        }
 
         self.resolve_loss_fn(spec, optimizers, layers)
     }
@@ -114,24 +111,45 @@ impl TrainerBuilder {
     ///
     /// # Returns
     /// A new `Layer`.
-    fn resolve_layer(&self, spec: LayerSpec, last: Option<&LayerSpec>) -> Vec<Layer> {
-        let mut layers = Vec::with_capacity(2);
+    fn resolve_layer_into(
+        &self,
+        spec: LayerSpec,
+        last: Option<LayerSpec>,
+        layers: &mut Vec<Layer>,
+    ) {
+        use Inner::*;
 
         let act_fn = match spec {
             LayerSpec::Dense { dim, act_fn } => {
-                if let Some(LayerSpec::Conv {
-                    input_dim,
-                    kernel_dim,
-                    stride,
-                    padding,
-                    act_fn: None,
-                    ..
-                }) = last
-                {
-                    let out_h = (input_dim.1 + 2 * padding - kernel_dim.2) / stride + 1;
-                    let out_w = (input_dim.2 + 2 * padding - kernel_dim.2) / stride + 1;
-                    layers.push(Layer::four_d_to2d(kernel_dim.0, out_h, out_w))
-                };
+                if matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
+                    let last = last.unwrap();
+                    let (out_h, out_w, out_c) = match last {
+                        LayerSpec::Conv {
+                            input_dim,
+                            kernel_dim,
+                            stride,
+                            padding,
+                            ..
+                        } => self.spatial_size(
+                            input_dim,
+                            kernel_dim.2,
+                            stride,
+                            padding,
+                            kernel_dim.0,
+                        ),
+                        LayerSpec::MaxPooling {
+                            input_dim,
+                            filter_size,
+                            stride,
+                            padding,
+                            ..
+                        } => {
+                            self.spatial_size(input_dim, filter_size, stride, padding, input_dim.0)
+                        }
+                        _ => unreachable!(),
+                    };
+                    layers.push(Layer::four_d_to2d(out_c, out_h, out_w))
+                }
 
                 layers.push(Layer::dense(dim));
                 act_fn
@@ -143,7 +161,7 @@ impl TrainerBuilder {
                 padding,
                 act_fn,
             } => {
-                if let None | Some(LayerSpec::Dense { .. }) = last {
+                if !matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
                     layers.push(Layer::two_d_to4d(input_dim.0, input_dim.1, input_dim.2))
                 }
 
@@ -163,13 +181,71 @@ impl TrainerBuilder {
 
                 act_fn
             }
+            LayerSpec::MaxPooling {
+                input_dim,
+                filter_size,
+                stride,
+                padding,
+                act_fn,
+            } => {
+                if !matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
+                    layers.push(Layer::two_d_to4d(input_dim.0, input_dim.1, input_dim.2))
+                }
+
+                layers.push(Layer::max_pooling(filter_size, stride, padding));
+
+                if act_fn.is_some() {
+                    let out_h = (input_dim.1 + 2 * padding - filter_size) / stride + 1;
+                    let out_w = (input_dim.2 + 2 * padding - filter_size) / stride + 1;
+                    layers.push(Layer::four_d_to2d(input_dim.0, out_h, out_w))
+                }
+
+                act_fn
+            }
         };
 
         if let Some(spec) = act_fn {
+            if matches!(layers.last(), Some(Layer(Conv2d(_) | MaxPooling(_)))) {
+                let last = last.unwrap();
+                let (out_h, out_w, out_c) = match last {
+                    LayerSpec::Conv {
+                        input_dim,
+                        kernel_dim,
+                        stride,
+                        padding,
+                        ..
+                    } => self.spatial_size(input_dim, kernel_dim.2, stride, padding, kernel_dim.0),
+                    LayerSpec::MaxPooling {
+                        input_dim,
+                        filter_size,
+                        stride,
+                        padding,
+                        ..
+                    } => self.spatial_size(input_dim, filter_size, stride, padding, input_dim.0),
+                    _ => unreachable!(),
+                };
+                layers.push(Layer::four_d_to2d(out_c, out_h, out_w))
+            }
             layers.push(self.resolve_act_fn(spec));
         };
+    }
 
-        layers
+    fn spatial_size(
+        &self,
+        input_dim: (usize, usize, usize),
+        square_filter_size: usize,
+        stride: usize,
+        padding: usize,
+        out_channels: usize,
+    ) -> (usize, usize, usize) {
+        let calc_dim = |in_dim: usize| {
+            ((in_dim + 2 * padding).saturating_sub(square_filter_size)) / stride + 1
+        };
+
+        let output_height = calc_dim(input_dim.1);
+        let output_width = calc_dim(input_dim.2);
+
+        (output_height, output_width, out_channels)
     }
 
     /// Resolves the `ActFn` for a specific layer.
@@ -183,6 +259,8 @@ impl TrainerBuilder {
         match spec {
             ActFnSpec::Sigmoid { amp } => Layer::sigmoid(amp),
             ActFnSpec::Softmax => Layer::softmax(),
+            ActFnSpec::Tanh { amp } => Layer::tanh(amp),
+            ActFnSpec::ReLU { slope } => Layer::relu(slope),
         }
     }
 

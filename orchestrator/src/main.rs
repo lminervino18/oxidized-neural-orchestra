@@ -3,15 +3,15 @@ use std::{
     num::NonZeroUsize,
     process::{Command, ExitStatus},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use comms::floats::{Float01, FloatNonNegative, FloatPositive};
-use orchestrator::{CancelHandle, configs::*, train};
+use log::info;
+use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
-const SERVER_BASE_PORT: usize = 40_000;
-const WORKER_BASE_PORT: usize = 50_000;
+const NODE_BASE_PORT: usize = 40_000;
 
 // The file path for the compose up script file.
 const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/compose_up.py");
@@ -19,20 +19,17 @@ const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/
 /// Sets up the docker containers for simulated execution of the system.
 ///
 /// # Args
-/// * `workers` - The amount of workers to use.
-/// * `servers` - The amount of servers to use.
+/// * `nodes` - The amount of nodes to use.
 /// * `release` - The compilation mode for the rust compiler.
 ///
 /// # Returns
 /// The exit status of the compose script.
-fn setup_docker(workers: usize, servers: usize, release: bool) -> io::Result<ExitStatus> {
+fn setup_docker(nodes: usize, release: bool) -> io::Result<ExitStatus> {
     let mut cmd = Command::new("python3");
 
     cmd.arg(COMPOSE_FILE_PATH)
-        .arg("--workers")
-        .arg(workers.to_string())
-        .arg("--servers")
-        .arg(servers.to_string());
+        .arg("--nodes")
+        .arg(nodes.to_string());
 
     if release {
         cmd.arg("--release");
@@ -41,165 +38,161 @@ fn setup_docker(workers: usize, servers: usize, release: bool) -> io::Result<Exi
     cmd.spawn()?.wait()
 }
 
-/// Builds the addresses for both workers and servers.
+/// Builds the addresses for nodes.
 ///
 /// # Args
-/// * `workers` - The amount of workers to use.
-/// * `servers` - The amount of servers to use.
+/// * `nodes` - The amount of nodes to use.
 ///
 /// # Returns
 /// A tuple of lists of addresses.
-fn build_addresses(workers: usize, servers: usize) -> (Vec<String>, Vec<String>) {
-    let worker_addrs = (0..workers)
-        .map(|i| format!("worker-{i}:{}", WORKER_BASE_PORT + i))
-        .collect();
+fn build_addresses(nodes: usize) -> Vec<String> {
+    (0..nodes)
+        .map(|i| format!("node-{i}:{}", NODE_BASE_PORT + i))
+        .collect()
+}
 
-    let server_addrs = (0..servers)
-        .map(|i| format!("server-{i}:{}", SERVER_BASE_PORT + i))
-        .collect();
+fn nonzero(n: usize) -> NonZeroUsize {
+    NonZeroUsize::new(n).unwrap()
+}
 
-    (worker_addrs, server_addrs)
+fn make_nielsen_mnist_model() -> ModelConfig {
+    use ActFnConfig::*;
+    use LayerConfig::*;
+    use ParamGenConfig::*;
+
+    let layers = vec![
+        Conv {
+            input_dim: (nonzero(1), nonzero(28), nonzero(28)),
+            kernel_dim: (nonzero(10), nonzero(1), nonzero(5)),
+            stride: nonzero(1),
+            padding: 0,
+            init: Kaiming,
+            act_fn: None,
+        },
+        // MaxPooling {
+        //     input_dim: (nonzero(10), nonzero(24), nonzero(24)),
+        //     filter_size: nonzero(2),
+        //     stride: nonzero(2),
+        //     padding: 0,
+        //     act_fn: None,
+        // },
+        Dense {
+            output_size: nonzero(100),
+            init: Kaiming,
+            act_fn: Some(ReLU {
+                slope: Float01::new(0.0).unwrap(),
+            }),
+        },
+        Dense {
+            output_size: nonzero(10),
+            init: Kaiming,
+            act_fn: Some(Softmax),
+        },
+    ];
+
+    ModelConfig { layers }
+}
+
+fn make_mnist_dataset() -> DatasetConfig {
+    let x_size = nonzero(28 * 28);
+    let y_size = nonzero(10);
+
+    let src = DataSrc::Local {
+        samples_path: "datasets/mnist/mnist_train_samples.bin".into(),
+        labels_path: "datasets/mnist/mnist_train_labels.bin".into(),
+    };
+
+    DatasetConfig {
+        src,
+        x_size,
+        y_size,
+    }
 }
 
 fn main() -> io::Result<()> {
-    const WORKERS: usize = 3;
+    unsafe { env::set_var("RUST_LOG", "debug") };
+    env_logger::init();
+
+    const WORKERS: usize = 2;
     const SERVERS: usize = 2;
+    const NODES: usize = WORKERS + SERVERS;
     const RELEASE: bool = false;
 
-    setup_docker(WORKERS, SERVERS, RELEASE)?;
+    setup_docker(NODES, RELEASE)?;
 
-    thread::sleep(Duration::from_secs(2));
-    let (worker_addrs, server_addrs) = build_addresses(WORKERS, SERVERS);
+    thread::sleep(Duration::from_secs(4));
+    let addrs = build_addresses(NODES);
 
-    let model_config = ModelConfig {
-        layers: vec![
-            LayerConfig::Conv {
-                input_dim: (
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                ),
-                kernel_dim: (
-                    NonZeroUsize::new(5).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                ),
-                stride: NonZeroUsize::new(1).unwrap(),
-                padding: 0,
-                init: ParamGenConfig::Kaiming,
-                act_fn: None,
-            },
-            LayerConfig::Dense {
-                output_size: NonZeroUsize::new(4).unwrap(),
-                init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Softmax),
-            },
-        ],
+    #[allow(unused_variables)]
+    let parameter_server_config = AlgorithmConfig::ParameterServer {
+        nservers: NonZeroUsize::new(SERVERS).unwrap(),
+        synchronizer: SynchronizerConfig::NonBlocking,
+        store: StoreConfig::Wild,
     };
 
-    let algorithm_config = if !server_addrs.is_empty() {
-        AlgorithmConfig::ParameterServer {
-            server_addrs,
-            synchronizer: SynchronizerConfig::NonBlocking,
-            store: StoreConfig::Wild,
-        }
-    } else {
-        AlgorithmConfig::AllReduce
+    #[allow(unused_variables)]
+    let all_reduce_config = AlgorithmConfig::AllReduce;
+
+    #[allow(unused_variables)]
+    let strategy_switch_config = AlgorithmConfig::StrategySwitch {
+        nservers: NonZeroUsize::new(SERVERS).unwrap(),
+        synchronizer: SynchronizerConfig::Barrier,
+        store: StoreConfig::Blocking,
     };
+
+    let model_config = make_nielsen_mnist_model();
 
     let training_config = TrainingConfig {
-        worker_addrs,
-        algorithm: algorithm_config,
+        addrs,
+        algorithm: parameter_server_config,
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
-        dataset: DatasetConfig {
-            src: DataSrc::Inline {
-                samples: vec![
-                    0.0, 1.0, 0.0, //
-                    1.0, 1.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 0.0, 0.0, //
-                    1.0, 0.0, 1.0, // plus sign
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, //
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, // dot
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, // cross
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, //
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, // box
-                ],
-                labels: vec![
-                    1.0, 0.0, 0.0, 0.0, // plus sign
-                    0.0, 1.0, 0.0, 0.0, // dot
-                    0.0, 0.0, 1.0, 0.0, // cross
-                    0.0, 0.0, 0.0, 1.0, // box
-                ],
-            },
-            x_size: NonZeroUsize::new(18).unwrap(),
-            y_size: NonZeroUsize::new(4).unwrap(),
-        },
+        dataset: make_mnist_dataset(),
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
-            lr: FloatPositive::new(1.0).unwrap(),
-            mu: Float01::new(0.9).unwrap(),
+            lr: FloatPositive::new(0.1).unwrap(),
+            mu: Float01::new(0.95).unwrap(),
         },
-        loss_fn: LossFnConfig::Mse,
-        batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(1000).unwrap(),
+        loss_fn: LossFnConfig::CrossEntropy,
+        batch_size: NonZeroUsize::new(10).unwrap(),
+        // max_epochs: NonZeroUsize::new(60).unwrap(),
+        max_epochs: NonZeroUsize::new(2).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
-        // early_stopping: None,
         early_stopping: Some(EarlyStoppingConfig {
-            tolerance: FloatNonNegative::new(0.5).unwrap(),
+            tolerance: FloatNonNegative::new(0.02).unwrap(),
         }),
     };
 
+    let start = Instant::now();
     let session = train(model_config, training_config).unwrap();
     let (_cancel, cancel_rx) = CancelHandle::pair();
     let mut rx = session.event_listener(cancel_rx);
 
     loop {
         match rx.blocking_recv() {
-            Some(orchestrator::TrainingEvent::PublishedLosses { losses, worker_id }) => {
-                println!("losses {worker_id}: {losses:?}")
+            Some(TrainingEvent::PublishedLosses { losses, worker_id }) => {
+                info!("losses: {worker_id}: {losses:?}");
             }
-            Some(orchestrator::TrainingEvent::TrainingComplete {
+            Some(TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
             }) => {
-                println!("params: {:?}", trained.params);
-                println!("stop reason: {reason:?}");
+                info!("params: {:?}", trained.params);
+                info!("stop reason: {reason:?}");
 
                 trained
                     .save_safetensors(MODEL_OUTPUT_PATH)
                     .expect("failed to save model");
 
-                println!("saved model to {MODEL_OUTPUT_PATH}");
+                info!("saved model to {MODEL_OUTPUT_PATH}");
                 break;
             }
             None => break,
-            res => println!("result: {res:?}"),
+            res => info!("result: {res:?}"),
         }
     }
 
+    println!("took: {} seconds", start.elapsed().as_secs_f32());
     Ok(())
 }

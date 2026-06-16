@@ -11,6 +11,7 @@ pub enum CompressedGrad<'a> {
 
 /// Compresses a given residual gradient into a slice of f16 or a sparse binary
 /// formatted slice.
+#[derive(Debug)]
 pub struct Compressor<R>
 where
     R: Rng,
@@ -20,6 +21,7 @@ where
 }
 
 /// The necessary metadata for enabling sparse gradient compression.
+#[derive(Debug)]
 struct SparseCapability<R>
 where
     R: Rng,

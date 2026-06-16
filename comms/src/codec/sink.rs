@@ -6,7 +6,7 @@ use super::{LEN_TYPE_SIZE, LenType};
 use crate::{protocol::Msg, utils};
 
 /// The sending end handle of the communication.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Sink<W: AsyncWrite + Unpin> {
     writer: W,
     buf: Vec<u8>,

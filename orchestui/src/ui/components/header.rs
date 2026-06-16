@@ -1,5 +1,5 @@
 use ratatui::{
-    layout::Rect,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::Modifier,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
@@ -8,7 +8,7 @@ use ratatui::{
 
 use orchestrator::StopReason;
 
-use crate::ui::screens::training::{Phase, TrainingState};
+use crate::ui::screens::training::{Phase, TrainingState, TrainingView};
 use crate::ui::theme::Theme;
 use crate::ui::utils::fmt_loss;
 
@@ -35,15 +35,37 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Phase::Error => Span::styled("ERROR", Theme::error()),
     };
 
-    let hint = if state.final_trained.is_some() {
-        Span::styled("  [q] menu  [←/→] worker  [s] save", Theme::muted())
-    } else if state.is_active() {
-        Span::styled("  [q] leave  [←/→] worker  [x] stop", Theme::muted())
-    } else {
-        Span::styled("  [q] menu  [←/→] worker", Theme::muted())
+    let view_hint = match state.view {
+        TrainingView::Dashboard => "  [v] topology",
+        TrainingView::Topology => "  [v] dashboard",
     };
 
-    let workers_done = state.workers_done();
+    let hint_text = if state.final_trained.is_some() {
+        format!("  [q] menu  [←/→] worker  [s] save{view_hint}")
+    } else if state.is_active() {
+        format!("  [q] leave  [←/→] worker  [x] stop{view_hint}")
+    } else {
+        format!("  [q] menu  [←/→] worker{view_hint}")
+    };
+
+    // After a StrategySwitch, some workers became servers — show the real counts.
+    let ps_servers = if state.ps_server_count > 0 {
+        state.ps_server_count
+    } else {
+        state.servers_total
+    };
+    let effective_total = state.workers_total - state.ps_server_count;
+    let workers_active = state
+        .workers
+        .iter()
+        .filter(|w| !w.done && !w.became_server)
+        .count();
+
+    let workers_str = if state.phase == Phase::Finished {
+        format!("workers {effective_total}/{effective_total}")
+    } else {
+        format!("workers {workers_active}/{effective_total}")
+    };
 
     let mut spans = vec![
         Span::styled(" ONO  ", Theme::title().add_modifier(Modifier::BOLD)),
@@ -52,17 +74,20 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         Span::styled("  │  ", Theme::muted()),
         Span::styled(format!("elapsed {}", state.elapsed_str()), Theme::dim()),
         Span::styled("  │  ", Theme::muted()),
-        Span::styled(
-            format!("workers {}/{}", workers_done, state.workers_total),
-            Theme::dim(),
-        ),
+        Span::styled(workers_str, Theme::dim()),
         Span::styled("  │  ", Theme::muted()),
     ];
 
-    if state.servers_total > 0 {
+    if ps_servers > 0 {
+        spans.push(Span::styled(format!("servers {ps_servers}"), Theme::dim()));
+        spans.push(Span::styled("  │  ", Theme::muted()));
+    }
+
+    // Transient badge shown right after a worker starts switching into a server.
+    if let Some(wid) = state.switching_worker() {
         spans.push(Span::styled(
-            format!("servers {}", state.servers_total),
-            Theme::dim(),
+            format!("⟳ switching W{wid} → PS"),
+            Theme::accent_magenta().add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled("  │  ", Theme::muted()));
     }
@@ -73,7 +98,7 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
     ));
     spans.push(Span::styled("  │  ", Theme::muted()));
     spans.push(Span::styled(
-        format!("optimizer {}", state.optimizer_label),
+        format!("optimizer {}", truncate(&state.optimizer_label, 20)),
         Theme::dim(),
     ));
 
@@ -82,18 +107,37 @@ pub fn draw_header(f: &mut Frame, area: Rect, state: &TrainingState) {
         spans.push(Span::styled(format!("early stop tol {tol}"), Theme::dim()));
     }
 
-    spans.push(hint);
+    // The status info (left) is allowed to clip; the hints (right) are anchored
+    // to the right edge in their own column so they never fall off-screen.
+    let hint_w = hint_text.chars().count() as u16 + 1;
 
-    let line = Line::from(spans);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Theme::border());
+    let inner = block.inner(area);
+    f.render_widget(block, area);
 
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(1), Constraint::Length(hint_w)])
+        .split(inner);
+
+    f.render_widget(Paragraph::new(Line::from(spans)), cols[0]);
     f.render_widget(
-        Paragraph::new(line).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Theme::border()),
-        ),
-        area,
+        Paragraph::new(Span::styled(hint_text, Theme::muted())).alignment(Alignment::Right),
+        cols[1],
     );
+}
+
+/// Truncates `s` to at most `max` characters, appending `…` when shortened.
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
 }
 
 fn avg_loss_str(state: &TrainingState) -> String {

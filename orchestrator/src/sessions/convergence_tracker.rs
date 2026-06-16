@@ -1,51 +1,56 @@
-use std::collections::HashMap;
+use comms::floats::FloatNonNegative;
+
+use super::GreaterThanOneUsize;
 
 /// Tracks wheather the training is converging or not.
+#[derive(Debug)]
 pub struct ConvergenceTracker {
-    pending: HashMap<usize, f64>,
-    n_workers: usize,
-    prev_avg: Option<f64>,
+    winsize: GreaterThanOneUsize,
+    tolerance: FloatNonNegative,
+    last: Option<f64>,
+    count: usize,
 }
 
 impl ConvergenceTracker {
     /// Creates a new `ConvergenceTracker`.
     ///
     /// # Args
-    /// * `n_workers` - The amount of workers
+    /// * `winsize` - The amount of losses to check.
+    /// * `tolerance` - The tolerance of the delta between subsequent losses.
     ///
     /// # Returns
     /// A new `ConvergenceTracker` instance.
-    pub fn new(n_workers: usize) -> Self {
+    pub fn new(winsize: GreaterThanOneUsize, tolerance: FloatNonNegative) -> Self {
         Self {
-            n_workers,
-            pending: HashMap::new(),
-            prev_avg: None,
+            winsize,
+            tolerance,
+            last: None,
+            count: 0,
         }
     }
 
-    /// Records the loss of the given worker and computes the mean of the loss if
-    /// all workers have recorded their last loss.
+    /// Records a new loss.
     ///
     /// # Args
-    /// * `worker_id` - The id of the worker whose losses are being recorded.
-    /// * `losses` - The losses to record.
-    ///
-    /// # Returns
-    /// An optional (previous, last) loss tuple if all workers have recorded their loss.
-    pub fn record(&mut self, worker_id: usize, losses: &[f64]) -> Option<(f64, f64)> {
-        let last = *losses.last()?;
-        self.pending.insert(worker_id, last);
+    /// * `loss` - The latest loss.
+    pub fn record(&mut self, loss: f64) {
+        if let Some(last) = self.last {
+            let delta = (last - loss).abs();
 
-        if self.pending.len() < self.n_workers {
-            return None;
+            if delta > *self.tolerance {
+                self.count = 0;
+            }
         }
 
-        let pending_sum: f64 = self.pending.values().sum();
-        let curr = pending_sum / self.n_workers as f64;
-        self.pending.clear();
+        self.count += 1;
+        self.last = Some(loss);
+    }
 
-        let signal = self.prev_avg.map(|prev| (prev, curr));
-        self.prev_avg = Some(curr);
-        signal
+    /// Asks the tracker if the training has converged.
+    ///
+    /// # Returns
+    /// A convergence flag, either `true` if the training converged or `false` otherwise.
+    pub fn converged(&self) -> bool {
+        self.count == *self.winsize
     }
 }

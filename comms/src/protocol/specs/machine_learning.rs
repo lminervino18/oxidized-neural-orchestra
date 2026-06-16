@@ -54,6 +54,8 @@ impl ParamGenSpec {
 #[serde(rename_all = "snake_case")]
 pub enum ActFnSpec {
     Sigmoid { amp: f32 },
+    Tanh { amp: f32 },
+    ReLU { slope: Float01 },
     Softmax,
 }
 
@@ -68,6 +70,13 @@ pub enum LayerSpec {
     Conv {
         input_dim: (usize, usize, usize),
         kernel_dim: (usize, usize, usize),
+        stride: usize,
+        padding: usize,
+        act_fn: Option<ActFnSpec>,
+    },
+    MaxPooling {
+        input_dim: (usize, usize, usize),
+        filter_size: usize,
         stride: usize,
         padding: usize,
         act_fn: Option<ActFnSpec>,

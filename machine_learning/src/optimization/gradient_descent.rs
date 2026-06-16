@@ -33,11 +33,11 @@ impl Optimizer for GradientDescent {
     /// A size mismatch error if the lengths of `grad` and `params` mismatch.
     fn update_params(&mut self, grad: &[f32], params: &mut [f32]) -> Result<()> {
         if grad.len() != params.len() {
-            return Err(MlErr::SizeMismatch {
-                what: "grad and params",
-                got: grad.len(),
-                expected: params.len(),
-            });
+            return Err(MlErr::size_mismatch(
+                "grad and params",
+                grad.len(),
+                params.len(),
+            ));
         }
 
         let lr = self.learning_rate;

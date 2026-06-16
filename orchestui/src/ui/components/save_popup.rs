@@ -18,6 +18,7 @@ pub fn draw_save_popup(f: &mut Frame, path: &str) {
     f.render_widget(Clear, area);
 
     let block = Block::default()
+        .style(Theme::base())
         .borders(Borders::ALL)
         .border_style(Theme::accent_magenta())
         .title(" Save Model ")

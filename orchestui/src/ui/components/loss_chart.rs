@@ -64,6 +64,7 @@ fn draw_avg_chart(f: &mut Frame, area: Rect, state: &TrainingState) {
 
     let chart = Chart::new(vec![dataset])
         .block(block)
+        .style(Style::default().bg(Theme::BG))
         .x_axis(
             Axis::default()
                 .title("epoch")
@@ -141,6 +142,7 @@ fn draw_selected_worker_chart(f: &mut Frame, area: Rect, state: &TrainingState) 
 
     let chart = Chart::new(vec![dataset])
         .block(block)
+        .style(Style::default().bg(Theme::BG))
         .x_axis(
             Axis::default()
                 .title("epoch")

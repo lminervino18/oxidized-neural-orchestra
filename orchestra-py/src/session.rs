@@ -1,15 +1,16 @@
 use std::{
-    io::{IsTerminal, Write},
+    io::{self, IsTerminal, Write},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
 use orchestrator::sessions::{CancelHandle, TrainingEvent};
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::Receiver;
 
 const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const BAR_WIDTH: usize = 40;
@@ -55,7 +56,7 @@ struct ProgressReporter {
 
 impl ProgressReporter {
     fn new(max_epochs: usize, worker_count: usize) -> Self {
-        let is_tty = std::io::stdout().is_terminal();
+        let is_tty = io::stdout().is_terminal();
 
         let current_epoch = Arc::new(AtomicUsize::new(0));
         let avg_loss_bits = Arc::new(AtomicUsize::new(0f32.to_bits() as usize));
@@ -70,7 +71,7 @@ impl ProgressReporter {
             let avg_loss_bits = Arc::clone(&avg_loss_bits);
             let done = Arc::clone(&done);
 
-            Some(std::thread::spawn(move || {
+            Some(thread::spawn(move || {
                 while !done.load(Ordering::Relaxed) {
                     let i = spinner_i.fetch_add(1, Ordering::Relaxed);
                     let spinner = SPINNER[i % SPINNER.len()];
@@ -87,8 +88,9 @@ impl ProgressReporter {
                         max_epochs,
                         fmt_loss(loss),
                     );
-                    let _ = std::io::stdout().flush();
-                    std::thread::sleep(std::time::Duration::from_millis(80));
+
+                    let _ = io::stdout().flush();
+                    thread::sleep(Duration::from_millis(80));
                 }
             }))
         } else {
@@ -129,7 +131,8 @@ impl ProgressReporter {
                 self.max_epochs,
                 fmt_loss(avg)
             );
-            let _ = std::io::stdout().flush();
+
+            let _ = io::stdout().flush();
         }
     }
 
@@ -151,12 +154,12 @@ impl ProgressReporter {
         }
 
         if is_tty {
+            let mark = if success { "✓" } else { "✗" };
             let epoch = if success {
                 max_epochs
             } else {
                 worker_epochs.iter().copied().max().unwrap_or(0)
             };
-            let mark = if success { "✓" } else { "✗" };
 
             print!(
                 "\x1b[2A\r  {} [{}] {}/{}\n  avg_loss={}\n\n",
@@ -166,7 +169,8 @@ impl ProgressReporter {
                 max_epochs,
                 fmt_loss(avg_loss(&last_loss)),
             );
-            let _ = std::io::stdout().flush();
+
+            let _ = io::stdout().flush();
         }
     }
 }
@@ -205,7 +209,7 @@ impl TrainedModel {
 
 #[pyclass]
 pub struct Session {
-    pub inner: Option<(orchestrator::Session, mpsc::Receiver<()>)>,
+    pub inner: Option<(orchestrator::Session, Receiver<()>)>,
     pub cancel: CancelHandle,
     pub max_epochs: usize,
     pub worker_count: usize,
@@ -228,14 +232,16 @@ impl Session {
     /// # Errors
     /// Raises a `RuntimeError` if the session was already consumed, if training
     /// fails, or if the background thread panics.
-    pub fn wait(&mut self, py: Python<'_>) -> PyResult<TrainedModel> {
-        let (session, cancel_rx) = self
+    pub fn wait(mut slf: PyRefMut<'_, Self>, py: Python<'_>) -> PyResult<TrainedModel> {
+        let (session, cancel_rx) = slf
             .inner
             .take()
             .ok_or_else(|| PyRuntimeError::new_err("session already consumed"))?;
 
-        let max_epochs = self.max_epochs;
-        let worker_count = self.worker_count;
+        let max_epochs = slf.max_epochs;
+        let worker_count = slf.worker_count;
+
+        drop(slf);
 
         let trained = py
             .detach(|| {

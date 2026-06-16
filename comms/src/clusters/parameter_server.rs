@@ -70,6 +70,20 @@ where
         future::join_all(futs).await
     }
 
+    /// Waits till receiving a message and discards it.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn discard_one(&mut self) -> io::Result<()> {
+        let futs = self
+            .server_handles
+            .iter_mut()
+            .map(async |server_handle| server_handle.discard_one().await);
+
+        future::join_all(futs).await;
+        Ok(())
+    }
+
     /// Disconnects this worker from the cluster.
     ///
     /// # Returns
