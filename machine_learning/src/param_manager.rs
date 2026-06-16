@@ -145,11 +145,11 @@ impl<'mw> ParamManager<'mw> {
     /// * `optimizers` - A list of optimizers, one per entity.
     pub fn optimize<O: Optimizer + Send>(&mut self, optimizers: &mut [O]) -> Result<()> {
         if optimizers.len() != self.metadatas.len() {
-            return Err(MlErr::SizeMismatch {
-                what: "optimizers",
-                got: optimizers.len(),
-                expected: self.metadatas.len(),
-            });
+            return Err(MlErr::size_mismatch(
+                "optimizers",
+                optimizers.len(),
+                self.metadatas.len(),
+            ));
         }
 
         optimizers

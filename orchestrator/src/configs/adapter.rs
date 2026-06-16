@@ -343,13 +343,17 @@ impl Adapter {
         partitions: Vec<Partition<'a>>,
     ) -> Result<Vec<WorkerAdapt<'a>>> {
         let trainer_spec = self.adapt_trainer(model, training);
-        let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
+        let (_, param_gen_opts) = self.adapt_layers(model, training.dataset.x_size);
+
+        let weighted_layers = param_gen_opts.iter().filter(|opt| opt.is_some()).count();
+        let param_gen_specs = param_gen_opts.into_iter().flatten().collect();
+
         let algorithm_spec = AlgorithmSpec::AllReduce {
             worker_addrs: worker_addrs.to_vec(),
             param_gen: ParamGenSpec::Chained {
                 specs: param_gen_specs,
             },
-            amount_of_layers: model.layers.len(),
+            amount_of_layers: weighted_layers,
         };
         let serializer_spec = self.adapt_serializer(training);
 
@@ -407,7 +411,9 @@ impl Adapter {
         let serializer_spec = self.adapt_serializer(training);
 
         let trainer_spec = self.adapt_trainer(model, training);
-        let (_, param_gen_specs) = self.adapt_layers(model, training.dataset.x_size);
+        let (_, param_gen_opts) = self.adapt_layers(model, training.dataset.x_size);
+
+        let param_gen_specs = param_gen_opts.into_iter().flatten().collect();
 
         let algorithm_spec = AlgorithmSpec::AllReduce {
             worker_addrs: worker_addrs.clone(),
@@ -554,29 +560,34 @@ impl Adapter {
         Vec<(usize, usize, usize)>,
         Vec<Vec<(usize, usize)>>,
     )> {
-        let (_, param_gens) = self.adapt_layers(model, training.dataset.x_size);
-        let nlayers = param_gens.len();
+        let (_, param_gen_opts) = self.adapt_layers(model, training.dataset.x_size);
 
-        let items: Vec<_> = param_gens
+        let nlayers = param_gen_opts.len();
+
+        let items: Vec<_> = param_gen_opts
             .into_iter()
             .enumerate()
-            .map(|(i, param_gen)| {
+            .filter_map(|(abs_idx, opt)| opt.map(|param_gen| (abs_idx, param_gen)))
+            .enumerate()
+            .map(|(rel_idx, (abs_idx, param_gen))| {
                 let size = param_gen.size();
-                ((i, param_gen), size)
+                ((abs_idx, rel_idx, param_gen), size)
             })
             .collect();
 
+        let weighted_layers = items.len();
         let param_gen_bins = balanced_partitions(items, nservers);
-        let mut server_ordering = vec![0; nlayers];
+
+        let mut server_ordering = vec![0; weighted_layers];
         let mut layer_offsets = vec![(0usize, 0usize, 0usize); nlayers];
         let mut server_cursors = vec![0usize; nservers];
 
         for (server_i, bin) in param_gen_bins.iter().enumerate() {
-            for (layer_i, spec) in bin {
+            for (abs_idx, rel_idx, spec) in bin {
                 let size = spec.size();
                 let start = server_cursors[server_i];
-                server_ordering[*layer_i] = server_i;
-                layer_offsets[*layer_i] = (server_i, start, start + size);
+                server_ordering[*rel_idx] = server_i;
+                layer_offsets[*abs_idx] = (server_i, start, start + size);
                 server_cursors[server_i] += size;
             }
         }
@@ -586,9 +597,9 @@ impl Adapter {
             let mut local_ranges = Vec::with_capacity(bin.len());
             let mut local_offset = 0;
 
-            for (_, spec) in bin {
+            for (_, _, spec) in bin {
                 let size = spec.size();
-                specs.push(spec);
+                specs.push(spec.clone());
 
                 local_ranges.push((local_offset, local_offset + size));
                 local_offset += size;
@@ -938,7 +949,7 @@ impl Adapter {
         &self,
         model: &ModelConfig,
         input_size: NonZeroUsize,
-    ) -> (Vec<LayerSpec>, Vec<ParamGenSpec>) {
+    ) -> (Vec<LayerSpec>, Vec<Option<ParamGenSpec>>) {
         let (layer_specs, param_gen_specs) = model
             .layers
             .iter()
@@ -1015,7 +1026,7 @@ impl Adapter {
         &self,
         layer: &LayerConfig,
         input_size: NonZeroUsize,
-    ) -> (LayerSpec, ParamGenSpec, NonZeroUsize) {
+    ) -> (LayerSpec, Option<ParamGenSpec>, NonZeroUsize) {
         match *layer {
             LayerConfig::Dense {
                 output_size,
@@ -1031,7 +1042,7 @@ impl Adapter {
                         dim: (sizes.0, sizes.2),
                         act_fn: act_fn_spec,
                     },
-                    self.adapt_param_gen(init, sizes),
+                    Some(self.adapt_param_gen(init, sizes)),
                     output_size,
                 )
             }
@@ -1061,7 +1072,31 @@ impl Adapter {
                         padding,
                         act_fn: act_fn_spec,
                     },
-                    self.adapt_param_gen(init, sizes),
+                    Some(self.adapt_param_gen(init, sizes)),
+                    output_size,
+                )
+            }
+            LayerConfig::MaxPooling {
+                input_dim,
+                filter_size,
+                stride,
+                padding,
+                act_fn,
+            } => {
+                let act_fn_spec = act_fn.map(|act_fn| self.adapt_act_fn(act_fn));
+
+                let input_dim = (input_dim.0.get(), input_dim.1.get(), input_dim.2.get());
+                let output_size = layer.output_size();
+
+                (
+                    LayerSpec::MaxPooling {
+                        input_dim,
+                        filter_size: filter_size.get(),
+                        stride: stride.get(),
+                        padding,
+                        act_fn: act_fn_spec,
+                    },
+                    None,
                     output_size,
                 )
             }

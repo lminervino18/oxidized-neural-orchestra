@@ -61,6 +61,11 @@ impl Dataset {
         self.src.load(src);
     }
 
+    /// Returns the number of rows in the dataset.
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
     /// Shuffles the rows in the dataset using a random number generator.
     ///
     /// # Args
@@ -164,8 +169,9 @@ impl Dataset {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ndarray::aview2;
+
+    use super::*;
 
     #[test]
     fn test_dataset_inline_src_get_2rows() {

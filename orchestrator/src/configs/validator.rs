@@ -92,6 +92,12 @@ impl Validator {
                     kernel_dim: (_, _, size),
                     padding,
                     ..
+                }
+                | LayerConfig::MaxPooling {
+                    input_dim: (_, height, width),
+                    filter_size: size,
+                    padding,
+                    ..
                 } => {
                     let remaining_height = (height.get() + 2 * padding).saturating_sub(size.get());
                     let remaining_width = (width.get() + 2 * padding).saturating_sub(size.get());

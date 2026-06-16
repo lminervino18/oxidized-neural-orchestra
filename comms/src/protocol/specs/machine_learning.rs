@@ -74,6 +74,13 @@ pub enum LayerSpec {
         padding: usize,
         act_fn: Option<ActFnSpec>,
     },
+    MaxPooling {
+        input_dim: (usize, usize, usize),
+        filter_size: usize,
+        stride: usize,
+        padding: usize,
+        act_fn: Option<ActFnSpec>,
+    },
 }
 
 /// The specification for the `Optimizer` trait.

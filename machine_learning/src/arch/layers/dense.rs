@@ -77,11 +77,7 @@ impl Dense {
         params: &'a [f32],
     ) -> Result<(ArrayView2<'a, f32>, ArrayView1<'a, f32>)> {
         if params.len() != self.size {
-            return Err(MlErr::SizeMismatch {
-                what: "params",
-                got: params.len(),
-                expected: self.size,
-            });
+            return Err(MlErr::size_mismatch("params", params.len(), self.size));
         }
 
         let w_size = self.size - self.dim.1;
@@ -107,11 +103,7 @@ impl Dense {
         grad: &'a mut [f32],
     ) -> Result<(ArrayViewMut2<'a, f32>, ArrayViewMut1<'a, f32>)> {
         if grad.len() != self.size {
-            return Err(MlErr::SizeMismatch {
-                what: "grad",
-                got: grad.len(),
-                expected: self.size,
-            });
+            return Err(MlErr::size_mismatch("grad", grad.len(), self.size));
         }
 
         let w_size = self.size - self.dim.1;
