@@ -20,7 +20,7 @@ Partial runs only re-run and re-plot the selected suite/model; every other suite
 
 All-reduce worker scale: [3, 5, 7] (configurable in `issue/suites.py`; the issue suggests 3/7/11 — kept lighter to fit one host).
 
-_Last full run: 4h 17m 40s (2026-06-16 21:05)._
+_Last full run: 3h 46m 30s (2026-06-17 05:06)._
 
 ## Convergence
 
@@ -29,16 +29,17 @@ _Last full run: 4h 17m 40s (2026-06-16 21:05)._
 
 | Model | Strategy | Topology | Epochs | Final loss | Accuracy |
 |---|---|---|---|---|---|
-| lenet5 | AR | 3w | 60 | 0.00517 | 0.986 |
-| lenet5 | AR | 5w | 60 | 0.2 | 0.486 |
-| lenet5 | AR | 7w | 21 | 1.44 | 0.101 |
-| lenet5 | PS | 3w/2s | 60 | 0.00435 | 0.115 |
-| lenet5 | SS | 3w/2s | 60 | 0.2 | 0.486 |
-| nielsen | AR | 3w | 60 | 0.0101 | 0.966 |
-| nielsen | AR | 5w | 60 | 1.41 | 0.113 |
-| nielsen | AR | 7w | 23 | 1.44 | 0.103 |
-| nielsen | PS | 3w/2s | 60 | 0.00971 | 0.103 |
+| lenet5 | AR | 3w | 56 | 0.00756 | 0.979 |
+| lenet5 | AR | 5w | 60 | 0.0105 | 0.973 |
+| lenet5 | AR | 7w | 60 | 0.014 | 0.963 |
+| lenet5 | PS | 3w/2s | 60 | 0.0049 | 0.983 |
+| lenet5 | SS | 3w/2s | 60 | 0.0105 | 0.973 |
+| nielsen | AR | 3w | 60 | 0.0146 | 0.959 |
+| nielsen | AR | 5w | 60 | 0.0191 | 0.949 |
+| nielsen | AR | 7w | 60 | 0.0223 | 0.941 |
+| nielsen | PS | 3w/2s | 60 | 0.0122 | 0.957 |
 | nielsen | SS | 3w/2s | — | — | — |
+| nielsen | SS | 3w/2s | 104 | 0.019 | 0.936 |
 
 ![](plots/convergence_loss_nielsen.png)
 ![](plots/convergence_loss_lenet5.png)
@@ -52,12 +53,12 @@ _Last full run: 4h 17m 40s (2026-06-16 21:05)._
 
 | Model | Strategy | Topology | offline | batch | Epochs/sec |
 |---|---|---|---|---|---|
-| lenet5 | AR | 3w | 0 | 64 | 0.73 |
-| lenet5 | AR | 3w | 4 | 64 | 0.725 |
-| lenet5 | AR | 3w | 0 | 256 | 0.709 |
-| nielsen | AR | 3w | 0 | 64 | 0.985 |
-| nielsen | AR | 3w | 4 | 64 | 0.989 |
-| nielsen | AR | 3w | 0 | 256 | 0.925 |
+| lenet5 | AR | 3w | 0 | 64 | 0.782 |
+| lenet5 | AR | 3w | 4 | 64 | 0.745 |
+| lenet5 | AR | 3w | 0 | 256 | 0.729 |
+| nielsen | AR | 3w | 0 | 64 | 0.995 |
+| nielsen | AR | 3w | 4 | 64 | 0.981 |
+| nielsen | AR | 3w | 0 | 256 | 0.939 |
 
 ![](plots/execution_speed_nielsen.png)
 ![](plots/execution_speed_lenet5.png)
@@ -69,12 +70,13 @@ _Last full run: 4h 17m 40s (2026-06-16 21:05)._
 
 | Model | Strategy | Topology | Loss/sec | Accuracy/sec |
 |---|---|---|---|---|
-| lenet5 | AR | 3w | 0.000261 | 0.00103 |
-| lenet5 | PS | 3w/2s | 0.000218 | 0.000127 |
-| lenet5 | SS | 3w/2s | 0.000179 | 0.000363 |
-| nielsen | AR | 3w | 0.000315 | 0.00133 |
-| nielsen | PS | 3w/2s | 0.000317 | 0.000161 |
+| lenet5 | AR | 3w | 0.000276 | 0.00123 |
+| lenet5 | PS | 3w/2s | 0.000263 | 0.00104 |
+| lenet5 | SS | 3w/2s | 0.000328 | 0.00146 |
+| nielsen | AR | 3w | 0.000352 | 0.0016 |
+| nielsen | PS | 3w/2s | 0.000333 | 0.00151 |
 | nielsen | SS | 3w/2s | — | — |
+| nielsen | SS | 3w/2s | 0.000418 | 0.00189 |
 
 ![](plots/convergence_speed_nielsen.png)
 ![](plots/convergence_speed_lenet5.png)
@@ -86,16 +88,16 @@ _Last full run: 4h 17m 40s (2026-06-16 21:05)._
 
 | Model | Strategy | Workers | Epochs/sec |
 |---|---|---|---|
-| lenet5 | AR | 3 | 0.712 |
-| lenet5 | AR | 5 | 0.902 |
-| lenet5 | AR | 7 | 1.07 |
-| lenet5 | PS | 2 | 0.533 |
-| lenet5 | PS | 3 | 0.748 |
-| nielsen | AR | 3 | 0.928 |
-| nielsen | AR | 5 | 1.18 |
-| nielsen | AR | 7 | 1.33 |
-| nielsen | PS | 2 | 0.726 |
-| nielsen | PS | 3 | 0.979 |
+| lenet5 | AR | 3 | 0.736 |
+| lenet5 | AR | 5 | 0.894 |
+| lenet5 | AR | 7 | 1.08 |
+| lenet5 | PS | 2 | 0.569 |
+| lenet5 | PS | 3 | 0.755 |
+| nielsen | AR | 3 | 0.958 |
+| nielsen | AR | 5 | 1.16 |
+| nielsen | AR | 7 | 1.3 |
+| nielsen | PS | 2 | 0.743 |
+| nielsen | PS | 3 | 0.99 |
 
 ![](plots/scalability_nielsen.png)
 ![](plots/scalability_lenet5.png)
