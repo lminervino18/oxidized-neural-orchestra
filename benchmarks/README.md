@@ -1,215 +1,109 @@
-# MNIST End-to-End Benchmark
+# Strategy Benchmarks
 
-Runs distributed MNIST training through the full O.N.O stack (Docker → workers → parameter server / ring AllReduce → orchestrator), measures accuracy and training time, and generates comparison plots.
+Compares the three distributed strategies — **parameter server**, **all-reduce** and **strategy switch** — on two models (**LeNet5** and **Nielsen MNIST**) across four focused suites. Each suite states what it measures and what it does not.
 
-## Setup
+## Models
 
-```bash
-.venv/bin/python -c "import orchestra, torch, matplotlib; print('OK')"
-```
-
-If you don't have the venv:
-
-```bash
-cd orchestra-py && maturin develop --release && cd ..
-pip install torch safetensors matplotlib
-```
-
-`/etc/hosts` must contain entries for `worker-0..N` and `server-0..N`. The benchmark exits with copy-pasteable fix instructions if any are missing.
-
-```bash
-sudo bash -c "echo '127.0.0.1 worker-0\n127.0.0.1 worker-1\n127.0.0.1 worker-2\n127.0.0.1 server-0\n127.0.0.1 server-1' >> /etc/hosts"
-```
+- **Nielsen MNIST**: `28×28×1 → conv(20, 5×5) → maxpool(2×2) → dense(100) → dense(10) → softmax`.
+- **LeNet5**: `conv(6, 5×5, pad2) → maxpool → conv(16, 5×5) → maxpool → dense(120) → dense(84) → dense(10)`, tanh + softmax.
 
 ## Running
 
 ```bash
-# All 22 runs (~55–60 min)
-.venv/bin/python benchmarks/mnist_e2e.py
-
-# Specific numbered runs (only updates those bars in the plots)
-.venv/bin/python benchmarks/mnist_e2e.py --runs 0 10 18
-
-# Regenerate all plots from historical results without running training
-.venv/bin/python benchmarks/mnist_e2e.py --plots-only
-
-# Keep containers after run / force image rebuild
-.venv/bin/python benchmarks/mnist_e2e.py --keep-containers --rebuild
+.venv/bin/python benchmarks/run_issue_benchmarks.py                 # all suites, both models
+.venv/bin/python benchmarks/run_issue_benchmarks.py --suite convergence
+.venv/bin/python benchmarks/run_issue_benchmarks.py --suite scalability --model lenet5
+.venv/bin/python benchmarks/run_issue_benchmarks.py --plots-only    # rebuild plots/README from history
 ```
 
-Partial runs only regenerate comparison plots that include at least one of the executed runs. All other plots keep their last historical values from previous JSONL files.
+Partial runs only re-run and re-plot the selected suite/model; every other suite keeps its previous results and figures.
 
-## Run Table
+All-reduce worker scale: [3, 5, 7] (configurable in `issue/suites.py`; the issue suggests 3/7/11 — kept lighter to fit one host).
 
-| # | Model | Algorithm | Workers | Servers | Serializer | Sync | Max Epochs |
-|---|-------|-----------|---------|---------|------------|------|------------|
-| 0 | dense_small | PS | 2 | 1 | base | barrier | 80 |
-| 1 | dense_large | PS | 2 | 1 | base | barrier | 120 |
-| 2 | dense_small | PS | 3 | 1 | base | barrier | 150 |
-| 3 | dense_large | PS | 3 | 1 | base | barrier | 200 |
-| 4 | dense_small | PS | 3 | 2 | base | barrier | 150 |
-| 5 | dense_large | PS | 3 | 2 | base | barrier | 200 |
-| 6 | dense_small | PS | 2 | 1 | sparse | barrier | 80 |
-| 7 | dense_large | PS | 2 | 1 | sparse | barrier | 120 |
-| 8 | dense_small | PS | 2 | 1 | base | nonblocking | 80 |
-| 9 | dense_large | PS | 2 | 1 | base | nonblocking | 120 |
-| 10 | dense_small | AllReduce | 2 | 0 | base | — | 150 |
-| 11 | dense_large | AllReduce | 2 | 0 | base | — | 150 |
-| 12 | dense_small | AllReduce | 3 | 0 | base | — | 150 |
-| 13 | dense_large | AllReduce | 3 | 0 | base | — | 200 |
-| 14 | dense_small | AllReduce | 2 | 0 | sparse | — | 150 |
-| 15 | dense_large | AllReduce | 2 | 0 | sparse | — | 150 |
-| 16 | dense_small | AllReduce | 3 | 0 | sparse | — | 150 |
-| 17 | dense_large | AllReduce | 3 | 0 | sparse | — | 200 |
-| 18 | conv_small_softmax | AllReduce | 2 | 0 | base | — | 100 |
-| 19 | conv_small_softmax | AllReduce | 3 | 0 | base | — | 100 |
-| 20 | conv_small_softmax | PS | 2 | 1 | base | barrier | 100 |
-| 21 | conv_small_softmax | PS | 3 | 1 | base | barrier | 250 |
+_Last full run: 4h 17m 40s (2026-06-16 21:05)._
 
-**Not included:** `conv_large_softmax` (Conv2d 32 filters) and conv sparse runs.
-`conv_large` requires ~15s/epoch making a 200-epoch run ~50 min; the sparse serializer
-adds a 6–7× per-epoch overhead for conv tensors. Both dimensions are covered by dense
-runs (large models) and dense sparse runs (sparse gradient compression) respectively.
-`conv_small_softmax` is sufficient to validate conv support end-to-end.
+## Convergence
 
-## Results
+**Measures:** loss vs epoch and final test accuracy per strategy/topology.
+**Does NOT measure:** wall-clock speed.
 
-### Overview
+| Model | Strategy | Topology | Epochs | Final loss | Accuracy |
+|---|---|---|---|---|---|
+| lenet5 | AR | 3w | 60 | 0.00517 | 0.986 |
+| lenet5 | AR | 5w | 60 | 0.2 | 0.486 |
+| lenet5 | AR | 7w | 21 | 1.44 | 0.101 |
+| lenet5 | PS | 3w/2s | 60 | 0.00435 | 0.115 |
+| lenet5 | SS | 3w/2s | 60 | 0.2 | 0.486 |
+| nielsen | AR | 3w | 60 | 0.0101 | 0.966 |
+| nielsen | AR | 5w | 60 | 1.41 | 0.113 |
+| nielsen | AR | 7w | 23 | 1.44 | 0.103 |
+| nielsen | PS | 3w/2s | 60 | 0.00971 | 0.103 |
+| nielsen | SS | 3w/2s | — | — | — |
 
-| Accuracy | Training Time |
-|---|---|
-| ![Accuracy across all 22 runs](plots/accuracy.png) | ![Training time across all 22 runs](plots/training_time.png) |
+![](plots/convergence_loss_nielsen.png)
+![](plots/convergence_loss_lenet5.png)
+![](plots/convergence_accuracy_nielsen.png)
+![](plots/convergence_accuracy_lenet5.png)
 
----
+## Execution speed
 
-### PS vs AllReduce — 2 workers, base serializer
-_Runs 0, 1 (PS barrier) vs 10, 11 (AllReduce ring)_
+**Measures:** epochs/sec on a small subset (no convergence). Compares raising `offline_epochs` vs raising `batch_size`.
+**Does NOT measure:** accuracy or convergence.
 
-| | dense_small | dense_large |
-|---|---|---|
-| Accuracy | ![](plots/cmp_ps_vs_ar_dense_small_accuracy.png) | ![](plots/cmp_ps_vs_ar_dense_large_accuracy.png) |
-| Time | ![](plots/cmp_ps_vs_ar_dense_small_time.png) | ![](plots/cmp_ps_vs_ar_dense_large_time.png) |
+| Model | Strategy | Topology | offline | batch | Epochs/sec |
+|---|---|---|---|---|---|
+| lenet5 | AR | 3w | 0 | 64 | 0.73 |
+| lenet5 | AR | 3w | 4 | 64 | 0.725 |
+| lenet5 | AR | 3w | 0 | 256 | 0.709 |
+| nielsen | AR | 3w | 0 | 64 | 0.985 |
+| nielsen | AR | 3w | 4 | 64 | 0.989 |
+| nielsen | AR | 3w | 0 | 256 | 0.925 |
 
----
+![](plots/execution_speed_nielsen.png)
+![](plots/execution_speed_lenet5.png)
 
-### PS Worker Scaling — base serializer, barrier sync
-_Runs 0–5: 2w/1s → 3w/1s → 3w/2s_
+## Convergence speed
 
-| | dense_small | dense_large |
-|---|---|---|
-| Accuracy | ![](plots/cmp_ps_worker_scaling_dense_small_accuracy.png) | ![](plots/cmp_ps_worker_scaling_dense_large_accuracy.png) |
-| Time | ![](plots/cmp_ps_worker_scaling_dense_small_time.png) | ![](plots/cmp_ps_worker_scaling_dense_large_time.png) |
+**Measures:** loss reduction/sec and accuracy/sec under one shared budget (same epochs and params; only the strategy changes).
+**Does NOT measure:** peak accuracy.
 
----
+| Model | Strategy | Topology | Loss/sec | Accuracy/sec |
+|---|---|---|---|---|
+| lenet5 | AR | 3w | 0.000261 | 0.00103 |
+| lenet5 | PS | 3w/2s | 0.000218 | 0.000127 |
+| lenet5 | SS | 3w/2s | 0.000179 | 0.000363 |
+| nielsen | AR | 3w | 0.000315 | 0.00133 |
+| nielsen | PS | 3w/2s | 0.000317 | 0.000161 |
+| nielsen | SS | 3w/2s | — | — |
 
-### AllReduce Worker Scaling — base serializer
-_Runs 10–13: 2 workers vs 3 workers_
+![](plots/convergence_speed_nielsen.png)
+![](plots/convergence_speed_lenet5.png)
 
-| | dense_small | dense_large |
-|---|---|---|
-| Accuracy | ![](plots/cmp_ar_worker_scaling_dense_small_accuracy.png) | ![](plots/cmp_ar_worker_scaling_dense_large_accuracy.png) |
-| Time | ![](plots/cmp_ar_worker_scaling_dense_small_time.png) | ![](plots/cmp_ar_worker_scaling_dense_large_time.png) |
+## Scalability
 
----
+**Measures:** how throughput (epochs/sec) changes as nodes increase.
+**Does NOT measure:** convergence (re-uses the speed budget).
 
-### Sparse vs Base Gradient — PS 2w/1s, barrier sync
-_Runs 0, 1 (base) vs 6, 7 (sparse)_
+| Model | Strategy | Workers | Epochs/sec |
+|---|---|---|---|
+| lenet5 | AR | 3 | 0.712 |
+| lenet5 | AR | 5 | 0.902 |
+| lenet5 | AR | 7 | 1.07 |
+| lenet5 | PS | 2 | 0.533 |
+| lenet5 | PS | 3 | 0.748 |
+| nielsen | AR | 3 | 0.928 |
+| nielsen | AR | 5 | 1.18 |
+| nielsen | AR | 7 | 1.33 |
+| nielsen | PS | 2 | 0.726 |
+| nielsen | PS | 3 | 0.979 |
 
-| | dense_small | dense_large |
-|---|---|---|
-| Accuracy | ![](plots/cmp_sparse_vs_base_ps_dense_small_accuracy.png) | ![](plots/cmp_sparse_vs_base_ps_dense_large_accuracy.png) |
-| Time | ![](plots/cmp_sparse_vs_base_ps_dense_small_time.png) | ![](plots/cmp_sparse_vs_base_ps_dense_large_time.png) |
+![](plots/scalability_nielsen.png)
+![](plots/scalability_lenet5.png)
 
----
+## Raw results
 
-### Sparse vs Base Gradient — AllReduce 2 workers
-_Runs 10, 11 (base) vs 14, 15 (sparse)_
+- Per-run records: `results/*.jsonl` (append-only, gitignored).
+- Flattened table: `results/summary.csv`.
+- Trained weights: `results/artifacts/*.safetensors`.
 
-| | dense_small | dense_large |
-|---|---|---|
-| Accuracy | ![](plots/cmp_sparse_vs_base_ar_dense_small_accuracy.png) | ![](plots/cmp_sparse_vs_base_ar_dense_large_accuracy.png) |
-| Time | ![](plots/cmp_sparse_vs_base_ar_dense_small_time.png) | ![](plots/cmp_sparse_vs_base_ar_dense_large_time.png) |
-
----
-
-### AllReduce Sparse — Worker Scaling
-_Runs 14, 15 (2w sparse) vs 16, 17 (3w sparse)_
-
-| | dense_small | dense_large |
-|---|---|---|
-| Accuracy | ![](plots/cmp_ar_sparse_worker_scaling_dense_small_accuracy.png) | ![](plots/cmp_ar_sparse_worker_scaling_dense_large_accuracy.png) |
-| Time | ![](plots/cmp_ar_sparse_worker_scaling_dense_small_time.png) | ![](plots/cmp_ar_sparse_worker_scaling_dense_large_time.png) |
-
----
-
-### Barrier vs Non-blocking Sync — PS 2w/1s, base serializer
-_Runs 0, 1 (barrier) vs 8, 9 (nonblocking wild)_
-
-| | dense_small | dense_large |
-|---|---|---|
-| Accuracy | ![](plots/cmp_barrier_vs_nonblocking_dense_small_accuracy.png) | ![](plots/cmp_barrier_vs_nonblocking_dense_large_accuracy.png) |
-| Time | ![](plots/cmp_barrier_vs_nonblocking_dense_small_time.png) | ![](plots/cmp_barrier_vs_nonblocking_dense_large_time.png) |
-
----
-
-### Conv — AllReduce Worker Scaling
-_Runs 18, 19: 2 workers vs 3 workers_
-
-| Accuracy | Time |
-|---|---|
-| ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_accuracy.png) | ![](plots/cmp_conv_ar_worker_scaling_conv_small_softmax_time.png) |
-
----
-
-### Conv — PS vs AllReduce, 2 workers
-_Runs 18 (AllReduce) vs 20 (PS barrier)_
-
-| Accuracy | Time |
-|---|---|
-| ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_accuracy.png) | ![](plots/cmp_conv_ps_vs_ar_conv_small_softmax_time.png) |
-
----
-
-### Conv — PS Worker Scaling
-_Runs 20, 21: 2w/1s vs 3w/1s_
-
-| Accuracy | Time |
-|---|---|
-| ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_accuracy.png) | ![](plots/cmp_conv_ps_worker_scaling_conv_small_softmax_time.png) |
-
----
-
-## What Gets Measured
-
-| Field | Includes | Excludes |
-|-------|----------|---------|
-| `train_seconds` | `orchestrate()` → `session.wait()` | Docker build, dataset prep |
-| `docker_start_seconds` | `docker compose up` + readiness wait | — |
-| `eval_seconds` | PyTorch inference on test set | — |
-| `accuracy` | Top-1 accuracy on 10k test set | — |
-
-Pass/fail: `accuracy >= min_accuracy AND train_seconds <= max_train_seconds`.
-
-## Models
-
-| Name | Architecture |
-|------|-------------|
-| `dense_small` | 784 → 128 → 64 → 10 (Sigmoid) |
-| `dense_large` | 784 → 256 → 128 → 64 → 10 (Sigmoid) |
-| `conv_small_softmax` | Conv2d(16 filters, 4×4, stride 2) → flatten(2704) → 64 → 10 (Softmax), CE loss |
-
-## Results Format
-
-```json
-{
-  "run_num": 0,
-  "model_name": "dense_small",
-  "workers": 2, "servers": 1,
-  "algorithm": "parameter_server",
-  "serializer": "base", "sync": "barrier",
-  "train_seconds": 24.2, "accuracy": 0.910,
-  "passed": true, "error": null
-}
-```
-
-Results (`.jsonl`) are gitignored. Plots (`plots/*.png`) are tracked.
+**Metrics:** `epochs_per_sec = epochs / train_seconds`; `loss_per_sec = (first_loss − final_loss) / train_seconds`; `accuracy_per_sec = accuracy / train_seconds`.
