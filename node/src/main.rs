@@ -8,6 +8,7 @@ use log::info;
 use tokio::net::TcpListener;
 
 use router::NodeRouter;
+use uuid::Uuid;
 
 /// A default host address for the tcp listener in the acceptor.
 const DEFAULT_HOST: &str = "0.0.0.0";
@@ -54,7 +55,10 @@ async fn main() -> io::Result<()> {
         Ok(rtp_factory(rx, tx))
     };
 
-    let acceptor = Acceptor::new(transport_factory);
-    let connector = Connector::new(rtp_factory);
+    let id = Uuid::new_v4();
+    info!("Assigned node id {id}");
+
+    let acceptor = Acceptor::new(id, transport_factory);
+    let connector = Connector::new(id, rtp_factory);
     NodeRouter::new(acceptor, connector).run().await
 }

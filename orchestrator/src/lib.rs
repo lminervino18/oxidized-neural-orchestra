@@ -4,18 +4,33 @@ pub mod dataset_format;
 mod error;
 pub mod sessions;
 
-use std::{fs, path::PathBuf, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs, io,
+    path::PathBuf,
+    time::Duration,
+};
 
-use comms::Connector;
+use comms::{Connector, NodeHandle, TransportLayer, protocol::Entity};
 
 use configs::{Adapter, DataSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
 pub use error::{OrchErr, Result};
 use log::debug;
 pub use sessions::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
-use tokio::runtime::Runtime;
+use tokio::{
+    net::{
+        TcpStream,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
+    runtime::Runtime,
+};
+use uuid::Uuid;
 
 use crate::configs::StatRequester;
+
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
 
 /// Starts the distributed training process and returns an active session.
 ///
@@ -55,25 +70,64 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
             4,
         )
     };
-    let mut connector = Connector::new(transport_factory);
+
+    let id = Uuid::nil();
+    let mut connector = Connector::new(id, transport_factory);
+    let runtime = Runtime::new()?;
+
+    debug!("Connecting to nodes");
+    let handles = runtime.block_on(connect_to_nodes(&mut connector, &training.addrs))?;
+
+    let addr_ids: HashMap<_, _> = handles
+        .iter()
+        .map(|(addr, node_handle)| (addr.clone(), node_handle.id()))
+        .collect();
 
     debug!("Requesting stats");
-    let runtime = Runtime::new()?;
-    let mut stat_requester = StatRequester::new(&mut connector);
-    let stats = runtime.block_on(stat_requester.obtain_stats(&training.addrs))?;
+    let mut stat_requester = StatRequester::new();
+    let stats = runtime.block_on(stat_requester.obtain_stats(handles))?;
 
     debug!("Adapting configs");
     let adapter = Adapter::new();
-    let (orch, workers, servers) = adapter.adapt_configs(model.clone(), &training, stats)?;
+    let (orch, workers, servers) =
+        adapter.adapt_configs(model.clone(), &training, stats, addr_ids)?;
 
-    let session = Session::new(orch, workers, servers, Connector::new(transport_factory))?;
-
+    let session = Session::new(orch, workers, servers, connector)?;
     if let Some((samples_bin, labels_bin)) = dataset_bin {
         remove_binary(&samples_bin);
         remove_binary(&labels_bin);
     }
 
     Ok(session)
+}
+
+/// Will connect to the nodes.
+///
+/// # Args
+/// * `connector` - The connector to connect to the nodes.
+/// * `addrs` - The network addresses to connect to.
+///
+/// # Returns
+/// A sorted list of node handles or an io error if occurred.
+async fn connect_to_nodes<T, F>(
+    connector: &mut Connector<R, W, T, F>,
+    addrs: &[String],
+) -> io::Result<BTreeMap<String, NodeHandle<T>>>
+where
+    T: TransportLayer,
+    F: Fn(R, W) -> T,
+{
+    let mut handles = BTreeMap::new();
+    let src = Entity::Orchestrator;
+
+    for addr in addrs {
+        let stream = TcpStream::connect(addr).await?;
+        let (rx, tx) = stream.into_split();
+        let node_handle = connector.connect_node(rx, tx, src).await?;
+        handles.insert(addr.clone(), node_handle);
+    }
+
+    Ok(handles)
 }
 
 /// Converts delimited dataset samples and labels so the validator always operates on raw packed

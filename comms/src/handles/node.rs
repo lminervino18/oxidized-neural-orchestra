@@ -1,5 +1,7 @@
 use std::io;
 
+use uuid::Uuid;
+
 use super::{ParamServerHandle, WorkerHandle};
 use crate::{
     protocol::{
@@ -15,7 +17,7 @@ use crate::{
 /// Obtained from [`crate::Connector::connect_node`]. Consumed when the node is assigned
 /// its role via [`NodeHandle::create_server`] or [`NodeHandle::create_worker`].
 pub struct NodeHandle<T: TransportLayer> {
-    id: usize,
+    id: Uuid,
     transport: T,
 }
 
@@ -35,8 +37,16 @@ impl<T: TransportLayer> NodeHandle<T> {
     ///
     /// # Returns
     /// A new `NodeHandle` instance.
-    pub(crate) fn new(id: usize, transport: T) -> Self {
+    pub(crate) fn new(id: Uuid, transport: T) -> Self {
         Self { id, transport }
+    }
+
+    /// The node's id.
+    ///
+    /// # Returns
+    /// The unique user id of the node.
+    pub fn id(&self) -> Uuid {
+        self.id
     }
 
     /// Bootstraps the node as a parameter server.

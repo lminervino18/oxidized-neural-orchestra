@@ -1,108 +1,67 @@
 use std::{collections::BTreeMap, io};
 
 use comms::{
-    Connector, NodeHandle, TransportLayer,
-    protocol::Entity,
+    NodeHandle, TransportLayer,
     specs::node::{StatRequest, StatResponse},
 };
-use tokio::net::{
-    TcpStream,
-    tcp::{OwnedReadHalf, OwnedWriteHalf},
-};
-
-type R = OwnedReadHalf;
-type W = OwnedWriteHalf;
 
 /// The amount of ping rounds to make.
 const PING_ROUNDS: usize = 10;
 
 /// Obtains the statistics from the nodes in the network.
-pub struct StatRequester<'a, T, F>
-where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-{
-    connector: &'a mut Connector<R, W, T, F>,
-}
+pub struct StatRequester;
 
-impl<'a, T, F> StatRequester<'a, T, F>
-where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-{
+impl StatRequester {
     /// Creates a new `Resovler`.
-    ///
-    /// # Args
-    /// * `connector` - The connection establisher.
     ///
     /// # Returns
     /// A new `Resolver` instance.
-    pub fn new(connector: &'a mut Connector<R, W, T, F>) -> Self {
-        Self { connector }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Connects to the nodes given their addresses and calculates requests the relevant
     /// statistics for training.
     ///
     /// # Args
-    /// * `addrs` - The network addresses of the workers.
+    /// * `handles` - The handles for communicating with the nodes.
     ///
     /// # Returns
     /// The accumulated statistic responses or an io error if occurred.
-    pub async fn obtain_stats(
+    pub async fn obtain_stats<T>(
         &mut self,
-        addrs: &[String],
-    ) -> io::Result<BTreeMap<String, Vec<StatResponse>>> {
-        let mut handles = self.connect_nodes(addrs).await?;
-        self.request_stats(&mut handles, addrs).await?;
-        let stats = self.wait_for_responses(&mut handles, addrs).await?;
-        self.disconnect_nodes(&mut handles).await;
+        mut handles: BTreeMap<String, NodeHandle<T>>,
+    ) -> io::Result<BTreeMap<String, Vec<StatResponse>>>
+    where
+        T: TransportLayer,
+    {
+        self.request_stats(&mut handles).await?;
+        let stats = self.wait_for_responses(&mut handles).await?;
+        self.disconnect_nodes(handles.values_mut()).await;
         Ok(stats)
-    }
-
-    /// Connects to the nodes in the network.
-    ///
-    /// # Args
-    /// * `addrs` - The network addresses of the nodes.
-    ///
-    /// # Returns
-    /// The `NodeHandle` for each of the given network address or an io error if occurred.
-    async fn connect_nodes(&mut self, addrs: &[String]) -> io::Result<Vec<NodeHandle<T>>> {
-        let mut handles = Vec::with_capacity(addrs.len());
-
-        for (id, addr) in addrs.iter().enumerate() {
-            let stream = TcpStream::connect(addr).await?;
-            let (rx, tx) = stream.into_split();
-
-            let node_handle = self
-                .connector
-                .connect_node(id, rx, tx, Entity::Orchestrator)
-                .await?;
-
-            handles.push(node_handle);
-        }
-
-        Ok(handles)
     }
 
     /// Requests the nodes to calculate their ping latency between each other.
     ///
     /// # Args
     /// * `handles` - The handles for communicating with the nodes.
-    /// * `addrs` - The network addresses of each of the handles.
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn request_stats(
+    async fn request_stats<T>(
         &self,
-        handles: &mut [NodeHandle<T>],
-        addrs: &[String],
-    ) -> io::Result<()> {
-        for (id, node_handle) in handles.iter_mut().enumerate() {
+        handles: &mut BTreeMap<String, NodeHandle<T>>,
+    ) -> io::Result<()>
+    where
+        T: TransportLayer,
+    {
+        let addrs: Vec<_> = handles.keys().cloned().collect();
+
+        for (i, node_handle) in handles.values_mut().enumerate() {
             let ping_req = StatRequest::Ping {
-                addrs: addrs[..id].to_vec(),
+                addrs: addrs[..i].to_vec(),
                 rounds: PING_ROUNDS,
-                incoming: addrs.len() - id - 1,
+                incoming: addrs.len() - i - 1,
             };
 
             node_handle.push_stats(vec![ping_req]).await?;
@@ -115,18 +74,19 @@ where
     ///
     /// # Args
     /// * `handles` - The handles for communicating with the nodes.
-    /// * `addrs` - The network addresses of each of the handles.
     ///
     /// # Returns
     /// The statistic responses or an io error if occurred.
-    async fn wait_for_responses(
+    async fn wait_for_responses<T>(
         &self,
-        handles: &mut [NodeHandle<T>],
-        addrs: &[String],
-    ) -> io::Result<BTreeMap<String, Vec<StatResponse>>> {
+        handles: &mut BTreeMap<String, NodeHandle<T>>,
+    ) -> io::Result<BTreeMap<String, Vec<StatResponse>>>
+    where
+        T: TransportLayer,
+    {
         let mut stats = BTreeMap::new();
 
-        for (addr, node_handle) in addrs.iter().zip(handles) {
+        for (addr, node_handle) in handles.iter_mut() {
             let node_stats = node_handle.pull_stats().await?;
             stats.insert(addr.to_string(), node_stats);
         }
@@ -138,7 +98,11 @@ where
     ///
     /// # Args
     /// * `handles` - The handles for communicating with the nodes.
-    async fn disconnect_nodes(&self, handles: &mut [NodeHandle<T>]) {
+    async fn disconnect_nodes<'a, I, T>(&self, handles: I)
+    where
+        T: TransportLayer + 'a,
+        I: Iterator<Item = &'a mut NodeHandle<T>> + 'a,
+    {
         for node_handle in handles {
             let _ = node_handle.disconnect().await;
         }

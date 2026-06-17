@@ -11,7 +11,7 @@ pub struct WorkerRingManager<T>
 where
     T: TransportLayer,
 {
-    id: usize,
+    pos: usize,
     addrs: Vec<String>,
     prev: WorkerHandle<T>,
     next: WorkerHandle<T>,
@@ -27,7 +27,7 @@ where
     /// Creates a new `WorkerRingManager`.
     ///
     /// # Args
-    /// * `id` - The id of this worker.
+    /// * `pos` - This worker's position with respect to every other worker in the ring.
     /// * `addrs` - The addresses of every worker in the ring.
     /// * `prev` - The handle for communicating with the previous worker.
     /// * `next` - The handle for communicating with the next worker.
@@ -37,7 +37,7 @@ where
     /// # Returns
     /// A new `WorkerRingManager` instance.
     pub fn new(
-        id: usize,
+        pos: usize,
         addrs: Vec<String>,
         prev: WorkerHandle<T>,
         next: WorkerHandle<T>,
@@ -45,7 +45,7 @@ where
         amount_of_layers: usize,
     ) -> Self {
         Self {
-            id,
+            pos,
             addrs,
             prev,
             next,
@@ -97,7 +97,7 @@ where
         //         address, this worker's address.
         let n = NonZeroUsize::new(amount_of_workers).unwrap();
         let mut chunks: Vec<_> = self.residual.split_chunks_mut(n).collect();
-        let mut i = self.id;
+        let mut i = self.pos;
 
         for _ in 0..n.get() - 1 {
             match self.next.push_grad(chunks[i]).await? {
@@ -138,7 +138,7 @@ where
         let n = NonZeroUsize::new(amount_of_workers).unwrap();
         let mut chunks: Vec<_> = self.grad.split_chunks_mut(n).collect();
         let mut residual_chunks: Vec<_> = self.residual.split_chunks_mut(n).collect();
-        let mut i = (self.id + 1) % n.get();
+        let mut i = (self.pos + 1) % n.get();
 
         // SAFETY `i` is in bounds, it's defined to be lower than `n`.
         chunks[i].copy_from_slice(residual_chunks[i]);

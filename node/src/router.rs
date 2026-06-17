@@ -1,7 +1,9 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchEvent, OrchHandle, TransportLayer, share_dataset,
+    Acceptor, Connection, Connector, OrchEvent, OrchHandle, TransportLayer,
+    protocol::Entity,
+    share_dataset,
     specs::{
         machine_learning::TrainerSpec,
         node::{NodeSpec, StatRequest},
@@ -75,10 +77,12 @@ where
     /// # Returns
     /// An io error if there's an issue accepting new incoming connections.
     pub async fn run(mut self) -> io::Result<()> {
+        let src = Entity::Node;
+
         loop {
             info!("awaiting connection");
 
-            let Connection::Orch(orch_handle) = self.acceptor.accept().await? else {
+            let Connection::Orch(orch_handle) = self.acceptor.accept(src).await? else {
                 warn!("expected an orchestrator connection, got something else");
                 continue;
             };
@@ -102,7 +106,7 @@ where
                     }
                 }
                 OrchEvent::StatsRequest { reqs } => {
-                    if let Err(e) = self.service(reqs, orch_handle).await {
+                    if let Err(e) = self.service_stats(reqs, orch_handle).await {
                         error!("stat service failed with an error: {e}");
                     }
                 }
@@ -125,7 +129,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn service(
+    async fn service_stats(
         &mut self,
         reqs: Vec<StatRequest>,
         mut orch_handle: OrchHandle<T>,
