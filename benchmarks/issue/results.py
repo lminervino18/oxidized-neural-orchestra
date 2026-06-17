@@ -42,7 +42,9 @@ def load_history():
                         rec = json.loads(line)
                     except json.JSONDecodeError:
                         continue
-                    if "run_key" in rec:
+                    # A valid run_key has the full suite|model|strategy|... shape.
+                    # Skip malformed keys left by older/aborted runs.
+                    if "|" in rec.get("run_key", ""):
                         history[rec["run_key"]] = rec
         except OSError:
             pass

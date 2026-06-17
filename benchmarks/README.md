@@ -38,7 +38,6 @@ _Last full run: 3h 46m 30s (2026-06-17 05:06)._
 | nielsen | AR | 5w | 60 | 0.0191 | 0.949 |
 | nielsen | AR | 7w | 60 | 0.0223 | 0.941 |
 | nielsen | PS | 3w/2s | 60 | 0.0122 | 0.957 |
-| nielsen | SS | 3w/2s | — | — | — |
 | nielsen | SS | 3w/2s | 104 | 0.019 | 0.936 |
 
 ![](plots/convergence_loss_nielsen.png)
@@ -75,7 +74,6 @@ _Last full run: 3h 46m 30s (2026-06-17 05:06)._
 | lenet5 | SS | 3w/2s | 0.000328 | 0.00146 |
 | nielsen | AR | 3w | 0.000352 | 0.0016 |
 | nielsen | PS | 3w/2s | 0.000333 | 0.00151 |
-| nielsen | SS | 3w/2s | — | — |
 | nielsen | SS | 3w/2s | 0.000418 | 0.00189 |
 
 ![](plots/convergence_speed_nielsen.png)
