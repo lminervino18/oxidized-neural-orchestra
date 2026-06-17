@@ -46,6 +46,7 @@ fn avg_loss(last_loss: &[Option<f64>]) -> f64 {
 struct ProgressReporter {
     worker_epochs: Vec<usize>,
     last_loss: Vec<Option<f64>>,
+    loss_history: Vec<f64>,
     max_epochs: usize,
     is_tty: bool,
     current_epoch: Arc<AtomicUsize>,
@@ -100,6 +101,7 @@ impl ProgressReporter {
         Self {
             worker_epochs: vec![0; worker_count],
             last_loss: vec![None; worker_count],
+            loss_history: Vec::new(),
             max_epochs,
             is_tty,
             current_epoch,
@@ -119,6 +121,13 @@ impl ProgressReporter {
 
         let epoch = self.worker_epochs.iter().copied().max().unwrap_or(0);
         let avg = avg_loss(&self.last_loss);
+
+        if epoch > 0 {
+            while self.loss_history.len() < epoch {
+                self.loss_history.push(avg);
+            }
+            self.loss_history[epoch - 1] = avg;
+        }
 
         self.current_epoch.store(epoch, Ordering::Relaxed);
         self.avg_loss_bits
@@ -178,6 +187,7 @@ impl ProgressReporter {
 #[pyclass]
 pub struct TrainedModel {
     pub inner: orchestrator::TrainedModel,
+    pub loss_history: Vec<f64>,
 }
 
 #[pymethods]
@@ -191,6 +201,14 @@ impl TrainedModel {
     /// The trained parameters in a flat vector.
     pub fn weights(&self) -> Vec<f32> {
         self.inner.params.to_vec()
+    }
+
+    /// Returns the average training loss recorded at each epoch.
+    ///
+    /// # Returns
+    /// One loss value per completed epoch, in order.
+    pub fn loss_history(&self) -> Vec<f64> {
+        self.loss_history.clone()
     }
 
     /// Saves the trained model in safetensors format.
@@ -263,14 +281,19 @@ impl Session {
                         }
                     };
 
+                    let loss_history = std::mem::take(&mut reporter.loss_history);
                     reporter.finish(result.is_ok());
-                    result
+                    result.map(|trained| (trained, loss_history))
                 })
                 .join()
                 .map_err(|_| "session thread panicked".to_string())?
             })
             .map_err(PyRuntimeError::new_err)?;
 
-        Ok(TrainedModel { inner: trained })
+        let (trained, loss_history) = trained;
+        Ok(TrainedModel {
+            inner: trained,
+            loss_history,
+        })
     }
 }
