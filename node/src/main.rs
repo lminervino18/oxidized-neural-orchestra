@@ -13,7 +13,7 @@ use router::NodeRouter;
 const DEFAULT_HOST: &str = "0.0.0.0";
 
 /// The timeout duration for the reliable transport.
-const NETWORK_TIMEOUT: Duration = Duration::from_secs(5);
+const NETWORK_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// The starting sleep duration for exponential backoff.
 const NETWORK_EXP_BACKOFF_BASE: Duration = Duration::from_secs(2);

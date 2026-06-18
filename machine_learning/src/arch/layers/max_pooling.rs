@@ -125,6 +125,7 @@ impl MaxPooling {
 
     pub fn backward(&mut self, d_in: ArrayViewMut4<f32>) -> Result<ArrayViewMut4<'_, f32>> {
         let Self {
+            padding,
             real_input_dim,
             ref mut delta_out,
             ref max_indices,
@@ -137,8 +138,16 @@ impl MaxPooling {
 
         for b in 0..batches {
             for c in 0..in_channels {
-                azip!((d in &d_in, &idx in max_indices) {
-                    delta_out[[b,c,idx.0,idx.1]] = *d;
+                let d_bc = d_in.slice(s![b, c, .., ..]);
+                let max_indices_bc = max_indices.slice(s![b, c, .., ..]);
+                azip!((&d in &d_bc, &idx in &max_indices_bc) {
+                    if let (Some(row), Some(col)) =
+                        (idx.0.checked_sub(padding), idx.1.checked_sub(padding))
+                        && row < real_input_dim.0
+                        && col < real_input_dim.1
+                    {
+                        delta_out[[b, c, row, col]] = d;
+                    }
                 });
             }
         }
@@ -263,6 +272,79 @@ mod tests {
             [0., 6., 7., 8.],
             [0., 10., 11., 12.],
             [0., 14., 15., 16.]
+        ]]];
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_max_pooling_backward_routes_per_channel_independently() {
+        // 1 batch, 2 channels, 4x4, filter 2 stride 2.
+        // Each channel has its maxima in DIFFERENT positions so we can detect
+        // whether the backward pass routes each channel's delta independently.
+        let input = array![[
+            [
+                [1., 2., 3., 4.],
+                [5., 6., 7., 8.],
+                [9., 10., 11., 12.],
+                [13., 14., 15., 16.]
+            ],
+            [
+                [16., 15., 14., 13.],
+                [12., 11., 10., 9.],
+                [8., 7., 6., 5.],
+                [4., 3., 2., 1.]
+            ]
+        ]];
+        let mut max_pooling = MaxPooling::new(2, 2, 0);
+        max_pooling.forward(input.view()).unwrap();
+
+        // upstream delta: distinct per channel so mixing would be visible.
+        let mut delta_in = array![[
+            [[1., 2.], [3., 4.]],
+            [[10., 20.], [30., 40.]]
+        ]];
+
+        let output = max_pooling.backward(delta_in.view_mut()).unwrap();
+
+        // channel 0 maxima at (1,1),(1,3),(3,1),(3,3); channel 1 maxima at (0,0),(0,2),(2,0),(2,2)
+        let expected = array![[
+            [
+                [0., 0., 0., 0.],
+                [0., 1., 0., 2.],
+                [0., 0., 0., 0.],
+                [0., 3., 0., 4.]
+            ],
+            [
+                [10., 0., 20., 0.],
+                [0., 0., 0., 0.],
+                [30., 0., 40., 0.],
+                [0., 0., 0., 0.]
+            ]
+        ]];
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_max_pooling_backward_with_padding_maps_to_real_input() {
+        let input = array![[[
+            [1., 2., 3., 4.],
+            [5., 6., 7., 8.],
+            [9., 10., 11., 12.],
+            [13., 14., 15., 16.]
+        ]]];
+        let mut max_pooling = MaxPooling::new(2, 2, 1);
+        max_pooling.forward(input.view()).unwrap();
+
+        let mut delta_in = array![[[[1., 2., 3.], [4., 5., 6.], [7., 8., 9.]]]];
+
+        let output = max_pooling.backward(delta_in.view_mut()).unwrap();
+        let expected = array![[[
+            [1., 0., 2., 3.],
+            [0., 0., 0., 0.],
+            [4., 0., 5., 6.],
+            [7., 0., 8., 9.]
         ]]];
 
         assert_eq!(output, expected);

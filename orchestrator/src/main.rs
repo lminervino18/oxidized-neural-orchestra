@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use comms::floats::{Float01, FloatPositive};
+use comms::floats::{Float01, FloatNonNegative, FloatPositive};
 use log::info;
 use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
 
@@ -51,6 +51,64 @@ fn build_addresses(nodes: usize) -> Vec<String> {
         .collect()
 }
 
+fn nonzero(n: usize) -> NonZeroUsize {
+    NonZeroUsize::new(n).unwrap()
+}
+
+fn make_nielsen_mnist_model() -> ModelConfig {
+    use ActFnConfig::*;
+    use LayerConfig::*;
+    use ParamGenConfig::*;
+
+    let layers = vec![
+        Conv {
+            input_dim: (nonzero(1), nonzero(28), nonzero(28)),
+            kernel_dim: (nonzero(10), nonzero(1), nonzero(5)),
+            stride: nonzero(1),
+            padding: 0,
+            init: Kaiming,
+            act_fn: None,
+        },
+        // MaxPooling {
+        //     input_dim: (nonzero(10), nonzero(24), nonzero(24)),
+        //     filter_size: nonzero(2),
+        //     stride: nonzero(2),
+        //     padding: 0,
+        //     act_fn: None,
+        // },
+        Dense {
+            output_size: nonzero(100),
+            init: Kaiming,
+            act_fn: Some(ReLU {
+                slope: Float01::new(0.0).unwrap(),
+            }),
+        },
+        Dense {
+            output_size: nonzero(10),
+            init: Kaiming,
+            act_fn: Some(Softmax),
+        },
+    ];
+
+    ModelConfig { layers }
+}
+
+fn make_mnist_dataset() -> DatasetConfig {
+    let x_size = nonzero(28 * 28);
+    let y_size = nonzero(10);
+
+    let src = DataSrc::Local {
+        samples_path: "datasets/mnist/mnist_train_samples.bin".into(),
+        labels_path: "datasets/mnist/mnist_train_labels.bin".into(),
+    };
+
+    DatasetConfig {
+        src,
+        x_size,
+        y_size,
+    }
+}
+
 fn main() -> io::Result<()> {
     unsafe { env::set_var("RUST_LOG", "debug") };
     env_logger::init();
@@ -82,31 +140,7 @@ fn main() -> io::Result<()> {
         store: StoreConfig::Blocking,
     };
 
-    let model_config = ModelConfig {
-        layers: vec![
-            LayerConfig::Conv {
-                input_dim: (
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                    NonZeroUsize::new(3).unwrap(),
-                ),
-                kernel_dim: (
-                    NonZeroUsize::new(5).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                    NonZeroUsize::new(2).unwrap(),
-                ),
-                stride: NonZeroUsize::new(1).unwrap(),
-                padding: 0,
-                init: ParamGenConfig::Kaiming,
-                act_fn: None,
-            },
-            LayerConfig::Dense {
-                output_size: NonZeroUsize::new(4).unwrap(),
-                init: ParamGenConfig::Kaiming,
-                act_fn: Some(ActFnConfig::Softmax),
-            },
-        ],
-    };
+    let model_config = make_nielsen_mnist_model();
 
     let training_config = TrainingConfig {
         addrs,
@@ -114,61 +148,20 @@ fn main() -> io::Result<()> {
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
-        dataset: DatasetConfig {
-            src: DataSrc::Inline {
-                samples: vec![
-                    0.0, 1.0, 0.0, //
-                    1.0, 1.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 0.0, 0.0, //
-                    1.0, 0.0, 1.0, // plus sign
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, //
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, // dot
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, // cross
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, //
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, // box
-                ],
-                labels: vec![
-                    1.0, 0.0, 0.0, 0.0, // plus sign
-                    0.0, 1.0, 0.0, 0.0, // dot
-                    0.0, 0.0, 1.0, 0.0, // cross
-                    0.0, 0.0, 0.0, 1.0, // box
-                ],
-            },
-            x_size: NonZeroUsize::new(18).unwrap(),
-            y_size: NonZeroUsize::new(4).unwrap(),
-        },
+        dataset: make_mnist_dataset(),
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
-            lr: FloatPositive::new(1.0).unwrap(),
+            lr: FloatPositive::new(0.1).unwrap(),
             mu: Float01::new(0.95).unwrap(),
         },
-        loss_fn: LossFnConfig::Mse,
-        batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(300).unwrap(),
+        loss_fn: LossFnConfig::CrossEntropy,
+        batch_size: NonZeroUsize::new(10).unwrap(),
+        // max_epochs: NonZeroUsize::new(60).unwrap(),
+        max_epochs: NonZeroUsize::new(2).unwrap(),
         offline_epochs: 0,
         seed: Some(42),
-        early_stopping: None,
+        early_stopping: Some(EarlyStoppingConfig {
+            tolerance: FloatNonNegative::new(0.02).unwrap(),
+        }),
     };
 
     let start = Instant::now();
