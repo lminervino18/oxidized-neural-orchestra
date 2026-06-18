@@ -12,6 +12,7 @@ use tokio::io::{self, AsyncRead, AsyncWrite, DuplexStream, ReadHalf, WriteHalf};
 use comms::{
     OrchEvent, OrchHandle, ParamServerHandle, Stp, WorkerEvent, WorkerHandle, floats::FloatPositive,
 };
+use uuid::Uuid;
 use worker::{
     middlewares::ServerClusterManager,
     workers::{ParamServerWorker, Worker},
@@ -115,11 +116,15 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
         StdRng::from_os_rng(),
     );
 
+    let worker_id = Uuid::new_v4();
+    let server_id = Uuid::new_v4();
+    let orch_id = Uuid::nil();
+
     // Worker node.
     let transport = Stp::new(wk_orch_rx, wk_orch_tx);
-    let mut orch_wk_handle = OrchHandle::new(transport);
+    let mut orch_wk_handle = OrchHandle::new(orch_id, transport);
     let transport = Stp::new(sv_rx, sv_tx);
-    let server_wk_handle = ParamServerHandle::new(0, transport);
+    let server_wk_handle = ParamServerHandle::new(server_id, transport);
     let mut cluster_manager = ServerClusterManager::new(vec![0]);
     cluster_manager.spawn(server_wk_handle, 2);
     let mut worker =
@@ -127,15 +132,15 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
 
     // Server node.
     let transport = Stp::new(wk_rx, wk_tx);
-    let worker_sv_handle = WorkerHandle::new(0, transport);
+    let worker_sv_handle = WorkerHandle::new(worker_id, transport);
     let transport = Stp::new(sv_orch_rx, sv_orch_tx);
-    let orch_sv_handle = OrchHandle::new(transport);
+    let orch_sv_handle = OrchHandle::new(orch_id, transport);
 
     // Orch node.
     let transport = Stp::new(orch_wk_rx, orch_wk_tx);
-    let worker_orch_handle = WorkerHandle::new(0, transport);
+    let worker_orch_handle = WorkerHandle::new(worker_id, transport);
     let transport = Stp::new(orch_sv_rx, orch_sv_tx);
-    let server_orch_handle = ParamServerHandle::new(0, transport);
+    let server_orch_handle = ParamServerHandle::new(server_id, transport);
 
     let worker_fut = worker.run();
     let server_fut = mock_server(

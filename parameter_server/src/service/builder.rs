@@ -2,6 +2,7 @@ use std::{io, num::NonZeroUsize, thread};
 
 use comms::{
     Acceptor, Connection, OrchHandle, TransportLayer, WorkerHandle,
+    protocol::Entity,
     specs::{
         machine_learning::OptimizerSpec,
         server::{ServerSpec, StoreSpec, SynchronizerSpec},
@@ -86,12 +87,14 @@ where
         G: AsyncFnMut(&mut WorkerHandle<T>) -> io::Result<()>,
     {
         let nworkers = spec.nworkers;
+        let src = Entity::ParamServer;
+
         let mut server = self
             .resolve_optimizer(spec, orch_handle)
             .map_err(io::Error::other)?;
 
         for _ in 0..nworkers {
-            let Connection::Worker(mut worker_handle) = self.acceptor.accept().await? else {
+            let Connection::Worker(mut worker_handle) = self.acceptor.accept(src).await? else {
                 return Err(io::Error::other("Unexpected non worker connection"));
             };
 

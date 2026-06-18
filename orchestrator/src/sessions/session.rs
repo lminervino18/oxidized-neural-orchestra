@@ -1,4 +1,9 @@
-use std::{collections::HashSet, io::SeekFrom, path::Path, thread};
+use std::{
+    collections::{HashMap, HashSet},
+    io::SeekFrom,
+    path::Path,
+    thread,
+};
 
 use comms::{
     Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle, protocol::Entity,
@@ -16,6 +21,7 @@ use tokio::{
     runtime::{Builder, Runtime},
     sync::mpsc::{self, Receiver, Sender},
 };
+use uuid::Uuid;
 
 use super::{EventListener, TrainedModel, WorkerListener, WorkerRequest};
 use crate::{
@@ -221,7 +227,7 @@ impl Session {
         user_event_tx: &Sender<TrainingEvent>,
         req_txs: &mut [Sender<WorkerRequest>],
         event_rx: &mut Receiver<TrainingEvent>,
-        layer_offsets: &[(usize, usize, usize)],
+        layer_offsets: &[(Uuid, usize, usize)],
     ) -> Vec<f32>
     where
         T: TransportLayer + 'static,
@@ -286,14 +292,14 @@ impl Session {
     /// The trained parameters of the model in layer order.
     async fn finalize_parameter_server<T>(
         server_handles: Vec<ParamServerHandle<T>>,
-        layer_offsets: &[(usize, usize, usize)],
+        layer_offsets: &[(Uuid, usize, usize)],
         user_event_tx: &Sender<TrainingEvent>,
     ) -> Vec<f32>
     where
         T: TransportLayer,
     {
         debug!("all workers done, reading final params from all servers");
-        let mut server_params = vec![Vec::new(); server_handles.len()];
+        let mut server_params = HashMap::with_capacity(server_handles.len());
 
         let req_err = async |i, e| {
             let details = format!("unexpected error from server {i}: {e}");
@@ -303,7 +309,6 @@ impl Session {
         };
 
         for (i, mut server_handle) in server_handles.into_iter().enumerate() {
-            let server_id = server_handle.id();
             // TODO: Acá eventualmente hay que ver como manejamos las caídas de
             //       los servidores. Capaz conviene tener a mano al Acceptor y
             //       en caso de que un servidor no responda que se vuelva a
@@ -313,6 +318,8 @@ impl Session {
             //       Si se corta el internet por ejemplo por un rato después se
             //       van a intentar reconectar varios y necesitamos saber quién
             //       es quién.
+            let server_id = server_handle.id();
+
             loop {
                 if let Err(e) = server_handle.req_params().await {
                     req_err(i, e).await;
@@ -322,7 +329,7 @@ impl Session {
                 match server_handle.pull_params().await {
                     Ok(params) => {
                         debug!("server {i}: pulled {} params", params.len());
-                        server_params[server_id] = params.to_vec();
+                        server_params.insert(server_id, params.to_vec());
 
                         if let Err(e) = server_handle.disconnect().await {
                             error!("Failed to disconnect server {i}: {e}");
@@ -343,7 +350,7 @@ impl Session {
         let mut model_params = Vec::with_capacity(total);
 
         for (layer_i, &(server_id, start, end)) in layer_offsets.iter().enumerate() {
-            let params = &server_params[server_id];
+            let params = &server_params[&server_id];
             debug!("layer {layer_i}: server {server_id} [{start}..{end}]");
             model_params.extend_from_slice(&params[start..end]);
         }
@@ -422,7 +429,7 @@ impl Session {
     {
         let mut handles = Vec::new();
 
-        for (i, ServerAdapt { addr, spec }) in servers.into_iter().enumerate() {
+        for ServerAdapt { addr, spec } in servers {
             debug!("connecting to server at {addr}");
 
             let stream =
@@ -435,7 +442,7 @@ impl Session {
 
             let (rx, tx) = stream.into_split();
             let node_handle = connector
-                .connect_node(i, rx, tx, Entity::Orchestrator)
+                .connect_node(rx, tx, Entity::Orchestrator)
                 .await
                 .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
@@ -465,36 +472,33 @@ impl Session {
     {
         const CHUNK_SIZE: usize = 8192;
 
-        let futs = workers
-            .into_iter()
-            .enumerate()
-            .map(|(i, adapt)| async move {
-                let WorkerAdapt {
-                    addr,
-                    spec,
-                    partition,
-                } = adapt;
+        let futs = workers.into_iter().map(|adapt| async move {
+            let WorkerAdapt {
+                addr,
+                spec,
+                partition,
+            } = adapt;
 
-                debug!("connecting to worker at {addr}");
+            debug!("connecting to worker at {addr}");
 
-                let stream =
-                    TcpStream::connect(&addr)
-                        .await
-                        .map_err(|e| OrchErr::ConnectionFailed {
-                            addr: addr.clone(),
-                            source: e,
-                        })?;
-
-                let (rx, tx) = stream.into_split();
-                let node_handle = connector
-                    .connect_node(i, rx, tx, Entity::Orchestrator)
+            let stream =
+                TcpStream::connect(&addr)
                     .await
-                    .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
+                    .map_err(|e| OrchErr::ConnectionFailed {
+                        addr: addr.clone(),
+                        source: e,
+                    })?;
 
-                let mut worker_handle = node_handle.create_worker(spec).await?;
-                Self::send_partition(&mut worker_handle, partition, CHUNK_SIZE).await?;
-                Ok::<_, OrchErr>(worker_handle)
-            });
+            let (rx, tx) = stream.into_split();
+            let node_handle = connector
+                .connect_node(rx, tx, Entity::Orchestrator)
+                .await
+                .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
+
+            let mut worker_handle = node_handle.create_worker(spec).await?;
+            Self::send_partition(&mut worker_handle, partition, CHUNK_SIZE).await?;
+            Ok::<_, OrchErr>(worker_handle)
+        });
 
         future::try_join_all(futs).await
     }

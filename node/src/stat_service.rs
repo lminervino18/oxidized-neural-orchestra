@@ -165,10 +165,9 @@ where
         incoming: usize,
     ) -> (Vec<AddressedHandle<T>>, Vec<NodeHandle<T>>) {
         let mut ping_handles = Vec::with_capacity(addrs.len());
-        let id = addrs.len();
 
-        for (peer_id, addr) in addrs.into_iter().enumerate() {
-            match self.connect_node(id, peer_id, &addr).await {
+        for addr in addrs {
+            match self.connect_node(&addr).await {
                 Ok(handle) => {
                     let addr_handle = AddressedHandle { addr, handle };
                     ping_handles.push(addr_handle);
@@ -178,9 +177,10 @@ where
         }
 
         let mut pong_handles = Vec::with_capacity(incoming);
+        let src = Entity::Node;
 
         for _ in 0..incoming {
-            if let Ok(Connection::Node(node_handle)) = self.acceptor.accept().await {
+            if let Ok(Connection::Node(node_handle)) = self.acceptor.accept(src).await {
                 pong_handles.push(node_handle);
             }
         }
@@ -191,27 +191,14 @@ where
     /// Connects to another node.
     ///
     /// # Args
-    /// * `id` - This node's id.
-    /// * `peer_id` - The other node's id.
     /// * `addr` - The network address of th node to connect to.
     ///
     /// # Returns
     /// A handle to the other node or an io error if occurred.
-    async fn connect_node(
-        &self,
-        id: usize,
-        peer_id: usize,
-        addr: &str,
-    ) -> io::Result<NodeHandle<T>> {
+    async fn connect_node(&self, addr: &str) -> io::Result<NodeHandle<T>> {
         let stream = TcpStream::connect(addr).await?;
         let (rx, tx) = stream.into_split();
-
-        let node_handle = self
-            .connector
-            .connect_node(peer_id, rx, tx, Entity::Node { id })
-            .await?;
-
-        Ok(node_handle)
+        self.connector.connect_node(rx, tx, Entity::Node).await
     }
 
     /// Runs a pinging round between the nodes.
