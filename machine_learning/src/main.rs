@@ -1,6 +1,6 @@
 use std::{env, fs::File, io::Read, num::NonZeroUsize, path::PathBuf};
 
-use comms::{DatasetSrc, floats::FloatPositive};
+use comms::floats::FloatPositive;
 use machine_learning::{
     arch::loss::CrossEntropy,
     datasets::{DataSrc, Dataset},

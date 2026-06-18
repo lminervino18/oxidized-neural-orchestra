@@ -152,7 +152,7 @@ fn ps_node_radius(max_dim: usize) -> f64 {
     let available = ZONE_HI - ZONE_LO;
     let n = max_dim as f64;
     let max_r = (available - (n - 1.0) * NODE_GAP) / (2.0 * n);
-    max_r.min(11.0).max(2.0)
+    max_r.clamp(2.0, 11.0)
 }
 
 // ── Layout computation ────────────────────────────────────────────────────────
@@ -528,11 +528,11 @@ fn node_color(node: &NodeInfo, state: &TrainingState, phase: Phase) -> Color {
 
     let worker = state.workers.get(wi);
 
-    if worker.map_or(false, |w| w.done) {
+    if worker.is_some_and(|w| w.done) {
         return COLOR_DONE;
     }
 
-    if worker.map_or(true, |w| w.last_loss.is_none()) && phase == Phase::Connecting {
+    if worker.is_none_or(|w| w.last_loss.is_none()) && phase == Phase::Connecting {
         return Theme::FG_MUTED;
     }
 

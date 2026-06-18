@@ -191,7 +191,7 @@ where
                 let trainer = worker.into_trainer();
                 let dataset = trainer.into_dataset();
 
-                let worker = self
+                let mut worker = self
                     .switch(
                         spec,
                         server_addrs,
@@ -203,7 +203,7 @@ where
                     )
                     .await?;
 
-                self.run_worker(Box::new(worker).as_mut()).await?;
+                self.run_worker(&mut worker).await?;
                 Ok(())
             }
             Run::Upgrade { spec } => {

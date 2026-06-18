@@ -473,7 +473,7 @@ impl TrainingState {
 
     /// Returns `true` if the worker at `id` has upgraded into a parameter server.
     fn is_server_worker(&self, id: usize) -> bool {
-        self.workers.get(id).map_or(false, |w| w.became_server)
+        self.workers.get(id).is_some_and(|w| w.became_server)
     }
 
     /// Advances the selected worker to the next one, skipping any that have
