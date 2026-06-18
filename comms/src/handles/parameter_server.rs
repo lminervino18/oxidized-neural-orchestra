@@ -1,6 +1,7 @@
 use std::io;
 
 use rand::{SeedableRng, rngs::StdRng};
+use uuid::Uuid;
 
 use super::{CompressedGrad, Compressor};
 use crate::{
@@ -14,7 +15,7 @@ use crate::{
 /// The handle for communicating with a `ParameterServer`.
 #[derive(Debug)]
 pub struct ParamServerHandle<T> {
-    id: usize,
+    id: Uuid,
     transport: T,
     compressor: Compressor<StdRng>,
 }
@@ -26,12 +27,12 @@ where
     /// Creates a new `ParamServerHandle`.
     ///
     /// # Args
-    /// * `id` - The id number of the server.
+    /// * `id` - The id of the server.
     /// * `transport` - The transport layer of the communication.
     ///
     /// # Returns
     /// A new `ParamServerHandle` instance.
-    pub fn new(id: usize, transport: T) -> Self {
+    pub fn new(id: Uuid, transport: T) -> Self {
         Self {
             id,
             transport,
@@ -42,8 +43,8 @@ where
     /// The server's id.
     ///
     /// # Returns
-    /// The id number of the server.
-    pub fn id(&self) -> usize {
+    /// The unique user id of the server.
+    pub fn id(&self) -> Uuid {
         self.id
     }
 

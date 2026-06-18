@@ -86,7 +86,6 @@ where
         let trainer_builder = TrainerBuilder::new();
 
         let WorkerSpec {
-            worker_id,
             ref trainer,
             ref algorithm,
             serializer,
@@ -101,7 +100,6 @@ where
             } => {
                 let cluster_manager = self
                     .connect_to_servers(
-                        worker_id,
                         server_addrs,
                         server_sizes,
                         server_ordering.clone(),
@@ -118,6 +116,7 @@ where
                 Ok(Box::new(worker) as Box<dyn Worker>)
             }
             AlgorithmSpec::AllReduce {
+                pos,
                 ref worker_addrs,
                 ref param_gen,
                 amount_of_layers,
@@ -130,7 +129,7 @@ where
                 let model_size = param_gen.size();
                 let ring_manager = self
                     .connect_to_workers(
-                        worker_id,
+                        pos,
                         worker_addrs.clone(),
                         model_size,
                         serializer,
@@ -174,10 +173,7 @@ where
         orch_handle: &'a mut OrchHandle<T>,
     ) -> io::Result<ParamServerWorker<'a, T>> {
         let WorkerSpec {
-            worker_id,
-            serializer,
-            seed,
-            ..
+            serializer, seed, ..
         } = spec;
 
         let trainer_builder = TrainerBuilder::new();
@@ -186,7 +182,6 @@ where
 
         let cluster_manager = self
             .connect_to_servers(
-                worker_id,
                 &server_addrs,
                 &server_sizes,
                 server_ordering,
@@ -233,7 +228,6 @@ where
     /// A new `ServerClusterManager` instance or an io error if occurred.
     async fn connect_to_servers<H>(
         &self,
-        id: usize,
         server_addrs: &[String],
         server_sizes: &[usize],
         server_ordering: Vec<usize>,
@@ -245,16 +239,13 @@ where
         H: AsyncFnMut(&mut ParamServerHandle<T>) -> io::Result<()>,
     {
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
-        let src_entity = Entity::Worker { id };
+        let src = Entity::Worker;
 
-        for (id, (addr, &size)) in server_addrs.iter().zip(server_sizes).enumerate() {
+        for (addr, &size) in server_addrs.iter().cloned().zip(server_sizes) {
             let stream = TcpStream::connect(addr).await?;
             let (rx, tx) = stream.into_split();
-            let mut server_handle = self
-                .connector
-                .connect_parameter_server(id, rx, tx, src_entity)
-                .await?;
 
+            let mut server_handle = self.connector.connect_parameter_server(rx, tx, src).await?;
             if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 server_handle.enable_sparse_capability(r, seed);
             }
@@ -269,7 +260,7 @@ where
     /// Connects this worker to it's previous and next workers in the network.
     ///
     /// # Args
-    /// * `id` - The id of this worker.
+    /// * `pos` - The position of this worker with respect to every other in the ring.
     /// * `worker_addrs` - The addresses of all the workers in the network.
     /// * `model_size` - The amount of parameters of the model.
     /// * `serializer_spec` - The spec of the serialization protocol.
@@ -280,33 +271,31 @@ where
     /// A new `WorkerRingManager` instance or an error if occurred.
     async fn connect_to_workers(
         &mut self,
-        id: usize,
+        pos: usize,
         addrs: Vec<String>,
         model_size: usize,
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
         amount_of_layers: usize,
     ) -> io::Result<WorkerRingManager<T>> {
+        let src = Entity::Worker;
+
         let prev_conn_fut = async {
             loop {
-                if let Connection::Worker(worker_handle) = self.acceptor.accept().await? {
+                if let Connection::Worker(worker_handle) = self.acceptor.accept(src).await? {
                     return Ok::<_, io::Error>(worker_handle);
                 }
             }
         };
 
         let n = addrs.len();
-        let src_entity = Entity::Worker { id };
 
         let next_conn_fut = async {
-            let addr = &addrs[(id + 1) % n];
+            let addr = &addrs[(pos + 1) % n];
             let stream = TcpStream::connect(addr).await?;
             let (rx, tx) = stream.into_split();
-            let mut worker_handle = self
-                .connector
-                .connect_worker(id, rx, tx, src_entity)
-                .await?;
 
+            let mut worker_handle = self.connector.connect_worker(rx, tx, src).await?;
             if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 worker_handle.enable_sparse_capability(r, seed);
             }
@@ -316,7 +305,8 @@ where
 
         let (prev, next) = tokio::try_join!(prev_conn_fut, next_conn_fut)?;
         let ring_manager =
-            WorkerRingManager::new(id, addrs, prev, next, model_size, amount_of_layers);
+            WorkerRingManager::new(pos, addrs, prev, next, model_size, amount_of_layers);
+
         Ok(ring_manager)
     }
 }

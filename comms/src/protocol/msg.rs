@@ -9,6 +9,7 @@ use serde::{
     Deserialize, Deserializer, Serialize,
     de::{SeqAccess, Visitor},
 };
+use uuid::Uuid;
 
 use super::specs::{
     machine_learning::TrainerSpec,
@@ -31,17 +32,24 @@ pub enum Payload<'a> {
 /// An enum of the different types of entities in the system.
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Entity {
-    Node { id: usize },
+    Node,
     Orchestrator,
-    ParamServer { id: usize },
-    Worker { id: usize },
+    ParamServer,
+    Worker,
 }
 
 /// The command for the `Control` variant of the `Msg` enum.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Command<'a> {
-    Connect(Entity),
+    Connect {
+        id: Uuid,
+        src: Entity,
+    },
+    Accept {
+        id: Uuid,
+        src: Entity,
+    },
     CreateNode {
         spec: NodeSpec,
     },

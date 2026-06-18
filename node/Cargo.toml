@@ -18,6 +18,7 @@ tokio = { version = "1", features = [
   "sync",
 ] }
 futures = "0.3.32"
+uuid = { version = "1.23.3", features = ["v4"] }
 
 [lints]
 workspace = true

@@ -2,6 +2,7 @@ use std::io;
 
 use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::AsyncRead;
+use uuid::Uuid;
 
 use super::{Compressor, compressor::CompressedGrad};
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
 
 /// The handle for communicating with a `Worker`.
 pub struct WorkerHandle<T> {
-    id: usize,
+    id: Uuid,
     transport: T,
     grad: Vec<f32>,
     compressor: Compressor<StdRng>,
@@ -36,18 +37,26 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// Creates a new `WorkerHandle`.
     ///
     /// # Args
-    /// * `id` - The id number of the worker.
+    /// * `id` - The id of the worker.
     /// * `transport` - The transport layer of the communication.
     ///
     /// # Returns
     /// A new `WorkerHandle` instance.
-    pub fn new(id: usize, transport: T) -> Self {
+    pub fn new(id: Uuid, transport: T) -> Self {
         Self {
             id,
             transport,
             grad: Vec::new(),
             compressor: Compressor::new(),
         }
+    }
+
+    /// The worker's id.
+    ///
+    /// # Returns
+    /// The unique user id of the worker.
+    pub fn id(&self) -> Uuid {
+        self.id
     }
 
     /// Enables the sparse gradient capability for this handle.
@@ -236,7 +245,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
         spec: ServerSpec,
         ranges: Vec<(usize, usize)>,
     ) -> io::Result<()> {
-        self.id = spec.id;
         let msg = Msg::Control(Command::Upgrade { spec, ranges });
         self.transport.send(&msg).await
     }
