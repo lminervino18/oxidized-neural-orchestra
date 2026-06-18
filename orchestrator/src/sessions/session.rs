@@ -431,9 +431,16 @@ impl Session {
 
         for ServerAdapt { addr, spec } in servers {
             debug!("connecting to server at {addr}");
-            let stream = TcpStream::connect(&addr).await?;
-            let (rx, tx) = stream.into_split();
 
+            let stream =
+                TcpStream::connect(&addr)
+                    .await
+                    .map_err(|e| OrchErr::ConnectionFailed {
+                        addr: addr.clone(),
+                        source: e,
+                    })?;
+
+            let (rx, tx) = stream.into_split();
             let node_handle = connector
                 .connect_node(rx, tx, Entity::Orchestrator)
                 .await
@@ -473,9 +480,16 @@ impl Session {
             } = adapt;
 
             debug!("connecting to worker at {addr}");
-            let stream = TcpStream::connect(&addr).await?;
-            let (rx, tx) = stream.into_split();
 
+            let stream =
+                TcpStream::connect(&addr)
+                    .await
+                    .map_err(|e| OrchErr::ConnectionFailed {
+                        addr: addr.clone(),
+                        source: e,
+                    })?;
+
+            let (rx, tx) = stream.into_split();
             let node_handle = connector
                 .connect_node(rx, tx, Entity::Orchestrator)
                 .await
