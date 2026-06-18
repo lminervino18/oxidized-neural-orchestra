@@ -83,10 +83,6 @@ where
         self.scatter().await?;
         self.gather().await?;
 
-        // The ring sums each worker's gradient; average it so the effective
-        // update (and thus the effective learning rate) stays independent of the
-        // number of workers. Without this, more workers means a larger step and
-        // training diverges as the ring grows.
         let nworkers = self.addrs.len() as f32;
         if nworkers > 1.0 {
             self.grad.iter_mut().for_each(|g| *g /= nworkers);

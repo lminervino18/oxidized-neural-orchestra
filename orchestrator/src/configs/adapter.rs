@@ -578,11 +578,6 @@ impl Adapter {
         let weighted_layers = items.len();
         let mut param_gen_bins = balanced_partitions(items, nservers);
 
-        // Keep each server's layers in model order. The worker accesses layers
-        // sequentially in model order (via server_ordering + per-server cursor),
-        // so the server's buffer layout and finalize's layer_offsets must match
-        // that order. balanced_partitions groups by size, which would otherwise
-        // shuffle a server's layers and corrupt the reassembled model.
         for bin in param_gen_bins.iter_mut() {
             bin.sort_by_key(|(abs_idx, _, _)| *abs_idx);
         }
