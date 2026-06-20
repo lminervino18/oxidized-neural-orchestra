@@ -47,18 +47,16 @@ async fn main() -> io::Result<()> {
         )
     };
 
-    let transport_factory = async || {
+    let connection_factory = async || {
         let (stream, peer_addr) = listener.accept().await?;
         info!("new incoming connection from {peer_addr}");
-
-        let (rx, tx) = stream.into_split();
-        Ok(rtp_factory(rx, tx))
+        Ok(stream.into_split())
     };
 
     let id = Uuid::new_v4();
     info!("Assigned node id {id}");
 
-    let acceptor = Acceptor::new(id, transport_factory);
+    let acceptor = Acceptor::new(id, rtp_factory, connection_factory);
     let connector = Connector::new(id, rtp_factory);
     NodeRouter::new(acceptor, connector).run().await
 }

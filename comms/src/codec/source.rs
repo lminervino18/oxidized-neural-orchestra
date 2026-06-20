@@ -27,6 +27,14 @@ impl<R: AsyncRead + Unpin> Source<R> {
         }
     }
 
+    /// Replaces `self`'s inner reader with a new one.
+    ///
+    /// # Args
+    /// * `reader` - The new reader.
+    pub fn replace(&mut self, reader: R) {
+        self.reader = reader;
+    }
+
     /// Waits to receive a new message from the inner reader.
     ///
     /// # Returns

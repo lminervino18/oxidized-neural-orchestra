@@ -1,20 +1,26 @@
 use std::{io, mem, time::Duration};
 
-use tokio::time;
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    time,
+};
 
-use super::TransportLayer;
+use super::{IoSwapable, TransportLayer};
 use crate::protocol::Msg;
 
 /// The `Retryer` retries sending and receiving messages using exponential backoff.
 #[derive(Debug)]
-pub struct Retryer<L: TransportLayer> {
+pub struct Retryer<T>
+where
+    T: TransportLayer,
+{
     base_retry_dur: Duration,
     retry_coef: u32,
     retries: usize,
-    inner: L,
+    inner: T,
 }
 
-impl<L: TransportLayer> Retryer<L> {
+impl<T: TransportLayer> Retryer<T> {
     /// Creates a new `Retryer` transport layer.
     ///
     /// # Args
@@ -25,7 +31,7 @@ impl<L: TransportLayer> Retryer<L> {
     ///
     /// # Returns
     /// A new `Retryer` transport layer instance.
-    pub fn new(base_retry_dur: Duration, retry_coef: u32, retries: usize, inner: L) -> Self {
+    pub fn new(base_retry_dur: Duration, retry_coef: u32, retries: usize, inner: T) -> Self {
         Self {
             base_retry_dur,
             retry_coef,
@@ -64,7 +70,7 @@ impl<L: TransportLayer> Retryer<L> {
     }
 }
 
-impl<L: TransportLayer> TransportLayer for Retryer<L> {
+impl<T: TransportLayer> TransportLayer for Retryer<T> {
     /// Will attempt to receive a message with retries.
     ///
     /// # Returns
@@ -110,5 +116,16 @@ impl<L: TransportLayer> TransportLayer for Retryer<L> {
         }
 
         self.inner.send(msg).await
+    }
+}
+
+impl<R, W, T> IoSwapable<R, W> for Retryer<T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer + IoSwapable<R, W>,
+{
+    fn swap(&mut self, reader: R, writer: W) {
+        self.inner.swap(reader, writer);
     }
 }

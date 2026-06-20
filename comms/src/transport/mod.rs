@@ -1,12 +1,16 @@
 mod framer;
+mod io_swapable;
 mod layer;
+mod recon;
 mod retryer;
 mod timeouter;
 
 use std::time::Duration;
 
 pub use framer::Framer;
+pub(super) use io_swapable::IoSwapable;
 pub use layer::TransportLayer;
+pub use recon::Recon;
 pub use retryer::Retryer;
 pub use timeouter::TimeOuter;
 use tokio::{

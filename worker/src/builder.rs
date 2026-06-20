@@ -26,17 +26,20 @@ use crate::{
     workers::{AllReduceWorker, Worker, parameter_server::ParamServerWorker},
 };
 
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
+
 /// The worker builder, given a spec, will build a new worker ready to use.
 pub struct WorkerBuilder<'a, R, W, T, F, G>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(R, W) -> T,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
-    acceptor: &'a mut Acceptor<T, F>,
-    connector: Connector<R, W, T, G>,
+    acceptor: &'a mut Acceptor<R, W, T, F, G>,
+    connector: Connector<R, W, T, F>,
 }
 
 impl<'a, R, W, T, F, G> WorkerBuilder<'a, R, W, T, F, G>
@@ -44,8 +47,8 @@ where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(R, W) -> T,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     /// Creates a new `WorkerBuilder`.
     ///
@@ -55,7 +58,10 @@ where
     ///
     /// # Returns
     /// A new `WorkerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<T, F>, connector: Connector<R, W, T, G>) -> Self {
+    pub fn new(
+        acceptor: &'a mut Acceptor<R, W, T, F, G>,
+        connector: Connector<R, W, T, F>,
+    ) -> Self {
         Self {
             acceptor,
             connector,
@@ -63,11 +69,11 @@ where
     }
 }
 
-impl<T, F, G> WorkerBuilder<'_, OwnedReadHalf, OwnedWriteHalf, T, F, G>
+impl<T, F, G> WorkerBuilder<'_, R, W, T, F, G>
 where
     T: TransportLayer + 'static,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     /// Builds a `Worker` from a `WorkerSpec`.
     ///

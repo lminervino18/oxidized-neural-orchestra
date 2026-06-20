@@ -12,6 +12,7 @@ use machine_learning::{
     initialization::{ParamGenBuilder, Result},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
 };
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::{ParameterServer, Server};
 use crate::{
@@ -26,24 +27,30 @@ const DEFAULT_CORE_COUNT: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 const SHARD_AMOUNT_FACTOR: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 
 /// Builds `Server`s given a specification.
-pub struct ServerBuilder<'a, T, F>
+pub struct ServerBuilder<'a, R, W, T, F, G>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
-    acceptor: &'a mut Acceptor<T, F>,
+    acceptor: &'a mut Acceptor<R, W, T, F, G>,
 }
 
-impl<'a, T, F> ServerBuilder<'a, T, F>
+impl<'a, R, W, T, F, G> ServerBuilder<'a, R, W, T, F, G>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
     T: TransportLayer + 'static,
-    F: AsyncFn() -> io::Result<T>,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     /// Creates a new `ServerBuilder`.
     ///
     /// # Returns
     /// A new `ServerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<T, F>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor<R, W, T, F, G>) -> Self {
         Self { acceptor }
     }
 
@@ -77,14 +84,14 @@ where
     /// # Returns
     ///  A new Server or a `RandErr` if the specification has
     /// invalid `RandParamGen` construction values.
-    pub async fn build_with<G>(
+    pub async fn build_with<H>(
         &mut self,
         spec: ServerSpec,
         orch_handle: OrchHandle<T>,
-        mut connection_hook: G,
+        mut connection_hook: H,
     ) -> io::Result<Box<dyn Server<T>>>
     where
-        G: AsyncFnMut(&mut WorkerHandle<T>) -> io::Result<()>,
+        H: AsyncFnMut(&mut WorkerHandle<T>) -> io::Result<()>,
     {
         let nworkers = spec.nworkers;
         let src = Entity::ParamServer;

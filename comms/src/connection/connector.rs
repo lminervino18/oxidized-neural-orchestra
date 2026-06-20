@@ -173,23 +173,21 @@ where
     /// # Returns
     /// A new `TransportLayer` or an io error if occurred.
     async fn connect(&self, rx: R, tx: W, src: Entity) -> io::Result<Connection<T>> {
-        let mut transport_layer = (self.transport_factory)(rx, tx);
+        let mut stack = (self.transport_factory)(rx, tx);
         let msg = Msg::Control(Command::Connect { id: self.id, src });
-        transport_layer.send(&msg).await?;
+        stack.send(&msg).await?;
 
-        let msg = transport_layer.recv().await?;
+        let msg = stack.recv().await?;
         let Msg::Control(Command::Accept { id, src: dst }) = msg else {
             let details = format!("Invalid connection message, expected Accept, got {msg:?}");
             return Err(io::Error::other(details));
         };
 
         let conn = match dst {
-            Entity::Node => Connection::Node(NodeHandle::new(id, transport_layer)),
-            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, transport_layer)),
-            Entity::ParamServer => {
-                Connection::ParamServer(ParamServerHandle::new(id, transport_layer))
-            }
-            Entity::Worker => Connection::Worker(WorkerHandle::new(id, transport_layer)),
+            Entity::Node => Connection::Node(NodeHandle::new(id, stack)),
+            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, stack)),
+            Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, stack)),
+            Entity::Worker => Connection::Worker(WorkerHandle::new(id, stack)),
         };
 
         Ok(conn)

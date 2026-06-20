@@ -22,11 +22,11 @@ type W = OwnedWriteHalf;
 pub struct StatService<'a, T, F, G>
 where
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(R, W) -> T,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
-    acceptor: &'a mut Acceptor<T, F>,
-    connector: &'a mut Connector<R, W, T, G>,
+    acceptor: &'a mut Acceptor<R, W, T, F, G>,
+    connector: &'a mut Connector<R, W, T, F>,
 }
 
 /// A struct helper to mantain the address of a handle close to it.
@@ -41,8 +41,8 @@ where
 impl<'a, T, F, G> StatService<'a, T, F, G>
 where
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(R, W) -> T,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     /// Creates a new `StatServicer`.
     ///
@@ -52,7 +52,10 @@ where
     ///
     /// # Returns
     /// A new `StatServicer` instance.
-    pub fn new(acceptor: &'a mut Acceptor<T, F>, connector: &'a mut Connector<R, W, T, G>) -> Self {
+    pub fn new(
+        acceptor: &'a mut Acceptor<R, W, T, F, G>,
+        connector: &'a mut Connector<R, W, T, F>,
+    ) -> Self {
         Self {
             acceptor,
             connector,

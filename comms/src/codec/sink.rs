@@ -27,6 +27,14 @@ impl<W: AsyncWrite + Unpin> Sink<W> {
         }
     }
 
+    /// Replaces `self`'s inner writer with a new one.
+    ///
+    /// # Args
+    /// * `writer` - The new writer.
+    pub fn replace(&mut self, writer: W) {
+        self.writer = writer;
+    }
+
     /// Writes the msg prefixed by the payload's length.
     ///
     /// # Args

@@ -2,7 +2,7 @@ use std::io;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::TransportLayer;
+use super::{IoSwapable, TransportLayer};
 use crate::{
     codec::{Sink, Source},
     protocol::Msg,
@@ -64,5 +64,16 @@ where
     /// An io error if occurred.
     async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<()> {
         self.tx.send(msg).await
+    }
+}
+
+impl<R, W> IoSwapable<R, W> for Framer<R, W>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    fn swap(&mut self, reader: R, writer: W) {
+        self.rx.replace(reader);
+        self.tx.replace(writer);
     }
 }

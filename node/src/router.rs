@@ -25,6 +25,9 @@ use worker::{
 
 use crate::stat_service::StatService;
 
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
+
 /// Routes incoming orchestrator connections to the appropriate runtime role
 /// keeping the process alive across sequential sessions.
 pub struct NodeRouter<R, W, T, F, G>
@@ -32,20 +35,20 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(R, W) -> T,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
-    acceptor: Acceptor<T, F>,
-    connector: Connector<R, W, T, G>,
+    acceptor: Acceptor<R, W, T, F, G>,
+    connector: Connector<R, W, T, F>,
 }
 
 impl<R, W, T, F, G> NodeRouter<R, W, T, F, G>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
-    T: TransportLayer + 'static,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(R, W) -> T + Clone,
+    T: TransportLayer,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     /// Creates a new `NodeRouter`.
     ///
@@ -55,7 +58,7 @@ where
     ///
     /// # Returns
     /// A new `NodeRouter` instance.
-    pub fn new(acceptor: Acceptor<T, F>, connector: Connector<R, W, T, G>) -> Self {
+    pub fn new(acceptor: Acceptor<R, W, T, F, G>, connector: Connector<R, W, T, F>) -> Self {
         Self {
             acceptor,
             connector,
@@ -63,11 +66,11 @@ where
     }
 }
 
-impl<T, F, G> NodeRouter<OwnedReadHalf, OwnedWriteHalf, T, F, G>
+impl<T, F, G> NodeRouter<R, W, T, F, G>
 where
     T: TransportLayer + 'static,
-    F: AsyncFn() -> io::Result<T>,
-    G: Fn(OwnedReadHalf, OwnedWriteHalf) -> T + Clone,
+    F: Fn(R, W) -> T + Clone,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     /// Waits for incoming connections and runs the specified node instance.
     ///

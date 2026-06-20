@@ -1,8 +1,11 @@
 use std::{io, time::Duration};
 
-use tokio::time;
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    time,
+};
 
-use super::TransportLayer;
+use super::{IoSwapable, TransportLayer};
 use crate::protocol::Msg;
 
 /// The `TimeOuter` tries receiving messages inside a time window.
@@ -52,5 +55,16 @@ impl<L: TransportLayer> TransportLayer for TimeOuter<L> {
     /// An io error if occurred.
     async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<()> {
         self.inner.send(msg).await
+    }
+}
+
+impl<R, W, T> IoSwapable<R, W> for TimeOuter<T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer + IoSwapable<R, W>,
+{
+    fn swap(&mut self, reader: R, writer: W) {
+        self.inner.swap(reader, writer);
     }
 }

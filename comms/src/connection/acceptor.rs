@@ -1,5 +1,6 @@
 use std::{io, marker::PhantomData};
 
+use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
 use super::Connection;
@@ -10,33 +11,42 @@ use crate::{
 };
 
 /// Accepts new incoming connections and assigns yields their handle types.
-pub struct Acceptor<T, F>
+pub struct Acceptor<R, W, T, F, G>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     id: Uuid,
     transport_factory: F,
-    _phantom: PhantomData<T>,
+    connection_factory: G,
+    _phantom: PhantomData<(T, G)>,
 }
 
-impl<T, F> Acceptor<T, F>
+impl<R, W, T, F, G> Acceptor<R, W, T, F, G>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
     T: TransportLayer,
-    F: AsyncFn() -> io::Result<T>,
+    F: Fn(R, W) -> T,
+    G: AsyncFn() -> io::Result<(R, W)>,
 {
     /// Creates a new `Acceptor`.
     ///
     /// # Args
     /// * `id` - This node's id.
+    /// * `connection_factory` - A closure that waits for new connections.
     /// * `transport_factory` - A transport layer factory closure.
     ///
     /// # Returns
     /// A new `Acceptor` instance.
-    pub fn new(id: Uuid, transport_factory: F) -> Self {
+    pub fn new(id: Uuid, transport_factory: F, connection_factory: G) -> Self {
         Self {
             id,
             transport_factory,
+            connection_factory,
             _phantom: Default::default(),
         }
     }
@@ -50,7 +60,8 @@ where
     /// A new connection or an io error if occurred while waiting for incoming connections
     /// or receiving the type of entity from the peer.
     pub async fn accept(&mut self, src: Entity) -> io::Result<Connection<T>> {
-        let mut transport_layer = (self.transport_factory)().await?;
+        let (rx, tx) = (self.connection_factory)().await?;
+        let mut transport_layer = (self.transport_factory)(rx, tx);
 
         let msg = transport_layer.recv().await?;
         let Msg::Control(Command::Connect { id, src: dst }) = msg else {
