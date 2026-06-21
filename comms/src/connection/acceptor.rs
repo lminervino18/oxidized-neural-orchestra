@@ -45,6 +45,26 @@ where
     _phantom: PhantomData<(T, G)>,
 }
 
+impl<R, W, T, F, G, Fut> Clone for Acceptor<R, W, T, F, G, Fut>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
+    Fut: Future<Output = io::Result<(R, W)>>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            conns: Arc::clone(&self.conns),
+            transport_factory: self.transport_factory.clone(),
+            connection_factory: self.connection_factory.clone(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
 impl<R, W, T, F, G, Fut> Acceptor<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
@@ -140,7 +160,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn accept_id_transport(&self, id: Uuid, layer: &mut T) -> io::Result<()> {
+    pub async fn reconnect(&self, id: Uuid, layer: &mut T) -> io::Result<()> {
         const RECONNECT: Entity = Entity::Reconnect;
 
         let (rx, tx) = loop {

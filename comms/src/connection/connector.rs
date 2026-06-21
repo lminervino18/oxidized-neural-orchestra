@@ -7,7 +7,7 @@ use crate::{
     Connection, WorkerHandle,
     handles::{NodeHandle, OrchHandle, ParamServerHandle},
     protocol::{Command, Entity, Msg},
-    transport::TransportLayer,
+    transport::{IoSwapable, TransportLayer},
 };
 
 /// Establishes connections and yields reliable transports.
@@ -163,6 +163,23 @@ where
         }
     }
 
+    /// Reconnects the given transport layer with the new reader and writer.
+    ///
+    /// # Args
+    /// * `rx` - The new layer's reader.
+    /// * `tx` - The new layer's writer.
+    /// * `layer` - The transport layer used to communicate with the other end.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn reconnect<U>(&self, rx: R, tx: W, layer: &mut U) -> io::Result<()>
+    where
+        U: TransportLayer + IoSwapable<R, W>,
+    {
+        layer.swap(rx, tx);
+        self.handshake(Entity::Reconnect, layer).await.map(|_| ())
+    }
+
     /// Connects the given channel to an entity using a reliable transport protocol layer.
     ///
     /// # Args
@@ -173,21 +190,14 @@ where
     /// # Returns
     /// A new `TransportLayer` or an io error if occurred.
     async fn connect(&self, rx: R, tx: W, src: Entity) -> io::Result<Connection<T>> {
-        let mut stack = (self.transport_factory)(rx, tx);
-        let msg = Msg::Control(Command::Connect { id: self.id, src });
-        stack.send(&msg).await?;
-
-        let msg = stack.recv().await?;
-        let Msg::Control(Command::Accept { id, src: dst }) = msg else {
-            let details = format!("Invalid connection message, expected Accept, got {msg:?}");
-            return Err(io::Error::other(details));
-        };
+        let mut layer = (self.transport_factory)(rx, tx);
+        let (id, dst) = self.handshake(src, &mut layer).await?;
 
         let conn = match dst {
-            Entity::Node => Connection::Node(NodeHandle::new(id, stack)),
-            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, stack)),
-            Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, stack)),
-            Entity::Worker => Connection::Worker(WorkerHandle::new(id, stack)),
+            Entity::Node => Connection::Node(NodeHandle::new(id, layer)),
+            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, layer)),
+            Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, layer)),
+            Entity::Worker => Connection::Worker(WorkerHandle::new(id, layer)),
             entity => {
                 let details = format!("Connected to invalid entity: {entity:?}");
                 return Err(io::Error::other(details));
@@ -195,5 +205,29 @@ where
         };
 
         Ok(conn)
+    }
+
+    /// Makes the handshake with the peer sharing the entity types and ids.
+    ///
+    /// # Args
+    /// * `src` - This node's entity variant.
+    /// * `layer` - The transport layer used to communicate with the other end.
+    ///
+    /// # Returns
+    /// The peer's id and entity type or an io error if occurred.
+    async fn handshake<U>(&self, src: Entity, layer: &mut U) -> io::Result<(Uuid, Entity)>
+    where
+        U: TransportLayer,
+    {
+        let msg = Msg::Control(Command::Connect { id: self.id, src });
+        layer.send(&msg).await?;
+
+        let msg = layer.recv().await?;
+        let Msg::Control(Command::Accept { id, src: dst }) = msg else {
+            let details = format!("Invalid connection message, expected Accept, got {msg:?}");
+            return Err(io::Error::other(details));
+        };
+
+        Ok((id, dst))
     }
 }

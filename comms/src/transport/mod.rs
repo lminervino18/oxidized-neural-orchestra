@@ -53,7 +53,8 @@ where
 {
     let framer = Framer::new(reader, writer);
     let timeouter = TimeOuter::new(timeout, framer);
-    Retryer::new(base_retry_dur, retry_coef, retries, timeouter)
+    let retryer = Retryer::new(base_retry_dur, retry_coef, retries, timeouter);
+    retryer
 }
 
 /// Builds an uninitialized simple transport.
