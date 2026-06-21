@@ -8,10 +8,7 @@ use comms::{
 use futures::future;
 use log::{debug, warn};
 use tokio::{
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     time::Instant,
 };
 
@@ -26,8 +23,8 @@ where
     G: Fn() -> Fut,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
-    connector: &'a mut Connector<R, W, T, F>,
+    acceptor: &'a mut Acceptor<T, F, G, Fut>,
+    connector: &'a mut Connector<T, F>,
 }
 
 /// A struct helper to mantain the address of a handle close to it.
@@ -55,8 +52,8 @@ where
     /// # Returns
     /// A new `StatServicer` instance.
     pub fn new(
-        acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
-        connector: &'a mut Connector<R, W, T, F>,
+        acceptor: &'a mut Acceptor<T, F, G, Fut>,
+        connector: &'a mut Connector<T, F>,
     ) -> Self {
         Self {
             acceptor,
@@ -172,7 +169,7 @@ where
         let mut ping_handles = Vec::with_capacity(addrs.len());
 
         for addr in addrs {
-            match self.connect_node(&addr).await {
+            match self.connector.connect_node(&addr, Entity::Node).await {
                 Ok(handle) => {
                     let addr_handle = AddressedHandle { addr, handle };
                     ping_handles.push(addr_handle);
@@ -191,19 +188,6 @@ where
         }
 
         (ping_handles, pong_handles)
-    }
-
-    /// Connects to another node.
-    ///
-    /// # Args
-    /// * `addr` - The network address of th node to connect to.
-    ///
-    /// # Returns
-    /// A handle to the other node or an io error if occurred.
-    async fn connect_node(&self, addr: &str) -> io::Result<NodeHandle<T>> {
-        let stream = TcpStream::connect(addr).await?;
-        let (rx, tx) = stream.into_split();
-        self.connector.connect_node(rx, tx, Entity::Node).await
     }
 
     /// Runs a pinging round between the nodes.

@@ -110,7 +110,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 /// # Returns
 /// A sorted list of node handles or an io error if occurred.
 async fn connect_to_nodes<T, F>(
-    connector: &mut Connector<R, W, T, F>,
+    connector: &mut Connector<T, F>,
     addrs: &[String],
 ) -> io::Result<BTreeMap<String, NodeHandle<T>>>
 where
@@ -118,12 +118,9 @@ where
     F: Fn(R, W) -> T,
 {
     let mut handles = BTreeMap::new();
-    let src = Entity::Orchestrator;
 
     for addr in addrs {
-        let stream = TcpStream::connect(addr).await?;
-        let (rx, tx) = stream.into_split();
-        let node_handle = connector.connect_node(rx, tx, src).await?;
+        let node_handle = connector.connect_node(addr, Entity::Orchestrator).await?;
         handles.insert(addr.clone(), node_handle);
     }
 

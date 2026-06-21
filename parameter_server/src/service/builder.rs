@@ -12,7 +12,7 @@ use machine_learning::{
     initialization::{ParamGenBuilder, Result},
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
 };
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 use super::{ParameterServer, Server};
 use crate::{
@@ -26,23 +26,22 @@ const DEFAULT_CORE_COUNT: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 /// The factor to multiply the amount of cores to obtain the shard amount.
 const SHARD_AMOUNT_FACTOR: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
+
 /// Builds `Server`s given a specification.
-pub struct ServerBuilder<'a, R, W, T, F, G, Fut>
+pub struct ServerBuilder<'a, T, F, G, Fut>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
+    acceptor: &'a mut Acceptor<T, F, G, Fut>,
 }
 
-impl<'a, R, W, T, F, G, Fut> ServerBuilder<'a, R, W, T, F, G, Fut>
+impl<'a, T, F, G, Fut> ServerBuilder<'a, T, F, G, Fut>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer + 'static,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,
@@ -52,7 +51,7 @@ where
     ///
     /// # Returns
     /// A new `ServerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor<T, F, G, Fut>) -> Self {
         Self { acceptor }
     }
 

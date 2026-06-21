@@ -2,10 +2,7 @@ use std::{io, mem, time::Duration};
 
 use log::error;
 use tokio::{
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     time,
 };
 use uuid::Uuid;
@@ -32,11 +29,11 @@ where
 {
     Active {
         addr: String,
-        connector: Connector<R, W, T, F>,
+        connector: Connector<T, F>,
     },
     Pasive {
         id: Uuid,
-        acceptor: Acceptor<R, W, T, F, G, Fut>,
+        acceptor: Acceptor<T, F, G, Fut>,
     },
 }
 
@@ -58,23 +55,17 @@ where
     /// An io error if occurred.
     async fn active_reconnect(
         addr: &str,
-        connector: &Connector<R, W, T, F>,
+        connector: &Connector<T, F>,
         layer: &mut T,
     ) -> io::Result<()> {
         const BASE_DELAY: Duration = Duration::from_secs(5);
         const RETRY_COEF: u32 = 2;
         const MAX_EXP: u32 = 5;
 
-        let mut connect = async || {
-            let stream = TcpStream::connect(addr).await?;
-            let (rx, tx) = stream.into_split();
-            connector.reconnect(rx, tx, layer).await
-        };
-
         let mut sleep_dur = Duration::from_secs(5);
         let mut exp = 0;
 
-        while let Err(e) = connect().await {
+        while let Err(e) = connector.reconnect(addr, layer).await {
             error!("Failed to reconnect to {addr}: {e}");
             time::sleep(sleep_dur).await;
             sleep_dur = BASE_DELAY * RETRY_COEF.pow(exp.min(MAX_EXP));
@@ -95,7 +86,7 @@ where
     /// An io error if occurred.
     async fn passive_reconnect(
         id: Uuid,
-        acceptor: &Acceptor<R, W, T, F, G, Fut>,
+        acceptor: &Acceptor<T, F, G, Fut>,
         layer: &mut T,
     ) -> io::Result<()> {
         acceptor.reconnect(id, layer).await
@@ -121,7 +112,7 @@ where
 }
 
 /// The reconnection layer of the transport protocol.
-pub struct Recon<T, F, G, Fut>
+pub struct Recon<F, G, Fut, T>
 where
     T: TransportLayer + IoSwapable<R, W>,
     F: Fn(R, W) -> T,
@@ -132,12 +123,12 @@ where
     inner: T,
 }
 
-impl<T, F, G, Fut> Recon<T, F, G, Fut>
+impl<F, G, Fut, T> Recon<F, G, Fut, T>
 where
-    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,
     Fut: Future<Output = io::Result<(R, W)>>,
+    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
 {
     /// Creates a new `Recon` transport layer in it's `Active` role.
     ///
@@ -148,7 +139,7 @@ where
     ///
     /// # Returns
     /// A new `Recon` instance.
-    pub fn active(addr: String, connector: Connector<R, W, T, F>, inner: T) -> Self {
+    pub fn active(addr: String, connector: Connector<T, F>, inner: T) -> Self {
         Self {
             strat: Strategy::Active { addr, connector },
             inner,
@@ -164,7 +155,7 @@ where
     ///
     /// # Returns
     /// A new `Recon` instance.
-    pub fn passive(id: Uuid, acceptor: Acceptor<R, W, T, F, G, Fut>, inner: T) -> Self {
+    pub fn passive(id: Uuid, acceptor: Acceptor<T, F, G, Fut>, inner: T) -> Self {
         Self {
             strat: Strategy::Pasive { id, acceptor },
             inner,
@@ -172,12 +163,12 @@ where
     }
 }
 
-impl<T, F, G, Fut> TransportLayer for Recon<T, F, G, Fut>
+impl<F, G, Fut, T> TransportLayer for Recon<F, G, Fut, T>
 where
-    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W> + Sync,
     F: Fn(R, W) -> T + Send + Sync,
     G: Fn() -> Fut + Send + Sync,
     Fut: Future<Output = io::Result<(R, W)>> + Send,
+    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W> + Sync,
 {
     /// Tries to receive a message, if incapable it will drop the connection
     /// and will wait until receiving a reconnection from the peer.

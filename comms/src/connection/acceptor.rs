@@ -1,7 +1,7 @@
 use std::{collections::HashMap, io, marker::PhantomData, sync::Arc};
 
 use tokio::{
-    io::{AsyncRead, AsyncWrite},
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     sync::{Mutex, Notify},
 };
 use uuid::Uuid;
@@ -13,42 +13,33 @@ use crate::{
     transport::{Demountable, IoSwapable, TransportLayer},
 };
 
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
+
 /// The shared state for managing incoming connections.
-struct ConnRegistry<R, W> {
+#[derive(Default)]
+struct ConnRegistry {
     backlog: Mutex<HashMap<Uuid, (R, W)>>,
     notify: Notify,
 }
 
-impl<R, W> Default for ConnRegistry<R, W> {
-    fn default() -> Self {
-        Self {
-            backlog: Default::default(),
-            notify: Default::default(),
-        }
-    }
-}
-
 /// Accepts new incoming connections and assigns yields their handle types.
-pub struct Acceptor<R, W, T, F, G, Fut>
+pub struct Acceptor<T, F, G, Fut>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     id: Uuid,
-    conns: Arc<ConnRegistry<R, W>>,
+    conns: Arc<ConnRegistry>,
     transport_factory: F,
     connection_factory: G,
     _phantom: PhantomData<(T, G)>,
 }
 
-impl<R, W, T, F, G, Fut> Clone for Acceptor<R, W, T, F, G, Fut>
+impl<T, F, G, Fut> Clone for Acceptor<T, F, G, Fut>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
@@ -60,15 +51,13 @@ where
             conns: Arc::clone(&self.conns),
             transport_factory: self.transport_factory.clone(),
             connection_factory: self.connection_factory.clone(),
-            _phantom: PhantomData,
+            _phantom: self._phantom,
         }
     }
 }
 
-impl<R, W, T, F, G, Fut> Acceptor<R, W, T, F, G, Fut>
+impl<T, F, G, Fut> Acceptor<T, F, G, Fut>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,
@@ -143,10 +132,8 @@ where
     }
 }
 
-impl<R, W, T, F, G, Fut> Acceptor<R, W, T, F, G, Fut>
+impl<T, F, G, Fut> Acceptor<T, F, G, Fut>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,

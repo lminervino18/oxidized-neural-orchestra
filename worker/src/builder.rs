@@ -13,13 +13,7 @@ use machine_learning::{
     initialization::ParamGenBuilder,
     training::TrainerBuilder,
 };
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
-};
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 
 use crate::{
     middlewares::{ServerClusterManager, WorkerRingManager},
@@ -30,23 +24,19 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// The worker builder, given a spec, will build a new worker ready to use.
-pub struct WorkerBuilder<'a, R, W, T, F, G, Fut>
+pub struct WorkerBuilder<'a, T, F, G, Fut>
 where
-    R: AsyncRead + Unpin + Send,
-    W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
-    connector: Connector<R, W, T, F>,
+    acceptor: &'a mut Acceptor<T, F, G, Fut>,
+    connector: Connector<T, F>,
 }
 
-impl<'a, R, W, T, F, G, Fut> WorkerBuilder<'a, R, W, T, F, G, Fut>
+impl<'a, T, F, G, Fut> WorkerBuilder<'a, T, F, G, Fut>
 where
-    R: AsyncRead + Unpin + Send,
-    W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
     F: Fn(R, W) -> T,
     G: Fn() -> Fut,
@@ -60,10 +50,7 @@ where
     ///
     /// # Returns
     /// A new `WorkerBuilder` instance.
-    pub fn new(
-        acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
-        connector: Connector<R, W, T, F>,
-    ) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor<T, F, G, Fut>, connector: Connector<T, F>) -> Self {
         Self {
             acceptor,
             connector,
@@ -71,7 +58,7 @@ where
     }
 }
 
-impl<T, F, G, Fut> WorkerBuilder<'_, R, W, T, F, G, Fut>
+impl<T, F, G, Fut> WorkerBuilder<'_, T, F, G, Fut>
 where
     T: TransportLayer + 'static,
     F: Fn(R, W) -> T,
@@ -251,10 +238,8 @@ where
         let src = Entity::Worker;
 
         for (addr, &size) in server_addrs.iter().cloned().zip(server_sizes) {
-            let stream = TcpStream::connect(addr).await?;
-            let (rx, tx) = stream.into_split();
+            let mut server_handle = self.connector.connect_parameter_server(&addr, src).await?;
 
-            let mut server_handle = self.connector.connect_parameter_server(rx, tx, src).await?;
             if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 server_handle.enable_sparse_capability(r, seed);
             }
@@ -301,10 +286,8 @@ where
 
         let next_conn_fut = async {
             let addr = &addrs[(pos + 1) % n];
-            let stream = TcpStream::connect(addr).await?;
-            let (rx, tx) = stream.into_split();
+            let mut worker_handle = self.connector.connect_worker(addr, src).await?;
 
-            let mut worker_handle = self.connector.connect_worker(rx, tx, src).await?;
             if let SerializerSpec::SparseCapable { r } = serializer_spec {
                 worker_handle.enable_sparse_capability(r, seed);
             }

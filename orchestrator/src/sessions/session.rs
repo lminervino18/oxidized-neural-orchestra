@@ -14,10 +14,7 @@ use log::{debug, error, info};
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt},
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     runtime::{Builder, Runtime},
     sync::mpsc::{self, Receiver, Sender},
 };
@@ -58,7 +55,7 @@ impl Session {
         orch: OrchAdapt,
         workers: Vec<WorkerAdapt<'_>>,
         servers: Vec<ServerAdapt>,
-        connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
+        connector: Connector<NetRtp, F>,
     ) -> Result<Self>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
@@ -421,7 +418,7 @@ impl Session {
     /// The worker handles or an orch error if occurred.
     async fn create_servers<I, F>(
         servers: I,
-        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
+        connector: &Connector<NetRtp, F>,
     ) -> Result<Vec<ParamServerHandle<NetRtp>>>
     where
         I: IntoIterator<Item = ServerAdapt>,
@@ -432,17 +429,8 @@ impl Session {
         for ServerAdapt { addr, spec } in servers {
             debug!("connecting to server at {addr}");
 
-            let stream =
-                TcpStream::connect(&addr)
-                    .await
-                    .map_err(|e| OrchErr::ConnectionFailed {
-                        addr: addr.clone(),
-                        source: e,
-                    })?;
-
-            let (rx, tx) = stream.into_split();
             let node_handle = connector
-                .connect_node(rx, tx, Entity::Orchestrator)
+                .connect_node(&addr, Entity::Orchestrator)
                 .await
                 .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
@@ -464,7 +452,7 @@ impl Session {
     /// The worker handles or an orch error if occurred.
     async fn create_workers<'a, F, I>(
         workers: I,
-        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
+        connector: &Connector<NetRtp, F>,
     ) -> Result<Vec<WorkerHandle<NetRtp>>>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
@@ -481,17 +469,8 @@ impl Session {
 
             debug!("connecting to worker at {addr}");
 
-            let stream =
-                TcpStream::connect(&addr)
-                    .await
-                    .map_err(|e| OrchErr::ConnectionFailed {
-                        addr: addr.clone(),
-                        source: e,
-                    })?;
-
-            let (rx, tx) = stream.into_split();
             let node_handle = connector
-                .connect_node(rx, tx, Entity::Orchestrator)
+                .connect_node(&addr, Entity::Orchestrator)
                 .await
                 .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 

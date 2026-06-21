@@ -1,21 +1,28 @@
 use std::{io, marker::PhantomData};
 
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::{
+        TcpStream,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
+};
 use uuid::Uuid;
 
 use crate::{
-    Connection, WorkerHandle,
+    WorkerHandle,
     handles::{NodeHandle, OrchHandle, ParamServerHandle},
     protocol::{Command, Entity, Msg},
     transport::{IoSwapable, TransportLayer},
 };
 
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
+
 /// Establishes connections and yields reliable transports.
 #[derive(Debug)]
-pub struct Connector<R, W, T, F>
+pub struct Connector<T, F>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
 {
@@ -24,10 +31,8 @@ where
     _phantom: PhantomData<(R, W, T)>,
 }
 
-impl<R, W, T, F> Clone for Connector<R, W, T, F>
+impl<T, F> Clone for Connector<T, F>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T + Clone,
 {
@@ -40,10 +45,8 @@ where
     }
 }
 
-impl<R, W, T, F> Connector<R, W, T, F>
+impl<T, F> Connector<T, F>
 where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
 {
@@ -69,21 +72,22 @@ where
     /// `NodeHandle::create_worker` on the returned handle.
     ///
     /// # Args
-    /// * `rx` - The reading end of the communication.
-    /// * `tx` - The writing end of the communication.
+    /// * `addr` - The peer's network address.
     /// * `src` - The entity initiating the connection.
     ///
     /// # Returns
     /// A new `NodeHandle` or an io error if occurred.
-    pub async fn connect_node(&self, rx: R, tx: W, src: Entity) -> io::Result<NodeHandle<T>>
+    pub async fn connect_node(&self, addr: &str, src: Entity) -> io::Result<NodeHandle<T>>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
-        match self.connect(rx, tx, src).await? {
-            Connection::Node(node_handle) => Ok(node_handle),
-            conn => {
-                let details = format!("Invalid connection type, expected Node, got {conn}");
+        let (id, layer, dst) = self.connect(addr, src).await?;
+
+        match dst {
+            Entity::Node => Ok(NodeHandle::new(id, layer)),
+            _ => {
+                let details = format!("Invalid connection type, expected Node, got {dst:?}");
                 Err(io::Error::other(details))
             }
         }
@@ -92,21 +96,22 @@ where
     /// Connects to a worker and returns a handle to communicate with it.
     ///
     /// # Args
-    /// * `rx` - The reading end of the communication.
-    /// * `tx` - The writing end of the communication.
+    /// * `addr` - The peer's network address.
     /// * `src` - The entity initiating the connection.
     ///
     /// # Returns
     /// A `WorkerHandle` ready to start training.
-    pub async fn connect_worker(&self, rx: R, tx: W, src: Entity) -> io::Result<WorkerHandle<T>>
+    pub async fn connect_worker(&self, addr: &str, src: Entity) -> io::Result<WorkerHandle<T>>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
-        match self.connect(rx, tx, src).await? {
-            Connection::Worker(worker_handle) => Ok(worker_handle),
-            conn => {
-                let details = format!("Invalid connection type, expected Worker, got {conn}");
+        let (id, layer, dst) = self.connect(addr, src).await?;
+
+        match dst {
+            Entity::Worker => Ok(WorkerHandle::new(id, layer)),
+            _ => {
+                let details = format!("Invalid connection type, expected Worker, got {dst:?}");
                 Err(io::Error::other(details))
             }
         }
@@ -115,26 +120,26 @@ where
     /// Connects to a parameter server and returns a handle to communicate with it.
     ///
     /// # Args
-    /// * `rx` - The reading end of the communication.
-    /// * `tx` - The writing end of the communication.
+    /// * `addr` - The peer's network address.
     /// * `src` - The entity initiating the connection.
     ///
     /// # Returns
     /// A new `ParamServerHandle` or an io error if occurred.
     pub async fn connect_parameter_server(
         &self,
-        rx: R,
-        tx: W,
+        addr: &str,
         src: Entity,
     ) -> io::Result<ParamServerHandle<T>>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
-        match self.connect(rx, tx, src).await? {
-            Connection::ParamServer(server_handle) => Ok(server_handle),
-            conn => {
-                let details = format!("Invalid connection type, expected Server, got {conn}");
+        let (id, layer, dst) = self.connect(addr, src).await?;
+
+        match dst {
+            Entity::ParamServer => Ok(ParamServerHandle::new(id, layer)),
+            _ => {
+                let details = format!("Invalid connection type, expected Server, got {dst:?}");
                 Err(io::Error::other(details))
             }
         }
@@ -143,21 +148,22 @@ where
     /// Connects to an orchestrator and returns a handle to communicate with it.
     ///
     /// # Args
-    /// * `rx` - The reading end of the communication.
-    /// * `tx` - The writing end of the communication.
+    /// * `addr` - The peer's network address.
     /// * `src` - The entity initiating the connection.
     ///
     /// # Returns
     /// A new `OrchHandle` or an io error if occurred.
-    pub async fn connect_orchestrator(&self, rx: R, tx: W, src: Entity) -> io::Result<OrchHandle<T>>
+    pub async fn connect_orchestrator(&self, addr: &str, src: Entity) -> io::Result<OrchHandle<T>>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
-        match self.connect(rx, tx, src).await? {
-            Connection::Orch(orch_handle) => Ok(orch_handle),
-            conn => {
-                let details = format!("Invalid connection type, expected Orchestrator, got {conn}");
+        let (id, layer, dst) = self.connect(addr, src).await?;
+
+        match dst {
+            Entity::Orchestrator => Ok(OrchHandle::new(id, layer)),
+            _ => {
+                let details = format!("Invalid connection type, expected Orch, got {dst:?}");
                 Err(io::Error::other(details))
             }
         }
@@ -166,16 +172,16 @@ where
     /// Reconnects the given transport layer with the new reader and writer.
     ///
     /// # Args
-    /// * `rx` - The new layer's reader.
-    /// * `tx` - The new layer's writer.
+    /// * `addr` - The peer's network address.
     /// * `layer` - The transport layer used to communicate with the other end.
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn reconnect<U>(&self, rx: R, tx: W, layer: &mut U) -> io::Result<()>
+    pub async fn reconnect<U>(&self, addr: &str, layer: &mut U) -> io::Result<()>
     where
         U: TransportLayer + IoSwapable<R, W>,
     {
+        let (rx, tx) = self.connect_io(addr).await?;
         layer.swap(rx, tx);
         self.handshake(Entity::Reconnect, layer).await.map(|_| ())
     }
@@ -183,28 +189,28 @@ where
     /// Connects the given channel to an entity using a reliable transport protocol layer.
     ///
     /// # Args
-    /// * `rx` - The reading end of the communication.
-    /// * `tx` - The writing end of the communication.
+    /// * `addr` - The peer's network address.
     /// * `src` - The entity initiating the connection.
     ///
     /// # Returns
-    /// A new `TransportLayer` or an io error if occurred.
-    async fn connect(&self, rx: R, tx: W, src: Entity) -> io::Result<Connection<T>> {
+    /// The peer's id and entity, and the transport layer to communicate or an io error if occurred.
+    async fn connect(&self, addr: &str, src: Entity) -> io::Result<(Uuid, T, Entity)> {
+        let (rx, tx) = self.connect_io(addr).await?;
         let mut layer = (self.transport_factory)(rx, tx);
         let (id, dst) = self.handshake(src, &mut layer).await?;
+        Ok((id, layer, dst))
+    }
 
-        let conn = match dst {
-            Entity::Node => Connection::Node(NodeHandle::new(id, layer)),
-            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, layer)),
-            Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, layer)),
-            Entity::Worker => Connection::Worker(WorkerHandle::new(id, layer)),
-            entity => {
-                let details = format!("Connected to invalid entity: {entity:?}");
-                return Err(io::Error::other(details));
-            }
-        };
-
-        Ok(conn)
+    /// Makes a connection with the peer and yields the inner reader and writer for that connection.
+    ///
+    /// # Args
+    /// * `addr` - The peer's network address.
+    ///
+    /// # Returns
+    /// Both socket ends or an io error if occurred.
+    async fn connect_io(&self, addr: &str) -> io::Result<(R, W)> {
+        let stream = TcpStream::connect(addr).await?;
+        Ok(stream.into_split())
     }
 
     /// Makes the handshake with the peer sharing the entity types and ids.
