@@ -3,31 +3,33 @@ use std::{io, mem};
 use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
-use super::{IoSwapable, TransportLayer};
+use super::{Demountable, IoSwapable, TransportLayer};
 use crate::{Acceptor, Connector, protocol::Msg};
 
 /// The reconnection layer of the transport protocol.
-pub struct Recon<R, W, T, F, G>
+pub struct Recon<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer + IoSwapable<R, W>,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     id: Uuid,
-    acceptor: Acceptor<R, W, T, F, G>,
+    acceptor: Acceptor<R, W, T, F, G, Fut>,
     connector: Connector<R, W, T, F>,
     inner: T,
 }
 
-impl<R, W, T, F, G> Recon<R, W, T, F, G>
+impl<R, W, T, F, G, Fut> Recon<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
-    T: TransportLayer + IoSwapable<R, W>,
+    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `Recon` transport layer.
     ///
@@ -41,7 +43,7 @@ where
     /// A new `Recon` instance.
     pub fn new(
         id: Uuid,
-        acceptor: Acceptor<R, W, T, F, G>,
+        acceptor: Acceptor<R, W, T, F, G, Fut>,
         connector: Connector<R, W, T, F>,
         inner: T,
     ) -> Self {
@@ -57,18 +59,22 @@ where
         todo!()
     }
 
+    /// Waits until the other side connects to this node using the inner acceptor.
     async fn await_reconnection(&mut self) -> io::Result<()> {
-        todo!()
+        self.acceptor
+            .accept_id_transport(self.id, &mut self.inner)
+            .await
     }
 }
 
-impl<R, W, T, F, G> TransportLayer for Recon<R, W, T, F, G>
+impl<R, W, T, F, G, Fut> TransportLayer for Recon<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
-    T: TransportLayer + IoSwapable<R, W>,
-    F: Fn(R, W) -> T + Send,
-    G: AsyncFn() -> io::Result<(R, W)> + Send,
+    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W> + Sync,
+    F: Fn(R, W) -> T + Send + Sync,
+    G: Fn() -> Fut + Send + Sync,
+    Fut: Future<Output = io::Result<(R, W)>> + Send,
 {
     /// Tries to receive a message, if incapable it will drop the connection
     /// and will wait until receiving a reconnection from the peer.
@@ -83,7 +89,7 @@ where
                     break Ok(unsafe { mem::transmute::<Msg<'_>, Msg<'_>>(msg) });
                 }
                 Err(_) => {
-                    self.await_reconnection().await?;
+                    let _ = self.await_reconnection().await;
                 }
             }
         }
@@ -99,7 +105,7 @@ where
     /// An io error if occurred.
     async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<()> {
         while let Err(_) = self.inner.send(msg).await {
-            self.reconnect().await?;
+            let _ = self.reconnect().await;
         }
 
         Ok(())

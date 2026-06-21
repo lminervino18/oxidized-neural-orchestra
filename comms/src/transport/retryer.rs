@@ -5,7 +5,7 @@ use tokio::{
     time,
 };
 
-use super::{IoSwapable, TransportLayer};
+use super::{Demountable, IoSwapable, TransportLayer};
 use crate::protocol::Msg;
 
 /// The `Retryer` retries sending and receiving messages using exponential backoff.
@@ -127,5 +127,16 @@ where
 {
     fn swap(&mut self, reader: R, writer: W) {
         self.inner.swap(reader, writer);
+    }
+}
+
+impl<R, W, T> Demountable<R, W> for Retryer<T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer + Demountable<R, W>,
+{
+    fn demount(self) -> (R, W) {
+        self.inner.demount()
     }
 }

@@ -188,6 +188,10 @@ where
             Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, stack)),
             Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, stack)),
             Entity::Worker => Connection::Worker(WorkerHandle::new(id, stack)),
+            entity => {
+                let details = format!("Connected to invalid entity: {entity:?}");
+                return Err(io::Error::other(details));
+            }
         };
 
         Ok(conn)

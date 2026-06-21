@@ -35,6 +35,14 @@ impl<W: AsyncWrite + Unpin> Sink<W> {
         self.writer = writer;
     }
 
+    /// Consumes `self` and yields it's inner writer.
+    ///
+    /// # Returns
+    /// Self's inner writer.
+    pub fn into_inner(self) -> W {
+        self.writer
+    }
+
     /// Writes the msg prefixed by the payload's length.
     ///
     /// # Args

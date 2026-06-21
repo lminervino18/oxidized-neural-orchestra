@@ -5,7 +5,7 @@ use tokio::{
     time,
 };
 
-use super::{IoSwapable, TransportLayer};
+use super::{Demountable, IoSwapable, TransportLayer};
 use crate::protocol::Msg;
 
 /// The `TimeOuter` tries receiving messages inside a time window.
@@ -66,5 +66,16 @@ where
 {
     fn swap(&mut self, reader: R, writer: W) {
         self.inner.swap(reader, writer);
+    }
+}
+
+impl<R, W, T> Demountable<R, W> for TimeOuter<T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer + Demountable<R, W>,
+{
+    fn demount(self) -> (R, W) {
+        self.inner.demount()
     }
 }

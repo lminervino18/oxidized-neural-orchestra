@@ -1,14 +1,13 @@
 mod framer;
-mod io_swapable;
 mod layer;
 mod recon;
 mod retryer;
 mod timeouter;
+mod utils;
 
 use std::time::Duration;
 
 pub use framer::Framer;
-pub(super) use io_swapable::IoSwapable;
 pub use layer::TransportLayer;
 pub use recon::Recon;
 pub use retryer::Retryer;
@@ -17,6 +16,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
+pub(super) use utils::{Demountable, IoSwapable};
 
 /// The reliable transport.
 pub type Rtp<R, W> = Retryer<TimeOuter<Framer<R, W>>>;

@@ -1,37 +1,58 @@
-use std::{io, marker::PhantomData};
+use std::{collections::HashMap, io, marker::PhantomData, sync::Arc};
 
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    sync::{Mutex, Notify},
+};
 use uuid::Uuid;
 
 use super::Connection;
 use crate::{
     NodeHandle, OrchHandle, ParamServerHandle, WorkerHandle,
     protocol::{Command, Entity, Msg},
-    transport::TransportLayer,
+    transport::{Demountable, IoSwapable, TransportLayer},
 };
 
+/// The shared state for managing incoming connections.
+struct ConnRegistry<R, W> {
+    backlog: Mutex<HashMap<Uuid, (R, W)>>,
+    notify: Notify,
+}
+
+impl<R, W> Default for ConnRegistry<R, W> {
+    fn default() -> Self {
+        Self {
+            backlog: Default::default(),
+            notify: Default::default(),
+        }
+    }
+}
+
 /// Accepts new incoming connections and assigns yields their handle types.
-pub struct Acceptor<R, W, T, F, G>
+pub struct Acceptor<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     id: Uuid,
+    conns: Arc<ConnRegistry<R, W>>,
     transport_factory: F,
     connection_factory: G,
     _phantom: PhantomData<(T, G)>,
 }
 
-impl<R, W, T, F, G> Acceptor<R, W, T, F, G>
+impl<R, W, T, F, G, Fut> Acceptor<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `Acceptor`.
     ///
@@ -45,6 +66,7 @@ where
     pub fn new(id: Uuid, transport_factory: F, connection_factory: G) -> Self {
         Self {
             id,
+            conns: Default::default(),
             transport_factory,
             connection_factory,
             _phantom: Default::default(),
@@ -59,28 +81,102 @@ where
     /// # Returns
     /// A new connection or an io error if occurred while waiting for incoming connections
     /// or receiving the type of entity from the peer.
-    pub async fn accept(&mut self, src: Entity) -> io::Result<Connection<T>> {
+    pub async fn accept(&self, src: Entity) -> io::Result<Connection<T>> {
         let (rx, tx) = (self.connection_factory)().await?;
-        let mut transport_layer = (self.transport_factory)(rx, tx);
+        let mut layer = (self.transport_factory)(rx, tx);
+        let (id, dst) = self.handshake(src, &mut layer).await?;
 
-        let msg = transport_layer.recv().await?;
+        let conn = match dst {
+            Entity::Worker => Connection::Worker(WorkerHandle::new(id, layer)),
+            Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, layer)),
+            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, layer)),
+            Entity::Node => Connection::Node(NodeHandle::new(id, layer)),
+            entity => {
+                let details = format!("Accepted invalid incoming connection from {entity:?}");
+                return Err(io::Error::other(details));
+            }
+        };
+
+        Ok(conn)
+    }
+
+    /// Makes the handshake with the peer sharing the entity types and ids.
+    ///
+    /// # Args
+    /// * `src` - This node's entity variant.
+    /// * `layer` - The transport layer used to communicate with the other end.
+    ///
+    /// # Returns
+    /// The peer's id and entity type or an io error if occurred.
+    async fn handshake(&self, src: Entity, layer: &mut T) -> io::Result<(Uuid, Entity)> {
+        let msg = layer.recv().await?;
+
         let Msg::Control(Command::Connect { id, src: dst }) = msg else {
             let text = format!("Expected Connect message, got: {msg:?}");
             return Err(io::Error::other(text));
         };
 
         let msg = Msg::Control(Command::Accept { id: self.id, src });
-        transport_layer.send(&msg).await?;
+        layer.send(&msg).await?;
 
-        let conn = match dst {
-            Entity::Worker => Connection::Worker(WorkerHandle::new(id, transport_layer)),
-            Entity::ParamServer => {
-                Connection::ParamServer(ParamServerHandle::new(id, transport_layer))
+        Ok((id, dst))
+    }
+}
+
+impl<R, W, T, F, G, Fut> Acceptor<R, W, T, F, G, Fut>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
+    F: Fn(R, W) -> T,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
+{
+    /// Will wait until a connection with the expected `id` arrives blocking the thread in the process.
+    ///
+    /// # Args
+    /// * `id` - The id that's being waited for.
+    /// * `layer` - The transport layer used to communicate with the other end.
+    ///
+    /// # Returns
+    /// An io error if occurred.
+    pub async fn accept_id_transport(&self, id: Uuid, layer: &mut T) -> io::Result<()> {
+        const RECONNECT: Entity = Entity::Reconnect;
+
+        let (rx, tx) = loop {
+            {
+                let mut backlog = self.conns.backlog.lock().await;
+
+                if let Some(rx_tx) = backlog.remove(&id) {
+                    break rx_tx;
+                }
             }
-            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, transport_layer)),
-            Entity::Node => Connection::Node(NodeHandle::new(id, transport_layer)),
+
+            let (rx, tx) = tokio::select! {
+                _ = self.conns.notify.notified() => continue,
+                res = (self.connection_factory)() => res?,
+            };
+
+            let mut tmp = (self.transport_factory)(rx, tx);
+            let (peer_id, dst) = self.handshake(RECONNECT, &mut tmp).await?;
+
+            if dst != RECONNECT {
+                let details = format!("Expected {RECONNECT:?}, got: {dst:?} with id {peer_id}");
+                return Err(io::Error::other(details));
+            }
+
+            let rx_tx = tmp.demount();
+
+            if peer_id == id {
+                break rx_tx;
+            }
+
+            let mut backlog = self.conns.backlog.lock().await;
+            backlog.insert(peer_id, rx_tx);
+            self.conns.notify.notify_waiters();
         };
 
-        Ok(conn)
+        layer.swap(rx, tx);
+        Ok(())
     }
 }

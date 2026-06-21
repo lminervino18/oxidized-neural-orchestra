@@ -30,25 +30,27 @@ type W = OwnedWriteHalf;
 
 /// Routes incoming orchestrator connections to the appropriate runtime role
 /// keeping the process alive across sequential sessions.
-pub struct NodeRouter<R, W, T, F, G>
+pub struct NodeRouter<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: Acceptor<R, W, T, F, G>,
+    acceptor: Acceptor<R, W, T, F, G, Fut>,
     connector: Connector<R, W, T, F>,
 }
 
-impl<R, W, T, F, G> NodeRouter<R, W, T, F, G>
+impl<R, W, T, F, G, Fut> NodeRouter<R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `NodeRouter`.
     ///
@@ -58,7 +60,7 @@ where
     ///
     /// # Returns
     /// A new `NodeRouter` instance.
-    pub fn new(acceptor: Acceptor<R, W, T, F, G>, connector: Connector<R, W, T, F>) -> Self {
+    pub fn new(acceptor: Acceptor<R, W, T, F, G, Fut>, connector: Connector<R, W, T, F>) -> Self {
         Self {
             acceptor,
             connector,
@@ -66,11 +68,12 @@ where
     }
 }
 
-impl<T, F, G> NodeRouter<R, W, T, F, G>
+impl<T, F, G, Fut> NodeRouter<R, W, T, F, G, Fut>
 where
     T: TransportLayer + 'static,
     F: Fn(R, W) -> T + Clone,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Waits for incoming connections and runs the specified node instance.
     ///

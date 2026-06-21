@@ -30,25 +30,27 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// The worker builder, given a spec, will build a new worker ready to use.
-pub struct WorkerBuilder<'a, R, W, T, F, G>
+pub struct WorkerBuilder<'a, R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<R, W, T, F, G>,
+    acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
     connector: Connector<R, W, T, F>,
 }
 
-impl<'a, R, W, T, F, G> WorkerBuilder<'a, R, W, T, F, G>
+impl<'a, R, W, T, F, G, Fut> WorkerBuilder<'a, R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `WorkerBuilder`.
     ///
@@ -59,7 +61,7 @@ where
     /// # Returns
     /// A new `WorkerBuilder` instance.
     pub fn new(
-        acceptor: &'a mut Acceptor<R, W, T, F, G>,
+        acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
         connector: Connector<R, W, T, F>,
     ) -> Self {
         Self {
@@ -69,11 +71,12 @@ where
     }
 }
 
-impl<T, F, G> WorkerBuilder<'_, R, W, T, F, G>
+impl<T, F, G, Fut> WorkerBuilder<'_, R, W, T, F, G, Fut>
 where
     T: TransportLayer + 'static,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Builds a `Worker` from a `WorkerSpec`.
     ///

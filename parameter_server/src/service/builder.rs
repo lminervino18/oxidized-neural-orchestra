@@ -27,30 +27,32 @@ const DEFAULT_CORE_COUNT: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 const SHARD_AMOUNT_FACTOR: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 
 /// Builds `Server`s given a specification.
-pub struct ServerBuilder<'a, R, W, T, F, G>
+pub struct ServerBuilder<'a, R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<R, W, T, F, G>,
+    acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
 }
 
-impl<'a, R, W, T, F, G> ServerBuilder<'a, R, W, T, F, G>
+impl<'a, R, W, T, F, G, Fut> ServerBuilder<'a, R, W, T, F, G, Fut>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
     T: TransportLayer + 'static,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `ServerBuilder`.
     ///
     /// # Returns
     /// A new `ServerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<R, W, T, F, G>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>) -> Self {
         Self { acceptor }
     }
 

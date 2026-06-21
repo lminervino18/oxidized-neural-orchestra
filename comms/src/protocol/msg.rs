@@ -30,12 +30,13 @@ pub enum Payload<'a> {
 }
 
 /// An enum of the different types of entities in the system.
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub enum Entity {
     Node,
     Orchestrator,
     ParamServer,
     Worker,
+    Reconnect,
 }
 
 /// The command for the `Control` variant of the `Msg` enum.

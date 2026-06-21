@@ -35,6 +35,14 @@ impl<R: AsyncRead + Unpin> Source<R> {
         self.reader = reader;
     }
 
+    /// Consumes `self` and yields it's inner reader.
+    ///
+    /// # Returns
+    /// Self's inner reader.
+    pub fn into_inner(self) -> R {
+        self.reader
+    }
+
     /// Waits to receive a new message from the inner reader.
     ///
     /// # Returns

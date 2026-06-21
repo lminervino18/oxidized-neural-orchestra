@@ -19,13 +19,14 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// Resolves the requested statistic calculations by the orchestrator.
-pub struct StatService<'a, T, F, G>
+pub struct StatService<'a, T, F, G, Fut>
 where
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<R, W, T, F, G>,
+    acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
     connector: &'a mut Connector<R, W, T, F>,
 }
 
@@ -38,11 +39,12 @@ where
     handle: NodeHandle<T>,
 }
 
-impl<'a, T, F, G> StatService<'a, T, F, G>
+impl<'a, T, F, G, Fut> StatService<'a, T, F, G, Fut>
 where
     T: TransportLayer,
     F: Fn(R, W) -> T,
-    G: AsyncFn() -> io::Result<(R, W)>,
+    G: Fn() -> Fut,
+    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `StatServicer`.
     ///
@@ -53,7 +55,7 @@ where
     /// # Returns
     /// A new `StatServicer` instance.
     pub fn new(
-        acceptor: &'a mut Acceptor<R, W, T, F, G>,
+        acceptor: &'a mut Acceptor<R, W, T, F, G, Fut>,
         connector: &'a mut Connector<R, W, T, F>,
     ) -> Self {
         Self {
