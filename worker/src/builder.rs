@@ -26,9 +26,9 @@ type W = OwnedWriteHalf;
 /// The worker builder, given a spec, will build a new worker ready to use.
 pub struct WorkerBuilder<'a, T, F, G, Fut>
 where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     acceptor: &'a mut Acceptor<T, F, G, Fut>,
@@ -37,9 +37,9 @@ where
 
 impl<'a, T, F, G, Fut> WorkerBuilder<'a, T, F, G, Fut>
 where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `WorkerBuilder`.
@@ -60,9 +60,9 @@ where
 
 impl<T, F, G, Fut> WorkerBuilder<'_, T, F, G, Fut>
 where
-    T: TransportLayer + 'static,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W> + 'static,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Builds a `Worker` from a `WorkerSpec`.
@@ -76,7 +76,7 @@ where
     pub async fn build<'a>(
         &mut self,
         spec: &WorkerSpec,
-        orch_handle: &'a mut OrchHandle<T>,
+        orch_handle: &'a mut OrchHandle<R, W, T>,
     ) -> io::Result<Box<dyn Worker + 'a>> {
         let data_src = self.download_dataset(orch_handle).await?;
         let trainer_builder = TrainerBuilder::new();
@@ -166,8 +166,8 @@ where
         server_ordering: Vec<usize>,
         dataset: Dataset,
         trainer_spec: TrainerSpec,
-        orch_handle: &'a mut OrchHandle<T>,
-    ) -> io::Result<ParamServerWorker<'a, T>> {
+        orch_handle: &'a mut OrchHandle<R, W, T>,
+    ) -> io::Result<ParamServerWorker<'a, R, W, T>> {
         let WorkerSpec {
             serializer, seed, ..
         } = spec;
@@ -230,9 +230,9 @@ where
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
         mut connection_hook: H,
-    ) -> io::Result<ServerClusterManager<T>>
+    ) -> io::Result<ServerClusterManager<R, W, T>>
     where
-        H: AsyncFnMut(&mut ParamServerHandle<T>) -> io::Result<()>,
+        H: AsyncFnMut(&mut ParamServerHandle<R, W, T>) -> io::Result<()>,
     {
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
         let src = Entity::Worker;
@@ -271,7 +271,7 @@ where
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
         amount_of_layers: usize,
-    ) -> io::Result<WorkerRingManager<T>> {
+    ) -> io::Result<WorkerRingManager<R, W, T>> {
         let src = Entity::Worker;
 
         let prev_conn_fut = async {

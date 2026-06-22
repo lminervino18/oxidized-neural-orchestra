@@ -7,7 +7,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-use super::{Demountable, IoSwapable, TransportLayer};
+use super::TransportLayer;
 use crate::{Acceptor, Connector, protocol::Msg};
 
 type R = OwnedReadHalf;
@@ -22,9 +22,9 @@ type W = OwnedWriteHalf;
 /// wait for reconnections from the peer node.
 enum Strategy<T, F, G, Fut>
 where
-    T: TransportLayer + IoSwapable<R, W>,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     Active {
@@ -39,9 +39,9 @@ where
 
 impl<T, F, G, Fut> Strategy<T, F, G, Fut>
 where
-    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Attempts to reconnect to the peer node.
@@ -114,9 +114,9 @@ where
 /// The reconnection layer of the transport protocol.
 pub struct Recon<F, G, Fut, T>
 where
-    T: TransportLayer + IoSwapable<R, W>,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     strat: Strategy<T, F, G, Fut>,
@@ -125,10 +125,10 @@ where
 
 impl<F, G, Fut, T> Recon<F, G, Fut, T>
 where
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
-    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
 {
     /// Creates a new `Recon` transport layer in it's `Active` role.
     ///
@@ -163,12 +163,12 @@ where
     }
 }
 
-impl<F, G, Fut, T> TransportLayer for Recon<F, G, Fut, T>
+impl<F, G, Fut, T> TransportLayer<R, W> for Recon<F, G, Fut, T>
 where
-    F: Fn(R, W) -> T + Send + Sync,
-    G: Fn() -> Fut + Send + Sync,
+    T: TransportLayer<R, W> + Sync,
+    F: Fn(R, W) -> T + Clone + Send + Sync,
+    G: Fn() -> Fut + Clone + Send + Sync,
     Fut: Future<Output = io::Result<(R, W)>> + Send,
-    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W> + Sync,
 {
     /// Tries to receive a message, if incapable it will drop the connection
     /// and will wait until receiving a reconnection from the peer.
@@ -203,5 +203,13 @@ where
         }
 
         Ok(())
+    }
+
+    fn swap(&mut self, reader: R, writer: W) {
+        self.inner.swap(reader, writer);
+    }
+
+    fn demount(self) -> (R, W) {
+        self.demount()
     }
 }

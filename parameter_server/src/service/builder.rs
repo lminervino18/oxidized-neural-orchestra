@@ -32,9 +32,9 @@ type W = OwnedWriteHalf;
 /// Builds `Server`s given a specification.
 pub struct ServerBuilder<'a, T, F, G, Fut>
 where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     acceptor: &'a mut Acceptor<T, F, G, Fut>,
@@ -42,9 +42,9 @@ where
 
 impl<'a, T, F, G, Fut> ServerBuilder<'a, T, F, G, Fut>
 where
-    T: TransportLayer + 'static,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W> + 'static,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `ServerBuilder`.
@@ -67,11 +67,8 @@ where
     pub async fn build(
         &mut self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
-    ) -> io::Result<Box<dyn Server<T>>>
-    where
-        T: TransportLayer,
-    {
+        orch_handle: OrchHandle<R, W, T>,
+    ) -> io::Result<Box<dyn Server<R, W, T>>> {
         self.build_with(spec, orch_handle, async |_| Ok(())).await
     }
 
@@ -88,11 +85,11 @@ where
     pub async fn build_with<H>(
         &mut self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
+        orch_handle: OrchHandle<R, W, T>,
         mut connection_hook: H,
-    ) -> io::Result<Box<dyn Server<T>>>
+    ) -> io::Result<Box<dyn Server<R, W, T>>>
     where
-        H: AsyncFnMut(&mut WorkerHandle<T>) -> io::Result<()>,
+        H: AsyncFnMut(&mut WorkerHandle<R, W, T>) -> io::Result<()>,
     {
         let nworkers = spec.nworkers;
         let src = Entity::ParamServer;
@@ -124,8 +121,8 @@ where
     fn resolve_optimizer(
         &self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
-    ) -> Result<Box<dyn Server<T>>> {
+        orch_handle: OrchHandle<R, W, T>,
+    ) -> Result<Box<dyn Server<R, W, T>>> {
         match spec.optimizer {
             OptimizerSpec::Adam {
                 learning_rate,
@@ -162,9 +159,9 @@ where
     fn resolve_store<O, OF>(
         &self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
+        orch_handle: OrchHandle<R, W, T>,
         optimizer_factory: OF,
-    ) -> Result<Box<dyn Server<T>>>
+    ) -> Result<Box<dyn Server<R, W, T>>>
     where
         O: Optimizer + Send + 'static,
         OF: Fn(usize) -> O,
@@ -203,9 +200,9 @@ where
     fn resolve_synchronizer<PS>(
         &self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<T>,
+        orch_handle: OrchHandle<R, W, T>,
         store: PS,
-    ) -> Box<dyn Server<T>>
+    ) -> Box<dyn Server<R, W, T>>
     where
         PS: Store + Send + Sync + 'static,
     {
@@ -232,10 +229,10 @@ where
     /// A new server.
     fn terminate_build<PS, Sy>(
         &self,
-        orch_handle: OrchHandle<T>,
+        orch_handle: OrchHandle<R, W, T>,
         store: PS,
         synchronizer: Sy,
-    ) -> Box<dyn Server<T>>
+    ) -> Box<dyn Server<R, W, T>>
     where
         PS: Store + Send + Sync + 'static,
         Sy: Synchronizer + Send + Sync + 'static,

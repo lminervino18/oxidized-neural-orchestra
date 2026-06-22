@@ -2,27 +2,32 @@ use std::{io, num::NonZeroUsize};
 
 use comms::{TransportLayer, WorkerEvent, WorkerHandle};
 use machine_learning::param_manager::ParamManager;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::SplitIntoChunksMut;
 
 // The communication manager between the worker process
 // and both the previous and the next workers.
-pub struct WorkerRingManager<T>
+pub struct WorkerRingManager<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     pos: usize,
     addrs: Vec<String>,
-    prev: WorkerHandle<T>,
-    next: WorkerHandle<T>,
+    prev: WorkerHandle<R, W, T>,
+    next: WorkerHandle<R, W, T>,
     grad: Vec<f32>,
     residual: Vec<f32>,
     amount_of_layers: usize,
 }
 
-impl<T> WorkerRingManager<T>
+impl<R, W, T> WorkerRingManager<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Creates a new `WorkerRingManager`.
     ///
@@ -39,8 +44,8 @@ where
     pub fn new(
         pos: usize,
         addrs: Vec<String>,
-        prev: WorkerHandle<T>,
-        next: WorkerHandle<T>,
+        prev: WorkerHandle<R, W, T>,
+        next: WorkerHandle<R, W, T>,
         size: usize,
         amount_of_layers: usize,
     ) -> Self {

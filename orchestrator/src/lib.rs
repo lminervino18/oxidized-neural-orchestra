@@ -19,10 +19,7 @@ pub use error::{OrchErr, Result};
 use log::debug;
 pub use sessions::{CancelHandle, Session, StopReason, TrainedModel, TrainingEvent};
 use tokio::{
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     runtime::Runtime,
 };
 use uuid::Uuid;
@@ -112,9 +109,9 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 async fn connect_to_nodes<T, F>(
     connector: &mut Connector<T, F>,
     addrs: &[String],
-) -> io::Result<BTreeMap<String, NodeHandle<T>>>
+) -> io::Result<BTreeMap<String, NodeHandle<R, W, T>>>
 where
-    T: TransportLayer,
+    T: TransportLayer<R, W>,
     F: Fn(R, W) -> T,
 {
     let mut handles = BTreeMap::new();

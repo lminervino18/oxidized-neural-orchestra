@@ -1,5 +1,6 @@
-use std::io;
+use std::{io, marker::PhantomData};
 
+use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
 use super::{ParamServerHandle, WorkerHandle};
@@ -16,9 +17,15 @@ use crate::{
 ///
 /// Obtained from [`crate::Connector::connect_node`]. Consumed when the node is assigned
 /// its role via [`NodeHandle::create_server`] or [`NodeHandle::create_worker`].
-pub struct NodeHandle<T: TransportLayer> {
+pub struct NodeHandle<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     id: Uuid,
     transport: T,
+    _phantom: PhantomData<(R, W)>,
 }
 
 /// A notified node event.
@@ -28,7 +35,12 @@ pub enum NodeEvent {
     Pong,
 }
 
-impl<T: TransportLayer> NodeHandle<T> {
+impl<R, W, T> NodeHandle<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     /// Creates a new `NodeHandle`.
     ///
     /// # Args
@@ -38,7 +50,11 @@ impl<T: TransportLayer> NodeHandle<T> {
     /// # Returns
     /// A new `NodeHandle` instance.
     pub(crate) fn new(id: Uuid, transport: T) -> Self {
-        Self { id, transport }
+        Self {
+            id,
+            transport,
+            _phantom: PhantomData,
+        }
     }
 
     /// The node's id.
@@ -56,7 +72,10 @@ impl<T: TransportLayer> NodeHandle<T> {
     ///
     /// # Returns
     /// The parameter server handle or an io error if occurred.
-    pub async fn create_server(mut self, spec: ServerSpec) -> io::Result<ParamServerHandle<T>> {
+    pub async fn create_server(
+        mut self,
+        spec: ServerSpec,
+    ) -> io::Result<ParamServerHandle<R, W, T>> {
         self.create(NodeSpec::Server(spec)).await?;
         Ok(ParamServerHandle::new(self.id, self.transport))
     }
@@ -68,7 +87,7 @@ impl<T: TransportLayer> NodeHandle<T> {
     ///
     /// # Returns
     /// The ready worker handle or an io error if occurred.
-    pub async fn create_worker(mut self, spec: WorkerSpec) -> io::Result<WorkerHandle<T>> {
+    pub async fn create_worker(mut self, spec: WorkerSpec) -> io::Result<WorkerHandle<R, W, T>> {
         self.create(NodeSpec::Worker(spec)).await?;
         Ok(WorkerHandle::new(self.id, self.transport))
     }

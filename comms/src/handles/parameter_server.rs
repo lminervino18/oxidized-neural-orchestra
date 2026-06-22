@@ -1,6 +1,7 @@
-use std::io;
+use std::{io, marker::PhantomData};
 
 use rand::{SeedableRng, rngs::StdRng};
+use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
 use super::{CompressedGrad, Compressor};
@@ -14,15 +15,23 @@ use crate::{
 
 /// The handle for communicating with a `ParameterServer`.
 #[derive(Debug)]
-pub struct ParamServerHandle<T> {
+pub struct ParamServerHandle<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     id: Uuid,
     transport: T,
     compressor: Compressor<StdRng>,
+    _phantom: PhantomData<(R, W)>,
 }
 
-impl<T> ParamServerHandle<T>
+impl<R, W, T> ParamServerHandle<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Creates a new `ParamServerHandle`.
     ///
@@ -37,6 +46,7 @@ where
             id,
             transport,
             compressor: Compressor::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -130,9 +140,11 @@ where
     }
 }
 
-impl<T> DatasetSrc for ParamServerHandle<T>
+impl<R, W, T> DatasetSrc for ParamServerHandle<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Waits to receive the dataset from the parameter server and writes both samples
     /// and labels to the given writers.

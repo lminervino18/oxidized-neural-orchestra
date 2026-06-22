@@ -29,8 +29,8 @@ fn channel_pair() -> (
 }
 
 async fn mock_orch<R, W>(
-    mut worker_handle: WorkerHandle<Stp<R, W>>,
-    mut server_handle: ParamServerHandle<Stp<R, W>>,
+    mut worker_handle: WorkerHandle<R, W, Stp<R, W>>,
+    mut server_handle: ParamServerHandle<R, W, Stp<R, W>>,
 ) -> io::Result<Vec<f32>>
 where
     R: AsyncRead + Unpin + Send,
@@ -50,8 +50,8 @@ where
 }
 
 async fn mock_server<R, W>(
-    mut worker_handle: WorkerHandle<Stp<R, W>>,
-    mut orch_handle: OrchHandle<Stp<R, W>>,
+    mut worker_handle: WorkerHandle<R, W, Stp<R, W>>,
+    mut orch_handle: OrchHandle<R, W, Stp<R, W>>,
     learning_rate: FloatPositive,
     nparams: usize,
 ) -> io::Result<()>

@@ -2,21 +2,26 @@ use std::io;
 
 use comms::{ParamServerCluster, ParamServerHandle, TransportLayer};
 use machine_learning::param_manager::{ParamManager, ParamsMetadata};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 // The communication manager between the worker process and the many servers.
-pub struct ServerClusterManager<T>
+pub struct ServerClusterManager<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
-    cluster: ParamServerCluster<T>,
+    cluster: ParamServerCluster<R, W, T>,
     server_ordering: Vec<usize>,
     residuals: Vec<Vec<f32>>,
     grads: Vec<Vec<f32>>,
 }
 
-impl<T> ServerClusterManager<T>
+impl<R, W, T> ServerClusterManager<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Creates a new `ServerClusterManager`.
     ///
@@ -39,7 +44,7 @@ where
     /// # Args
     /// * `server_handle` - The handle to the parameter server.
     /// * `size` - The amount of parameters this server holds.
-    pub fn spawn(&mut self, server_handle: ParamServerHandle<T>, size: usize) {
+    pub fn spawn(&mut self, server_handle: ParamServerHandle<R, W, T>, size: usize) {
         self.cluster.spawn(server_handle);
         self.residuals.push(vec![0.0; size]);
         self.grads.push(vec![0.0; size]);

@@ -29,12 +29,15 @@ use crate::{
     sessions::{ConvergenceTracker, LossRecorder},
 };
 
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
+
 /// An ongoing training session.
 pub struct Session {
     runtime: Runtime,
     orch_adapt: OrchAdapt,
-    worker_handles: Vec<WorkerHandle<NetRtp>>,
-    server_handles: Vec<ParamServerHandle<NetRtp>>,
+    worker_handles: Vec<WorkerHandle<R, W, NetRtp>>,
+    server_handles: Vec<ParamServerHandle<R, W, NetRtp>>,
 }
 
 impl Session {
@@ -180,7 +183,7 @@ impl Session {
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
     async fn start_training(
-        worker_handles: Vec<WorkerHandle<NetRtp>>,
+        worker_handles: Vec<WorkerHandle<R, W, NetRtp>>,
         event_rx: &mut Receiver<TrainingEvent>,
         event_tx: &Sender<TrainingEvent>,
         cancel_rx: Receiver<()>,
@@ -188,7 +191,7 @@ impl Session {
         convergence_tracker: Option<ConvergenceTracker>,
         user_event_tx: &Sender<TrainingEvent>,
         switch_tracking: Option<StrategySwitchTracking>,
-        server_handles: &mut Vec<ParamServerHandle<NetRtp>>,
+        server_handles: &mut Vec<ParamServerHandle<R, W, NetRtp>>,
     ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>) {
         let mut req_txs = Self::spawn_worker_listeners(worker_handles, event_tx);
 
@@ -220,14 +223,14 @@ impl Session {
     /// The trained parameters of the model.
     async fn finalize_training<T>(
         algorithm: AlgorithmConfig,
-        server_handles: Vec<ParamServerHandle<T>>,
+        server_handles: Vec<ParamServerHandle<R, W, T>>,
         user_event_tx: &Sender<TrainingEvent>,
         req_txs: &mut [Sender<WorkerRequest>],
         event_rx: &mut Receiver<TrainingEvent>,
         layer_offsets: &[(Uuid, usize, usize)],
     ) -> Vec<f32>
     where
-        T: TransportLayer + 'static,
+        T: TransportLayer<R, W> + 'static,
     {
         match algorithm {
             AlgorithmConfig::ParameterServer { .. } => {
@@ -254,7 +257,7 @@ impl Session {
     /// # Returns
     /// A list of senders to make requests to the listeners.
     fn spawn_worker_listeners(
-        worker_handles: Vec<WorkerHandle<NetRtp>>,
+        worker_handles: Vec<WorkerHandle<R, W, NetRtp>>,
         event_tx: &Sender<TrainingEvent>,
     ) -> Vec<Sender<WorkerRequest>> {
         let mut req_txs = Vec::with_capacity(worker_handles.len());
@@ -288,12 +291,12 @@ impl Session {
     /// # Returns
     /// The trained parameters of the model in layer order.
     async fn finalize_parameter_server<T>(
-        server_handles: Vec<ParamServerHandle<T>>,
+        server_handles: Vec<ParamServerHandle<R, W, T>>,
         layer_offsets: &[(Uuid, usize, usize)],
         user_event_tx: &Sender<TrainingEvent>,
     ) -> Vec<f32>
     where
-        T: TransportLayer,
+        T: TransportLayer<R, W>,
     {
         debug!("all workers done, reading final params from all servers");
         let mut server_params = HashMap::with_capacity(server_handles.len());
@@ -419,7 +422,7 @@ impl Session {
     async fn create_servers<I, F>(
         servers: I,
         connector: &Connector<NetRtp, F>,
-    ) -> Result<Vec<ParamServerHandle<NetRtp>>>
+    ) -> Result<Vec<ParamServerHandle<R, W, NetRtp>>>
     where
         I: IntoIterator<Item = ServerAdapt>,
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
@@ -453,7 +456,7 @@ impl Session {
     async fn create_workers<'a, F, I>(
         workers: I,
         connector: &Connector<NetRtp, F>,
-    ) -> Result<Vec<WorkerHandle<NetRtp>>>
+    ) -> Result<Vec<WorkerHandle<R, W, NetRtp>>>
     where
         F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
         I: IntoIterator<Item = WorkerAdapt<'a>>,
@@ -491,11 +494,14 @@ impl Session {
     ///
     /// # Returns
     /// An orch error if occurred.
-    async fn send_partition<'a, T: TransportLayer>(
-        worker_handle: &mut WorkerHandle<T>,
+    async fn send_partition<'a, T>(
+        worker_handle: &mut WorkerHandle<R, W, T>,
         partition: Partition<'a>,
         chunk_size: usize,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        T: TransportLayer<R, W>,
+    {
         match partition {
             Partition::Local {
                 samples_path,
@@ -538,7 +544,7 @@ impl Session {
     /// # Returns
     /// An orch error if occurred.
     async fn send_local_partition<T>(
-        worker_handle: &mut WorkerHandle<T>,
+        worker_handle: &mut WorkerHandle<R, W, T>,
         samples_path: &Path,
         labels_path: &Path,
         samples_offset: u64,
@@ -548,7 +554,7 @@ impl Session {
         chunk_size: usize,
     ) -> Result<()>
     where
-        T: TransportLayer,
+        T: TransportLayer<R, W>,
     {
         let mut samples_fd = File::open(samples_path).await?;
         let mut labels_fd = File::open(labels_path).await?;
@@ -580,13 +586,13 @@ impl Session {
     /// # Returns
     /// An orch error if occurred.
     async fn send_inline_partition<T>(
-        worker_handle: &mut WorkerHandle<T>,
+        worker_handle: &mut WorkerHandle<R, W, T>,
         samples: &[f32],
         labels: &[f32],
         chunk_size: usize,
     ) -> Result<()>
     where
-        T: TransportLayer,
+        T: TransportLayer<R, W>,
     {
         let mut samples_cursor = share_dataset::get_dataset_cursor(samples);
         let mut labels_cursor = share_dataset::get_dataset_cursor(labels);

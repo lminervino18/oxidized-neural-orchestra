@@ -1,5 +1,6 @@
-use std::{borrow::Cow, io};
+use std::{borrow::Cow, io, marker::PhantomData};
 
+use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
 use super::DatasetSrc;
@@ -15,9 +16,15 @@ use crate::{
 };
 
 /// The handle for communicating with an `Orchestrator`.
-pub struct OrchHandle<T: TransportLayer> {
+pub struct OrchHandle<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     id: Uuid,
     transport: T,
+    _phantom: PhantomData<(R, W)>,
 }
 
 /// A notified orchestrator event.
@@ -45,9 +52,11 @@ pub enum OrchEvent {
     },
 }
 
-impl<T> OrchHandle<T>
+impl<R, W, T> OrchHandle<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Creates a new `OrchHandle`.
     ///
@@ -58,7 +67,11 @@ where
     /// # Returns
     /// A new `OrchHandle` instance.
     pub fn new(id: Uuid, transport: T) -> Self {
-        Self { id, transport }
+        Self {
+            id,
+            transport,
+            _phantom: PhantomData,
+        }
     }
 
     /// The orchestrator's id.
@@ -170,9 +183,11 @@ where
     }
 }
 
-impl<T> DatasetSrc for OrchHandle<T>
+impl<R, W, T> DatasetSrc for OrchHandle<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Waits to receive the dataset from the orchestrator and writes both samples
     /// and labels to the given writers.

@@ -4,6 +4,7 @@ use comms::{
     NodeHandle, TransportLayer,
     specs::node::{StatRequest, StatResponse},
 };
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// The amount of ping rounds to make.
 const PING_ROUNDS: usize = 10;
@@ -28,12 +29,14 @@ impl StatRequester {
     ///
     /// # Returns
     /// The accumulated statistic responses or an io error if occurred.
-    pub async fn obtain_stats<T>(
+    pub async fn obtain_stats<R, W, T>(
         &mut self,
-        mut handles: BTreeMap<String, NodeHandle<T>>,
+        mut handles: BTreeMap<String, NodeHandle<R, W, T>>,
     ) -> io::Result<BTreeMap<String, Vec<StatResponse>>>
     where
-        T: TransportLayer,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
+        T: TransportLayer<R, W>,
     {
         self.request_stats(&mut handles).await?;
         let stats = self.wait_for_responses(&mut handles).await?;
@@ -48,12 +51,14 @@ impl StatRequester {
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn request_stats<T>(
+    async fn request_stats<R, W, T>(
         &self,
-        handles: &mut BTreeMap<String, NodeHandle<T>>,
+        handles: &mut BTreeMap<String, NodeHandle<R, W, T>>,
     ) -> io::Result<()>
     where
-        T: TransportLayer,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
+        T: TransportLayer<R, W>,
     {
         let addrs: Vec<_> = handles.keys().cloned().collect();
 
@@ -77,12 +82,14 @@ impl StatRequester {
     ///
     /// # Returns
     /// The statistic responses or an io error if occurred.
-    async fn wait_for_responses<T>(
+    async fn wait_for_responses<R, W, T>(
         &self,
-        handles: &mut BTreeMap<String, NodeHandle<T>>,
+        handles: &mut BTreeMap<String, NodeHandle<R, W, T>>,
     ) -> io::Result<BTreeMap<String, Vec<StatResponse>>>
     where
-        T: TransportLayer,
+        R: AsyncRead + Unpin,
+        W: AsyncWrite + Unpin,
+        T: TransportLayer<R, W>,
     {
         let mut stats = BTreeMap::new();
 
@@ -98,10 +105,12 @@ impl StatRequester {
     ///
     /// # Args
     /// * `handles` - The handles for communicating with the nodes.
-    async fn disconnect_nodes<'a, I, T>(&self, handles: I)
+    async fn disconnect_nodes<'a, R, W, T, I>(&self, handles: I)
     where
-        T: TransportLayer + 'a,
-        I: Iterator<Item = &'a mut NodeHandle<T>> + 'a,
+        R: AsyncRead + Unpin + 'a,
+        W: AsyncWrite + Unpin + 'a,
+        T: TransportLayer<R, W> + 'a,
+        I: Iterator<Item = &'a mut NodeHandle<R, W, T>> + 'a,
     {
         for node_handle in handles {
             let _ = node_handle.disconnect().await;

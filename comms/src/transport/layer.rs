@@ -1,5 +1,7 @@
 use std::io;
 
+use tokio::io::{AsyncRead, AsyncWrite};
+
 use crate::protocol::Msg;
 
 /// The trait that the different transport layers should implement
@@ -7,7 +9,11 @@ use crate::protocol::Msg;
 /// transport.
 #[allow(unused)]
 #[trait_variant::make(TransportLayer: Send)]
-pub trait TransportLayerTemplate {
+pub trait TransportLayerTemplate<R, W>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
     /// Receives a message from the inner layer.
     ///
     /// # Returns
@@ -22,4 +28,17 @@ pub trait TransportLayerTemplate {
     /// # Returns
     /// An io error if occurred.
     async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<()>;
+
+    /// Swaps `self`'s inner reader and writer.
+    ///
+    /// # Args
+    /// * `reader` - The new reader.
+    /// * `writer` - The new writer.
+    fn swap(&mut self, reader: R, writer: W);
+
+    /// Consumes `self` and yields the inner io reader and writer.
+    ///
+    /// # Returns
+    /// Self's both reader and writer.
+    fn demount(self) -> (R, W);
 }

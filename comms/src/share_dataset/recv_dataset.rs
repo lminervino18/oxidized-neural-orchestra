@@ -1,5 +1,7 @@
 use std::io::{self, Error, ErrorKind};
 
+use tokio::io::{AsyncRead, AsyncWrite};
+
 use crate::{
     protocol::{Command, Msg, Payload},
     transport::TransportLayer,
@@ -14,13 +16,15 @@ use crate::{
 ///
 /// # Errors
 /// Returns an `io::Error` if the connection or writting to the storage fail.
-pub async fn recv_dataset<T>(
+pub async fn recv_dataset<R, W, T>(
     xs: &mut Vec<f32>,
     ys: &mut Vec<f32>,
     transport: &mut T,
 ) -> io::Result<()>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     recv_chunks_into(xs, transport).await?;
     recv_chunks_into(ys, transport).await?;
@@ -36,9 +40,11 @@ where
 ///
 /// # Returns
 /// An io error if occurred.
-async fn recv_chunks_into<T>(acc: &mut Vec<f32>, transport: &mut T) -> io::Result<()>
+async fn recv_chunks_into<R, W, T>(acc: &mut Vec<f32>, transport: &mut T) -> io::Result<()>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     let size = match transport.recv().await? {
         Msg::Control(Command::ShareDatasetSize { size }) => size,

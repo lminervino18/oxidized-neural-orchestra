@@ -1,20 +1,25 @@
 use std::io;
 
 use futures::future;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{ParamServerHandle, TransportLayer};
 
 /// A helper struct to manage a cluster of parameter servers.
-pub struct ParamServerCluster<T>
+pub struct ParamServerCluster<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
-    server_handles: Vec<ParamServerHandle<T>>,
+    server_handles: Vec<ParamServerHandle<R, W, T>>,
 }
 
-impl<T> Default for ParamServerCluster<T>
+impl<R, W, T> Default for ParamServerCluster<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     fn default() -> Self {
         Self {
@@ -23,9 +28,11 @@ where
     }
 }
 
-impl<T> ParamServerCluster<T>
+impl<R, W, T> ParamServerCluster<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Creates a new `ParamServerCluster`.
     ///
@@ -39,7 +46,7 @@ where
     ///
     /// # Args
     /// * `server_handle` - The handler for communicating with a new server.
-    pub fn spawn(&mut self, server_handle: ParamServerHandle<T>) {
+    pub fn spawn(&mut self, server_handle: ParamServerHandle<R, W, T>) {
         self.server_handles.push(server_handle);
     }
 

@@ -1,6 +1,6 @@
 use std::io::{self, Cursor};
 
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     protocol::{Command, Msg, Payload},
@@ -32,17 +32,19 @@ pub fn get_dataset_cursor(dataset_raw: &[f32]) -> Cursor<&[u8]> {
 ///
 /// # Errors
 /// Returns an `io::Error` if the connection or reading from the storage fail.
-pub async fn send_dataset<R, T>(
-    xs: &mut R,
-    ys: &mut R,
+pub async fn send_dataset<DsR, R, W, T>(
+    xs: &mut DsR,
+    ys: &mut DsR,
     xs_size_hint: usize,
     ys_size_hint: usize,
     chunk_size: usize,
     transport: &mut T,
 ) -> io::Result<()>
 where
+    DsR: AsyncRead + Unpin,
     R: AsyncRead + Unpin,
-    T: TransportLayer,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     const UNIT_SIZE: usize = size_of::<f32>();
     let mut buf: Vec<u32> = vec![0; chunk_size / UNIT_SIZE];
@@ -64,15 +66,17 @@ where
 ///
 /// # Returns
 /// An io error if occurred.
-async fn send_chunks_from<R, T>(
-    reader: &mut R,
+async fn send_chunks_from<DsR, R, W, T>(
+    reader: &mut DsR,
     size_hint: usize,
     acc: &mut [u8],
     transport: &mut T,
 ) -> io::Result<()>
 where
+    DsR: AsyncRead + Unpin,
     R: AsyncRead + Unpin,
-    T: TransportLayer,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     let msg = Msg::Control(Command::ShareDatasetSize { size: size_hint });
     transport.send(&msg).await?;

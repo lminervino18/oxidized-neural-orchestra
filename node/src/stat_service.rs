@@ -8,6 +8,7 @@ use comms::{
 use futures::future;
 use log::{debug, warn};
 use tokio::{
+    io::{AsyncRead, AsyncWrite},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     time::Instant,
 };
@@ -18,9 +19,9 @@ type W = OwnedWriteHalf;
 /// Resolves the requested statistic calculations by the orchestrator.
 pub struct StatService<'a, T, F, G, Fut>
 where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     acceptor: &'a mut Acceptor<T, F, G, Fut>,
@@ -30,17 +31,19 @@ where
 /// A struct helper to mantain the address of a handle close to it.
 struct AddressedHandle<T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     addr: String,
-    handle: NodeHandle<T>,
+    handle: NodeHandle<R, W, T>,
 }
 
 impl<'a, T, F, G, Fut> StatService<'a, T, F, G, Fut>
 where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `StatServicer`.
@@ -165,7 +168,7 @@ where
         &mut self,
         addrs: Vec<String>,
         incoming: usize,
-    ) -> (Vec<AddressedHandle<T>>, Vec<NodeHandle<T>>) {
+    ) -> (Vec<AddressedHandle<T>>, Vec<NodeHandle<R, W, T>>) {
         let mut ping_handles = Vec::with_capacity(addrs.len());
 
         for addr in addrs {
@@ -199,7 +202,7 @@ where
     async fn serve_ping_round(
         &mut self,
         ping_handles: &mut Vec<AddressedHandle<T>>,
-        pong_handles: &mut Vec<NodeHandle<T>>,
+        pong_handles: &mut Vec<NodeHandle<R, W, T>>,
         rtts: &mut HashMap<String, Vec<Duration>>,
     ) {
         let ping_futs = ping_handles
@@ -249,7 +252,7 @@ where
     ///
     /// # Returns
     /// The round trip time duration or an io error if occurred.
-    async fn ping_node(&self, node_handle: &mut NodeHandle<T>) -> io::Result<Duration> {
+    async fn ping_node(&self, node_handle: &mut NodeHandle<R, W, T>) -> io::Result<Duration> {
         let start = Instant::now();
         node_handle.ping().await?;
 
@@ -269,7 +272,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn pong_node(&self, node_handle: &mut NodeHandle<T>) -> io::Result<()> {
+    async fn pong_node(&self, node_handle: &mut NodeHandle<R, W, T>) -> io::Result<()> {
         match node_handle.recv_event().await? {
             NodeEvent::Ping => node_handle.pong().await,
             event => {

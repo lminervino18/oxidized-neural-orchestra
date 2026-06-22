@@ -10,7 +10,7 @@ use super::Connection;
 use crate::{
     NodeHandle, OrchHandle, ParamServerHandle, WorkerHandle,
     protocol::{Command, Entity, Msg},
-    transport::{Demountable, IoSwapable, TransportLayer},
+    transport::TransportLayer,
 };
 
 type R = OwnedReadHalf;
@@ -26,9 +26,9 @@ struct ConnRegistry {
 /// Accepts new incoming connections and assigns yields their handle types.
 pub struct Acceptor<T, F, G, Fut>
 where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     id: Uuid,
@@ -40,7 +40,7 @@ where
 
 impl<T, F, G, Fut> Clone for Acceptor<T, F, G, Fut>
 where
-    T: TransportLayer,
+    T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
@@ -58,9 +58,9 @@ where
 
 impl<T, F, G, Fut> Acceptor<T, F, G, Fut>
 where
-    T: TransportLayer,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `Acceptor`.
@@ -78,7 +78,7 @@ where
             conns: Default::default(),
             transport_factory,
             connection_factory,
-            _phantom: Default::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -90,7 +90,7 @@ where
     /// # Returns
     /// A new connection or an io error if occurred while waiting for incoming connections
     /// or receiving the type of entity from the peer.
-    pub async fn accept(&self, src: Entity) -> io::Result<Connection<T>> {
+    pub async fn accept(&self, src: Entity) -> io::Result<Connection<R, W, T>> {
         let (rx, tx) = (self.connection_factory)().await?;
         let mut layer = (self.transport_factory)(rx, tx);
         let (id, dst) = self.handshake(src, &mut layer).await?;
@@ -134,9 +134,9 @@ where
 
 impl<T, F, G, Fut> Acceptor<T, F, G, Fut>
 where
-    T: TransportLayer + IoSwapable<R, W> + Demountable<R, W>,
-    F: Fn(R, W) -> T,
-    G: Fn() -> Fut,
+    T: TransportLayer<R, W>,
+    F: Fn(R, W) -> T + Clone,
+    G: Fn() -> Fut + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Will wait until a connection with the expected `id` arrives blocking the thread in the process.

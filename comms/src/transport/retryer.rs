@@ -1,26 +1,34 @@
-use std::{io, mem, time::Duration};
+use std::{io, marker::PhantomData, mem, time::Duration};
 
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     time,
 };
 
-use super::{Demountable, IoSwapable, TransportLayer};
+use super::TransportLayer;
 use crate::protocol::Msg;
 
 /// The `Retryer` retries sending and receiving messages using exponential backoff.
 #[derive(Debug)]
-pub struct Retryer<T>
+pub struct Retryer<R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     base_retry_dur: Duration,
     retry_coef: u32,
     retries: usize,
     inner: T,
+    _phantom: PhantomData<(R, W)>,
 }
 
-impl<T: TransportLayer> Retryer<T> {
+impl<R, W, T> Retryer<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     /// Creates a new `Retryer` transport layer.
     ///
     /// # Args
@@ -37,6 +45,7 @@ impl<T: TransportLayer> Retryer<T> {
             retry_coef,
             retries,
             inner,
+            _phantom: PhantomData,
         }
     }
 
@@ -70,7 +79,12 @@ impl<T: TransportLayer> Retryer<T> {
     }
 }
 
-impl<T: TransportLayer> TransportLayer for Retryer<T> {
+impl<R, W, T> TransportLayer<R, W> for Retryer<R, W, T>
+where
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
+    T: TransportLayer<R, W>,
+{
     /// Will attempt to receive a message with retries.
     ///
     /// # Returns
@@ -117,25 +131,11 @@ impl<T: TransportLayer> TransportLayer for Retryer<T> {
 
         self.inner.send(msg).await
     }
-}
 
-impl<R, W, T> IoSwapable<R, W> for Retryer<T>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-    T: TransportLayer + IoSwapable<R, W>,
-{
     fn swap(&mut self, reader: R, writer: W) {
         self.inner.swap(reader, writer);
     }
-}
 
-impl<R, W, T> Demountable<R, W> for Retryer<T>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-    T: TransportLayer + Demountable<R, W>,
-{
     fn demount(self) -> (R, W) {
         self.inner.demount()
     }

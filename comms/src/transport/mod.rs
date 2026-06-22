@@ -3,7 +3,6 @@ mod layer;
 mod recon;
 mod retryer;
 mod timeouter;
-mod utils;
 
 use std::time::Duration;
 
@@ -16,10 +15,9 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
-pub(super) use utils::{Demountable, IoSwapable};
 
 /// The reliable transport.
-pub type Rtp<R, W> = Retryer<TimeOuter<Framer<R, W>>>;
+pub type Rtp<R, W> = Retryer<R, W, TimeOuter<R, W, Framer<R, W>>>;
 
 /// The simple transport;
 pub type Stp<R, W> = Framer<R, W>;

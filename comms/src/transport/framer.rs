@@ -2,7 +2,7 @@ use std::io;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::{Demountable, IoSwapable, TransportLayer};
+use super::TransportLayer;
 use crate::{
     codec::{Sink, Source},
     protocol::Msg,
@@ -42,7 +42,7 @@ where
     }
 }
 
-impl<R, W> TransportLayer for Framer<R, W>
+impl<R, W> TransportLayer<R, W> for Framer<R, W>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
@@ -65,24 +65,21 @@ where
     async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<()> {
         self.tx.send(msg).await
     }
-}
 
-impl<R, W> IoSwapable<R, W> for Framer<R, W>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
+    /// Swaps both sink's writer and source's reader with new ones.
+    ///
+    /// # Args
+    /// * `reader` - The new reader.
+    /// * `writer` - The new writer.
     fn swap(&mut self, reader: R, writer: W) {
         self.rx.replace(reader);
         self.tx.replace(writer);
     }
-}
 
-impl<R, W> Demountable<R, W> for Framer<R, W>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
+    /// Yields the inner reader and writer.
+    ///
+    /// # Returns
+    /// Both sink and source reader and writer.
     fn demount(self) -> (R, W) {
         (self.rx.into_inner(), self.tx.into_inner())
     }

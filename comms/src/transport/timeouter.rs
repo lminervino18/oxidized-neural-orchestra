@@ -1,22 +1,33 @@
-use std::{io, time::Duration};
+use std::{io, marker::PhantomData, time::Duration};
 
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     time,
 };
 
-use super::{Demountable, IoSwapable, TransportLayer};
+use super::TransportLayer;
 use crate::protocol::Msg;
 
 /// The `TimeOuter` tries receiving messages inside a time window.
 /// If it fails it returns an error with `ErrorKind::TimedOut`.
 #[derive(Debug)]
-pub struct TimeOuter<L: TransportLayer> {
+pub struct TimeOuter<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     timeout: Duration,
-    inner: L,
+    inner: T,
+    _phantom: PhantomData<(R, W)>,
 }
 
-impl<L: TransportLayer> TimeOuter<L> {
+impl<R, W, T> TimeOuter<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     /// Creates a new `TimeOuter` transport layer.
     ///
     /// # Args
@@ -25,12 +36,21 @@ impl<L: TransportLayer> TimeOuter<L> {
     ///
     /// # Returns
     /// A new `TimeOuter` transport layer instance.
-    pub fn new(timeout: Duration, inner: L) -> Self {
-        Self { timeout, inner }
+    pub fn new(timeout: Duration, inner: T) -> Self {
+        Self {
+            timeout,
+            inner,
+            _phantom: PhantomData,
+        }
     }
 }
 
-impl<L: TransportLayer> TransportLayer for TimeOuter<L> {
+impl<R, W, T> TransportLayer<R, W> for TimeOuter<R, W, T>
+where
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
+    T: TransportLayer<R, W>,
+{
     /// Calls receive on the inner transport layer setting it's timeout.
     /// Returning an io error with `ErrorKind::TimedOut` if the timoeut
     /// reaches the setted duration.
@@ -56,25 +76,11 @@ impl<L: TransportLayer> TransportLayer for TimeOuter<L> {
     async fn send<'a>(&mut self, msg: &Msg<'a>) -> io::Result<()> {
         self.inner.send(msg).await
     }
-}
 
-impl<R, W, T> IoSwapable<R, W> for TimeOuter<T>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-    T: TransportLayer + IoSwapable<R, W>,
-{
     fn swap(&mut self, reader: R, writer: W) {
         self.inner.swap(reader, writer);
     }
-}
 
-impl<R, W, T> Demountable<R, W> for TimeOuter<T>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-    T: TransportLayer + Demountable<R, W>,
-{
     fn demount(self) -> (R, W) {
         self.inner.demount()
     }

@@ -1,9 +1,15 @@
 use comms::{NetRtp, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    sync::mpsc::{Receiver, Sender},
+};
 
 use super::{TrainingEvent, WorkerRequest};
 use crate::{OrchErr, Result};
+
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
 
 /// The return type of the `handle_request` method.
 enum ReqResolution {
@@ -21,7 +27,7 @@ enum EventResolution {
 /// The worker handle manager.
 pub struct WorkerListener {
     id: usize,
-    worker_handle: WorkerHandle<NetRtp>,
+    worker_handle: WorkerHandle<R, W, NetRtp>,
     stopping: bool,
 }
 
@@ -34,7 +40,7 @@ impl WorkerListener {
     ///
     /// # Returns
     /// A new `WorkerListener` instance.
-    pub fn new(id: usize, worker_handle: WorkerHandle<NetRtp>) -> Self {
+    pub fn new(id: usize, worker_handle: WorkerHandle<R, W, NetRtp>) -> Self {
         Self {
             id,
             worker_handle,

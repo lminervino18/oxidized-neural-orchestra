@@ -1,7 +1,7 @@
-use std::io;
+use std::{io, marker::PhantomData};
 
 use rand::{SeedableRng, rngs::StdRng};
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, AsyncWrite};
 use uuid::Uuid;
 
 use super::{Compressor, compressor::CompressedGrad};
@@ -15,11 +15,17 @@ use crate::{
 };
 
 /// The handle for communicating with a `Worker`.
-pub struct WorkerHandle<T> {
+pub struct WorkerHandle<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     id: Uuid,
     transport: T,
     grad: Vec<f32>,
     compressor: Compressor<StdRng>,
+    _phantom: PhantomData<(R, W)>,
 }
 
 /// A notified worker event.
@@ -33,7 +39,12 @@ pub enum WorkerEvent<'a> {
     Upgraded,
 }
 
-impl<T: TransportLayer> WorkerHandle<T> {
+impl<R, W, T> WorkerHandle<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
     /// Creates a new `WorkerHandle`.
     ///
     /// # Args
@@ -48,6 +59,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
             transport,
             grad: Vec::new(),
             compressor: Compressor::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -181,16 +193,16 @@ impl<T: TransportLayer> WorkerHandle<T> {
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn push_dataset<R>(
+    pub async fn push_dataset<DsR>(
         &mut self,
-        xs: &mut R,
-        ys: &mut R,
+        xs: &mut DsR,
+        ys: &mut DsR,
         xs_size_hint: usize,
         ys_size_hint: usize,
         chunk_size: usize,
     ) -> io::Result<()>
     where
-        R: AsyncRead + Unpin,
+        DsR: AsyncRead + Unpin,
     {
         share_dataset::send_dataset(
             xs,
@@ -253,7 +265,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
     ///
     /// # Returns
     /// A new `ParamServerHandle` instance.
-    pub fn upgrade_handle(self) -> ParamServerHandle<T> {
+    pub fn upgrade_handle(self) -> ParamServerHandle<R, W, T> {
         ParamServerHandle::new(self.id, self.transport)
     }
 

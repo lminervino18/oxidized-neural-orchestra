@@ -20,10 +20,14 @@ pub use greater_than_one_usize::GreaterThanOneUsize;
 pub use loss_recorder::LossRecorder;
 pub use session::Session;
 pub use switch_tracker::SwitchTracker;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 pub use trained_model::TrainedModel;
 pub use worker_listener::WorkerListener;
 
 use crate::OrchErr;
+
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
 
 /// Requests that the orchestrator can make to a worker handler task.
 #[derive(Debug, Clone)]
@@ -63,7 +67,7 @@ pub enum TrainingEvent {
         worker_id: usize,
     },
     Upgraded {
-        server_handle: Box<ParamServerHandle<NetRtp>>,
+        server_handle: Box<ParamServerHandle<R, W, NetRtp>>,
         worker_id: usize,
     },
     Error(OrchErr),

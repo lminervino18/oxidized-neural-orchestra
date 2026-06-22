@@ -1,11 +1,8 @@
 use std::{io, marker::PhantomData};
 
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::{
-        TcpStream,
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-    },
+use tokio::net::{
+    TcpStream,
+    tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
 use uuid::Uuid;
 
@@ -13,7 +10,7 @@ use crate::{
     WorkerHandle,
     handles::{NodeHandle, OrchHandle, ParamServerHandle},
     protocol::{Command, Entity, Msg},
-    transport::{IoSwapable, TransportLayer},
+    transport::TransportLayer,
 };
 
 type R = OwnedReadHalf;
@@ -23,7 +20,7 @@ type W = OwnedWriteHalf;
 #[derive(Debug)]
 pub struct Connector<T, F>
 where
-    T: TransportLayer,
+    T: TransportLayer<R, W>,
     F: Fn(R, W) -> T,
 {
     id: Uuid,
@@ -33,7 +30,7 @@ where
 
 impl<T, F> Clone for Connector<T, F>
 where
-    T: TransportLayer,
+    T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
 {
     fn clone(&self) -> Self {
@@ -47,7 +44,7 @@ where
 
 impl<T, F> Connector<T, F>
 where
-    T: TransportLayer,
+    T: TransportLayer<R, W>,
     F: Fn(R, W) -> T,
 {
     /// Creates a new `Connector`.
@@ -62,7 +59,7 @@ where
         Self {
             id,
             transport_factory,
-            _phantom: Default::default(),
+            _phantom: PhantomData,
         }
     }
 
@@ -77,11 +74,7 @@ where
     ///
     /// # Returns
     /// A new `NodeHandle` or an io error if occurred.
-    pub async fn connect_node(&self, addr: &str, src: Entity) -> io::Result<NodeHandle<T>>
-    where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
-    {
+    pub async fn connect_node(&self, addr: &str, src: Entity) -> io::Result<NodeHandle<R, W, T>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -101,11 +94,11 @@ where
     ///
     /// # Returns
     /// A `WorkerHandle` ready to start training.
-    pub async fn connect_worker(&self, addr: &str, src: Entity) -> io::Result<WorkerHandle<T>>
-    where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
-    {
+    pub async fn connect_worker(
+        &self,
+        addr: &str,
+        src: Entity,
+    ) -> io::Result<WorkerHandle<R, W, T>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -129,11 +122,7 @@ where
         &self,
         addr: &str,
         src: Entity,
-    ) -> io::Result<ParamServerHandle<T>>
-    where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
-    {
+    ) -> io::Result<ParamServerHandle<R, W, T>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -153,11 +142,11 @@ where
     ///
     /// # Returns
     /// A new `OrchHandle` or an io error if occurred.
-    pub async fn connect_orchestrator(&self, addr: &str, src: Entity) -> io::Result<OrchHandle<T>>
-    where
-        R: AsyncRead + Unpin,
-        W: AsyncWrite + Unpin,
-    {
+    pub async fn connect_orchestrator(
+        &self,
+        addr: &str,
+        src: Entity,
+    ) -> io::Result<OrchHandle<R, W, T>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -177,10 +166,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn reconnect<U>(&self, addr: &str, layer: &mut U) -> io::Result<()>
-    where
-        U: TransportLayer + IoSwapable<R, W>,
-    {
+    pub async fn reconnect(&self, addr: &str, layer: &mut T) -> io::Result<()> {
         let (rx, tx) = self.connect_io(addr).await?;
         layer.swap(rx, tx);
         self.handshake(Entity::Reconnect, layer).await.map(|_| ())
@@ -221,10 +207,7 @@ where
     ///
     /// # Returns
     /// The peer's id and entity type or an io error if occurred.
-    async fn handshake<U>(&self, src: Entity, layer: &mut U) -> io::Result<(Uuid, Entity)>
-    where
-        U: TransportLayer,
-    {
+    async fn handshake(&self, src: Entity, layer: &mut T) -> io::Result<(Uuid, Entity)> {
         let msg = Msg::Control(Command::Connect { id: self.id, src });
         layer.send(&msg).await?;
 

@@ -2,29 +2,36 @@ use std::io;
 
 use comms::{OrchEvent, OrchHandle, TransportLayer, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
-use tokio::task::JoinSet;
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    task::JoinSet,
+};
 
 use super::Server;
 use crate::{storage::Store, synchronization::Synchronizer};
 
 /// The central server structure, it handles task management and io between workers.
-pub struct ParameterServer<PS, Sy, T>
+pub struct ParameterServer<R, W, T, PS, Sy>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
     PS: Store,
     Sy: Synchronizer,
-    T: TransportLayer,
 {
     tasks: JoinSet<io::Result<()>>,
     store: PS,
     synchronizer: Sy,
-    orch_handle: OrchHandle<T>,
+    orch_handle: OrchHandle<R, W, T>,
 }
 
-impl<PS, Sy, T> ParameterServer<PS, Sy, T>
+impl<R, W, T, PS, Sy> ParameterServer<R, W, T, PS, Sy>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
     PS: Store,
     Sy: Synchronizer,
-    T: TransportLayer,
 {
     /// Creates a new `ParameterServer`.
     ///
@@ -34,7 +41,7 @@ where
     ///
     /// # Returns
     /// A new `ParameterServer` instance.
-    pub fn new(store: PS, synchronizer: Sy, orch_handle: OrchHandle<T>) -> Self {
+    pub fn new(store: PS, synchronizer: Sy, orch_handle: OrchHandle<R, W, T>) -> Self {
         Self {
             tasks: JoinSet::new(),
             store,
@@ -44,11 +51,13 @@ where
     }
 }
 
-impl<PS, Sy, T> ParameterServer<PS, Sy, T>
+impl<R, W, T, PS, Sy> ParameterServer<R, W, T, PS, Sy>
 where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
     PS: Store,
     Sy: Synchronizer,
-    T: TransportLayer,
 {
     /// Starts the training process with the spawned workers.
     ///
@@ -90,20 +99,19 @@ where
     }
 }
 
-impl<PS, Sy, T> ParameterServer<PS, Sy, T>
+impl<R, W, T, PS, Sy> ParameterServer<R, W, T, PS, Sy>
 where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
+    T: TransportLayer<R, W> + 'static,
     PS: Store + Send + Sync + 'static,
     Sy: Synchronizer + 'static,
-    T: TransportLayer,
 {
     /// Binds a new worker to this server and spawns it's own training task.
     ///
     /// # Args
     /// * `worker_handle` - The handle for a worker connection.
-    pub fn spawn(&mut self, mut worker_handle: WorkerHandle<T>)
-    where
-        T: TransportLayer + Send + 'static,
-    {
+    pub fn spawn(&mut self, mut worker_handle: WorkerHandle<R, W, T>) {
         let id = self.tasks.len() + 1;
         let store = self.store.clone();
         let synchronizer = self.synchronizer.clone();
@@ -163,17 +171,19 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, PS, Sy> Server<T> for ParameterServer<PS, Sy, T>
+impl<R, W, T, PS, Sy> Server<R, W, T> for ParameterServer<R, W, T, PS, Sy>
 where
+    R: AsyncRead + Unpin + Send + 'static,
+    W: AsyncWrite + Unpin + Send + 'static,
     PS: Store + Send + Sync + 'static,
     Sy: Synchronizer + Send + 'static,
-    T: TransportLayer + Send + 'static,
+    T: TransportLayer<R, W> + Send + 'static,
 {
     async fn run(&mut self) -> io::Result<()> {
         self.run().await
     }
 
-    fn spawn(&mut self, worker_handle: WorkerHandle<T>) {
+    fn spawn(&mut self, worker_handle: WorkerHandle<R, W, T>) {
         self.spawn(worker_handle)
     }
 }

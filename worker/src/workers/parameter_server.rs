@@ -3,23 +3,28 @@ use std::io;
 use comms::{OrchEvent, OrchHandle, TransportLayer};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::{Run, Worker};
 use crate::middlewares::ServerClusterManager;
 
 /// The middleman between the parameter server and the model trainer.
-pub struct ParamServerWorker<'node, T>
+pub struct ParamServerWorker<'node, R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     trainer: Box<dyn Trainer>,
-    cluster_manager: ServerClusterManager<T>,
-    orch_handle: &'node mut OrchHandle<T>,
+    cluster_manager: ServerClusterManager<R, W, T>,
+    orch_handle: &'node mut OrchHandle<R, W, T>,
 }
 
-impl<'node, T> ParamServerWorker<'node, T>
+impl<'node, R, W, T> ParamServerWorker<'node, R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Creates a new `Worker`.
     ///
@@ -32,8 +37,8 @@ where
     /// A new `Worker` instance.
     pub fn new(
         trainer: Box<dyn Trainer>,
-        cluster_manager: ServerClusterManager<T>,
-        orch_handle: &'node mut OrchHandle<T>,
+        cluster_manager: ServerClusterManager<R, W, T>,
+        orch_handle: &'node mut OrchHandle<R, W, T>,
     ) -> Self {
         Self {
             trainer,
@@ -44,9 +49,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T> Worker for ParamServerWorker<'_, T>
+impl<R, W, T> Worker for ParamServerWorker<'_, R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
+    T: TransportLayer<R, W>,
 {
     /// Runs the worker using its configured distributed algorithm while keeping a live
     /// bidirectional channel to the orchestrator.

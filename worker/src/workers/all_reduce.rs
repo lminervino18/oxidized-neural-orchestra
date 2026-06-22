@@ -3,25 +3,30 @@ use std::io;
 use comms::{OrchEvent, OrchHandle, TransportLayer, specs::machine_learning::ParamGenSpec};
 use log::{debug, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::{Run, Worker};
 use crate::middlewares::WorkerRingManager;
 
 /// The middleman between the workers and the model trainer.
-pub struct AllReduceWorker<'node, T>
+pub struct AllReduceWorker<'node, R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     trainer: Box<dyn Trainer>,
-    ring_manager: WorkerRingManager<T>,
-    orch_handle: &'node mut OrchHandle<T>,
+    ring_manager: WorkerRingManager<R, W, T>,
+    orch_handle: &'node mut OrchHandle<R, W, T>,
     optimization_params: Vec<f32>,
     params: Vec<f32>,
 }
 
-impl<'node, T> AllReduceWorker<'node, T>
+impl<'node, R, W, T> AllReduceWorker<'node, R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
 {
     /// Creates a new `AllReduceWorker`.
     ///
@@ -35,8 +40,8 @@ where
     /// A new `AllReduceWorker` instance.
     pub fn new(
         trainer: Box<dyn Trainer>,
-        ring_manager: WorkerRingManager<T>,
-        orch_handle: &'node mut OrchHandle<T>,
+        ring_manager: WorkerRingManager<R, W, T>,
+        orch_handle: &'node mut OrchHandle<R, W, T>,
         params: Vec<f32>,
     ) -> Self {
         Self {
@@ -50,9 +55,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T> Worker for AllReduceWorker<'_, T>
+impl<R, W, T> Worker for AllReduceWorker<'_, R, W, T>
 where
-    T: TransportLayer,
+    R: AsyncRead + Unpin + Send,
+    W: AsyncWrite + Unpin + Send,
+    T: TransportLayer<R, W>,
 {
     async fn run(&mut self) -> io::Result<Run> {
         let mut should_continue = true;

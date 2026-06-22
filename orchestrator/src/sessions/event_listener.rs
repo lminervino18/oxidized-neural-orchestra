@@ -2,7 +2,10 @@ use std::{mem, num::NonZeroUsize};
 
 use comms::{NetRtp, ParamServerHandle};
 use log::info;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    sync::mpsc::{Receiver, Sender},
+};
 
 use crate::{
     StopReason, TrainingEvent,
@@ -10,10 +13,13 @@ use crate::{
     sessions::{ConvergenceTracker, LossRecorder, WorkerRequest},
 };
 
+type R = OwnedReadHalf;
+type W = OwnedWriteHalf;
+
 /// The main loop over the training events in the system.
 pub struct EventListener<'a> {
     cancel_rx: Receiver<()>,
-    server_handles: &'a mut Vec<ParamServerHandle<NetRtp>>,
+    server_handles: &'a mut Vec<ParamServerHandle<R, W, NetRtp>>,
     req_txs: &'a mut [Sender<WorkerRequest>],
     event_rx: &'a mut Receiver<TrainingEvent>,
     event_tx: Sender<TrainingEvent>,
@@ -44,7 +50,7 @@ impl<'a> EventListener<'a> {
     pub fn new(
         cancel_rx: Receiver<()>,
         req_txs: &'a mut [Sender<WorkerRequest>],
-        server_handles: &'a mut Vec<ParamServerHandle<NetRtp>>,
+        server_handles: &'a mut Vec<ParamServerHandle<R, W, NetRtp>>,
         loss_recorder: LossRecorder,
         convergence_tracker: Option<ConvergenceTracker>,
         event_rx: &'a mut Receiver<TrainingEvent>,
