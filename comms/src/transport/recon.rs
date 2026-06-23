@@ -20,11 +20,12 @@ type W = OwnedWriteHalf;
 ///
 /// Connections coming from the `Acceptor` are called `Pasive` connections, these will
 /// wait for reconnections from the peer node.
-enum Strategy<T, F, G, Fut>
+enum Strategy<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     Active {
@@ -33,15 +34,16 @@ where
     },
     Pasive {
         id: Uuid,
-        acceptor: Acceptor<T, F, G, Fut>,
+        acceptor: Acceptor<T, F, G, H, Fut>,
     },
 }
 
-impl<T, F, G, Fut> Strategy<T, F, G, Fut>
+impl<T, F, G, H, Fut> Strategy<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Attempts to reconnect to the peer node.
@@ -86,7 +88,7 @@ where
     /// An io error if occurred.
     async fn passive_reconnect(
         id: Uuid,
-        acceptor: &Acceptor<T, F, G, Fut>,
+        acceptor: &Acceptor<T, F, G, H, Fut>,
         layer: &mut T,
     ) -> io::Result<()> {
         acceptor.reconnect(id, layer).await
@@ -112,22 +114,24 @@ where
 }
 
 /// The reconnection layer of the transport protocol.
-pub struct Recon<F, G, Fut, T>
+pub struct Recon<F, G, H, Fut, T>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    strat: Strategy<T, F, G, Fut>,
+    strat: Strategy<T, F, G, H, Fut>,
     inner: T,
 }
 
-impl<F, G, Fut, T> Recon<F, G, Fut, T>
+impl<F, G, H, Fut, T> Recon<F, G, H, Fut, T>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T + Clone,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `Recon` transport layer in it's `Active` role.
@@ -155,7 +159,7 @@ where
     ///
     /// # Returns
     /// A new `Recon` instance.
-    pub fn passive(id: Uuid, acceptor: Acceptor<T, F, G, Fut>, inner: T) -> Self {
+    pub fn passive(id: Uuid, acceptor: Acceptor<T, F, G, H, Fut>, inner: T) -> Self {
         Self {
             strat: Strategy::Pasive { id, acceptor },
             inner,
@@ -163,11 +167,12 @@ where
     }
 }
 
-impl<F, G, Fut, T> TransportLayer<R, W> for Recon<F, G, Fut, T>
+impl<F, G, H, Fut, T> TransportLayer<R, W> for Recon<F, G, H, Fut, T>
 where
     T: TransportLayer<R, W> + Sync,
     F: Fn(R, W) -> T + Clone + Send + Sync,
     G: Fn() -> Fut + Clone + Send + Sync,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T + Clone + Sync + Send,
     Fut: Future<Output = io::Result<(R, W)>> + Send,
 {
     /// Tries to receive a message, if incapable it will drop the connection
@@ -210,6 +215,6 @@ where
     }
 
     fn demount(self) -> (R, W) {
-        self.demount()
+        self.inner.demount()
     }
 }

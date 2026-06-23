@@ -13,6 +13,7 @@ use machine_learning::{
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
 };
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use uuid::Uuid;
 
 use super::{ParameterServer, Server};
 use crate::{
@@ -30,28 +31,30 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// Builds `Server`s given a specification.
-pub struct ServerBuilder<'a, T, F, G, Fut>
+pub struct ServerBuilder<'a, T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<T, F, G, Fut>,
+    acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
 }
 
-impl<'a, T, F, G, Fut> ServerBuilder<'a, T, F, G, Fut>
+impl<'a, T, F, G, H, Fut> ServerBuilder<'a, T, F, G, H, Fut>
 where
     T: TransportLayer<R, W> + 'static,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `ServerBuilder`.
     ///
     /// # Returns
     /// A new `ServerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<T, F, G, Fut>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor<T, F, G, H, Fut>) -> Self {
         Self { acceptor }
     }
 
@@ -82,14 +85,14 @@ where
     /// # Returns
     ///  A new Server or a `RandErr` if the specification has
     /// invalid `RandParamGen` construction values.
-    pub async fn build_with<H>(
+    pub async fn build_with<K>(
         &mut self,
         spec: ServerSpec,
         orch_handle: OrchHandle<R, W, T>,
-        mut connection_hook: H,
+        mut connection_hook: K,
     ) -> io::Result<Box<dyn Server<R, W, T>>>
     where
-        H: AsyncFnMut(&mut WorkerHandle<R, W, T>) -> io::Result<()>,
+        K: AsyncFnMut(&mut WorkerHandle<R, W, T>) -> io::Result<()>,
     {
         let nworkers = spec.nworkers;
         let src = Entity::ParamServer;

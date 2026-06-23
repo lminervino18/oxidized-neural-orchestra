@@ -12,19 +12,21 @@ use tokio::{
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     time::Instant,
 };
+use uuid::Uuid;
 
 type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// Resolves the requested statistic calculations by the orchestrator.
-pub struct StatService<'a, T, F, G, Fut>
+pub struct StatService<'a, T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<T, F, G, Fut>,
+    acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
     connector: &'a mut Connector<T, F>,
 }
 
@@ -39,11 +41,12 @@ where
     handle: NodeHandle<R, W, T>,
 }
 
-impl<'a, T, F, G, Fut> StatService<'a, T, F, G, Fut>
+impl<'a, T, F, G, H, Fut> StatService<'a, T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `StatServicer`.
@@ -55,7 +58,7 @@ where
     /// # Returns
     /// A new `StatServicer` instance.
     pub fn new(
-        acceptor: &'a mut Acceptor<T, F, G, Fut>,
+        acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
         connector: &'a mut Connector<T, F>,
     ) -> Self {
         Self {

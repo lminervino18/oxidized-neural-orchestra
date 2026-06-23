@@ -14,6 +14,7 @@ use machine_learning::{
     training::TrainerBuilder,
 };
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use uuid::Uuid;
 
 use crate::{
     middlewares::{ServerClusterManager, WorkerRingManager},
@@ -24,22 +25,24 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// The worker builder, given a spec, will build a new worker ready to use.
-pub struct WorkerBuilder<'a, T, F, G, Fut>
+pub struct WorkerBuilder<'a, T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: &'a mut Acceptor<T, F, G, Fut>,
+    acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
     connector: Connector<T, F>,
 }
 
-impl<'a, T, F, G, Fut> WorkerBuilder<'a, T, F, G, Fut>
+impl<'a, T, F, G, H, Fut> WorkerBuilder<'a, T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `WorkerBuilder`.
@@ -50,7 +53,7 @@ where
     ///
     /// # Returns
     /// A new `WorkerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<T, F, G, Fut>, connector: Connector<T, F>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor<T, F, G, H, Fut>, connector: Connector<T, F>) -> Self {
         Self {
             acceptor,
             connector,
@@ -58,11 +61,12 @@ where
     }
 }
 
-impl<T, F, G, Fut> WorkerBuilder<'_, T, F, G, Fut>
+impl<T, F, G, H, Fut> WorkerBuilder<'_, T, F, G, H, Fut>
 where
     T: TransportLayer<R, W> + 'static,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Builds a `Worker` from a `WorkerSpec`.
@@ -222,17 +226,17 @@ where
     ///
     /// # Returns
     /// A new `ServerClusterManager` instance or an io error if occurred.
-    async fn connect_to_servers<H>(
+    async fn connect_to_servers<K>(
         &self,
         server_addrs: &[String],
         server_sizes: &[usize],
         server_ordering: Vec<usize>,
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
-        mut connection_hook: H,
+        mut connection_hook: K,
     ) -> io::Result<ServerClusterManager<R, W, T>>
     where
-        H: AsyncFnMut(&mut ParamServerHandle<R, W, T>) -> io::Result<()>,
+        K: AsyncFnMut(&mut ParamServerHandle<R, W, T>) -> io::Result<()>,
     {
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
         let src = Entity::Worker;

@@ -15,6 +15,7 @@ use log::{debug, error, info, warn};
 use machine_learning::datasets::Dataset;
 use parameter_server::service::{Server, ServerBuilder};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use uuid::Uuid;
 use worker::{
     builder::WorkerBuilder,
     workers::{ParamServerWorker, Run, Worker},
@@ -27,22 +28,24 @@ type W = OwnedWriteHalf;
 
 /// Routes incoming orchestrator connections to the appropriate runtime role
 /// keeping the process alive across sequential sessions.
-pub struct NodeRouter<T, F, G, Fut>
+pub struct NodeRouter<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
-    acceptor: Acceptor<T, F, G, Fut>,
+    acceptor: Acceptor<T, F, G, H, Fut>,
     connector: Connector<T, F>,
 }
 
-impl<T, F, G, Fut> NodeRouter<T, F, G, Fut>
+impl<T, F, G, H, Fut> NodeRouter<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `NodeRouter`.
@@ -53,7 +56,7 @@ where
     ///
     /// # Returns
     /// A new `NodeRouter` instance.
-    pub fn new(acceptor: Acceptor<T, F, G, Fut>, connector: Connector<T, F>) -> Self {
+    pub fn new(acceptor: Acceptor<T, F, G, H, Fut>, connector: Connector<T, F>) -> Self {
         Self {
             acceptor,
             connector,
@@ -61,11 +64,12 @@ where
     }
 }
 
-impl<T, F, G, Fut> NodeRouter<T, F, G, Fut>
+impl<T, F, G, H, Fut> NodeRouter<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W> + 'static,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Waits for incoming connections and runs the specified node instance.

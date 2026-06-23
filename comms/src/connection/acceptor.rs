@@ -24,25 +24,28 @@ struct ConnRegistry {
 }
 
 /// Accepts new incoming connections and assigns yields their handle types.
-pub struct Acceptor<T, F, G, Fut>
+pub struct Acceptor<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Self, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     id: Uuid,
     conns: Arc<ConnRegistry>,
     transport_factory: F,
     connection_factory: G,
+    passive_recon_wrapper: Arc<H>,
     _phantom: PhantomData<(T, G)>,
 }
 
-impl<T, F, G, Fut> Clone for Acceptor<T, F, G, Fut>
+impl<T, F, G, H, Fut> Clone for Acceptor<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Self, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     fn clone(&self) -> Self {
@@ -51,16 +54,18 @@ where
             conns: Arc::clone(&self.conns),
             transport_factory: self.transport_factory.clone(),
             connection_factory: self.connection_factory.clone(),
+            passive_recon_wrapper: Arc::clone(&self.passive_recon_wrapper),
             _phantom: self._phantom,
         }
     }
 }
 
-impl<T, F, G, Fut> Acceptor<T, F, G, Fut>
+impl<T, F, G, H, Fut> Acceptor<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Self, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `Acceptor`.
@@ -69,15 +74,17 @@ where
     /// * `id` - This node's id.
     /// * `connection_factory` - A closure that waits for new connections.
     /// * `transport_factory` - A transport layer factory closure.
+    /// * `recon_wrapper` - Takes a reliable transport and wraps it with a passive reconnection layer.
     ///
     /// # Returns
     /// A new `Acceptor` instance.
-    pub fn new(id: Uuid, transport_factory: F, connection_factory: G) -> Self {
+    pub fn new(id: Uuid, transport_factory: F, connection_factory: G, recon_wrapper: H) -> Self {
         Self {
             id,
             conns: Default::default(),
             transport_factory,
             connection_factory,
+            passive_recon_wrapper: Arc::new(recon_wrapper),
             _phantom: PhantomData,
         }
     }
@@ -132,11 +139,12 @@ where
     }
 }
 
-impl<T, F, G, Fut> Acceptor<T, F, G, Fut>
+impl<T, F, G, H, Fut> Acceptor<T, F, G, H, Fut>
 where
     T: TransportLayer<R, W>,
     F: Fn(R, W) -> T + Clone,
     G: Fn() -> Fut + Clone,
+    H: Fn(Uuid, Self, T) -> T,
     Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Will wait until a connection with the expected `id` arrives blocking the thread in the process.
