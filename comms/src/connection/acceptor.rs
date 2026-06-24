@@ -152,8 +152,6 @@ impl Acceptor {
     where
         T: TransportLayer<R, W>,
     {
-        const RECONNECT: Entity = Entity::Reconnect;
-
         let (rx, tx) = loop {
             {
                 let mut backlog = self.conns.backlog.lock().await;
@@ -169,10 +167,10 @@ impl Acceptor {
             };
 
             let mut tmp = (self.transport_factory)(rx, tx);
-            let (peer_id, dst) = self.handshake(RECONNECT, &mut tmp).await?;
+            let (peer_id, dst) = self.handshake(Entity::Reconnect, &mut tmp).await?;
 
-            if dst != RECONNECT {
-                let details = format!("Expected {RECONNECT:?}, got: {dst:?} with id {peer_id}");
+            if dst != Entity::Reconnect {
+                let details = format!("Expected Entity::Reconnect, got: {dst:?} with id {peer_id}");
                 return Err(io::Error::other(details));
             }
 
