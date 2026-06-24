@@ -20,32 +20,13 @@ type W = OwnedWriteHalf;
 ///
 /// Connections coming from the `Acceptor` are called `Pasive` connections, these will
 /// wait for reconnections from the peer node.
-enum Strategy<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
-    Active {
-        addr: String,
-        connector: Connector<T, F>,
-    },
-    Pasive {
-        id: Uuid,
-        acceptor: Acceptor<T, F, G, H, Fut>,
-    },
+#[derive(Debug)]
+enum Strategy {
+    Active { addr: String, connector: Connector },
+    Pasive { id: Uuid, acceptor: Acceptor },
 }
 
-impl<T, F, G, H, Fut> Strategy<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl Strategy {
     /// Attempts to reconnect to the peer node.
     ///
     /// # Args
@@ -55,11 +36,10 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn active_reconnect(
-        addr: &str,
-        connector: &Connector<T, F>,
-        layer: &mut T,
-    ) -> io::Result<()> {
+    async fn active_reconnect<T>(addr: &str, connector: &Connector, layer: &mut T) -> io::Result<()>
+    where
+        T: TransportLayer<R, W>,
+    {
         const BASE_DELAY: Duration = Duration::from_secs(5);
         const RETRY_COEF: u32 = 2;
         const MAX_EXP: u32 = 5;
@@ -86,11 +66,10 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn passive_reconnect(
-        id: Uuid,
-        acceptor: &Acceptor<T, F, G, H, Fut>,
-        layer: &mut T,
-    ) -> io::Result<()> {
+    async fn passive_reconnect<T>(id: Uuid, acceptor: &Acceptor, layer: &mut T) -> io::Result<()>
+    where
+        T: TransportLayer<R, W>,
+    {
         acceptor.reconnect(id, layer).await
     }
 
@@ -101,7 +80,10 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn reconnect(&self, layer: &mut T) -> io::Result<()> {
+    async fn reconnect<T>(&self, layer: &mut T) -> io::Result<()>
+    where
+        T: TransportLayer<R, W>,
+    {
         match self {
             Strategy::Active { addr, connector } => {
                 Self::active_reconnect(addr, connector, layer).await
@@ -114,25 +96,18 @@ where
 }
 
 /// The reconnection layer of the transport protocol.
-pub struct Recon<F, G, H, Fut, T>
+#[derive(Debug)]
+pub struct Recon<T>
 where
     T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T + Clone,
-    Fut: Future<Output = io::Result<(R, W)>>,
 {
-    strat: Strategy<T, F, G, H, Fut>,
+    strat: Strategy,
     inner: T,
 }
 
-impl<F, G, H, Fut, T> Recon<F, G, H, Fut, T>
+impl<T> Recon<T>
 where
     T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T + Clone,
-    Fut: Future<Output = io::Result<(R, W)>>,
 {
     /// Creates a new `Recon` transport layer in it's `Active` role.
     ///
@@ -143,7 +118,7 @@ where
     ///
     /// # Returns
     /// A new `Recon` instance.
-    pub fn active(addr: String, connector: Connector<T, F>, inner: T) -> Self {
+    pub fn active(addr: String, connector: Connector, inner: T) -> Self {
         Self {
             strat: Strategy::Active { addr, connector },
             inner,
@@ -159,7 +134,7 @@ where
     ///
     /// # Returns
     /// A new `Recon` instance.
-    pub fn passive(id: Uuid, acceptor: Acceptor<T, F, G, H, Fut>, inner: T) -> Self {
+    pub fn passive(id: Uuid, acceptor: Acceptor, inner: T) -> Self {
         Self {
             strat: Strategy::Pasive { id, acceptor },
             inner,
@@ -167,13 +142,9 @@ where
     }
 }
 
-impl<F, G, H, Fut, T> TransportLayer<R, W> for Recon<F, G, H, Fut, T>
+impl<T> TransportLayer<R, W> for Recon<T>
 where
-    T: TransportLayer<R, W> + Sync,
-    F: Fn(R, W) -> T + Clone + Send + Sync,
-    G: Fn() -> Fut + Clone + Send + Sync,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T + Clone + Sync + Send,
-    Fut: Future<Output = io::Result<(R, W)>> + Send,
+    T: TransportLayer<R, W> + Sync + Send,
 {
     /// Tries to receive a message, if incapable it will drop the connection
     /// and will wait until receiving a reconnection from the peer.

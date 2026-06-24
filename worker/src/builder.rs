@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, DatasetSrc, OrchHandle, ParamServerHandle, TransportLayer,
+    Acceptor, Connection, Connector, DatasetSrc, OrchHandle, ParamServerHandle, RecTP,
     protocol::Entity,
     specs::{
         machine_learning::TrainerSpec,
@@ -14,7 +14,6 @@ use machine_learning::{
     training::TrainerBuilder,
 };
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use uuid::Uuid;
 
 use crate::{
     middlewares::{ServerClusterManager, WorkerRingManager},
@@ -25,26 +24,12 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// The worker builder, given a spec, will build a new worker ready to use.
-pub struct WorkerBuilder<'a, T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
-    acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
-    connector: Connector<T, F>,
+pub struct WorkerBuilder<'a> {
+    acceptor: &'a mut Acceptor,
+    connector: Connector,
 }
 
-impl<'a, T, F, G, H, Fut> WorkerBuilder<'a, T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl<'a> WorkerBuilder<'a> {
     /// Creates a new `WorkerBuilder`.
     ///
     /// # Args
@@ -53,7 +38,7 @@ where
     ///
     /// # Returns
     /// A new `WorkerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<T, F, G, H, Fut>, connector: Connector<T, F>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor, connector: Connector) -> Self {
         Self {
             acceptor,
             connector,
@@ -61,14 +46,7 @@ where
     }
 }
 
-impl<T, F, G, H, Fut> WorkerBuilder<'_, T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W> + 'static,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl WorkerBuilder<'_> {
     /// Builds a `Worker` from a `WorkerSpec`.
     ///
     /// # Args
@@ -80,7 +58,7 @@ where
     pub async fn build<'a>(
         &mut self,
         spec: &WorkerSpec,
-        orch_handle: &'a mut OrchHandle<R, W, T>,
+        orch_handle: &'a mut OrchHandle<R, W, RecTP<R, W>>,
     ) -> io::Result<Box<dyn Worker + 'a>> {
         let data_src = self.download_dataset(orch_handle).await?;
         let trainer_builder = TrainerBuilder::new();
@@ -170,8 +148,8 @@ where
         server_ordering: Vec<usize>,
         dataset: Dataset,
         trainer_spec: TrainerSpec,
-        orch_handle: &'a mut OrchHandle<R, W, T>,
-    ) -> io::Result<ParamServerWorker<'a, R, W, T>> {
+        orch_handle: &'a mut OrchHandle<R, W, RecTP<R, W>>,
+    ) -> io::Result<ParamServerWorker<'a, R, W, RecTP<R, W>>> {
         let WorkerSpec {
             serializer, seed, ..
         } = spec;
@@ -234,9 +212,9 @@ where
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
         mut connection_hook: K,
-    ) -> io::Result<ServerClusterManager<R, W, T>>
+    ) -> io::Result<ServerClusterManager<R, W, RecTP<R, W>>>
     where
-        K: AsyncFnMut(&mut ParamServerHandle<R, W, T>) -> io::Result<()>,
+        K: AsyncFnMut(&mut ParamServerHandle<R, W, RecTP<R, W>>) -> io::Result<()>,
     {
         let mut cluster_manager = ServerClusterManager::new(server_ordering);
         let src = Entity::Worker;
@@ -275,7 +253,7 @@ where
         serializer_spec: SerializerSpec,
         seed: Option<u64>,
         amount_of_layers: usize,
-    ) -> io::Result<WorkerRingManager<R, W, T>> {
+    ) -> io::Result<WorkerRingManager<R, W, RecTP<R, W>>> {
         let src = Entity::Worker;
 
         let prev_conn_fut = async {

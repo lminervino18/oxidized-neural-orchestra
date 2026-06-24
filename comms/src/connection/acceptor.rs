@@ -1,14 +1,23 @@
-use std::{collections::HashMap, io, marker::PhantomData, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt::{self, Debug, Formatter},
+    io,
+    sync::Arc,
+};
 
+use log::info;
 use tokio::{
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    net::{
+        TcpListener,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
     sync::{Mutex, Notify},
 };
 use uuid::Uuid;
 
 use super::Connection;
 use crate::{
-    NodeHandle, OrchHandle, ParamServerHandle, WorkerHandle,
+    NodeHandle, OrchHandle, ParamServerHandle, RecTP, Recon, RelTP, WorkerHandle,
     protocol::{Command, Entity, Msg},
     transport::TransportLayer,
 };
@@ -17,75 +26,54 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// The shared state for managing incoming connections.
-#[derive(Default)]
+#[derive(Debug)]
 struct ConnRegistry {
     backlog: Mutex<HashMap<Uuid, (R, W)>>,
+    listener: TcpListener,
     notify: Notify,
 }
 
 /// Accepts new incoming connections and assigns yields their handle types.
-pub struct Acceptor<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Self, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+#[derive(Clone)]
+pub struct Acceptor {
     id: Uuid,
     conns: Arc<ConnRegistry>,
-    transport_factory: F,
-    connection_factory: G,
-    passive_recon_wrapper: Arc<H>,
-    _phantom: PhantomData<(T, G)>,
+    transport_factory: Arc<dyn Fn(R, W) -> RelTP<R, W> + Send + Sync + 'static>,
 }
 
-impl<T, F, G, H, Fut> Clone for Acceptor<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Self, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            conns: Arc::clone(&self.conns),
-            transport_factory: self.transport_factory.clone(),
-            connection_factory: self.connection_factory.clone(),
-            passive_recon_wrapper: Arc::clone(&self.passive_recon_wrapper),
-            _phantom: self._phantom,
-        }
+impl Debug for Acceptor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Acceptor")
+            .field("id", &self.id)
+            .field("conns", &self.conns)
+            .finish()
     }
 }
 
-impl<T, F, G, H, Fut> Acceptor<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Self, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl Acceptor {
     /// Creates a new `Acceptor`.
     ///
     /// # Args
     /// * `id` - This node's id.
-    /// * `connection_factory` - A closure that waits for new connections.
-    /// * `transport_factory` - A transport layer factory closure.
-    /// * `recon_wrapper` - Takes a reliable transport and wraps it with a passive reconnection layer.
+    /// * `listener` - A listener for incoming connections.
+    /// * `transport_factory` - A clossure to build a reliable transport layer.
     ///
     /// # Returns
     /// A new `Acceptor` instance.
-    pub fn new(id: Uuid, transport_factory: F, connection_factory: G, recon_wrapper: H) -> Self {
+    pub fn new<F>(id: Uuid, listener: TcpListener, transport_factory: F) -> Self
+    where
+        F: Fn(R, W) -> RelTP<R, W> + Send + Sync + 'static,
+    {
+        let conn_registry = ConnRegistry {
+            backlog: Mutex::new(HashMap::new()),
+            listener,
+            notify: Notify::new(),
+        };
+
         Self {
             id,
-            conns: Default::default(),
-            transport_factory,
-            connection_factory,
-            passive_recon_wrapper: Arc::new(recon_wrapper),
-            _phantom: PhantomData,
+            conns: Arc::new(conn_registry),
+            transport_factory: Arc::new(transport_factory),
         }
     }
 
@@ -97,16 +85,17 @@ where
     /// # Returns
     /// A new connection or an io error if occurred while waiting for incoming connections
     /// or receiving the type of entity from the peer.
-    pub async fn accept(&self, src: Entity) -> io::Result<Connection<R, W, T>> {
-        let (rx, tx) = (self.connection_factory)().await?;
+    pub async fn accept(&self, src: Entity) -> io::Result<Connection<R, W, RecTP<R, W>>> {
+        let (rx, tx) = self.accept_connection().await?;
         let mut layer = (self.transport_factory)(rx, tx);
         let (id, dst) = self.handshake(src, &mut layer).await?;
+        let recon_layer = Recon::passive(self.id, self.clone(), layer);
 
         let conn = match dst {
-            Entity::Worker => Connection::Worker(WorkerHandle::new(id, layer)),
-            Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, layer)),
-            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, layer)),
-            Entity::Node => Connection::Node(NodeHandle::new(id, layer)),
+            Entity::Worker => Connection::Worker(WorkerHandle::new(id, recon_layer)),
+            Entity::ParamServer => Connection::ParamServer(ParamServerHandle::new(id, recon_layer)),
+            Entity::Orchestrator => Connection::Orch(OrchHandle::new(id, recon_layer)),
+            Entity::Node => Connection::Node(NodeHandle::new(id, recon_layer)),
             entity => {
                 let details = format!("Accepted invalid incoming connection from {entity:?}");
                 return Err(io::Error::other(details));
@@ -114,6 +103,16 @@ where
         };
 
         Ok(conn)
+    }
+
+    /// Waits for a new connection through the inner listener.
+    ///
+    /// # Returns
+    /// A splitted socket or an io error if occurred.
+    async fn accept_connection(&self) -> io::Result<(R, W)> {
+        let (stream, addr) = self.conns.listener.accept().await?;
+        info!("new incoming connection from {addr}");
+        Ok(stream.into_split())
     }
 
     /// Makes the handshake with the peer sharing the entity types and ids.
@@ -124,7 +123,10 @@ where
     ///
     /// # Returns
     /// The peer's id and entity type or an io error if occurred.
-    async fn handshake(&self, src: Entity, layer: &mut T) -> io::Result<(Uuid, Entity)> {
+    async fn handshake<T>(&self, src: Entity, layer: &mut T) -> io::Result<(Uuid, Entity)>
+    where
+        T: TransportLayer<R, W>,
+    {
         let msg = layer.recv().await?;
 
         let Msg::Control(Command::Connect { id, src: dst }) = msg else {
@@ -137,16 +139,7 @@ where
 
         Ok((id, dst))
     }
-}
 
-impl<T, F, G, H, Fut> Acceptor<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Self, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
     /// Will wait until a connection with the expected `id` arrives blocking the thread in the process.
     ///
     /// # Args
@@ -155,7 +148,10 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn reconnect(&self, id: Uuid, layer: &mut T) -> io::Result<()> {
+    pub async fn reconnect<T>(&self, id: Uuid, layer: &mut T) -> io::Result<()>
+    where
+        T: TransportLayer<R, W>,
+    {
         const RECONNECT: Entity = Entity::Reconnect;
 
         let (rx, tx) = loop {
@@ -169,7 +165,7 @@ where
 
             let (rx, tx) = tokio::select! {
                 _ = self.conns.notify.notified() => continue,
-                res = (self.connection_factory)() => res?,
+                res = self.accept_connection() => res?,
             };
 
             let mut tmp = (self.transport_factory)(rx, tx);

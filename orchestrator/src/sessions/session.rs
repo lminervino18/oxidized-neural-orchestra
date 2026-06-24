@@ -6,7 +6,7 @@ use std::{
 };
 
 use comms::{
-    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle, protocol::Entity,
+    Connector, NetRecTP, ParamServerHandle, TransportLayer, WorkerHandle, protocol::Entity,
     share_dataset,
 };
 use futures::future;
@@ -36,8 +36,8 @@ type W = OwnedWriteHalf;
 pub struct Session {
     runtime: Runtime,
     orch_adapt: OrchAdapt,
-    worker_handles: Vec<WorkerHandle<R, W, NetRtp>>,
-    server_handles: Vec<ParamServerHandle<R, W, NetRtp>>,
+    worker_handles: Vec<WorkerHandle<R, W, NetRecTP>>,
+    server_handles: Vec<ParamServerHandle<R, W, NetRecTP>>,
 }
 
 impl Session {
@@ -54,15 +54,12 @@ impl Session {
     ///
     /// # Errors
     /// Returns an `OrchErr` if any connection or bootstrap message fails.
-    pub fn new<F>(
+    pub fn new(
         orch: OrchAdapt,
         workers: Vec<WorkerAdapt<'_>>,
         servers: Vec<ServerAdapt>,
-        connector: Connector<NetRtp, F>,
-    ) -> Result<Self>
-    where
-        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
-    {
+        connector: Connector,
+    ) -> Result<Self> {
         let runtime = Builder::new_multi_thread().enable_all().build()?;
         let (nworkers, nservers) = (workers.len(), servers.len());
 
@@ -183,7 +180,7 @@ impl Session {
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
     async fn start_training(
-        worker_handles: Vec<WorkerHandle<R, W, NetRtp>>,
+        worker_handles: Vec<WorkerHandle<R, W, NetRecTP>>,
         event_rx: &mut Receiver<TrainingEvent>,
         event_tx: &Sender<TrainingEvent>,
         cancel_rx: Receiver<()>,
@@ -191,7 +188,7 @@ impl Session {
         convergence_tracker: Option<ConvergenceTracker>,
         user_event_tx: &Sender<TrainingEvent>,
         switch_tracking: Option<StrategySwitchTracking>,
-        server_handles: &mut Vec<ParamServerHandle<R, W, NetRtp>>,
+        server_handles: &mut Vec<ParamServerHandle<R, W, NetRecTP>>,
     ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>) {
         let mut req_txs = Self::spawn_worker_listeners(worker_handles, event_tx);
 
@@ -257,7 +254,7 @@ impl Session {
     /// # Returns
     /// A list of senders to make requests to the listeners.
     fn spawn_worker_listeners(
-        worker_handles: Vec<WorkerHandle<R, W, NetRtp>>,
+        worker_handles: Vec<WorkerHandle<R, W, NetRecTP>>,
         event_tx: &Sender<TrainingEvent>,
     ) -> Vec<Sender<WorkerRequest>> {
         let mut req_txs = Vec::with_capacity(worker_handles.len());
@@ -419,13 +416,12 @@ impl Session {
     ///
     /// # Returns
     /// The worker handles or an orch error if occurred.
-    async fn create_servers<I, F>(
+    async fn create_servers<I>(
         servers: I,
-        connector: &Connector<NetRtp, F>,
-    ) -> Result<Vec<ParamServerHandle<R, W, NetRtp>>>
+        connector: &Connector,
+    ) -> Result<Vec<ParamServerHandle<R, W, NetRecTP>>>
     where
         I: IntoIterator<Item = ServerAdapt>,
-        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
     {
         let mut handles = Vec::new();
 
@@ -453,12 +449,11 @@ impl Session {
     ///
     /// # Returns
     /// The worker handles or an orch error if occurred.
-    async fn create_workers<'a, F, I>(
+    async fn create_workers<'a, I>(
         workers: I,
-        connector: &Connector<NetRtp, F>,
-    ) -> Result<Vec<WorkerHandle<R, W, NetRtp>>>
+        connector: &Connector,
+    ) -> Result<Vec<WorkerHandle<R, W, NetRecTP>>>
     where
-        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
         I: IntoIterator<Item = WorkerAdapt<'a>>,
     {
         const CHUNK_SIZE: usize = 8192;

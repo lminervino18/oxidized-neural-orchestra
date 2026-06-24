@@ -1,4 +1,8 @@
-use std::{io, marker::PhantomData};
+use std::{
+    fmt::{self, Debug, Formatter},
+    io,
+    sync::Arc,
+};
 
 use tokio::net::{
     TcpStream,
@@ -7,7 +11,7 @@ use tokio::net::{
 use uuid::Uuid;
 
 use crate::{
-    WorkerHandle,
+    RecTP, Recon, RelTP, WorkerHandle,
     handles::{NodeHandle, OrchHandle, ParamServerHandle},
     protocol::{Command, Entity, Msg},
     transport::TransportLayer,
@@ -17,49 +21,33 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// Establishes connections and yields reliable transports.
-#[derive(Debug)]
-pub struct Connector<T, F>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T,
-{
+#[derive(Clone)]
+pub struct Connector {
     id: Uuid,
-    transport_factory: F,
-    _phantom: PhantomData<(R, W, T)>,
+    transport_factory: Arc<dyn Fn(R, W) -> RelTP<R, W> + Send + Sync + 'static>,
 }
 
-impl<T, F> Clone for Connector<T, F>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            transport_factory: self.transport_factory.clone(),
-            _phantom: self._phantom,
-        }
+impl Debug for Connector {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Connector").field("id", &self.id).finish()
     }
 }
 
-impl<T, F> Connector<T, F>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T,
-{
+impl Connector {
     /// Creates a new `Connector`.
     ///
     /// # Args
     /// * `id` - This node's id.
-    /// * `transport_factory` - A factory of transport layers.
     ///
     /// # Returns
     /// A new `Connector` instance.
-    pub fn new(id: Uuid, transport_factory: F) -> Self {
+    pub fn new<F>(id: Uuid, transport_factory: F) -> Self
+    where
+        F: Fn(R, W) -> RelTP<R, W> + Send + Sync + 'static,
+    {
         Self {
             id,
-            transport_factory,
-            _phantom: PhantomData,
+            transport_factory: Arc::new(transport_factory),
         }
     }
 
@@ -74,7 +62,11 @@ where
     ///
     /// # Returns
     /// A new `NodeHandle` or an io error if occurred.
-    pub async fn connect_node(&self, addr: &str, src: Entity) -> io::Result<NodeHandle<R, W, T>> {
+    pub async fn connect_node(
+        &self,
+        addr: &str,
+        src: Entity,
+    ) -> io::Result<NodeHandle<R, W, RecTP<R, W>>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -98,7 +90,7 @@ where
         &self,
         addr: &str,
         src: Entity,
-    ) -> io::Result<WorkerHandle<R, W, T>> {
+    ) -> io::Result<WorkerHandle<R, W, RecTP<R, W>>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -122,7 +114,7 @@ where
         &self,
         addr: &str,
         src: Entity,
-    ) -> io::Result<ParamServerHandle<R, W, T>> {
+    ) -> io::Result<ParamServerHandle<R, W, RecTP<R, W>>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -146,7 +138,7 @@ where
         &self,
         addr: &str,
         src: Entity,
-    ) -> io::Result<OrchHandle<R, W, T>> {
+    ) -> io::Result<OrchHandle<R, W, RecTP<R, W>>> {
         let (id, layer, dst) = self.connect(addr, src).await?;
 
         match dst {
@@ -166,7 +158,10 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn reconnect(&self, addr: &str, layer: &mut T) -> io::Result<()> {
+    pub async fn reconnect<T>(&self, addr: &str, layer: &mut T) -> io::Result<()>
+    where
+        T: TransportLayer<R, W>,
+    {
         let (rx, tx) = self.connect_io(addr).await?;
         layer.swap(rx, tx);
         self.handshake(Entity::Reconnect, layer).await.map(|_| ())
@@ -180,11 +175,12 @@ where
     ///
     /// # Returns
     /// The peer's id and entity, and the transport layer to communicate or an io error if occurred.
-    async fn connect(&self, addr: &str, src: Entity) -> io::Result<(Uuid, T, Entity)> {
+    async fn connect(&self, addr: &str, src: Entity) -> io::Result<(Uuid, RecTP<R, W>, Entity)> {
         let (rx, tx) = self.connect_io(addr).await?;
         let mut layer = (self.transport_factory)(rx, tx);
         let (id, dst) = self.handshake(src, &mut layer).await?;
-        Ok((id, layer, dst))
+        let recon_layer = Recon::active(addr.to_string(), self.clone(), layer);
+        Ok((id, recon_layer, dst))
     }
 
     /// Makes a connection with the peer and yields the inner reader and writer for that connection.
@@ -207,7 +203,10 @@ where
     ///
     /// # Returns
     /// The peer's id and entity type or an io error if occurred.
-    async fn handshake(&self, src: Entity, layer: &mut T) -> io::Result<(Uuid, Entity)> {
+    async fn handshake<T>(&self, src: Entity, layer: &mut T) -> io::Result<(Uuid, Entity)>
+    where
+        T: TransportLayer<R, W>,
+    {
         let msg = Msg::Control(Command::Connect { id: self.id, src });
         layer.send(&msg).await?;
 

@@ -1,4 +1,8 @@
-use std::{io, marker::PhantomData};
+use std::{
+    fmt::{self, Debug, Formatter},
+    io,
+    marker::PhantomData,
+};
 
 use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -14,7 +18,6 @@ use crate::{
 };
 
 /// The handle for communicating with a `ParameterServer`.
-#[derive(Debug)]
 pub struct ParamServerHandle<R, W, T>
 where
     R: AsyncRead + Unpin,
@@ -25,6 +28,19 @@ where
     transport: T,
     compressor: Compressor<StdRng>,
     _phantom: PhantomData<(R, W)>,
+}
+
+impl<R, W, T> Debug for ParamServerHandle<R, W, T>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+    T: TransportLayer<R, W>,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ParamServerHandle")
+            .field("id", &self.id)
+            .finish()
+    }
 }
 
 impl<R, W, T> ParamServerHandle<R, W, T>

@@ -1,7 +1,7 @@
 use std::{io, num::NonZeroUsize, thread};
 
 use comms::{
-    Acceptor, Connection, OrchHandle, TransportLayer, WorkerHandle,
+    Acceptor, Connection, OrchHandle, RecTP, WorkerHandle,
     protocol::Entity,
     specs::{
         machine_learning::OptimizerSpec,
@@ -13,7 +13,6 @@ use machine_learning::{
     optimization::{Adam, GradientDescent, GradientDescentWithMomentum, Optimizer},
 };
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use uuid::Uuid;
 
 use super::{ParameterServer, Server};
 use crate::{
@@ -31,30 +30,16 @@ type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// Builds `Server`s given a specification.
-pub struct ServerBuilder<'a, T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
-    acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
+pub struct ServerBuilder<'a> {
+    acceptor: &'a mut Acceptor,
 }
 
-impl<'a, T, F, G, H, Fut> ServerBuilder<'a, T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W> + 'static,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl<'a> ServerBuilder<'a> {
     /// Creates a new `ServerBuilder`.
     ///
     /// # Returns
     /// A new `ServerBuilder` instance.
-    pub fn new(acceptor: &'a mut Acceptor<T, F, G, H, Fut>) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor) -> Self {
         Self { acceptor }
     }
 
@@ -70,8 +55,8 @@ where
     pub async fn build(
         &mut self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<R, W, T>,
-    ) -> io::Result<Box<dyn Server<R, W, T>>> {
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
+    ) -> io::Result<Box<dyn Server<R, W, RecTP<R, W>>>> {
         self.build_with(spec, orch_handle, async |_| Ok(())).await
     }
 
@@ -88,11 +73,11 @@ where
     pub async fn build_with<K>(
         &mut self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<R, W, T>,
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
         mut connection_hook: K,
-    ) -> io::Result<Box<dyn Server<R, W, T>>>
+    ) -> io::Result<Box<dyn Server<R, W, RecTP<R, W>>>>
     where
-        K: AsyncFnMut(&mut WorkerHandle<R, W, T>) -> io::Result<()>,
+        K: AsyncFnMut(&mut WorkerHandle<R, W, RecTP<R, W>>) -> io::Result<()>,
     {
         let nworkers = spec.nworkers;
         let src = Entity::ParamServer;
@@ -124,8 +109,8 @@ where
     fn resolve_optimizer(
         &self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<R, W, T>,
-    ) -> Result<Box<dyn Server<R, W, T>>> {
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
+    ) -> Result<Box<dyn Server<R, W, RecTP<R, W>>>> {
         match spec.optimizer {
             OptimizerSpec::Adam {
                 learning_rate,
@@ -162,9 +147,9 @@ where
     fn resolve_store<O, OF>(
         &self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<R, W, T>,
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
         optimizer_factory: OF,
-    ) -> Result<Box<dyn Server<R, W, T>>>
+    ) -> Result<Box<dyn Server<R, W, RecTP<R, W>>>>
     where
         O: Optimizer + Send + 'static,
         OF: Fn(usize) -> O,
@@ -203,9 +188,9 @@ where
     fn resolve_synchronizer<PS>(
         &self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<R, W, T>,
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
         store: PS,
-    ) -> Box<dyn Server<R, W, T>>
+    ) -> Box<dyn Server<R, W, RecTP<R, W>>>
     where
         PS: Store + Send + Sync + 'static,
     {
@@ -232,10 +217,10 @@ where
     /// A new server.
     fn terminate_build<PS, Sy>(
         &self,
-        orch_handle: OrchHandle<R, W, T>,
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
         store: PS,
         synchronizer: Sy,
-    ) -> Box<dyn Server<R, W, T>>
+    ) -> Box<dyn Server<R, W, RecTP<R, W>>>
     where
         PS: Store + Send + Sync + 'static,
         Sy: Synchronizer + Send + Sync + 'static,

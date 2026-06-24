@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use comms::{Connector, NodeHandle, TransportLayer, protocol::Entity};
+use comms::{Connector, NodeHandle, RecTP, protocol::Entity};
 
 use configs::{Adapter, DataSrc, ModelConfig, TrainingConfig, Validator};
 use dataset_format::{DatasetFormat, convert_to_binary};
@@ -106,14 +106,10 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
 ///
 /// # Returns
 /// A sorted list of node handles or an io error if occurred.
-async fn connect_to_nodes<T, F>(
-    connector: &mut Connector<T, F>,
+async fn connect_to_nodes(
+    connector: &mut Connector,
     addrs: &[String],
-) -> io::Result<BTreeMap<String, NodeHandle<R, W, T>>>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T,
-{
+) -> io::Result<BTreeMap<String, NodeHandle<R, W, RecTP<R, W>>>> {
     let mut handles = BTreeMap::new();
 
     for addr in addrs {

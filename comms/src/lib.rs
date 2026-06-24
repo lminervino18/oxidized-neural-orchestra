@@ -17,5 +17,6 @@ pub use handles::{
 };
 pub use protocol::specs;
 pub use transport::{
-    NetRtp, Recon, Rtp, Stp, TransportLayer, build_reliable_transport, build_simple_transport,
+    NetRecTP, RecTP, Recon, RelTP, Stp, TransportLayer, build_reliable_transport,
+    build_simple_transport,
 };

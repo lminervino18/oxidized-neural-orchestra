@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::{
-    Acceptor, Connection, Connector, OrchEvent, OrchHandle, TransportLayer,
+    Acceptor, Connection, Connector, OrchEvent, OrchHandle, RecTP,
     protocol::Entity,
     share_dataset,
     specs::{
@@ -15,7 +15,6 @@ use log::{debug, error, info, warn};
 use machine_learning::datasets::Dataset;
 use parameter_server::service::{Server, ServerBuilder};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use uuid::Uuid;
 use worker::{
     builder::WorkerBuilder,
     workers::{ParamServerWorker, Run, Worker},
@@ -28,26 +27,12 @@ type W = OwnedWriteHalf;
 
 /// Routes incoming orchestrator connections to the appropriate runtime role
 /// keeping the process alive across sequential sessions.
-pub struct NodeRouter<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
-    acceptor: Acceptor<T, F, G, H, Fut>,
-    connector: Connector<T, F>,
+pub struct NodeRouter {
+    acceptor: Acceptor,
+    connector: Connector,
 }
 
-impl<T, F, G, H, Fut> NodeRouter<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl NodeRouter {
     /// Creates a new `NodeRouter`.
     ///
     /// # Args
@@ -56,7 +41,7 @@ where
     ///
     /// # Returns
     /// A new `NodeRouter` instance.
-    pub fn new(acceptor: Acceptor<T, F, G, H, Fut>, connector: Connector<T, F>) -> Self {
+    pub fn new(acceptor: Acceptor, connector: Connector) -> Self {
         Self {
             acceptor,
             connector,
@@ -64,14 +49,7 @@ where
     }
 }
 
-impl<T, F, G, H, Fut> NodeRouter<T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W> + 'static,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl NodeRouter {
     /// Waits for incoming connections and runs the specified node instance.
     ///
     /// Blocks indefinitely, accepting one orchestrator connection per iteration.
@@ -98,7 +76,7 @@ where
     ///
     /// # Args
     /// * `orch_handle` - The newly connected orchestrator's handle.
-    async fn handle_orch(&mut self, mut orch_handle: OrchHandle<R, W, T>) {
+    async fn handle_orch(&mut self, mut orch_handle: OrchHandle<R, W, RecTP<R, W>>) {
         while let Ok(event) = orch_handle.recv_event().await {
             debug!("Received {event:?} from orchestrator");
 
@@ -135,7 +113,7 @@ where
     async fn service_stats(
         &mut self,
         reqs: Vec<StatRequest>,
-        mut orch_handle: OrchHandle<R, W, T>,
+        mut orch_handle: OrchHandle<R, W, RecTP<R, W>>,
     ) -> io::Result<()> {
         let mut service = StatService::new(&mut self.acceptor, &mut self.connector);
         let stats = service.serve(reqs).await;
@@ -150,7 +128,11 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn route(&mut self, spec: NodeSpec, orch_handle: OrchHandle<R, W, T>) -> io::Result<()> {
+    async fn route(
+        &mut self,
+        spec: NodeSpec,
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
+    ) -> io::Result<()> {
         match spec {
             NodeSpec::Server(spec) => self.as_server(spec, orch_handle).await,
             NodeSpec::Worker(spec) => self.as_worker(spec, orch_handle).await,
@@ -168,7 +150,7 @@ where
     async fn as_server(
         &mut self,
         spec: ServerSpec,
-        orch_handle: OrchHandle<R, W, T>,
+        orch_handle: OrchHandle<R, W, RecTP<R, W>>,
     ) -> io::Result<()> {
         let mut server_builder = ServerBuilder::new(&mut self.acceptor);
         let mut server = server_builder.build(spec, orch_handle).await?;
@@ -186,7 +168,7 @@ where
     async fn as_worker(
         &mut self,
         spec: WorkerSpec,
-        mut orch_handle: OrchHandle<R, W, T>,
+        mut orch_handle: OrchHandle<R, W, RecTP<R, W>>,
     ) -> io::Result<()> {
         let mut worker_builder = WorkerBuilder::new(&mut self.acceptor, self.connector.clone());
         let mut worker = worker_builder.build(&spec, &mut orch_handle).await?;
@@ -233,7 +215,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn run_server(&mut self, server: &mut dyn Server<R, W, T>) -> io::Result<()> {
+    async fn run_server(&mut self, server: &mut dyn Server<R, W, RecTP<R, W>>) -> io::Result<()> {
         info!("starting parameter server session");
         server.run().await?;
         info!("parameter server session finished");
@@ -248,10 +230,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn run_worker(&mut self, worker: &mut dyn Worker) -> io::Result<Run>
-    where
-        T: TransportLayer<R, W> + 'static,
-    {
+    async fn run_worker(&mut self, worker: &mut dyn Worker) -> io::Result<Run> {
         info!("starting worker session");
         let run = worker.run().await?;
         info!("worker session finished");
@@ -279,8 +258,8 @@ where
         server_ordering: Vec<usize>,
         dataset: Dataset,
         trainer_spec: TrainerSpec,
-        orch_handle: &'a mut OrchHandle<R, W, T>,
-    ) -> io::Result<ParamServerWorker<'a, R, W, T>> {
+        orch_handle: &'a mut OrchHandle<R, W, RecTP<R, W>>,
+    ) -> io::Result<ParamServerWorker<'a, R, W, RecTP<R, W>>> {
         let mut worker_builder = WorkerBuilder::new(&mut self.acceptor, self.connector.clone());
 
         let worker = worker_builder
@@ -311,9 +290,9 @@ where
     async fn upgrade(
         &mut self,
         spec: ServerSpec,
-        mut orch_handle: OrchHandle<R, W, T>,
+        mut orch_handle: OrchHandle<R, W, RecTP<R, W>>,
         dataset: Dataset,
-    ) -> io::Result<Box<dyn Server<R, W, T>>> {
+    ) -> io::Result<Box<dyn Server<R, W, RecTP<R, W>>>> {
         orch_handle.upgraded().await?;
         const CHUNK_SIZE: usize = 1 << 12;
 

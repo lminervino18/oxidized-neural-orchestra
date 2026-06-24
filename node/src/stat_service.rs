@@ -1,54 +1,33 @@
 use std::{collections::HashMap, io, time::Duration};
 
 use comms::{
-    Acceptor, Connection, Connector, NodeEvent, NodeHandle, TransportLayer,
+    Acceptor, Connection, Connector, NodeEvent, NodeHandle, RecTP,
     protocol::Entity,
     specs::node::{Stat, StatRequest, StatResponse},
 };
 use futures::future;
 use log::{debug, warn};
 use tokio::{
-    io::{AsyncRead, AsyncWrite},
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
     time::Instant,
 };
-use uuid::Uuid;
 
 type R = OwnedReadHalf;
 type W = OwnedWriteHalf;
 
 /// Resolves the requested statistic calculations by the orchestrator.
-pub struct StatService<'a, T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
-    acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
-    connector: &'a mut Connector<T, F>,
+pub struct StatService<'a> {
+    acceptor: &'a mut Acceptor,
+    connector: &'a mut Connector,
 }
 
 /// A struct helper to mantain the address of a handle close to it.
-struct AddressedHandle<T>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-    T: TransportLayer<R, W>,
-{
+struct AddressedHandle {
     addr: String,
-    handle: NodeHandle<R, W, T>,
+    handle: NodeHandle<R, W, RecTP<R, W>>,
 }
 
-impl<'a, T, F, G, H, Fut> StatService<'a, T, F, G, H, Fut>
-where
-    T: TransportLayer<R, W>,
-    F: Fn(R, W) -> T + Clone,
-    G: Fn() -> Fut + Clone,
-    H: Fn(Uuid, Acceptor<T, F, G, H, Fut>, T) -> T,
-    Fut: Future<Output = io::Result<(R, W)>>,
-{
+impl<'a> StatService<'a> {
     /// Creates a new `StatServicer`.
     ///
     /// # Args
@@ -57,10 +36,7 @@ where
     ///
     /// # Returns
     /// A new `StatServicer` instance.
-    pub fn new(
-        acceptor: &'a mut Acceptor<T, F, G, H, Fut>,
-        connector: &'a mut Connector<T, F>,
-    ) -> Self {
+    pub fn new(acceptor: &'a mut Acceptor, connector: &'a mut Connector) -> Self {
         Self {
             acceptor,
             connector,
@@ -171,7 +147,7 @@ where
         &mut self,
         addrs: Vec<String>,
         incoming: usize,
-    ) -> (Vec<AddressedHandle<T>>, Vec<NodeHandle<R, W, T>>) {
+    ) -> (Vec<AddressedHandle>, Vec<NodeHandle<R, W, RecTP<R, W>>>) {
         let mut ping_handles = Vec::with_capacity(addrs.len());
 
         for addr in addrs {
@@ -204,8 +180,8 @@ where
     /// * `rtts` - The round trip time storage.
     async fn serve_ping_round(
         &mut self,
-        ping_handles: &mut Vec<AddressedHandle<T>>,
-        pong_handles: &mut Vec<NodeHandle<R, W, T>>,
+        ping_handles: &mut Vec<AddressedHandle>,
+        pong_handles: &mut Vec<NodeHandle<R, W, RecTP<R, W>>>,
         rtts: &mut HashMap<String, Vec<Duration>>,
     ) {
         let ping_futs = ping_handles
@@ -255,7 +231,10 @@ where
     ///
     /// # Returns
     /// The round trip time duration or an io error if occurred.
-    async fn ping_node(&self, node_handle: &mut NodeHandle<R, W, T>) -> io::Result<Duration> {
+    async fn ping_node(
+        &self,
+        node_handle: &mut NodeHandle<R, W, RecTP<R, W>>,
+    ) -> io::Result<Duration> {
         let start = Instant::now();
         node_handle.ping().await?;
 
@@ -275,7 +254,7 @@ where
     ///
     /// # Returns
     /// An io error if occurred.
-    async fn pong_node(&self, node_handle: &mut NodeHandle<R, W, T>) -> io::Result<()> {
+    async fn pong_node(&self, node_handle: &mut NodeHandle<R, W, RecTP<R, W>>) -> io::Result<()> {
         match node_handle.recv_event().await? {
             NodeEvent::Ping => node_handle.pong().await,
             event => {

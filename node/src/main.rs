@@ -3,7 +3,7 @@ mod stat_service;
 
 use std::{env, io, time::Duration};
 
-use comms::{Acceptor, Connector, Recon};
+use comms::{Acceptor, Connector};
 use log::info;
 use tokio::net::TcpListener;
 
@@ -47,18 +47,10 @@ async fn main() -> io::Result<()> {
         )
     };
 
-    let connection_factory = async || {
-        let (stream, peer_addr) = listener.accept().await?;
-        info!("new incoming connection from {peer_addr}");
-        Ok(stream.into_split())
-    };
-
-    let passive_recon_wrapper = |id, acceptor, layer| Recon::passive(id, acceptor, layer);
-
     let id = Uuid::new_v4();
     info!("Assigned node id {id}");
 
-    let acceptor = Acceptor::new(id, rtp_factory, connection_factory, passive_recon_wrapper);
+    let acceptor = Acceptor::new(id, listener, rtp_factory);
     let connector = Connector::new(id, rtp_factory);
     NodeRouter::new(acceptor, connector).run().await
 }

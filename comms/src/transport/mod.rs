@@ -17,13 +17,16 @@ use tokio::{
 };
 
 /// The reliable transport.
-pub type Rtp<R, W> = Retryer<R, W, TimeOuter<R, W, Framer<R, W>>>;
+pub type RelTP<R, W> = Retryer<R, W, TimeOuter<R, W, Framer<R, W>>>;
+
+/// The reliable transport with reconnections.
+pub type RecTP<R, W> = Recon<RelTP<R, W>>;
 
 /// The simple transport;
 pub type Stp<R, W> = Framer<R, W>;
 
-/// The network TCP reliable transport layer.
-pub type NetRtp = Rtp<OwnedReadHalf, OwnedWriteHalf>;
+/// The network TCP reliable transport layer with reconnections.
+pub type NetRecTP = RecTP<OwnedReadHalf, OwnedWriteHalf>;
 
 /// Builds an uninitialized reliable transport.
 ///
@@ -44,7 +47,7 @@ pub fn build_reliable_transport<R, W>(
     base_retry_dur: Duration,
     retry_coef: u32,
     retries: usize,
-) -> Rtp<R, W>
+) -> RelTP<R, W>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,

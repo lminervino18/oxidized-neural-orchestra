@@ -1,4 +1,4 @@
-use comms::{NetRtp, WorkerEvent, WorkerHandle};
+use comms::{NetRecTP, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
 use tokio::{
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
@@ -27,7 +27,7 @@ enum EventResolution {
 /// The worker handle manager.
 pub struct WorkerListener {
     id: usize,
-    worker_handle: WorkerHandle<R, W, NetRtp>,
+    worker_handle: WorkerHandle<R, W, NetRecTP>,
     stopping: bool,
 }
 
@@ -40,7 +40,7 @@ impl WorkerListener {
     ///
     /// # Returns
     /// A new `WorkerListener` instance.
-    pub fn new(id: usize, worker_handle: WorkerHandle<R, W, NetRtp>) -> Self {
+    pub fn new(id: usize, worker_handle: WorkerHandle<R, W, NetRecTP>) -> Self {
         Self {
             id,
             worker_handle,
