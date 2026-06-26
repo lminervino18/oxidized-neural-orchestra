@@ -83,12 +83,15 @@ where
         self.scatter().await?;
         self.gather().await?;
 
-        let nworkers = self.addrs.len() as f32;
-        if nworkers > 1.0 {
-            self.grad.iter_mut().for_each(|g| *g /= nworkers);
+        // The ring sums every worker's partial gradient; average it back so the
+        // effective learning rate stays independent of the worker count.
+        let nworkers = self.addrs.len();
+        let mut param_manager = self.build_param_manager(params);
+        if let Some(n) = NonZeroUsize::new(nworkers).filter(|n| n.get() > 1) {
+            param_manager.normalize_gradient(n);
         }
 
-        Ok(self.build_param_manager(params))
+        Ok(param_manager)
     }
 
     /// Will start the ring scattering of the gradients with the rest of
