@@ -17,11 +17,14 @@ SUITE_DOCS = {
     "convergence": (
         "Convergence",
         "**Measures:** loss vs epoch and final test accuracy. Strategies are compared "
-        f"at a **fixed {3}-worker** topology so the effective batch (workers × batch) "
-        "is held constant — the only fair way to attribute differences to the strategy "
-        "and not to the batch. The all-reduce **worker-count sweep** lives in its own "
-        "figure (effective batch changes there). The dashed line is the single-process "
-        "PyTorch reference (same recipe + same early-stopping rule).\n"
+        f"at a **fixed {3}-worker** topology so the per-worker shard size and the "
+        "cross-worker averaging frequency stay constant — the only fair way to attribute "
+        "differences to the strategy. (Training is **Local SGD**: every worker runs SGD "
+        "locally at `batch` per step over its data shard, then the updates are averaged "
+        "across workers each epoch — the per-step batch is **not** `workers × batch`.) The "
+        "all-reduce **worker-count sweep** lives in its own figure (more workers = smaller "
+        "shards + more averaging). The dashed line is the single-process PyTorch reference "
+        "(same recipe + same early-stopping rule).\n"
         "**Does NOT measure:** wall-clock speed.",
     ),
     "execution-speed": (
@@ -91,9 +94,9 @@ def _suite_rows(suite, history):
                   key=lambda r: (r["model"], r.get("baseline", False), r["strategy"],
                                  r.get("ps_variant") or "", r["workers"]))
     if suite == "convergence":
-        header = ["Model", "Strategy", "Topology", "Eff. batch", "Epochs", "Final loss", "Accuracy"]
+        header = ["Model", "Strategy", "Topology", "Batch/wkr", "Epochs", "Final loss", "Accuracy"]
         rows = [[r["model"], _strat_cell(r), _topo(r),
-                 r.get("workers", 1) * r.get("batch_size", 0),
+                 r.get("batch_size", 0),
                  r.get("epochs_ran", "—"), _fmt(r.get("final_loss")),
                  _fmt_pm(r, "accuracy", "{:.3f}")] for r in runs]
     elif suite == "execution-speed":
@@ -164,10 +167,10 @@ def render(history, meta=None):
         "",
         _hyper_table(),
         "",
-        "`batch` is applied **per worker** (the dataset is sharded across workers), "
-        "so the effective global batch is `batch × workers`. Nielsen uses the "
-        "canonical `network3.py` recipe (60 / 10 / 0.1 → ~98.8%); the small batch is "
-        "what lets the distributed runs converge.",
+        "`batch` is the **per-worker** mini-batch (the dataset is sharded across workers, "
+        "and each worker runs SGD locally at this batch before the per-epoch averaging). "
+        "Nielsen uses the canonical `network3.py` recipe (60 / 10 / 0.1 → ~98.8%); the "
+        "small batch is what lets the distributed runs converge.",
         "",
         "## Strategies & variants",
         "",
@@ -209,9 +212,13 @@ def render(history, meta=None):
     p += [
         "## Methodology & fairness",
         "",
-        "- **Effective batch.** `batch` is per worker, so the effective global batch is "
-        "`workers × batch`. Convergence compares strategies at a fixed worker count to "
-        "hold it constant; the worker-count sweep is shown separately.",
+        "- **Local SGD, not large-batch.** Each worker runs SGD locally at the per-worker "
+        "`batch` over its data shard, then the updates are averaged across workers each "
+        "epoch (FedAvg-style). The per-step batch is **not** `workers × batch`. Adding "
+        "workers shards the data finer and averages more often, which is what shifts "
+        "convergence — so the strategy comparison fixes the worker count and the "
+        "worker-count sweep is shown separately. The single-process baseline uses the same "
+        "per-step batch, so it is a like-for-like reference, not an over-batched one.",
         "- **Batch differs across suites.** Speed/scalability use a larger batch on a "
         "subset (they only need throughput), so their numbers do **not** transfer to the "
         "convergence config (e.g. Nielsen converges at batch 10 but is benchmarked for "

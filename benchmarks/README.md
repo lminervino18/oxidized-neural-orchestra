@@ -16,7 +16,7 @@ Each model owns its *reference* recipe (in `issue/suites.py`). Convergence suite
 | nielsen | 0.1 | 10 | 60 | cross_entropy |
 | lenet5 | 0.05 | 64 | 60 | cross_entropy |
 
-`batch` is applied **per worker** (the dataset is sharded across workers), so the effective global batch is `batch × workers`. Nielsen uses the canonical `network3.py` recipe (60 / 10 / 0.1 → ~98.8%); the small batch is what lets the distributed runs converge.
+`batch` is the **per-worker** mini-batch (the dataset is sharded across workers, and each worker runs SGD locally at this batch before the per-epoch averaging). Nielsen uses the canonical `network3.py` recipe (60 / 10 / 0.1 → ~98.8%); the small batch is what lets the distributed runs converge.
 
 ## Strategies & variants
 
@@ -42,22 +42,29 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 
 ## Convergence
 
-**Measures:** loss vs epoch and final test accuracy. Strategies are compared at a **fixed 3-worker** topology so the effective batch (workers × batch) is held constant — the only fair way to attribute differences to the strategy and not to the batch. The all-reduce **worker-count sweep** lives in its own figure (effective batch changes there). The dashed line is the single-process PyTorch reference (same recipe + same early-stopping rule).
+**Measures:** loss vs epoch and final test accuracy. Strategies are compared at a **fixed 3-worker** topology so the per-worker shard size and the cross-worker averaging frequency stay constant — the only fair way to attribute differences to the strategy. (Training is **Local SGD**: every worker runs SGD locally at `batch` per step over its data shard, then the updates are averaged across workers each epoch — the per-step batch is **not** `workers × batch`.) The all-reduce **worker-count sweep** lives in its own figure (more workers = smaller shards + more averaging). The dashed line is the single-process PyTorch reference (same recipe + same early-stopping rule).
 **Does NOT measure:** wall-clock speed.
 
-| Model | Strategy | Topology | Eff. batch | Epochs | Final loss | Accuracy |
+| Model | Strategy | Topology | Batch/wkr | Epochs | Final loss | Accuracy |
 |---|---|---|---|---|---|---|
-| lenet5 | AR | 3w | 192 | 55 | 0.00759 | 0.978 |
-| lenet5 | AR | 5w | 320 | 60 | 0.0105 | 0.973 |
-| lenet5 | AR | 7w | 448 | 60 | 0.014 | 0.963 |
-| lenet5 | PS (blocking) | 3w/2s | 192 | 60 | 0.00723 | 0.980 |
-| lenet5 | SS (blocking) · no switch | 3w/2s | 192 | 60 | 0.0105 | 0.973 |
+| lenet5 | AR | 3w | 64 | 55 | 0.00759 | 0.978 |
+| lenet5 | AR | 5w | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | AR | 7w | 64 | 60 | 0.014 | 0.963 |
+| lenet5 | PS | 3w/2s | 64 | 60 | 0.0049 | 0.983 |
+| lenet5 | PS (blocking) | 3w/2s | 64 | 60 | 0.00723 | 0.980 |
+| lenet5 | SS | 3w/2s | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | SS (blocking) · no switch | 3w/2s | 64 | 60 | 0.0105 | 0.973 |
 | lenet5 | PyTorch (ref) | 1w | 64 | 60 | 0.00107 | 0.990 |
-| nielsen | AR | 3w | 30 | 52 | 0.00361 | 0.984 |
-| nielsen | AR | 5w | 50 | 60 | 0.00547 | 0.979 |
-| nielsen | AR | 7w | 70 | 60 | 0.00762 | 0.975 |
-| nielsen | PS (blocking) | 3w/2s | 30 | 60 | 0.00349 | 0.983 |
-| nielsen | SS (blocking) · no switch | 3w/2s | 30 | 60 | 0.00547 | 0.979 |
+| nielsen | AR | 3w | 64 | 60 | 0.0146 | 0.959 |
+| nielsen | AR | 3w | 10 | 52 | 0.00361 | 0.984 |
+| nielsen | AR | 5w | 64 | 60 | 0.0191 | 0.949 |
+| nielsen | AR | 5w | 10 | 60 | 0.00547 | 0.979 |
+| nielsen | AR | 7w | 64 | 60 | 0.0223 | 0.941 |
+| nielsen | AR | 7w | 10 | 60 | 0.00762 | 0.975 |
+| nielsen | PS | 3w/2s | 64 | 60 | 0.0122 | 0.957 |
+| nielsen | PS (blocking) | 3w/2s | 10 | 60 | 0.00349 | 0.983 |
+| nielsen | SS | 3w/2s | 64 | 104 | 0.019 | 0.936 |
+| nielsen | SS (blocking) · no switch | 3w/2s | 10 | 60 | 0.00547 | 0.979 |
 | nielsen | PyTorch (ref) | 1w | 10 | 60 | 0.000222 | 0.989 |
 
 ![](plots/convergence_loss_nielsen.png)
@@ -92,10 +99,16 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 | Model | Strategy | Topology | Loss/sec | Accuracy/sec |
 |---|---|---|---|---|
 | lenet5 | AR | 3w | 0.000271 | 0.00121 |
+| lenet5 | PS | 3w/2s | 0.000263 | 0.00104 |
 | lenet5 | PS (blocking) | 3w/2s | 0.000271 | 0.00121 |
+| lenet5 | SS | 3w/2s | 0.000328 | 0.00146 |
 | lenet5 | SS (blocking) · no switch | 3w/2s | 0.000323 | 0.00144 |
+| nielsen | AR | 3w | 0.000352 | 0.0016 |
 | nielsen | AR | 3w | 0.000164 | 0.00158 |
+| nielsen | PS | 3w/2s | 0.000333 | 0.00151 |
 | nielsen | PS (blocking) | 3w/2s | 0.000145 | 0.00141 |
+| nielsen | PS (non-block) | 3w/2s | — | — |
+| nielsen | SS | 3w/2s | 0.000418 | 0.00189 |
 | nielsen | SS (blocking) · no switch | 3w/2s | 0.000246 | 0.00174 |
 
 ![](plots/convergence_speed_nielsen.png)
@@ -111,11 +124,15 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 | lenet5 | AR | 3 | 3 | 2982 |
 | lenet5 | AR | 5 | 5 | 3607 |
 | lenet5 | AR | 7 | 7 | 4450 |
+| lenet5 | PS | 2 | 3 | — |
+| lenet5 | PS | 3 | 5 | — |
 | lenet5 | PS (blocking) | 2 | 3 | 2301 |
 | lenet5 | PS (blocking) | 3 | 5 | 3034 |
 | nielsen | AR | 3 | 3 | 3578 |
 | nielsen | AR | 5 | 5 | 4709 |
 | nielsen | AR | 7 | 7 | 5445 |
+| nielsen | PS | 2 | 3 | — |
+| nielsen | PS | 3 | 5 | — |
 | nielsen | PS (blocking) | 2 | 3 | 3024 |
 | nielsen | PS (blocking) | 3 | 5 | 3926 |
 
@@ -124,7 +141,7 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 
 ## Methodology & fairness
 
-- **Effective batch.** `batch` is per worker, so the effective global batch is `workers × batch`. Convergence compares strategies at a fixed worker count to hold it constant; the worker-count sweep is shown separately.
+- **Local SGD, not large-batch.** Each worker runs SGD locally at the per-worker `batch` over its data shard, then the updates are averaged across workers each epoch (FedAvg-style). The per-step batch is **not** `workers × batch`. Adding workers shards the data finer and averages more often, which is what shifts convergence — so the strategy comparison fixes the worker count and the worker-count sweep is shown separately. The single-process baseline uses the same per-step batch, so it is a like-for-like reference, not an over-batched one.
 - **Batch differs across suites.** Speed/scalability use a larger batch on a subset (they only need throughput), so their numbers do **not** transfer to the convergence config (e.g. Nielsen converges at batch 10 but is benchmarked for speed at batch 64/256 — ~6× faster there).
 - **Throughput = samples/sec**, not epochs/sec: an epoch with a bigger batch has fewer steps, so epochs/sec would reward batch size by construction.
 - **Loss scale.** The distributed `loss` is the mean across workers of each worker's epoch-mean cross-entropy; the PyTorch baseline is the global epoch-mean cross-entropy — same scale, directly comparable. (Early stopping on the distributed side keys off the per-epoch **max** worker loss; for the 1-worker baseline max = mean.)

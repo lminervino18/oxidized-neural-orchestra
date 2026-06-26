@@ -2,8 +2,10 @@
 only regenerates its own figures and never blanks another suite's plots.
 
 Fairness-driven choices:
-- Convergence compares strategies at a FIXED worker count (effective batch =
-  workers x batch is held constant); the worker-count sweep gets its own figure.
+- Convergence compares strategies at a FIXED worker count, holding per-worker shard
+  size and averaging frequency constant (Local SGD: per-worker batch + cross-worker
+  averaging, NOT a single workers x batch batch); the worker-count sweep gets its own
+  figure.
 - Scalability separates all-reduce and parameter server (PS spends extra server
   nodes, so they don't share a "workers" axis honestly).
 - Throughput is reported as samples/sec (batch-invariant), not epochs/sec.
@@ -20,7 +22,7 @@ STRAT = {"parameter_server": "PS", "all_reduce": "AR", "strategy_switch": "SS"}
 VARIANT_SHORT = {"blocking": "blocking", "non_blocking": "non-block"}
 BASELINE_LABEL = "PyTorch (ref)"
 
-# Convergence compares strategies at this fixed worker count (same effective batch).
+# Convergence compares strategies at this fixed worker count (same shard size + averaging).
 CONV_WORKERS = 3
 
 
@@ -37,10 +39,6 @@ def _topo(r):
 
 def _nodes(r):
     return r["workers"] + r["servers"]
-
-
-def _eff_batch(r):
-    return r["workers"] * r["batch_size"]
 
 
 def _switch_tag(r):
@@ -142,9 +140,10 @@ def plot_convergence(results, ts):
 
 
 def plot_convergence_workers(results, ts):
-    """Separate figure: all-reduce convergence vs worker count, showing how the
-    effective batch (workers x batch) changes the curve — kept apart from the
-    strategy comparison so the two questions don't get conflated."""
+    """Separate figure: all-reduce convergence vs worker count, showing how adding
+    workers (smaller per-worker shards + more frequent cross-worker averaging, i.e.
+    Local SGD) shifts the curve — kept apart from the strategy comparison so the two
+    questions don't get conflated."""
     plt = _plt()
     out = []
     for model, runs in _by_model(_ok(results, "convergence")).items():
@@ -157,13 +156,13 @@ def plot_convergence_workers(results, ts):
         for r in ar:
             losses = r["loss_history"]
             ax.plot(range(1, len(losses) + 1), losses, linewidth=1.6,
-                    label=f"AR {r['workers']}w (eff batch {_eff_batch(r)})")
+                    label=f"AR {r['workers']}w (batch {r['batch_size']}/worker)")
         ax.set_title(f"Convergence vs workers · {model} · all-reduce  ({ts})",
                      fontsize=11, fontweight="bold")
         ax.set_xlabel("Epoch")
         ax.set_ylabel("Loss")
         ax.grid(alpha=0.3)
-        ax.legend(fontsize=8, title="effective batch = workers × batch")
+        ax.legend(fontsize=8, title="Local SGD: more workers = smaller shards + more averaging")
         out.append(_save(fig, f"convergence_workers_{model}.png"))
         plt.close(fig)
     return out
