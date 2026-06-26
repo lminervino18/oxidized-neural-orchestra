@@ -4,6 +4,8 @@ TARGET_URL="https://drive.google.com/uc?export=download&id=18kPPrx97omjSkVltx_IN
 DOWNLOAD_PATH=datasets/mnist.zip
 UNZIP_PATH=datasets/
 
+mkdir -p $DOWNLOAD_PATH $UNZIP_PATH
+
 curl -L -o $DOWNLOAD_PATH $TARGET_URL
 
 unzip $DOWNLOAD_PATH -d $UNZIP_PATH
