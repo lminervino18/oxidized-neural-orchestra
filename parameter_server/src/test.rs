@@ -97,9 +97,10 @@ async fn test_lineal_convergence() -> io::Result<()> {
     let orch_id = Uuid::nil();
 
     let shard_size = NonZeroUsize::new(1).unwrap();
+    let nworkers = NonZeroUsize::new(1).unwrap();
     let mut param_gen = ConstParamGen::new(0.5, NPARAMS);
     let optimizer_factory = |_| GradientDescent::new(FloatPositive::new(0.1).unwrap());
-    let store = BlockingStore::new(shard_size, &mut param_gen, optimizer_factory);
+    let store = BlockingStore::new(shard_size, nworkers, &mut param_gen, optimizer_factory);
     let synchronizer = BarrierSync::new(NonZeroUsize::new(1).unwrap());
     let transport = comms::build_simple_transport(sv_orch_rx, sv_orch_tx);
     let orch_handle = OrchHandle::new(orch_id, transport);

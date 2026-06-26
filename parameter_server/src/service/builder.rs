@@ -161,6 +161,7 @@ where
         O: Optimizer + Send + 'static,
         OF: Fn(usize) -> O,
     {
+        let nworkers = NonZeroUsize::new(spec.nworkers).unwrap_or(NonZeroUsize::MIN);
         let param_gen_builder = ParamGenBuilder::new();
         let mut param_gen = param_gen_builder.build(spec.param_gen.clone(), spec.seed)?;
 
@@ -173,7 +174,8 @@ where
 
         match spec.store {
             StoreSpec::Blocking => {
-                let store = BlockingStore::new(shard_size, param_gen.as_mut(), optimizer_factory);
+                let store =
+                    BlockingStore::new(shard_size, nworkers, param_gen.as_mut(), optimizer_factory);
                 Ok(self.resolve_synchronizer(spec, orch_handle, store))
             }
             StoreSpec::Wild => {

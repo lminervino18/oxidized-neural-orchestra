@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use machine_learning::optimization::Optimizer;
 use parking_lot::{Mutex, RwLock};
 
@@ -11,6 +13,7 @@ use crate::storage::{Result, error::ParamServerErr};
 #[derive(Debug)]
 pub struct BlockingShard<O: Optimizer> {
     nparams: usize,
+    nworkers: NonZeroUsize,
     grads: [Mutex<Box<[f32]>>; 2],
     params: RwLock<Box<[f32]>>,
     optimizer: Mutex<O>,
@@ -22,14 +25,17 @@ impl<O: Optimizer> BlockingShard<O> {
     /// # Args
     /// * `params` - The initial state of the parameters.
     /// * `optimizer` - The optimization algorithm.
+    /// * `nworkers` - The number of workers whose gradients are summed per round
+    ///   (the barrier size), used to average the accumulated gradient.
     ///
     /// # Returns
     /// A new `BlockingShard` instance.
-    pub fn new(params: Vec<f32>, optimizer: O) -> Self {
+    pub fn new(params: Vec<f32>, optimizer: O, nworkers: NonZeroUsize) -> Self {
         let nparams = params.len();
 
         Self {
             nparams,
+            nworkers,
             grads: [
                 Mutex::new(vec![0.; nparams].into_boxed_slice()),
                 Mutex::new(vec![0.; nparams].into_boxed_slice()),
@@ -68,6 +74,13 @@ impl<O: Optimizer> BlockingShard<O> {
     pub fn update_params(&self, frozen_idx: usize) {
         let mut params = self.params.write();
         let mut grad = self.grads[frozen_idx].lock();
+
+        // The barrier accumulated one gradient per worker (a sum); average it so
+        // the effective learning rate stays independent of the worker count.
+        if self.nworkers.get() > 1 {
+            let factor = self.nworkers.get() as f32;
+            grad.iter_mut().for_each(|g| *g /= factor);
+        }
 
         // SAFETY: Both grad and params have the same length.
         self.optimizer
@@ -118,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_accumulation_and_update() {
-        let shard = BlockingShard::new(vec![0.; 3], AddOptimizer);
+        let shard = BlockingShard::new(vec![0.; 3], AddOptimizer, NonZeroUsize::new(1).unwrap());
 
         shard.accumulate(0, &[1.0, 2.0, 3.0]).unwrap();
         shard.accumulate(0, &[1.0, 1.0, 1.0]).unwrap();
@@ -141,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_double_buffering_flow() {
-        let shard = BlockingShard::new(vec![0.], AddOptimizer);
+        let shard = BlockingShard::new(vec![0.], AddOptimizer, NonZeroUsize::new(1).unwrap());
 
         shard.accumulate(0, &[10.]).unwrap();
         shard.accumulate(1, &[5.]).unwrap();
@@ -154,5 +167,20 @@ mod tests {
         shard.update_params(1);
         shard.pull_params(&mut out).unwrap();
         assert_eq!(out, [15.]);
+    }
+
+    #[test]
+    fn test_gradient_is_averaged_across_workers() {
+        // Two workers each accumulate the same gradient; the optimizer must see
+        // the mean ([2, 4]), not the sum ([4, 8]).
+        let shard = BlockingShard::new(vec![0.; 2], AddOptimizer, NonZeroUsize::new(2).unwrap());
+
+        shard.accumulate(0, &[2.0, 4.0]).unwrap();
+        shard.accumulate(0, &[2.0, 4.0]).unwrap();
+        shard.update_params(0);
+
+        let mut out = [0.; 2];
+        shard.pull_params(&mut out).unwrap();
+        assert_eq!(out, [2.0, 4.0]);
     }
 }
