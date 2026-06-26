@@ -121,7 +121,7 @@ where
         self.epoch += epochs;
         let res = TrainResult {
             losses: &self.losses,
-            was_last: self.epoch == self.max_epochs.get(),
+            is_last: self.epoch == self.max_epochs.get(),
         };
 
         Ok(res)

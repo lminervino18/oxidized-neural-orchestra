@@ -39,7 +39,7 @@ where
     loop {
         match worker_handle.recv_event().await? {
             WorkerEvent::Disconnect => break,
-            WorkerEvent::Loss(losses) => println!("loss: {losses:?}"),
+            WorkerEvent::Loss { losses } => println!("loss: {losses:?}"),
             _ => {}
         }
     }
@@ -64,11 +64,13 @@ where
 
     loop {
         match worker_handle.recv_event().await? {
-            WorkerEvent::Disconnect => break,
-            WorkerEvent::Grad(grad) => {
+            WorkerEvent::Grad { grad, is_last } => {
                 optimizer.update_params(grad, &mut params).unwrap();
-            }
-            WorkerEvent::RequestParams => {
+
+                if is_last {
+                    break;
+                }
+
                 worker_handle.push_params(&mut params).await?;
             }
             _ => {}

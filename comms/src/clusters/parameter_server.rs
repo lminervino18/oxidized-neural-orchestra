@@ -58,43 +58,25 @@ where
 
     /// Pushes the latest gradients to the servers.
     ///
+    /// # Args
+    /// * `residuals` - The residuals for each of the servers.
+    /// * `is_last` - Wheather this gradient message is the last one or not.
+    ///
     /// # Returns
     /// The thresholds for cleaning the residual vecs or io errors if occurred.
-    pub async fn push_grads(&mut self, residuals: &[Vec<f32>]) -> Vec<io::Result<Option<f32>>> {
-        let futs = self
-            .server_handles
-            .iter_mut()
-            .zip(residuals)
-            .map(async |(server_handle, residual)| server_handle.push_grad(residual).await);
+    pub async fn push_grads(
+        &mut self,
+        residuals: &[Vec<f32>],
+        is_last: bool,
+    ) -> Vec<io::Result<Option<f32>>> {
+        let futs =
+            self.server_handles
+                .iter_mut()
+                .zip(residuals)
+                .map(async |(server_handle, residual)| {
+                    server_handle.push_grad(residual, is_last).await
+                });
 
         future::join_all(futs).await
-    }
-
-    /// Waits till receiving a message and discards it.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn discard_one(&mut self) -> io::Result<()> {
-        let futs = self
-            .server_handles
-            .iter_mut()
-            .map(async |server_handle| server_handle.discard_one().await);
-
-        future::join_all(futs).await;
-        Ok(())
-    }
-
-    /// Disconnects this worker from the cluster.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn disconnect(&mut self) -> io::Result<()> {
-        let futs = self
-            .server_handles
-            .iter_mut()
-            .map(async |server_handle| server_handle.disconnect().await);
-
-        future::try_join_all(futs).await?;
-        Ok(())
     }
 }

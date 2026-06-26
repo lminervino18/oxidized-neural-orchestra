@@ -23,8 +23,8 @@ pub const HEADER_SIZE: usize = size_of::<Header>();
 /// The payload data for the `Data` variant of the `Msg` enum.
 #[derive(Debug)]
 pub enum Payload<'a> {
-    DenseGrad(&'a [f16]),
-    SparseGrad(&'a [u8]),
+    DenseGrad { grad: &'a [f16], is_last: bool },
+    SparseGrad { sparse: &'a [u8], is_last: bool },
     Params(&'a mut [f32]),
     Datachunk(&'a [f32]),
 }
@@ -130,10 +130,17 @@ impl<'a> Msg<'a> {
             }
             Msg::Data(payload) => {
                 let (kind, data): (Header, &[_]) = match payload {
-                    Payload::DenseGrad(grad) => (1, bytemuck::cast_slice(grad)),
-                    Payload::SparseGrad(sparse) => (2, sparse),
-                    Payload::Params(params) => (3, bytemuck::cast_slice(params)),
-                    Payload::Datachunk(chunk) => (4, bytemuck::cast_slice(chunk)),
+                    Payload::DenseGrad { grad, is_last } => {
+                        let kind = 1 + *is_last as u32;
+                        let data = bytemuck::cast_slice(grad);
+                        (kind, data)
+                    }
+                    Payload::SparseGrad { sparse, is_last } => {
+                        let kind = 3 + *is_last as u32;
+                        (kind, sparse)
+                    }
+                    Payload::Params(params) => (5, bytemuck::cast_slice(params)),
+                    Payload::Datachunk(chunk) => (6, bytemuck::cast_slice(chunk)),
                 };
 
                 let header = kind.to_be_bytes();
@@ -162,12 +169,18 @@ impl<'a> Msg<'a> {
 
         match kind {
             0 => Ok(Msg::Control(serde_json::from_slice(rest)?)),
-            1..5 => {
+            1..7 => {
                 let payload = match kind {
-                    1 => Payload::DenseGrad(bytemuck::cast_slice(rest)),
-                    2 => Payload::SparseGrad(rest),
-                    3 => Payload::Params(bytemuck::cast_slice_mut(rest)),
-                    4 => Payload::Datachunk(bytemuck::cast_slice(rest)),
+                    1 | 2 => Payload::DenseGrad {
+                        grad: bytemuck::cast_slice(rest),
+                        is_last: kind & 1 == 0,
+                    },
+                    3 | 4 => Payload::SparseGrad {
+                        sparse: rest,
+                        is_last: kind & 1 == 0,
+                    },
+                    5 => Payload::Params(bytemuck::cast_slice_mut(rest)),
+                    6 => Payload::Datachunk(bytemuck::cast_slice(rest)),
                     _ => unreachable!(),
                 };
 
