@@ -75,9 +75,11 @@ where
         // SAFETY: The parameter vector is the same size as
         //         the amount of parameters in the storage.
         self.store.pull_params(&mut params).unwrap();
+        info!("waiting for orchestrator to pull params");
 
         loop {
             let event = self.orch_handle.recv_event().await?;
+            println!("{event:?}");
 
             match event {
                 OrchEvent::Disconnect => break,
@@ -115,17 +117,14 @@ where
             // SAFETY: This buffer is the same size as the
             //         amount of parameters in the storage.
             store.pull_params(&mut params).unwrap();
+            debug!(worker_id = id; "sending parameters");
             worker_handle.push_params(&mut params).await?;
 
             loop {
                 debug!(worker_id = id; "waiting to receive a message");
 
                 match worker_handle.recv_event().await? {
-                    WorkerEvent::RequestParams => {
-                        debug!(worker_id = id; "sending parameters");
-                        worker_handle.push_params(&mut params).await?;
-                    }
-                    WorkerEvent::Grad(grad) if nparams == grad.len() => {
+                    WorkerEvent::Grad { grad, is_last } if nparams == grad.len() => {
                         debug!(worker_id = id; "received gradient, applying step");
 
                         // SAFETY: We checked that the gradient is the same
@@ -135,13 +134,15 @@ where
                             .await
                             .map_err(io::Error::other)?;
 
+                        if is_last {
+                            info!(worker_id = id; "gracefully disconnecting worker");
+                            break;
+                        }
+
+                        debug!(worker_id = id; "sending parameters");
                         worker_handle.push_params(&mut params).await?;
                     }
-                    WorkerEvent::Disconnect => {
-                        info!(worker_id = id; "gracefully disconnecting worker");
-                        break;
-                    }
-                    WorkerEvent::Grad(grad) => {
+                    WorkerEvent::Grad { grad, .. } => {
                         // Acá eventualmente habría que ver como se redimensiona el servidor a partir
                         // de que haya llegado otro tamaño de gradiente.
                         //

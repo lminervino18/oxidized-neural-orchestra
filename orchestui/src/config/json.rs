@@ -70,10 +70,10 @@ mod tests {
     #[test]
     fn strategy_switch_worker_count_includes_server_addrs() {
         let json = r#"{
-            "worker_addrs": ["127.0.0.1:50000", "127.0.0.1:50001"],
+            "addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
             "algorithm": {
                 "strategy_switch": {
-                    "server_addrs": ["127.0.0.1:40000"],
+                    "nservers": 1,
                     "synchronizer": "non_blocking",
                     "store": "wild"
                 }
@@ -106,10 +106,10 @@ mod tests {
     #[test]
     fn parameter_server_worker_count_excludes_server_addrs() {
         let json = r#"{
-            "worker_addrs": ["127.0.0.1:50000"],
+            "addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
             "algorithm": {
                 "parameter_server": {
-                    "server_addrs": ["127.0.0.1:40000", "127.0.0.1:40001"],
+                    "nservers": 2,
                     "synchronizer": "barrier",
                     "store": "blocking"
                 }
@@ -132,9 +132,8 @@ mod tests {
         let config: TrainingConfig = serde_json::from_str(json).expect("parse failed");
 
         if let AlgorithmConfig::ParameterServer { nservers, .. } = &config.algorithm {
-            let worker_count = config.addrs.len();
             let server_count = nservers.get();
-            assert_eq!(worker_count, 1);
+            assert_eq!(config.addrs.len(), 3);
             assert_eq!(server_count, 2);
         } else {
             panic!("expected ParameterServer");

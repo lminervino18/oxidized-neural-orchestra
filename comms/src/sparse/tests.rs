@@ -38,10 +38,13 @@ async fn test_sparse_gradient() -> io::Result<()> {
     let threshold = sparse::calculate_threshold(&grad, r, &mut rng);
     sparse::grad_drop_into(&mut ser_buf, &grad, threshold);
 
-    let msg = Msg::Data(Payload::SparseGrad(&ser_buf));
+    let msg = Msg::Data(Payload::SparseGrad {
+        sparse: &ser_buf,
+        is_last: false,
+    });
     wk_transport.send(&msg).await?;
 
-    let Msg::Data(Payload::SparseGrad(sparse)) = sv_transport.recv().await? else {
+    let Msg::Data(Payload::SparseGrad { sparse, .. }) = sv_transport.recv().await? else {
         panic!("Didn't receive a sparse gradient");
     };
 

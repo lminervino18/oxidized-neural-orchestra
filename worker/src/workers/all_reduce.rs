@@ -62,13 +62,13 @@ where
                 .ring_manager
                 .build_param_manager(&mut self.optimization_params);
 
-            let TrainResult { losses, was_last } = self
+            let TrainResult { losses, is_last } = self
                 .trainer
                 .train(&mut param_manager)
                 .map_err(io::Error::other)?;
 
             self.orch_handle.push_losses(losses).await?;
-            should_continue = !was_last;
+            should_continue = !is_last;
 
             tokio::select! {
                 biased;
