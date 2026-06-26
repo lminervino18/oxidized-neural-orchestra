@@ -1,6 +1,6 @@
 use std::{
     cmp::Reverse,
-    collections::{BTreeMap, BinaryHeap, HashMap, HashSet},
+    collections::{BTreeMap, BinaryHeap, HashMap},
     fs,
     net::ToSocketAddrs,
     num::NonZeroUsize,
@@ -245,21 +245,26 @@ impl Adapter {
             trainer_spec: trainer_spec.clone(),
         });
 
-        let mut upgrades = servers
-            .into_iter()
-            .zip(param_ranges)
-            .map(|(ServerAdapt { spec, .. }, ranges)| WorkerPostAction::Upgrade { spec, ranges });
+        // Bind each server's upgrade (which carries that shard's seed params) to its
+        // OWN address. `servers`/`param_ranges` are in `server_addrs` order, but the
+        // worker that switches indexes servers in that same sorted order via
+        // `server_sizes`/`server_ordering`. Consuming the upgrades sequentially while
+        // walking `worker_addrs` in TSP-ring order would seed shards onto the wrong
+        // physical servers whenever the two orders differ, so a switched worker would
+        // pull a mismatched-size shard and panic. Keying by address keeps seeding and
+        // indexing consistent regardless of the TSP walk order.
+        let mut upgrades: HashMap<&String, WorkerPostAction> = server_addrs
+            .iter()
+            .zip(
+                servers.into_iter().zip(param_ranges).map(
+                    |(ServerAdapt { spec, .. }, ranges)| WorkerPostAction::Upgrade { spec, ranges },
+                ),
+            )
+            .collect();
 
-        let server_addr_set: HashSet<_> = server_addrs.iter().collect();
         let post_actions = worker_addrs
             .iter()
-            .map(|addr| {
-                if server_addr_set.contains(addr) {
-                    upgrades.next()
-                } else {
-                    switches.next()
-                }
-            })
+            .map(|addr| upgrades.remove(addr).or_else(|| switches.next()))
             .collect::<Option<Vec<_>>>()
             .ok_or(OrchErr::Adapting(
                 "post actions don't sum up to training.addrs".into(),
@@ -603,7 +608,11 @@ impl Adapter {
             .collect();
 
         let weighted_layers = items.len();
-        let param_gen_bins = balanced_partitions(items, nservers);
+        let mut param_gen_bins = balanced_partitions(items, nservers);
+
+        for bin in param_gen_bins.iter_mut() {
+            bin.sort_by_key(|(abs_idx, _, _)| *abs_idx);
+        }
 
         let mut server_ordering = vec![0; weighted_layers];
         let mut layer_offsets = vec![(0, 0, 0); nlayers];

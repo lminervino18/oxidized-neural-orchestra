@@ -17,11 +17,10 @@ def _make_addrs(n: int, base_port: int, host: str) -> list[str]:
     return [f"{host}-{i}:{base_port + i}" for i in range(n)]
 
 
-_workers = int(os.environ.get("WORKERS", "3"))
+_nodes = int(os.environ.get("NODES", "6"))
 _servers = int(os.environ.get("SERVERS", "3"))
 
-WORKER_ADDRS = _make_addrs(_workers, 50000, "worker")
-SERVER_ADDRS = _make_addrs(_servers, 40000, "server")
+ADDRS = _make_addrs(_nodes, 40000, "node")
 
 SAMPLES_PATH = os.environ.get("SAMPLES_PATH", "data/mnist_train_samples.bin")
 LABELS_PATH = os.environ.get("LABELS_PATH", "data/mnist_train_labels.bin")
@@ -31,8 +30,8 @@ EARLY_STOPPING_TOLERANCE: float | None = float(t) if (t := os.environ.get("EARLY
 
 
 def main() -> None:
-    print(f"worker addrs: {WORKER_ADDRS}")
-    print(f"server addrs: {SERVER_ADDRS}")
+    print(f"node addrs: {ADDRS}")
+    print(f"servers: {_servers}")
     print(f"samples: {SAMPLES_PATH}")
     print(f"labels: {LABELS_PATH}")
     if EARLY_STOPPING_TOLERANCE is not None:
@@ -49,8 +48,8 @@ def main() -> None:
 
     print("building training config...")
     training = orchestra.parameter_server(
-        worker_addrs=WORKER_ADDRS,
-        server_addrs=SERVER_ADDRS,
+        addrs=ADDRS,
+        nservers=_servers,
         dataset=LocalDataset(SAMPLES_PATH, LABELS_PATH, x_size=784, y_size=10),
         optimizer=GradientDescent(lr=0.01),
         loss_fn=Mse(),
