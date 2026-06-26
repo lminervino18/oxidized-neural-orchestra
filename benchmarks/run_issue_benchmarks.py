@@ -48,6 +48,13 @@ def parse_args():
     p.add_argument("--keep-containers", action="store_true", help="Leave containers up at the end")
     p.add_argument("--plots-only", action="store_true",
                    help="Rebuild plots and README from history without training")
+    p.add_argument("--fresh", action="store_true",
+                   help="Ignore prior results: plots and README reflect only this run "
+                        "(use for a clean final run)")
+    p.add_argument("--repeats", type=int, default=1, metavar="N",
+                   help="Repeat each execution-speed/scalability config N times and report "
+                        "mean ± std (error bars). The heavy full-MNIST suites (convergence, "
+                        "convergence-speed) always run once. Default 1.")
     return p.parse_args()
 
 
@@ -60,8 +67,8 @@ def main():
     from issue import results as R
     from issue.plots import plot_suites
     from issue.readme import write as write_readme
-    from issue.runner import (capture_logs, check_hosts, docker_cleanup, docker_down,
-                              docker_up, nodes_for, run_single, wait_nodes_ready)
+    from issue.runner import (capture_logs, check_hosts, detect_switch, docker_cleanup,
+                              docker_down, docker_up, nodes_for, run_single, wait_nodes_ready)
     from issue.suites import ALL_MODELS, ALL_SUITES, build_runs, run_key
 
     suites = args.suite or ALL_SUITES
@@ -84,65 +91,113 @@ def main():
     if not runs:
         sys.exit("No runs for the given suites/models/strategies.")
 
-    check_hosts(max(nodes_for(r) for r in runs))
-    docker_cleanup()
+    # Baselines are single-process PyTorch references: no Docker, no orchestra.
+    baseline_runs = [r for r in runs if r.get("baseline")]
+    docker_runs = [r for r in runs if not r.get("baseline")]
+
+    if docker_runs:
+        check_hosts(max(nodes_for(r) for r in docker_runs))
+        docker_cleanup()
 
     out_path = R.RESULTS_DIR / f"{datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.jsonl"
     new_results = []
     done = 0
+    total = len(runs)
+    repeats = max(1, args.repeats)
+    # Repeats only apply where variance matters AND the cost is cheap: the
+    # subset-based throughput suites. The expensive full-MNIST suites (convergence,
+    # convergence-speed) always run once regardless of --repeats.
+    REPEATABLE = {"execution-speed", "scalability"}
+
+    def reps_for(run):
+        return repeats if run["suite"] in REPEATABLE else 1
+
+    def summarize(result):
+        if result.get("error"):
+            print(f"  ERROR: {result['error'].splitlines()[-1]}")
+            return
+        acc = result.get("accuracy")
+        acc_s = f" acc={acc:.3f}" if acc is not None else ""
+        sw = result.get("switched")
+        sw_s = f" switched={sw}" if sw is not None else ""
+        print(f"  ok: {result.get('epochs_ran')} epochs in "
+              f"{result.get('train_seconds', 0):.1f}s{acc_s}{sw_s}")
+
+    print(f"Running {total} configs across suites={suites} models={models}")
+    if repeats > 1:
+        rep_suites = sorted(REPEATABLE & set(suites)) or ["(none selected)"]
+        print(f"  repeats: ×{repeats} for {rep_suites}, ×1 for everything else")
+    print()
+    t_start = time.perf_counter()
+
+    # PyTorch baselines first — they need no containers.
+    for run in baseline_runs:
+        done += 1
+        rn = reps_for(run)
+        tag = f" ×{rn}" if rn > 1 else ""
+        print(f"[{done}/{total}]{tag} {run['suite']} · {run['model']} · pytorch-baseline")
+        reps = []
+        for _ in range(rn):
+            try:
+                result = run_single(run)
+            except Exception as e:
+                result = {**run, "error": str(e)}
+            R.save_result(result, out_path)
+            reps.append(result)
+        agg = R.aggregate(reps) if rn > 1 else reps[0]
+        new_results.append(agg)
+        summarize(agg)
 
     # Group by node count; within a group, all-reduce runs reuse the same
     # containers. A reset (down+up) happens only when the previous run left
     # server state (parameter_server / strategy_switch) or the strategy changed.
     groups = defaultdict(list)
-    for r in runs:
+    for r in docker_runs:
         groups[nodes_for(r)].append(r)
     for g in groups.values():
-        g.sort(key=lambda r: (r["strategy"], r["model"], r["workers"]))
+        g.sort(key=lambda r: (r["strategy"], r.get("ps_variant") or "", r["model"], r["workers"]))
 
-    print(f"Running {len(runs)} runs across suites={suites} models={models}\n")
-    t_start = time.perf_counter()
     for n, group in sorted(groups.items()):
         up = False
         prev_strategy = None
         try:
             for run in group:
                 done += 1
-                needs_reset = (not up
-                               or prev_strategy in ("parameter_server", "strategy_switch")
-                               or prev_strategy != run["strategy"]
-                               or not wait_nodes_ready(n, timeout=1.0))
-                print(f"[{done}/{len(runs)}] {run['suite']} · {run['model']} · "
-                      f"{run['strategy']} · {n} nodes{'  (reuse)' if not needs_reset else ''}")
-                try:
-                    if needs_reset:
-                        if up:
-                            docker_down()
-                        docker_up(n, rebuild=args.rebuild)
-                        up = True
-                        if not wait_nodes_ready(n):
-                            raise RuntimeError(f"nodes not ready ({n})")
-                    result = run_single(run)
-                    if result.get("error"):
-                        label = result.get("run_key", f"{run['suite']}_{n}n")
-                        capture_logs(n, label.replace("|", "_").replace("/", "-"))
-                except Exception as e:
-                    result = {"run_key": run_key(run), "suite": run["suite"], "model": run["model"],
-                              "strategy": run["strategy"], "workers": run["workers"],
-                              "servers": run["servers"], "error": str(e)}
-                    up = False
-
-                prev_strategy = run["strategy"]
-                R.save_result(result, out_path)
-                new_results.append(result)
-
-                if result.get("error"):
-                    print(f"  ERROR: {result['error'].splitlines()[-1]}")
-                else:
-                    acc = result.get("accuracy")
-                    acc_s = f" acc={acc:.3f}" if acc is not None else ""
-                    print(f"  ok: {result.get('epochs_ran')} epochs in "
-                          f"{result.get('train_seconds', 0):.1f}s{acc_s}")
+                rn = reps_for(run)
+                variant = f" ({run['ps_variant']})" if run.get("ps_variant") else ""
+                tag = f" ×{rn}" if rn > 1 else ""
+                print(f"[{done}/{total}]{tag} {run['suite']} · {run['model']} · "
+                      f"{run['strategy']}{variant} · {n} nodes")
+                reps = []
+                for _ in range(rn):
+                    needs_reset = (not up
+                                   or prev_strategy in ("parameter_server", "strategy_switch")
+                                   or prev_strategy != run["strategy"]
+                                   or not wait_nodes_ready(n, timeout=1.0))
+                    try:
+                        if needs_reset:
+                            if up:
+                                docker_down()
+                            docker_up(n, rebuild=args.rebuild)
+                            up = True
+                            if not wait_nodes_ready(n):
+                                raise RuntimeError(f"nodes not ready ({n})")
+                        result = run_single(run)
+                        # Mark whether strategy-switch actually swapped algorithm.
+                        if run["strategy"] == "strategy_switch" and not result.get("error"):
+                            result["switched"] = detect_switch(n)
+                        if result.get("error"):
+                            label = result.get("run_key", f"{run['suite']}_{n}n")
+                            capture_logs(n, label.replace("|", "_").replace("/", "-"))
+                    except Exception as e:
+                        result = {**run, "run_key": run_key(run), "error": str(e)}
+                        up = False
+                    prev_strategy = run["strategy"]
+                    R.save_result(result, out_path)
+                    reps.append(result)
+                agg = R.aggregate(reps) if rn > 1 else reps[0]
+                new_results.append(agg)
+                summarize(agg)
         finally:
             if up and not args.keep_containers:
                 try:
@@ -154,7 +209,7 @@ def main():
     if is_full:
         R.save_run_meta(total_seconds, ts)
 
-    merged = R.merge(R.load_history(), new_results)
+    merged = R.merge({} if args.fresh else R.load_history(), new_results)
     plot_suites(suites, list(merged.values()), ts)
     write_readme(merged, R.load_run_meta())
     R.write_csv(merged.values(), R.RESULTS_DIR / "summary.csv")

@@ -6,6 +6,7 @@ the keys it executed and leaves every other suite's results untouched.
 
 import csv
 import json
+import statistics
 from pathlib import Path
 
 BENCH_DIR = Path(__file__).resolve().parent.parent
@@ -13,11 +14,42 @@ RESULTS_DIR = BENCH_DIR / "results"
 META_PATH = RESULTS_DIR / "run_meta.json"
 
 CSV_FIELDS = [
-    "run_key", "suite", "model", "strategy", "workers", "servers",
-    "batch_size", "offline_epochs", "max_epochs", "epochs_ran",
-    "train_seconds", "epochs_per_sec", "final_loss", "loss_per_sec",
-    "accuracy", "accuracy_per_sec", "error",
+    "run_key", "suite", "model", "strategy", "ps_variant", "baseline", "switched",
+    "workers", "servers", "lr", "batch_size", "offline_epochs", "max_epochs",
+    "repeats", "epochs_ran", "train_seconds", "epochs_per_sec", "samples_per_sec",
+    "final_loss", "loss_per_sec", "accuracy", "accuracy_per_sec", "error",
 ]
+
+# Scalar metrics averaged across repeated runs of the same config (+ a *_std field).
+AGG_SCALARS = ["train_seconds", "epochs_per_sec", "samples_per_sec", "epochs_ran",
+               "final_loss", "loss_per_sec", "accuracy", "accuracy_per_sec"]
+
+
+def aggregate(reps):
+    """Collapse repeated runs of one config into a single record: each scalar
+    metric becomes its mean with a `<metric>_std` companion, the loss curve is
+    the repeat closest to the mean final loss, and `switched` is OR-ed."""
+    oks = [r for r in reps if not r.get("error")]
+    if not oks:
+        return reps[0]
+    agg = dict(oks[0])
+    for k in AGG_SCALARS:
+        vals = [r[k] for r in oks if r.get(k) is not None]
+        if vals:
+            agg[k] = statistics.fmean(vals)
+            agg[f"{k}_std"] = statistics.pstdev(vals) if len(vals) > 1 else 0.0
+        else:
+            agg[k] = agg[f"{k}_std"] = None
+    mean_fl = agg.get("final_loss")
+    if mean_fl is not None:
+        rep = min((r for r in oks if r.get("final_loss") is not None),
+                  key=lambda r: abs(r["final_loss"] - mean_fl), default=oks[0])
+        agg["loss_history"] = rep.get("loss_history")
+    switched = [r.get("switched") for r in oks if r.get("switched") is not None]
+    agg["switched"] = (any(switched) if switched else None)
+    agg["repeats"] = len(oks)
+    agg["error"] = None
+    return agg
 
 
 def save_result(result, jsonl_path):

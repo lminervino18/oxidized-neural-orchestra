@@ -15,8 +15,8 @@ import urllib.request
 from pathlib import Path
 
 from .metrics import derive
-from .models import build_orchestra_model, build_torch_ref
-from .suites import X_SIZE, Y_SIZE, run_key
+from .models import build_orchestra_model, build_torch_ref, train_torch_baseline
+from .suites import X_SIZE, Y_SIZE, TrainingConfig, run_key
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DOCKER_DIR = REPO_ROOT / "docker"
@@ -198,13 +198,25 @@ def capture_logs(nodes, label):
 
 # ── Training / eval ────────────────────────────────────────────────────────────
 
+def _ps_store_sync(variant):
+    """Map a PS variant to its (store, sync) pair.
+
+    - blocking:     BlockingStore + BarrierSync — workers wait for a full round.
+    - non_blocking: WildStore + NonBlockingSync — workers proceed without barrier.
+    """
+    from orchestra.store import BlockingStore, WildStore
+    from orchestra.sync import BarrierSync, NonBlockingSync
+
+    if variant == "non_blocking":
+        return WildStore(), NonBlockingSync()
+    return BlockingStore(), BarrierSync()
+
+
 def build_training(run, train_s, train_l):
     import orchestra
     from orchestra.datasets import LocalDataset
     from orchestra.loss_fns import CrossEntropy, Mse
     from orchestra.optimizers import GradientDescent
-    from orchestra.store import BlockingStore
-    from orchestra.sync import BarrierSync
 
     addrs = node_addrs(nodes_for(run))
     loss_fn = CrossEntropy() if run["loss_fn"] == "cross_entropy" else Mse()
@@ -222,7 +234,8 @@ def build_training(run, train_s, train_l):
     strategy = run["strategy"]
     if strategy == "all_reduce":
         return orchestra.all_reduce(**common)
-    extra = dict(nservers=run["servers"], sync=BarrierSync(), store=BlockingStore())
+    store, sync = _ps_store_sync(run.get("ps_variant"))
+    extra = dict(nservers=run["servers"], sync=sync, store=store)
     if strategy == "parameter_server":
         return orchestra.parameter_server(**common, **extra)
     return orchestra.strategy_switch(**common, **extra)
@@ -242,15 +255,74 @@ def evaluate(model_name, sf_path, test_s, test_l):
         return (net(xt).argmax(dim=1) == yt).float().mean().item()
 
 
+def _read_arrays(s_path, l_path):
+    import numpy as np
+    x = np.fromfile(str(s_path), dtype=np.float32).reshape(-1, X_SIZE)
+    y = np.fromfile(str(l_path), dtype=np.float32).reshape(-1, Y_SIZE)
+    return x, y
+
+
+def _base_result(run):
+    keep = ("suite", "model", "strategy", "ps_variant", "baseline", "workers",
+            "servers", "batch_size", "offline_epochs", "max_epochs", "lr", "subset")
+    result = {k: run.get(k) for k in keep}
+    result["run_key"] = run.get("run_key") or run_key(run)
+    result.update(train_seconds=None, loss_history=None, accuracy=None,
+                  train_samples=None, switched=None, error=None)
+    return result
+
+
+def _train_count(train_s):
+    """Number of training samples in the (possibly subset) dataset file."""
+    try:
+        return train_s.stat().st_size // (X_SIZE * 4)
+    except OSError:
+        return None
+
+
+# Logged by a worker (RUST_LOG=info) when it switches from all-reduce to PS.
+SWITCH_MARKER = "switching algorithm to parameter server"
+
+
+def detect_switch(nodes):
+    """Return True if any node logged the strategy-switch event (SS runs only)."""
+    for i in range(nodes):
+        r = subprocess.run(["docker", "logs", f"node-{i}"], capture_output=True, text=True)
+        if SWITCH_MARKER in (r.stdout + r.stderr):
+            return True
+    return False
+
+
+def run_baseline(run):
+    """Single-process PyTorch reference run (no Docker, no orchestra)."""
+    result = _base_result(run)
+    cfg = TrainingConfig(lr=run["lr"], batch_size=run["batch_size"],
+                         max_epochs=run["max_epochs"], seed=run["seed"])
+    try:
+        train_s, train_l, test_s, test_l = prepare_dataset(run.get("subset"))
+        result["train_samples"] = _train_count(train_s)
+        train_x, train_y = _read_arrays(train_s, train_l)
+        test_x, test_y = _read_arrays(test_s, test_l)
+        t0 = time.perf_counter()
+        loss_history, accuracy = train_torch_baseline(
+            run["model"], train_x, train_y, test_x, test_y, cfg)
+        result["train_seconds"] = time.perf_counter() - t0
+        result["loss_history"] = loss_history
+        result["accuracy"] = accuracy if run.get("eval") else None
+    except Exception:
+        result["error"] = traceback.format_exc()
+    return derive(result)
+
+
 def run_single(run):
-    keep = ("suite", "model", "strategy", "workers", "servers",
-            "batch_size", "offline_epochs", "max_epochs", "lr")
-    result = {k: run[k] for k in keep}
-    result["run_key"] = run_key(run)
-    result.update(train_seconds=None, loss_history=None, accuracy=None, error=None)
+    if run.get("baseline"):
+        return run_baseline(run)
+
+    result = _base_result(run)
 
     try:
         train_s, train_l, test_s, test_l = prepare_dataset(run.get("subset"))
+        result["train_samples"] = _train_count(train_s)
         model = build_orchestra_model(run["model"])
         training = build_training(run, train_s, train_l)
 
