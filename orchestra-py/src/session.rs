@@ -1,5 +1,6 @@
 use std::{
     io::{self, IsTerminal, Write},
+    mem,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
@@ -119,7 +120,7 @@ impl ProgressReporter {
             }
         }
 
-        let epoch = self.worker_epochs.iter().copied().max().unwrap_or(0);
+        let epoch = self.worker_epochs.iter().copied().max().unwrap_or_default();
         let avg = avg_loss(&self.last_loss);
 
         if epoch > 0 {
@@ -167,7 +168,7 @@ impl ProgressReporter {
             let epoch = if success {
                 max_epochs
             } else {
-                worker_epochs.iter().copied().max().unwrap_or(0)
+                worker_epochs.iter().copied().max().unwrap_or_default()
             };
 
             print!(
@@ -281,7 +282,7 @@ impl Session {
                         }
                     };
 
-                    let loss_history = std::mem::take(&mut reporter.loss_history);
+                    let loss_history = mem::take(&mut reporter.loss_history);
                     reporter.finish(result.is_ok());
                     result.map(|trained| (trained, loss_history))
                 })
@@ -291,9 +292,11 @@ impl Session {
             .map_err(PyRuntimeError::new_err)?;
 
         let (trained, loss_history) = trained;
-        Ok(TrainedModel {
+        let trained_model = TrainedModel {
             inner: trained,
             loss_history,
-        })
+        };
+
+        Ok(trained_model)
     }
 }
