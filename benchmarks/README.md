@@ -50,20 +50,13 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 | lenet5 | AR | 3w | 64 | 55 | 0.00759 | 0.978 |
 | lenet5 | AR | 5w | 64 | 60 | 0.0105 | 0.973 |
 | lenet5 | AR | 7w | 64 | 60 | 0.014 | 0.963 |
-| lenet5 | PS | 3w/2s | 64 | 60 | 0.0049 | 0.983 |
 | lenet5 | PS (blocking) | 3w/2s | 64 | 60 | 0.00723 | 0.980 |
-| lenet5 | SS | 3w/2s | 64 | 60 | 0.0105 | 0.973 |
 | lenet5 | SS (blocking) · no switch | 3w/2s | 64 | 60 | 0.0105 | 0.973 |
 | lenet5 | PyTorch (ref) | 1w | 64 | 60 | 0.00107 | 0.990 |
-| nielsen | AR | 3w | 64 | 60 | 0.0146 | 0.959 |
 | nielsen | AR | 3w | 10 | 52 | 0.00361 | 0.984 |
-| nielsen | AR | 5w | 64 | 60 | 0.0191 | 0.949 |
 | nielsen | AR | 5w | 10 | 60 | 0.00547 | 0.979 |
-| nielsen | AR | 7w | 64 | 60 | 0.0223 | 0.941 |
 | nielsen | AR | 7w | 10 | 60 | 0.00762 | 0.975 |
-| nielsen | PS | 3w/2s | 64 | 60 | 0.0122 | 0.957 |
 | nielsen | PS (blocking) | 3w/2s | 10 | 60 | 0.00349 | 0.983 |
-| nielsen | SS | 3w/2s | 64 | 104 | 0.019 | 0.936 |
 | nielsen | SS (blocking) · no switch | 3w/2s | 10 | 60 | 0.00547 | 0.979 |
 | nielsen | PyTorch (ref) | 1w | 10 | 60 | 0.000222 | 0.989 |
 
@@ -84,9 +77,9 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 | lenet5 | AR | 3w | 0 | 64 | 2954 | 0.738 |
 | lenet5 | AR | 3w | 4 | 64 | 2987 | 0.747 |
 | lenet5 | AR | 3w | 0 | 256 | 3019 | 0.755 |
-| nielsen | AR | 3w | 0 | 64 | 3984 | 0.996 |
-| nielsen | AR | 3w | 4 | 64 | 4016 | 1 |
-| nielsen | AR | 3w | 0 | 256 | 3689 | 0.922 |
+| nielsen | AR | 3w | 0 | 64 | 3824 | 0.956 |
+| nielsen | AR | 3w | 4 | 64 | 3927 | 0.982 |
+| nielsen | AR | 3w | 0 | 256 | 3685 | 0.921 |
 
 ![](plots/execution_speed_nielsen.png)
 ![](plots/execution_speed_lenet5.png)
@@ -99,16 +92,10 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 | Model | Strategy | Topology | Loss/sec | Accuracy/sec |
 |---|---|---|---|---|
 | lenet5 | AR | 3w | 0.000271 | 0.00121 |
-| lenet5 | PS | 3w/2s | 0.000263 | 0.00104 |
 | lenet5 | PS (blocking) | 3w/2s | 0.000271 | 0.00121 |
-| lenet5 | SS | 3w/2s | 0.000328 | 0.00146 |
 | lenet5 | SS (blocking) · no switch | 3w/2s | 0.000323 | 0.00144 |
-| nielsen | AR | 3w | 0.000352 | 0.0016 |
 | nielsen | AR | 3w | 0.000164 | 0.00158 |
-| nielsen | PS | 3w/2s | 0.000333 | 0.00151 |
 | nielsen | PS (blocking) | 3w/2s | 0.000145 | 0.00141 |
-| nielsen | PS (non-block) | 3w/2s | — | — |
-| nielsen | SS | 3w/2s | 0.000418 | 0.00189 |
 | nielsen | SS (blocking) · no switch | 3w/2s | 0.000246 | 0.00174 |
 
 ![](plots/convergence_speed_nielsen.png)
@@ -124,15 +111,11 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 | lenet5 | AR | 3 | 3 | 2982 |
 | lenet5 | AR | 5 | 5 | 3607 |
 | lenet5 | AR | 7 | 7 | 4450 |
-| lenet5 | PS | 2 | 3 | — |
-| lenet5 | PS | 3 | 5 | — |
 | lenet5 | PS (blocking) | 2 | 3 | 2301 |
 | lenet5 | PS (blocking) | 3 | 5 | 3034 |
 | nielsen | AR | 3 | 3 | 3578 |
 | nielsen | AR | 5 | 5 | 4709 |
 | nielsen | AR | 7 | 7 | 5445 |
-| nielsen | PS | 2 | 3 | — |
-| nielsen | PS | 3 | 5 | — |
 | nielsen | PS (blocking) | 2 | 3 | 3024 |
 | nielsen | PS (blocking) | 3 | 5 | 3926 |
 
