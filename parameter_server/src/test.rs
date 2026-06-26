@@ -49,6 +49,7 @@ where
         server_handle.push_grad(&grad).await?;
     }
 
+    server_handle.discard_one().await?;
     server_handle.disconnect().await?;
     orch_handle.done().await?;
     orch_handle.disconnect().await?;
