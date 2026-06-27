@@ -109,24 +109,28 @@ impl Conv2d {
 
         output.reshape_inplace((batch_size, filters, output_height, output_width));
 
-        for b in 0..batch_size {
-            let input_b = self.effective_input.index_axis(Axis(0), b);
+        effective_input
+            .axis_iter(Axis(0))
+            .zip(output.axis_iter_mut(Axis(0)))
+            .try_for_each(|(input_b, mut output_b)| -> Result<()> {
+                for f in 0..filters {
+                    let kernel_f = k.index_axis(Axis(0), f);
 
-            for f in 0..filters {
-                let kernel_f = k.index_axis(Axis(0), f);
-                let res_3d = input_b.conv(
-                    kernel_f.no_reverse(),
-                    ConvMode::Custom {
-                        padding: [0; 3],
-                        strides: [1, stride, stride],
-                    },
-                    PaddingMode::Zeros,
-                )?;
-                let res_2d = res_3d.index_axis(Axis(0), 0);
+                    let res_3d = input_b.conv(
+                        kernel_f.no_reverse(),
+                        ConvMode::Custom {
+                            padding: [0; 3],
+                            strides: [1, stride, stride],
+                        },
+                        PaddingMode::Zeros,
+                    )?;
+                    let res_2d = res_3d.index_axis(Axis(0), 0);
 
-                output.slice_mut(s![b, f, .., ..]).assign(&res_2d);
-            }
-        }
+                    output_b.slice_mut(s![f, .., ..]).assign(&res_2d);
+                }
+
+                Ok(())
+            })?;
 
         *output += &b;
 
@@ -155,8 +159,6 @@ impl Conv2d {
             ..
         } = *self;
 
-        let batch_size = effective_input.dim().0;
-
         dk.fill(0.);
         delta_out.reshape_inplace((
             effective_input.dim().0,
@@ -166,42 +168,52 @@ impl Conv2d {
         ));
         delta_out.fill(0.);
 
-        for b_idx in 0..batch_size {
-            for f_idx in 0..filters {
-                let dilated_bf = dilated.slice(s![b_idx, f_idx, .., ..]);
+        dilated
+            .axis_iter(Axis(0))
+            .zip(effective_input.axis_iter(Axis(0)))
+            .zip(delta_out.axis_iter_mut(Axis(0)))
+            .try_for_each(
+                |((dilated_b, effective_input_b), mut delta_out_b)| -> Result<()> {
+                    for f_idx in 0..filters {
+                        let dilated_bf = dilated_b.slice(s![f_idx, .., ..]);
 
-                for c_idx in 0..in_channels {
-                    // kernel
-                    let effective_input_bc = effective_input.slice(s![b_idx, c_idx, .., ..]);
+                        for c_idx in 0..in_channels {
+                            // kernel
+                            let effective_input_bc = effective_input_b.slice(s![c_idx, .., ..]);
 
-                    let dk_step = effective_input_bc.conv(
-                        dilated_bf.no_reverse(),
-                        ConvMode::Valid,
-                        PaddingMode::Zeros,
-                    )?;
+                            let dk_step = effective_input_bc.conv(
+                                dilated_bf.no_reverse(),
+                                ConvMode::Valid,
+                                PaddingMode::Zeros,
+                            )?;
 
-                    let mut dk_view = dk.slice_mut(s![f_idx, c_idx, .., ..]);
-                    dk_view += &dk_step;
+                            let mut dk_view = dk.slice_mut(s![f_idx, c_idx, .., ..]);
+                            dk_view += &dk_step;
 
-                    // delta
-                    let k_fc = k.slice(s![f_idx, c_idx, .., ..]);
+                            // delta
+                            let k_fc = k.slice(s![f_idx, c_idx, .., ..]);
 
-                    let copy_height = cmp::min(real_input_dim.0, effective_input.dim().2 - padding);
-                    let copy_width = cmp::min(real_input_dim.1, effective_input.dim().3 - padding);
+                            let copy_height =
+                                cmp::min(real_input_dim.0, effective_input.dim().2 - padding);
+                            let copy_width =
+                                cmp::min(real_input_dim.1, effective_input.dim().3 - padding);
 
-                    let effective_delta_step =
-                        dilated_bf.conv(&k_fc, ConvMode::Full, PaddingMode::Zeros)?;
-                    let delta_step = effective_delta_step.slice(s![
-                        padding..padding + copy_height,
-                        padding..padding + copy_width
-                    ]);
+                            let effective_delta_step =
+                                dilated_bf.conv(&k_fc, ConvMode::Full, PaddingMode::Zeros)?;
+                            let delta_step = effective_delta_step.slice(s![
+                                padding..padding + copy_height,
+                                padding..padding + copy_width
+                            ]);
 
-                    let mut delta_view =
-                        delta_out.slice_mut(s![b_idx, c_idx, ..copy_height, ..copy_width]);
-                    delta_view += &delta_step;
-                }
-            }
-        }
+                            let mut delta_view =
+                                delta_out_b.slice_mut(s![c_idx, ..copy_height, ..copy_width]);
+                            delta_view += &delta_step;
+                        }
+                    }
+
+                    Ok(())
+                },
+            )?;
 
         let db_sum = d_in.sum_axis(Axis(0)).sum_axis(Axis(1)).sum_axis(Axis(1));
         db.assign(&db_sum);
