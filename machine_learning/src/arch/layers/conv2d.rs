@@ -1,9 +1,11 @@
+use rayon::iter::ParallelIterator;
 use std::cmp;
 
-use ndarray::prelude::*;
+use ndarray::{Zip, prelude::*};
 use ndarray_conv::{ConvExt, ConvMode, PaddingMode, ReverseKernel};
 
 use crate::{MlErr, Result, arch::InplaceReshape};
+use rayon::iter::IntoParallelIterator;
 
 #[derive(Clone, Debug)]
 pub struct Conv2d {
@@ -109,9 +111,9 @@ impl Conv2d {
 
         output.reshape_inplace((batch_size, filters, output_height, output_width));
 
-        effective_input
-            .axis_iter(Axis(0))
-            .zip(output.axis_iter_mut(Axis(0)))
+        Zip::from(effective_input.axis_iter(Axis(0)))
+            .and(output.axis_iter_mut(Axis(0)))
+            .into_par_iter()
             .try_for_each(|(input_b, mut output_b)| -> Result<()> {
                 for f in 0..filters {
                     let kernel_f = k.index_axis(Axis(0), f);
