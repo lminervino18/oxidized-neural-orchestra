@@ -74,6 +74,9 @@ where
     /// Runs the all reduce algorithm to scatter the partial gradients and
     /// then gather the total aggregated gradient into a `ParamManager`.
     ///
+    /// # Args
+    /// * `params` - The parameters that will go into the param manager.
+    ///
     /// # Returns
     /// A new `ParamManager` instance or an io error if occurred.
     pub async fn pull_grads<'a>(
@@ -112,7 +115,8 @@ where
             }
 
             i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(agg_grad) = self.prev.recv_event().await? else {
+
+            let WorkerEvent::Grad { grad: agg_grad, .. } = self.prev.recv_event().await? else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
@@ -168,7 +172,7 @@ where
             }
 
             i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(acc_grad) = self.prev.recv_event().await? else {
+            let WorkerEvent::Grad { grad: acc_grad, .. } = self.prev.recv_event().await? else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 

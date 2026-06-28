@@ -56,7 +56,7 @@ fn test_machine_learning00_linear_convergence() {
         .collect();
 
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
+    while !trainer.train(&mut param_manager).unwrap().is_last {}
 
     // 2
 
@@ -113,7 +113,7 @@ fn test_machine_learning01_and2_gate_convergence() {
         .collect();
 
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
+    while !trainer.train(&mut param_manager).unwrap().is_last {}
 
     // 2
 
@@ -179,7 +179,7 @@ fn test_machine_learning02_and3_gate_convergence() {
         .collect();
 
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
+    while !trainer.train(&mut param_manager).unwrap().is_last {}
 
     // 2
 
@@ -241,7 +241,7 @@ fn test_machine_learning03_xor2_gate_convergence() {
         .collect();
 
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
+    while !trainer.train(&mut param_manager).unwrap().is_last {}
 
     // 2
 
@@ -320,7 +320,7 @@ fn test_machine_learning04_xor4_gate_convergence() {
         .collect();
 
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
+    while !trainer.train(&mut param_manager).unwrap().is_last {}
 
     // 2
     let x = ArrayView2::from_shape((16, 4), &x).unwrap();

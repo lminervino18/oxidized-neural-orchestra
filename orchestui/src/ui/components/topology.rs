@@ -152,7 +152,7 @@ fn ps_node_radius(max_dim: usize) -> f64 {
     let available = ZONE_HI - ZONE_LO;
     let n = max_dim as f64;
     let max_r = (available - (n - 1.0) * NODE_GAP) / (2.0 * n);
-    max_r.min(11.0).max(2.0)
+    max_r.clamp(2.0, 11.0)
 }
 
 // ── Layout computation ────────────────────────────────────────────────────────
@@ -160,9 +160,7 @@ fn ps_node_radius(max_dim: usize) -> f64 {
 fn compute_layout(state: &TrainingState) -> (Vec<NodeInfo>, Vec<Connection>, f64) {
     match state.algorithm {
         AlgorithmKind::AllReduce => allreduce_layout(state.workers_total),
-        AlgorithmKind::StrategySwitch if state.ps_server_count > 0 => {
-            ss_switched_layout(state)
-        }
+        AlgorithmKind::StrategySwitch if state.ps_server_count > 0 => ss_switched_layout(state),
         AlgorithmKind::StrategySwitch => allreduce_layout(state.workers_total),
         AlgorithmKind::ParameterServer => ps_layout(state.workers_total, state.servers_total),
     }
@@ -186,7 +184,10 @@ fn allreduce_layout(n: usize) -> (Vec<NodeInfo>, Vec<Connection>, f64) {
         .collect();
 
     let conns: Vec<Connection> = (0..n)
-        .map(|i| Connection { from_idx: i, to_idx: (i + 1) % n })
+        .map(|i| Connection {
+            from_idx: i,
+            to_idx: (i + 1) % n,
+        })
         .collect();
 
     (nodes, conns, radius)
@@ -220,8 +221,14 @@ fn ps_layout(nw: usize, ns: usize) -> (Vec<NodeInfo>, Vec<Connection>, f64) {
     let mut conns = Vec::new();
     for wi in 0..nw {
         for sj in 0..ns {
-            conns.push(Connection { from_idx: wi, to_idx: nw + sj });
-            conns.push(Connection { from_idx: nw + sj, to_idx: wi });
+            conns.push(Connection {
+                from_idx: wi,
+                to_idx: nw + sj,
+            });
+            conns.push(Connection {
+                from_idx: nw + sj,
+                to_idx: wi,
+            });
         }
     }
 
@@ -265,8 +272,14 @@ fn ss_switched_layout(state: &TrainingState) -> (Vec<NodeInfo>, Vec<Connection>,
     let mut conns = Vec::new();
     for wi in 0..nw {
         for sj in 0..ns {
-            conns.push(Connection { from_idx: wi, to_idx: nw + sj });
-            conns.push(Connection { from_idx: nw + sj, to_idx: wi });
+            conns.push(Connection {
+                from_idx: wi,
+                to_idx: nw + sj,
+            });
+            conns.push(Connection {
+                from_idx: nw + sj,
+                to_idx: wi,
+            });
         }
     }
 
@@ -297,7 +310,13 @@ fn draw_connections(
     for conn in conns {
         let a = &nodes[conn.from_idx];
         let b = &nodes[conn.to_idx];
-        ctx.draw(&CanvasLine { x1: a.x, y1: a.y, x2: b.x, y2: b.y, color: COLOR_CONN });
+        ctx.draw(&CanvasLine {
+            x1: a.x,
+            y1: a.y,
+            x2: b.x,
+            y2: b.y,
+            color: COLOR_CONN,
+        });
     }
 
     if !is_active || phase == Phase::Finished || phase == Phase::Error {
@@ -342,10 +361,34 @@ fn draw_shapes(
             let hh = radius * 0.68;
             let x = node.x;
             let y = node.y;
-            ctx.draw(&CanvasLine { x1: x - hw, y1: y + hh, x2: x + hw, y2: y + hh, color });
-            ctx.draw(&CanvasLine { x1: x - hw, y1: y - hh, x2: x + hw, y2: y - hh, color });
-            ctx.draw(&CanvasLine { x1: x - hw, y1: y - hh, x2: x - hw, y2: y + hh, color });
-            ctx.draw(&CanvasLine { x1: x + hw, y1: y - hh, x2: x + hw, y2: y + hh, color });
+            ctx.draw(&CanvasLine {
+                x1: x - hw,
+                y1: y + hh,
+                x2: x + hw,
+                y2: y + hh,
+                color,
+            });
+            ctx.draw(&CanvasLine {
+                x1: x - hw,
+                y1: y - hh,
+                x2: x + hw,
+                y2: y - hh,
+                color,
+            });
+            ctx.draw(&CanvasLine {
+                x1: x - hw,
+                y1: y - hh,
+                x2: x - hw,
+                y2: y + hh,
+                color,
+            });
+            ctx.draw(&CanvasLine {
+                x1: x + hw,
+                y1: y - hh,
+                x2: x + hw,
+                y2: y + hh,
+                color,
+            });
         } else {
             draw_dense_circle(ctx, node.x, node.y, radius, color);
         }
@@ -362,7 +405,10 @@ fn draw_dense_circle(ctx: &mut Context, cx: f64, cy: f64, r: f64, color: Color) 
             (cx + r * a.cos(), cy + r * a.sin())
         })
         .collect();
-    ctx.draw(&Points { coords: &coords, color });
+    ctx.draw(&Points {
+        coords: &coords,
+        color,
+    });
 }
 
 // ── Node text content (scaled to radius) ─────────────────────────────────────
@@ -398,7 +444,11 @@ fn draw_node_content(
         let epoch_dy = -row;
 
         let label = node.label.clone();
-        ctx.print(lcx(node.x, label.len()), node.y + label_dy, Span::styled(label, bold));
+        ctx.print(
+            lcx(node.x, label.len()),
+            node.y + label_dy,
+            Span::styled(label, bold),
+        );
 
         if let Some(wi) = node.worker_idx {
             if let Some(w) = state.workers.get(wi) {
@@ -406,12 +456,20 @@ fn draw_node_content(
 
                 if show_loss {
                     let loss = fmt_short(w.last_loss);
-                    ctx.print(lcx(node.x, loss.len()), node.y + loss_dy, Span::styled(loss, dim));
+                    ctx.print(
+                        lcx(node.x, loss.len()),
+                        node.y + loss_dy,
+                        Span::styled(loss, dim),
+                    );
                 }
 
                 if show_epoch {
                     let ep = format!("{}/{}", w.epochs_done, state.max_epochs);
-                    ctx.print(lcx(node.x, ep.len()), node.y + epoch_dy, Span::styled(ep, dim));
+                    ctx.print(
+                        lcx(node.x, ep.len()),
+                        node.y + epoch_dy,
+                        Span::styled(ep, dim),
+                    );
                 }
             }
         }
@@ -451,23 +509,42 @@ fn draw_static_labels(ctx: &mut Context, state: &TrainingState, _nodes: &[NodeIn
 
     // Column type labels (well above ZONE_HI)
     if ps_active {
-        ctx.print(32.0, 86.0, Span::styled("workers", Style::default().fg(Theme::FG_DIM)));
-        ctx.print(132.0, 86.0, Span::styled("servers", Style::default().fg(COLOR_SERVER)));
+        ctx.print(
+            32.0,
+            86.0,
+            Span::styled("workers", Style::default().fg(Theme::FG_DIM)),
+        );
+        ctx.print(
+            132.0,
+            86.0,
+            Span::styled("servers", Style::default().fg(COLOR_SERVER)),
+        );
 
         // Flow direction arrows: placed at mid-height, in the gap between columns
         let mid_x = 82.0;
         let mid_y = CY;
-        ctx.print(mid_x, mid_y + 2.0, Span::styled("→ grads",  Style::default().fg(Theme::FG_MUTED)));
-        ctx.print(mid_x, mid_y - 2.0, Span::styled("← params", Style::default().fg(Theme::FG_MUTED)));
+        ctx.print(
+            mid_x,
+            mid_y + 2.0,
+            Span::styled("→ grads", Style::default().fg(Theme::FG_MUTED)),
+        );
+        ctx.print(
+            mid_x,
+            mid_y - 2.0,
+            Span::styled("← params", Style::default().fg(Theme::FG_MUTED)),
+        );
     }
 
     // StrategySwitch banner (top, above column labels)
     if algo == AlgorithmKind::StrategySwitch && state.ps_server_count == 0 {
         ctx.print(
-            10.0, 92.0,
+            10.0,
+            92.0,
             Span::styled(
                 "⟳  all-reduce → will switch to PS when gradients converge",
-                Style::default().fg(Theme::ACCENT_YELLOW).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Theme::ACCENT_YELLOW)
+                    .add_modifier(Modifier::BOLD),
             ),
         );
     }
@@ -475,7 +552,8 @@ fn draw_static_labels(ctx: &mut Context, state: &TrainingState, _nodes: &[NodeIn
     // Finished banner (bottom zone, above legend)
     if state.phase == Phase::Finished {
         ctx.print(
-            64.0, 14.0,
+            64.0,
+            14.0,
             Span::styled(
                 "✓  TRAINING COMPLETE",
                 Style::default().fg(COLOR_DONE).add_modifier(Modifier::BOLD),
@@ -491,16 +569,28 @@ fn draw_legend(ctx: &mut Context, state: &TrainingState) {
     let base_x = 145.0;
     let base_y = 11.0;
 
-    ctx.print(base_x, base_y + 5.0, Span::styled("● active worker", Style::default().fg(Theme::FG_MUTED)));
+    ctx.print(
+        base_x,
+        base_y + 5.0,
+        Span::styled("● active worker", Style::default().fg(Theme::FG_MUTED)),
+    );
 
     let ps_active = state.algorithm == AlgorithmKind::ParameterServer
         || (state.algorithm == AlgorithmKind::StrategySwitch && state.ps_server_count > 0);
 
     if ps_active || state.servers_total > 0 {
-        ctx.print(base_x, base_y + 2.5, Span::styled("■ parameter server", Style::default().fg(COLOR_SERVER)));
+        ctx.print(
+            base_x,
+            base_y + 2.5,
+            Span::styled("■ parameter server", Style::default().fg(COLOR_SERVER)),
+        );
     }
 
-    ctx.print(base_x, base_y, Span::styled("● done (blue)", Style::default().fg(COLOR_DONE)));
+    ctx.print(
+        base_x,
+        base_y,
+        Span::styled("● done (blue)", Style::default().fg(COLOR_DONE)),
+    );
 }
 
 // ── Color resolution ──────────────────────────────────────────────────────────
@@ -528,11 +618,11 @@ fn node_color(node: &NodeInfo, state: &TrainingState, phase: Phase) -> Color {
 
     let worker = state.workers.get(wi);
 
-    if worker.map_or(false, |w| w.done) {
+    if worker.is_some_and(|w| w.done) {
         return COLOR_DONE;
     }
 
-    if worker.map_or(true, |w| w.last_loss.is_none()) && phase == Phase::Connecting {
+    if worker.is_none_or(|w| w.last_loss.is_none()) && phase == Phase::Connecting {
         return Theme::FG_MUTED;
     }
 

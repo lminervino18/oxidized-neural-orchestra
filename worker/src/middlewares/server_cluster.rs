@@ -77,10 +77,13 @@ where
 
     /// Pushes the latest gradients to the servers.
     ///
+    /// # Args
+    /// * `is_last` - Whether these gradients are the last batch.
+    ///
     /// # Returns
     /// An io error if occurred.
-    pub async fn push_grads(&mut self) -> io::Result<()> {
-        let thresholds = self.cluster.push_grads(&self.residuals).await;
+    pub async fn push_grads(&mut self, is_last: bool) -> io::Result<()> {
+        let thresholds = self.cluster.push_grads(&self.residuals, is_last).await;
 
         for (residual, threshold) in self.residuals.iter_mut().zip(thresholds) {
             match threshold {
@@ -98,14 +101,5 @@ where
         }
 
         Ok(())
-    }
-
-    /// Disconnects this worker from all the servers.
-    ///
-    /// # Returns
-    /// An io error if occurred.
-    pub async fn disconnect(&mut self) -> io::Result<()> {
-        self.cluster.discard_one().await?;
-        self.cluster.disconnect().await
     }
 }
