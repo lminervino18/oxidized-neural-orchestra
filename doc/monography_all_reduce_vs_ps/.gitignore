@@ -1,0 +1,30 @@
+# LaTeX build intermediates
+build/
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Large raw datasets (regenerate with `make datasets`)
+datasets/**/*.bin
+datasets/**/*.gz
+datasets/**/*.zip
+
+# Trained-weight artifacts from runs
+results/raw/artifacts/
+*.safetensors
+
+# Docker compose generated for the isolated cluster
+build/compose.yaml
+
+# Keep the PDF and processed results tracked (the repo root ignores *.csv).
+!main.pdf
+!results/processed/
+!results/processed/*.csv
