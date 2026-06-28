@@ -1,0 +1,415 @@
+run_id,timestamp,dataset,model,strategy,nodes,workers,servers,synchronizer,store,batch_size_per_worker,effective_global_batch,optimizer,learning_rate,seed,max_epochs,offline_epochs,epoch,train_loss,test_loss,test_accuracy,epoch_time_sec,total_time_sec,samples_per_sec,status,notes
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,1,0.1073116494614772,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,2,0.035523172557830496,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,3,0.02839772692911714,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,4,0.024870673808984795,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,5,0.022443573721319773,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,6,0.020537037148779108,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,7,0.018998358428099604,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,8,0.017706403126417376,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,9,0.016644557055817414,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,10,0.01569017527645658,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,11,0.014815214044974672,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,12,0.014059854676588367,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,13,0.013387177823826502,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,14,0.012726664484169065,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,15,0.012101563615660877,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,16,0.011590896378312595,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,17,0.011069502571773901,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,18,0.010578159330685281,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,19,0.01014408574378378,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,20,0.009762811501309351,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,21,0.009347199194486566,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,22,0.009031263550244086,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,23,0.008658982777264604,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,24,0.008328462687931412,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,25,0.008038865763588535,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,26,0.007777037770935399,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,27,0.007522904375565406,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,28,0.007230802144923526,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,29,0.007010297983085011,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,30,0.006752051376284076,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,31,0.006555115520031865,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,32,0.006365656079113348,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,33,0.006165414316015722,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,34,0.005962673404263866,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,35,0.005763841015167155,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,36,0.0056117251679657885,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,37,0.0054497972575189325,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,38,0.005315983862992109,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,39,0.005158352977441973,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,40,0.004962669494837369,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,41,0.004832007143050798,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,42,0.004723437933315759,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,43,0.004606725323769886,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,44,0.004468991935758722,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,45,0.004350964580925348,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,46,0.004252653508876825,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,47,0.004136277423965217,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,48,0.004021663618357773,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,49,0.003915361494040649,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,50,0.00383410310117957,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,51,0.0037358537921153775,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,52,0.0036134551118239787,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,53,0.0035388305261191727,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,54,0.003448912600423863,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,55,0.0033816668393218123,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,56,0.0032915094079682948,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,57,0.0032395564413492312,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,58,0.003151688997974047,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,59,0.0030936642758140364,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,60,0.0030228339665622273,NA,0.9829000234603882,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,1,0.08472615908660922,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,2,0.030041450439942306,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,3,0.024325435728245318,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,4,0.021031694750821145,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,5,0.0186937866958482,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,6,0.01699095933572104,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,7,0.015542298286673882,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,8,0.014250894733688419,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,9,0.013245016183996119,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,10,0.012339231749078614,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,11,0.01150630962448862,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,12,0.010787158577255245,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,13,0.010123192243418462,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,14,0.009542235803949424,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,15,0.008982549289294407,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,16,0.008489749170247685,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,17,0.008032674035701976,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,18,0.00759339130734096,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,19,0.007229988881515525,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,20,0.006864087727609774,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,21,0.006561091216730205,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,22,0.006244296867349176,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,23,0.0059220338134411896,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,24,0.005719438328301517,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,25,0.005486251047869959,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,26,0.005262136335084304,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,27,0.005031939694007825,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,28,0.004814631911604247,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,29,0.004631880114646764,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,30,0.004469446083502488,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,31,0.0043068983883112755,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,32,0.004164344934863792,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,33,0.003994293545859878,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,34,0.003857246410365512,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,35,0.0037155725967435134,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,36,0.0035735270143735956,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,37,0.003468644998072686,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,38,0.0033557032817181343,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,39,0.003256145720266377,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,40,0.0031422470738760406,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,41,0.003033756063596572,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,42,0.002936249785002831,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,43,0.0028491340590246998,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,44,0.0027745624379690867,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,45,0.0026537800629952476,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,46,0.0025807869484548718,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,47,0.002502192254082062,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,48,0.0024348951277722466,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,49,0.002361927506713258,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,50,0.0022808834260444706,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,51,0.0022312823890666853,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,52,0.0021590514703534198,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,53,0.002098236957826873,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,54,0.002050220522444007,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,55,0.001974324764442057,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,56,0.0019368482473594247,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,57,0.0018773305040262938,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,58,0.0018280603867753876,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,59,0.0017689747240710813,NA,NA,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_ps2x1_nielsen,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,10,20,sgd,0.1,42,60,0,60,0.0017369347767234615,NA,0.9848999977111816,19.9376,1196.2549534179998,3009.3919274598607,ok,"PS barrier + blocking store, 2 workers + 1 server"
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,1,0.23469009212965222,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,2,0.07729437488354354,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,3,0.04846242102203056,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,4,0.03341313670440286,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,5,0.02364397385499736,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,6,0.016008630956578902,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,7,0.01048989241098449,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,8,0.007131512256076348,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,9,0.0046229130357460235,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,10,0.00337385907516015,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,11,0.0026480397969015335,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,12,0.0022153368287744493,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,13,0.0019279370707066619,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,14,0.0016726462979847838,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,15,0.0014923730421627776,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,16,0.0013484466826811285,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,17,0.0012348380531114268,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,18,0.0011259013516374996,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,19,0.0010409032360809646,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,20,0.0009617552643760709,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,21,0.0009002178783960062,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,22,0.0008439542985289753,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,23,0.0007894048153400774,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,24,0.0007401023784407054,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,25,0.0006990382552280417,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,26,0.0006622986792218673,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,27,0.0006279577660843264,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,28,0.0005966783505025148,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,29,0.0005679982117065568,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,30,0.0005421305508146474,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,31,0.0005169480939637386,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,32,0.000496450363691802,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,33,0.000476164138331671,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,34,0.00045573291707032125,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,35,0.00043817783110139885,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,36,0.00042120112537103203,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,37,0.000406722007756476,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,38,0.00039287734813833215,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,39,0.00037955356473754875,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,40,0.00036678605742333775,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,41,0.0003562316434228592,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,42,0.0003451519831291089,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,43,0.0003348617450944715,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,44,0.0003255468327833384,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,45,0.0003163450261192935,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,46,0.0003077036721419262,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,47,0.0002996395149155333,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,48,0.0002918803752124468,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,49,0.0002843016652226235,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,50,0.0002773536298567881,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,51,0.0002708112664262643,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,52,0.0002642132312245925,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,53,0.0002580133961867356,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,54,0.00025243749345592905,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,55,0.0002465282973512674,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,56,0.0002413404279052358,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,57,0.00023612908458024032,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,58,0.00023113249658256998,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,59,0.0002264774413028808,NA,NA,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+A_baseline_nielsen,exp,mnist,nielsen,baseline,1,1,0,NA,NA,10,10,sgd,0.1,42,60,0,60,0.00022185343908594273,NA,0.9894999861717224,4.8928,293.5667959029961,12262.967236899489,ok,single-process PyTorch reference
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,1,0.22942894686083007,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,2,0.20437052136768896,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,3,0.12944513814081746,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,4,0.08151426097197458,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,5,0.06285494106463158,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,6,0.05316807573516231,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,7,0.04716570713100024,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,8,0.04307299708427862,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,9,0.040083118219329035,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,10,0.037782165218465974,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,11,0.03593619764442943,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,12,0.03441799385790247,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,13,0.033132921668308946,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,14,0.03202603051788328,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,15,0.031040401445894986,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,16,0.030175433561011062,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,17,0.02939822297615116,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,18,0.02867715095579158,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,19,0.028013618165880532,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,20,0.027419171338306045,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,21,0.02685923772463691,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,22,0.026345634604045192,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,23,0.02585256186325724,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,24,0.025367467034475025,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,25,0.02496705604341425,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,26,0.02452197598037814,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,27,0.024132108910890144,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,28,0.023754079323496758,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,29,0.023393792091623174,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,30,0.02303618815794801,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,31,0.022729134310768184,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,32,0.022404180315105087,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,33,0.022104317166899368,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,34,0.02178876188797353,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,35,0.021520193990557646,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,36,0.02123702758457201,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,37,0.020967067564797662,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,38,0.020718536334455504,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,39,0.02047297557777337,NA,NA,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,80,240,sgd,0.1,42,40,0,40,0.02021882122987648,NA,0.9474999904632568,14.7184,588.7352654600109,4076.535143728395,ok,"AR 3w, global batch 3x80=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,1,0.22942190239926175,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,2,0.20427228006064888,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,3,0.12934467566721145,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,4,0.08150370580422386,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,5,0.06282984313740392,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,6,0.05315810408345888,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,7,0.04715574096768782,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,8,0.043037347948976484,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,9,0.040056402982197085,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,10,0.037756553561043314,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,11,0.0359062141038881,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,12,0.03439628136728425,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,13,0.03310428517604478,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,14,0.03200217395540715,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,15,0.03100856497219841,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,16,0.030140243046346216,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,17,0.029367237297145566,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,18,0.028650116482732114,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,19,0.02798653158216776,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,20,0.02738459937620831,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,21,0.026830843758789122,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,22,0.026297830419337066,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,23,0.025805786559036155,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,24,0.025345934477175647,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,25,0.024919409873626036,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,26,0.024499854034817168,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,27,0.024100340331223755,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,28,0.02373047874059024,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,29,0.023361036299521028,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,30,0.023018051620232485,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,31,0.022690652481926758,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,32,0.022373754709108816,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,33,0.022058807029545616,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,34,0.02177536722062816,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,35,0.021484727725659805,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,36,0.021202166270452627,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,37,0.02094854269159783,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,38,0.0206783261326714,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,39,0.02043632819995362,NA,NA,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,120,240,sgd,0.1,42,40,0,40,0.020200077183455373,NA,0.9469000101089478,19.9171,796.685796107995,3012.4799660350254,ok,"PS 2w+1s, global batch 2x120=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,1,0.22945849738140905,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,2,0.20428557551493243,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,3,0.1293539833305776,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,4,0.08150448046970492,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,5,0.06287207902323766,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,6,0.053207500137519084,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,7,0.04721079475462901,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,8,0.04310749920397687,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,9,0.0401259757658808,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,10,0.037819750941308836,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,11,0.03599225129554436,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,12,0.034453870424904554,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,13,0.03318393172544194,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,14,0.03206973050082258,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,15,0.0310969443665018,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,16,0.030219565108266344,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,17,0.02944742340888517,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,18,0.028735809832670108,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,19,0.02806663394642217,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,20,0.027461499523674528,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,21,0.026910305354128368,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,22,0.02641772913137256,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,23,0.025908036734587126,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,24,0.02543983070674974,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,25,0.025003410790337948,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,26,0.024599221116435373,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,27,0.024212604341855033,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,28,0.02383801047763166,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,29,0.023476914207676502,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,30,0.02310401425555638,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,31,0.022791377064301822,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,32,0.022478147767545115,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,33,0.022165005085264367,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,34,0.021883284289965332,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,35,0.02158833821825334,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,36,0.02131062303632285,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,37,0.021052698189344958,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,38,0.020796863367515614,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,39,0.020542512365456594,NA,NA,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,48,240,sgd,0.1,42,40,0,40,0.020321596307594843,NA,0.9470000267028809,12.332,493.2792768509971,4865.397985743801,ok,"AR 5w, global batch 5x48=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,1,0.22947986673255755,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,2,0.20433238486975433,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,3,0.1294267593366405,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,4,0.08152393457110352,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,5,0.06286513315827273,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,6,0.053191404902484904,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,7,0.04718780468307124,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,8,0.0430954181452732,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,9,0.0401018429836196,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,10,0.037799950320394717,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,11,0.03595767450994812,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,12,0.034440839538870685,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,13,0.03316480873673378,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,14,0.032041455604235325,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,15,0.031083375084260477,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,16,0.030212184207392856,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,17,0.029435599243562503,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,18,0.028713264928850124,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,19,0.028050990184099272,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,20,0.02743489029628652,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,21,0.026893947827765947,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,22,0.02635901721078748,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,23,0.02588371412201823,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,24,0.025423775411922245,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,25,0.024975147478488512,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,26,0.02456804045273806,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,27,0.02418053938622413,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,28,0.02379517525209521,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,29,0.02343989604122006,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,30,0.023087743332803567,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,31,0.02274665575111208,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,32,0.02244427444789073,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,33,0.022144225801684275,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,34,0.021838908183385505,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,35,0.02155404291853911,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,36,0.021281234525037385,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,37,0.02102290857089334,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,38,0.020763613476730156,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,39,0.020529801688584853,NA,NA,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bg_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,60,240,sgd,0.1,42,40,0,40,0.02027065852669669,NA,0.9474999904632568,12.5213,500.85327581799356,4791.822507460533,ok,"PS 4w+1s, global batch 4x60=240"
+Bp_ar_n1,exp,mnist,nielsen,all_reduce,1,1,0,NA,NA,64,64,sgd,0.1,42,8,0,,,NA,NA,,,,error,AR 1w — single-worker throughput reference
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,1,0.22777053332700137,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,2,0.17841108089061986,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,3,0.09488046145767959,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,4,0.06466706705823168,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,5,0.05232528069225987,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,6,0.04550811973861086,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,7,0.041127916517918466,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ar_n3,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,8,0.038060539756004645,NA,NA,14.7094,117.6754395780008,4079.015992813296,ok,AR 3w
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,1,0.21957872814052706,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,2,0.11475814884003038,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,3,0.06142763094767008,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,4,0.04715872782545655,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,5,0.040376040856064485,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,6,0.036376494885684854,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,7,0.033602395778471905,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ps_n3,exp,mnist,nielsen,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,8,0.03150851438622984,NA,NA,20.4963,163.97034736200294,2927.3585603882852,ok,PS 2w+1s
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,1,0.23078191821423774,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,2,0.21984719031886696,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,3,0.18021858825556375,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,4,0.1187533726166448,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,5,0.08429678717579822,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,6,0.06786170870511536,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,7,0.058344375151184756,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ar_n5,exp,mnist,nielsen,all_reduce,5,5,0,NA,NA,64,320,sgd,0.1,42,8,0,8,0.05209984584390111,NA,NA,12.3291,98.63304219300335,4866.523320458317,ok,AR 5w
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,1,0.22981053442733873,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,2,0.20911149636858822,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,3,0.14075790995034285,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,4,0.08776548953565268,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,5,0.06653941982112521,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,6,0.05579515503362255,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,7,0.049207105018352376,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+Bp_ps_n5,exp,mnist,nielsen,parameter_server,5,4,1,barrier,blocking,64,256,sgd,0.1,42,8,0,8,0.04475345425291907,NA,NA,12.583,100.66364114600583,4768.355232688159,ok,PS 4w+1s
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,1,0.14363946931431568,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,2,0.07111903604596738,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,3,0.053818706579472804,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,4,0.046346206929859225,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,5,0.042043215694069214,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,6,0.03919722473425543,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,7,0.03711344995796962,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ar_small,exp,mnist,mlp_small,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,8,0.03551578979117919,NA,NA,0.2694,2.1552598690032028,222710.9625634136,ok,AR mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,1,0.12198911520884911,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,2,0.05748236814369716,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,3,0.045312296302917277,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,4,0.039955975618693955,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,5,0.03675123491581621,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,6,0.03459900316023915,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,7,0.03292731151105728,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ps_small,exp,mnist,mlp_small,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,8,0.03155862133701106,NA,NA,0.3597,2.877383536004345,166818.22009260123,ok,PS mlp_small
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,1,0.13368059873083601,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,2,0.056356566875133,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,3,0.042433565858704066,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,4,0.03702122068103731,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,5,0.03387865542632978,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,6,0.03169896709536002,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,7,0.02996099219857275,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ar_medium,exp,mnist,mlp_medium,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,8,0.02858410540797487,NA,NA,2.5112,20.089802636997774,23892.71854348746,ok,AR mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,1,0.110112722003738,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,2,0.0452959374101683,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,3,0.0362886727660056,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,4,0.032290411758941054,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,5,0.029660159630506992,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,6,0.02778425774538426,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,7,0.0261540457967099,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ps_medium,exp,mnist,mlp_medium,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,8,0.024733582446933845,NA,NA,2.3316,18.65313855400018,25732.93489513397,ok,PS mlp_medium
+D_ar_large,exp,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,,,NA,NA,,,,error,AR mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,1,0.10310910902179923,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,2,0.043242027118685175,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,3,0.03477279070932608,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,4,0.03088874579506312,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,5,0.028308782208105725,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,6,0.02644108065091718,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,7,0.024848485355962464,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large
+D_ps_large,exp,mnist,mlp_large,parameter_server,3,2,1,barrier,blocking,64,128,sgd,0.1,42,8,0,8,0.02345837616898198,NA,NA,11.5743,92.59402834500361,5183.919617489036,ok,PS mlp_large

@@ -1,0 +1,6 @@
+model,params,used
+nielsen,289630,True
+lenet5,61706,False
+mlp_small,101770,True
+mlp_medium,669706,True
+mlp_large,1863690,True

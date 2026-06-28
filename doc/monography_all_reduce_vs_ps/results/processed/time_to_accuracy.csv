@@ -1,0 +1,17 @@
+dataset,model,strategy,nodes,test_accuracy,epochs_to_converge,time_to_converge_sec,total_time_sec
+mnist,nielsen,all_reduce,3,0.9829000234603882,56,868.6,930.6436904779985
+mnist,nielsen,parameter_server,3,0.9848999977111816,57,1136.44,1196.2549534179998
+mnist,nielsen,baseline,1,0.9894999861717224,56,274.0,293.5667959029961
+mnist,nielsen,all_reduce,3,0.9474999904632568,33,485.71,588.7352654600109
+mnist,nielsen,parameter_server,3,0.9469000101089478,33,657.27,796.685796107995
+mnist,nielsen,all_reduce,5,0.9470000267028809,33,406.96,493.2792768509971
+mnist,nielsen,parameter_server,5,0.9474999904632568,33,413.2,500.85327581799356
+mnist,nielsen,all_reduce,3,,7,102.97,117.6754395780008
+mnist,nielsen,parameter_server,3,,7,143.47,163.97034736200294
+mnist,nielsen,all_reduce,5,,8,98.63,98.63304219300335
+mnist,nielsen,parameter_server,5,,7,88.08,100.66364114600583
+mnist,mlp_small,all_reduce,3,,7,1.89,2.1552598690032028
+mnist,mlp_small,parameter_server,3,,6,2.16,2.877383536004345
+mnist,mlp_medium,all_reduce,3,,7,17.58,20.089802636997774
+mnist,mlp_medium,parameter_server,3,,7,16.32,18.65313855400018
+mnist,mlp_large,parameter_server,3,,7,81.02,92.59402834500361
