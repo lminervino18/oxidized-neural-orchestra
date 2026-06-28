@@ -79,7 +79,7 @@ where
 
         loop {
             let event = self.orch_handle.recv_event().await?;
-            println!("{event:?}");
+            debug!("received event from orchestrator {event:?}");
 
             match event {
                 OrchEvent::Disconnect => break,
