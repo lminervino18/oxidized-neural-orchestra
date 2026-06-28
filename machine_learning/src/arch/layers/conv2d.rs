@@ -2,7 +2,7 @@ use rayon::iter::ParallelIterator;
 use std::cmp;
 
 use ndarray::{Zip, prelude::*};
-use ndarray_conv::{ConvFFTExt, ConvMode, PaddingMode, ReverseKernel};
+use ndarray_conv::{ConvFFTExt, ConvMode, PaddingMode, ReverseKernel, get_fft_processor};
 
 use crate::{MlErr, Result, arch::InplaceReshape};
 use rayon::iter::IntoParallelIterator;
@@ -115,16 +115,19 @@ impl Conv2d {
             .and(output.axis_iter_mut(Axis(0)))
             .into_par_iter()
             .try_for_each(|(input_b, mut output_b)| -> Result<()> {
+                let mut proc = get_fft_processor::<f32, f32>();
+
                 for f in 0..filters {
                     let kernel_f = k.index_axis(Axis(0), f);
 
-                    let res_3d = input_b.conv_fft(
+                    let res_3d = input_b.conv_fft_with_processor(
                         kernel_f.no_reverse(),
                         ConvMode::Custom {
                             padding: [0; 3],
                             strides: [1, stride, stride],
                         },
                         PaddingMode::Zeros,
+                        &mut proc,
                     )?;
                     let res_2d = res_3d.index_axis(Axis(0), 0);
 
@@ -170,6 +173,7 @@ impl Conv2d {
         ));
         delta_out.fill(0.);
 
+        let mut proc = get_fft_processor::<f32, f32>();
         dilated
             .axis_iter(Axis(0))
             .zip(effective_input.axis_iter(Axis(0)))
@@ -183,10 +187,11 @@ impl Conv2d {
                             // kernel
                             let effective_input_bc = effective_input_b.slice(s![c_idx, .., ..]);
 
-                            let dk_step = effective_input_bc.conv_fft(
+                            let dk_step = effective_input_bc.conv_fft_with_processor(
                                 dilated_bf.no_reverse(),
                                 ConvMode::Valid,
                                 PaddingMode::Zeros,
+                                &mut proc,
                             )?;
 
                             let mut dk_view = dk.slice_mut(s![f_idx, c_idx, .., ..]);
@@ -200,8 +205,12 @@ impl Conv2d {
                             let copy_width =
                                 cmp::min(real_input_dim.1, effective_input.dim().3 - padding);
 
-                            let effective_delta_step =
-                                dilated_bf.conv_fft(&k_fc, ConvMode::Full, PaddingMode::Zeros)?;
+                            let effective_delta_step = dilated_bf.conv_fft_with_processor(
+                                &k_fc,
+                                ConvMode::Full,
+                                PaddingMode::Zeros,
+                                &mut proc,
+                            )?;
                             let delta_step = effective_delta_step.slice(s![
                                 padding..padding + copy_height,
                                 padding..padding + copy_width
