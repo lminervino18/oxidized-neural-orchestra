@@ -14,3 +14,11 @@ docker/
 docs/
 notebooks/
 target
+
+# Heavy non-Rust paths the node image never needs (keep the build context small)
+.venv
+**/.venv
+doc/
+data/
+tmp/
+*.safetensors
