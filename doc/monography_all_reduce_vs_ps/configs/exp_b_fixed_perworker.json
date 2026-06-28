@@ -1,0 +1,30 @@
+{
+  "name": "exp_b_fixed_perworker",
+  "_doc": "Exp B (raw throughput) + scalability — AR vs PS on MNIST/nielsen with a FIXED PER-WORKER batch of 64. This measures samples/sec and scaling as nodes grow, but the effective global batch changes with the worker count, so it is NOT a fair convergence comparison (only throughput). 8-epoch budget, no eval (throughput only). AR 1w is the single-worker reference for speedup.",
+  "runs": [
+    {"label": "Bp_ar_n1", "dataset": "mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 1, "servers": 0, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false,
+     "notes": "AR 1w — single-worker throughput reference"},
+
+    {"label": "Bp_ar_n3", "dataset": "mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 3, "servers": 0, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false,
+     "notes": "AR 3w"},
+
+    {"label": "Bp_ar_n5", "dataset": "mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 5, "servers": 0, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false,
+     "notes": "AR 5w"},
+
+    {"label": "Bp_ps_n3", "dataset": "mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 2, "servers": 1, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false,
+     "notes": "PS 2w+1s"},
+
+    {"label": "Bp_ps_n5", "dataset": "mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 4, "servers": 1, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false,
+     "notes": "PS 4w+1s"}
+  ]
+}

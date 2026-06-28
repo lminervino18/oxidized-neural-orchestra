@@ -1,0 +1,12 @@
+{
+  "name": "exp_d_communication",
+  "_doc": "Exp D — communication pressure. Fixed node count (3), fixed per-worker batch (64), 8 epochs, throughput focus (no eval). Varies MLP model size to isolate the effect of gradient/parameter size on AR vs PS throughput.",
+  "runs": [
+    {"label":"D_ar_small","dataset":"mnist","model":"mlp_small","strategy":"all_reduce","workers":3,"servers":0,"batch_size":64,"max_epochs":8,"offline_epochs":0,"lr":0.1,"loss_fn":"cross_entropy","seed":42,"eval":false,"notes":"AR mlp_small"},
+    {"label":"D_ps_small","dataset":"mnist","model":"mlp_small","strategy":"parameter_server","workers":2,"servers":1,"batch_size":64,"max_epochs":8,"offline_epochs":0,"lr":0.1,"loss_fn":"cross_entropy","seed":42,"eval":false,"notes":"PS mlp_small"},
+    {"label":"D_ar_medium","dataset":"mnist","model":"mlp_medium","strategy":"all_reduce","workers":3,"servers":0,"batch_size":64,"max_epochs":8,"offline_epochs":0,"lr":0.1,"loss_fn":"cross_entropy","seed":42,"eval":false,"notes":"AR mlp_medium"},
+    {"label":"D_ps_medium","dataset":"mnist","model":"mlp_medium","strategy":"parameter_server","workers":2,"servers":1,"batch_size":64,"max_epochs":8,"offline_epochs":0,"lr":0.1,"loss_fn":"cross_entropy","seed":42,"eval":false,"notes":"PS mlp_medium"},
+    {"label":"D_ar_large","dataset":"mnist","model":"mlp_large","strategy":"all_reduce","workers":3,"servers":0,"batch_size":64,"max_epochs":8,"offline_epochs":0,"lr":0.1,"loss_fn":"cross_entropy","seed":42,"eval":false,"notes":"AR mlp_large"},
+    {"label":"D_ps_large","dataset":"mnist","model":"mlp_large","strategy":"parameter_server","workers":2,"servers":1,"batch_size":64,"max_epochs":8,"offline_epochs":0,"lr":0.1,"loss_fn":"cross_entropy","seed":42,"eval":false,"notes":"PS mlp_large"}
+  ]
+}

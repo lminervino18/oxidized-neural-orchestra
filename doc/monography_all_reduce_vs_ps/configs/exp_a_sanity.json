@@ -1,0 +1,25 @@
+{
+  "name": "exp_a_sanity",
+  "_doc": "Exp A — sanity/correctness on MNIST/nielsen with the reference recipe (batch 10 per worker, 60 epochs, lr 0.1). Validates that every strategy trains correctly. Effective batch differs across configs by design (this is the correctness check, not the fair comparison).",
+  "runs": [
+    {"label": "A_baseline_nielsen", "dataset": "mnist", "model": "nielsen", "strategy": "baseline",
+     "workers": 1, "servers": 0, "batch_size": 10, "max_epochs": 60, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true,
+     "notes": "single-process PyTorch reference"},
+
+    {"label": "A_ar3_nielsen", "dataset": "mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 3, "servers": 0, "batch_size": 10, "max_epochs": 60, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true,
+     "notes": "all-reduce, 3 workers"},
+
+    {"label": "A_ps2x1_nielsen", "dataset": "mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 2, "servers": 1, "batch_size": 10, "max_epochs": 60, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true,
+     "notes": "PS barrier + blocking store, 2 workers + 1 server"},
+
+    {"label": "A_switch2x1_nielsen", "dataset": "mnist", "model": "nielsen", "strategy": "strategy_switch",
+     "workers": 2, "servers": 1, "batch_size": 10, "max_epochs": 60, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true,
+     "notes": "starts all-reduce, switches to PS on convergence"}
+  ]
+}
