@@ -2,7 +2,7 @@ use rayon::iter::ParallelIterator;
 use std::cmp;
 
 use ndarray::{Zip, prelude::*};
-use ndarray_conv::{ConvExt, ConvMode, PaddingMode, ReverseKernel};
+use ndarray_conv::{ConvFFTExt, ConvMode, PaddingMode, ReverseKernel};
 
 use crate::{MlErr, Result, arch::InplaceReshape};
 use rayon::iter::IntoParallelIterator;
@@ -118,7 +118,7 @@ impl Conv2d {
                 for f in 0..filters {
                     let kernel_f = k.index_axis(Axis(0), f);
 
-                    let res_3d = input_b.conv(
+                    let res_3d = input_b.conv_fft(
                         kernel_f.no_reverse(),
                         ConvMode::Custom {
                             padding: [0; 3],
@@ -183,7 +183,7 @@ impl Conv2d {
                             // kernel
                             let effective_input_bc = effective_input_b.slice(s![c_idx, .., ..]);
 
-                            let dk_step = effective_input_bc.conv(
+                            let dk_step = effective_input_bc.conv_fft(
                                 dilated_bf.no_reverse(),
                                 ConvMode::Valid,
                                 PaddingMode::Zeros,
@@ -201,7 +201,7 @@ impl Conv2d {
                                 cmp::min(real_input_dim.1, effective_input.dim().3 - padding);
 
                             let effective_delta_step =
-                                dilated_bf.conv(&k_fc, ConvMode::Full, PaddingMode::Zeros)?;
+                                dilated_bf.conv_fft(&k_fc, ConvMode::Full, PaddingMode::Zeros)?;
                             let delta_step = effective_delta_step.slice(s![
                                 padding..padding + copy_height,
                                 padding..padding + copy_width
