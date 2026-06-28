@@ -1,58 +1,49 @@
-use rayon::iter::ParallelIterator;
 use std::cmp;
 
-use ndarray::{Zip, prelude::*};
-use ndarray_conv::{
-    ConvExt, ConvFFTExt, ConvMode, FftProcessor, PaddingMode, ReverseKernel, get_fft_processor,
-};
+use ndarray::prelude::*;
+use ndarray_conv::{ConvExt, ConvMode, PaddingMode, ReverseKernel};
 
-use crate::{
-    MlErr, Result,
-    arch::{InplaceReshape, layers::layer::try_cast_dim},
-};
-use rayon::iter::IntoParallelIterator;
+use crate::{MlErr, Result, arch::InplaceReshape};
 
 #[derive(Clone, Debug)]
 struct Convolver {
     // processor: Option<P>,
     // kernel_size: usize,
-    conv_fn: fn(
-        ArrayView2<f32>,
-        ArrayView2<f32>,
-        bool,
-        ConvMode<2>,
-        PaddingMode<2, f32>,
-    ) -> Result<Array2<f32>>,
 }
 
 impl Convolver {
     fn new(_kernel_size: usize, _processor: Option<()>) -> Self {
-        fn conv_fn<const N: usize, D: Dimension>(
-            input: ArrayView<'_, f32, D>,
-            kernel: ArrayView<'_, f32, D>,
-            reverse: bool,
-            conv_mode: ConvMode<N>,
-            padding_mode: PaddingMode<N, f32>,
-        ) -> Result<Array2<f32>> {
-            if reverse {
-                Ok(input.conv(kernel.reverse(), conv_mode, padding_mode)?)
-            } else {
-                Ok(input.conv(kernel.no_reverse(), conv_mode, padding_mode)?)
-            }
-        }
-
-        Self { conv_fn }
+        Self {}
     }
 
-    fn conv<const N: usize>(
+    fn conv2d(
         &mut self,
         input: ArrayView2<f32>,
         kernel: ArrayView2<f32>,
         reverse: bool,
-        conv_mode: ConvMode<N>,
-        padding_mode: PaddingMode<N, f32>,
+        conv_mode: ConvMode<2>,
+        padding_mode: PaddingMode<2, f32>,
     ) -> Result<Array2<f32>> {
-        (self.conv_fn)(input, kernel, reverse, conv_mode, padding_mode)
+        if reverse {
+            Ok(input.conv(kernel.reverse(), conv_mode, padding_mode)?)
+        } else {
+            Ok(input.conv(kernel.no_reverse(), conv_mode, padding_mode)?)
+        }
+    }
+
+    fn conv3d(
+        &self,
+        input: ArrayView3<f32>,
+        kernel: ArrayView3<f32>,
+        reverse: bool,
+        conv_mode: ConvMode<3>,
+        padding_mode: PaddingMode<3, f32>,
+    ) -> Result<Array3<f32>> {
+        if reverse {
+            Ok(input.conv(kernel.reverse(), conv_mode, padding_mode)?)
+        } else {
+            Ok(input.conv(kernel.no_reverse(), conv_mode, padding_mode)?)
+        }
     }
 }
 
@@ -134,6 +125,7 @@ impl Conv2d {
             ref mut real_input_dim,
             ref mut effective_input,
             ref mut output,
+            ref mut convolver,
             ..
         } = *self;
 
@@ -165,16 +157,14 @@ impl Conv2d {
 
         output.reshape_inplace((batch_size, filters, output_height, output_width));
 
-        Zip::from(effective_input.axis_iter(Axis(0)))
-            .and(output.axis_iter_mut(Axis(0)))
-            .into_par_iter()
+        effective_input
+            .axis_iter(Axis(0))
+            .zip(output.axis_iter_mut(Axis(0)))
             .try_for_each(|(input_b, mut output_b)| -> Result<()> {
-                let mut proc = get_fft_processor::<f32, f32>();
-
                 for f in 0..filters {
                     let kernel_f = k.index_axis(Axis(0), f);
 
-                    let res_3d = self.convolver.conv(
+                    let res_3d = convolver.conv3d(
                         input_b,
                         kernel_f,
                         false,
@@ -216,6 +206,7 @@ impl Conv2d {
             ref effective_input,
             ref mut delta_out,
             ref mut dilated,
+            ref mut convolver,
             ..
         } = *self;
 
@@ -241,7 +232,7 @@ impl Conv2d {
                             // kernel
                             let effective_input_bc = effective_input_b.slice(s![c_idx, .., ..]);
 
-                            let dk_step = self.convolver.conv(
+                            let dk_step = convolver.conv2d(
                                 effective_input_bc,
                                 dilated_bf,
                                 false,
@@ -260,7 +251,7 @@ impl Conv2d {
                             let copy_width =
                                 cmp::min(real_input_dim.1, effective_input.dim().3 - padding);
 
-                            let effective_delta_step = self.convolver.conv(
+                            let effective_delta_step = convolver.conv2d(
                                 dilated_bf,
                                 k_fc,
                                 true,
