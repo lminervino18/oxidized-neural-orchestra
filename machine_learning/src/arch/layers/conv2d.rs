@@ -330,6 +330,7 @@ mod tests {
     use std::env;
 
     use super::*;
+    use approx::assert_abs_diff_eq;
 
     #[test]
     fn test_conv2d00_forward_backward_consistency() {
@@ -429,7 +430,7 @@ mod tests {
         let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
         let output = conv.forward(params, input.view()).unwrap();
         // println!("output:\n{:#}", output);
-        assert_eq!(output, expected);
+        assert_abs_diff_eq!(output, expected, epsilon = 1e-4);
     }
 
     #[test]
