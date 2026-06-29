@@ -22,8 +22,11 @@ STRAT = {"parameter_server": "PS", "all_reduce": "AR", "strategy_switch": "SS"}
 VARIANT_SHORT = {"blocking": "blocking", "non_blocking": "non-block"}
 BASELINE_LABEL = "PyTorch (ref)"
 
-# Convergence compares strategies at this fixed worker count (same shard size + averaging).
-CONV_WORKERS = 3
+# Convergence compares strategies at a fixed TOTAL node budget, not a fixed worker
+# count: strategy_switch all-reduces over every node (workers + servers) until it
+# switches, so a 3w/2s SS is a 5-node run. Holding nodes fixed (PS/SS = 3w+2s = 5,
+# AR = 5w) is the only way SS sits honestly next to the others.
+CONV_NODES = 5
 
 
 def _plt():
@@ -93,7 +96,7 @@ def plot_convergence(results, ts):
     plt = _plt()
     out = []
     for model, runs in _by_model(_ok(results, "convergence")).items():
-        main = [r for r in runs if r.get("baseline") or r["workers"] == CONV_WORKERS]
+        main = [r for r in runs if r.get("baseline") or _nodes(r) == CONV_NODES]
 
         curves = [r for r in main if r.get("loss_history")]
         if curves:
@@ -106,7 +109,7 @@ def plot_convergence(results, ts):
                             linestyle="--", color="black", zorder=5)
                 else:
                     ax.plot(xs, losses, label=_label(r), linewidth=1.5)
-            ax.set_title(f"Convergence · {model} · strategies @ {CONV_WORKERS}w  ({ts})",
+            ax.set_title(f"Convergence · {model} · strategies @ {CONV_NODES} nodes  ({ts})",
                          fontsize=11, fontweight="bold")
             ax.set_xlabel("Epoch")
             ax.set_ylabel("Loss")
@@ -131,7 +134,7 @@ def plot_convergence(results, ts):
             ax.set_xticklabels([_label(r) for r in acc], rotation=25, ha="right", fontsize=8)
             ax.set_ylim(0, 1.12)
             ax.set_ylabel("Test accuracy")
-            ax.set_title(f"Final accuracy · {model} · @ {CONV_WORKERS}w  ({ts})",
+            ax.set_title(f"Final accuracy · {model} · @ {CONV_NODES} nodes  ({ts})",
                          fontsize=11, fontweight="bold")
             ax.grid(axis="y", alpha=0.3)
             out.append(_save(fig, f"convergence_accuracy_{model}.png"))
@@ -234,7 +237,7 @@ def plot_convergence_speed(results, ts):
         _bar(a2, runs, "accuracy_per_sec", "{:.3g}")
         a2.set_ylabel("Accuracy / sec")
         a2.set_title("Accuracy / sec")
-        fig.suptitle(f"Convergence speed · {model} · @ {CONV_WORKERS}w  ({ts})",
+        fig.suptitle(f"Convergence speed · {model} · @ {CONV_NODES} nodes  ({ts})",
                      fontsize=11, fontweight="bold")
         out.append(_save(fig, f"convergence_speed_{model}.png"))
         plt.close(fig)
