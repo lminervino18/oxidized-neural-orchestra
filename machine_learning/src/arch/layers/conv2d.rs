@@ -1,6 +1,6 @@
 use std::cmp;
 
-use ndarray::prelude::*;
+use ndarray::{linalg, prelude::*};
 use ndarray_conv::{ConvExt, ConvMode, PaddingMode, ReverseKernel};
 
 use crate::{MlErr, Result, arch::InplaceReshape};
@@ -14,6 +14,74 @@ struct Convolver {
 impl Convolver {
     fn new(_kernel_size: usize, _processor: Option<()>) -> Self {
         Self {}
+    }
+
+    /// Reshapes a three-dimension image tensor into a matrix with columns that match the window
+    /// views that the kernel sees during the convolution pass.
+    ///
+    /// ## Args
+    /// * `image` - The **already padded** image tensor.
+    /// * `kernel_size` - The size of the square kernel.
+    /// * `stride` - The size of the kernel steps.
+    ///
+    /// ## Returns
+    /// The reshaped matrix from the image tensor.
+    fn im2col(&self, image: ArrayView3<f32>, kernel_size: usize, stride: usize) -> Array2<f32> {
+        let (channels, image_h, image_w) = image.dim();
+
+        let out_h = (image_h - kernel_size) / stride + 1;
+        let out_w = (image_w - kernel_size) / stride + 1;
+
+        let mut col_image = Array2::zeros((channels * kernel_size * kernel_size, out_h * out_w));
+
+        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
+            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
+                let window = image.slice(s![.., i..i + kernel_size, j..j + kernel_size]);
+                let col = col_image.column_mut(row_idx * out_w + col_idx);
+
+                // SAFETY: Both arrays have the same number of elements: kernel_size^2.
+                col.into_shape_with_order(window.dim())
+                    .unwrap()
+                    .assign(&window);
+            }
+        }
+
+        col_image
+    }
+
+    pub fn conv_into(
+        &self,
+        buf: &mut Array3<f32>,
+        input: ArrayView3<f32>,
+        kernel: ArrayView4<f32>,
+        _reverse: bool, // wip
+        stride: usize,
+    ) -> Result<()> {
+        let (channels, image_h, image_w) = input.dim();
+        let (filters, in_channels, kernel_w, kernel_h) = kernel.dim();
+        assert_eq!(channels, in_channels);
+        assert_eq!(kernel_w, kernel_h);
+
+        let kernel_size = kernel_w;
+        let col_image = self.im2col(input, kernel_size, stride);
+
+        // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
+        let col_kernel = kernel
+            .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
+            .unwrap();
+
+        let out_h = (image_h - kernel_size) / stride + 1;
+        let out_w = (image_w - kernel_size) / stride + 1;
+
+        buf.reshape_inplace((filters, out_h, out_w));
+        // SAFETY: `buf` was just reshaped to have enough elements.
+        let mut buf = buf
+            .view_mut()
+            .into_shape_with_order((filters, out_h * out_w))
+            .unwrap();
+
+        linalg::general_mat_mul(1.0, &col_kernel, &col_image, 0.0, &mut buf);
+        Ok(())
     }
 
     fn conv2d(
