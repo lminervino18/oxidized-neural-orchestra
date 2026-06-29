@@ -76,18 +76,17 @@ impl Convolver {
         let out_h = (image_h - kernel_size) / stride + 1;
         let out_w = (image_w - kernel_size) / stride + 1;
 
+        // TODO: poner esto en metadata o algo
         let mut col_image = Array2::zeros((channels * kernel_size * kernel_size, out_h * out_w));
 
         for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
             for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
                 let window = image.slice(s![.., i..i + kernel_size, j..j + kernel_size]);
-                let col = col_image.column_mut(row_idx * out_w + col_idx);
+                let mut col = col_image.column_mut(row_idx * out_w + col_idx);
 
-                // SAFETY: Both arrays have the same number of elements: kernel_size^2.
-                // FIXME: es safe igual ? xd. La otra es iterar
-                col.into_shape_with_order(window.dim())
-                    .unwrap()
-                    .assign(&window);
+                col.iter_mut().zip(window.iter()).for_each(|(c, w)| {
+                    *c = *w;
+                });
             }
         }
 
