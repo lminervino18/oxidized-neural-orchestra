@@ -52,6 +52,19 @@ def aggregate(reps):
     return agg
 
 
+def archive_prior_jsonl():
+    """Move existing per-run JSONL into archive/ so a fresh run leaves only its own
+    results in the directory. `load_history` globs `results/*.jsonl` non-recursively,
+    so a stale file would otherwise re-enter the merged history (and the CSV/plots)."""
+    archive = RESULTS_DIR / "archive"
+    moved = 0
+    for path in list(RESULTS_DIR.glob("*.jsonl")):
+        archive.mkdir(parents=True, exist_ok=True)
+        path.rename(archive / path.name)
+        moved += 1
+    return moved
+
+
 def save_result(result, jsonl_path):
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     with open(jsonl_path, "a") as f:
