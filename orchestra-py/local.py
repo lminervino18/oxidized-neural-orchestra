@@ -17,8 +17,8 @@ def _make_addrs(n: int, base_port: int, host: str) -> list[str]:
     return [f"{host}-{i}:{base_port + i}" for i in range(n)]
 
 
-_nodes = int(os.environ.get("NODES", "6"))
-_servers = int(os.environ.get("SERVERS", "3"))
+_nodes = int(os.environ["NODES"])
+_servers = int(os.environ["SERVERS"])
 
 ADDRS = _make_addrs(_nodes, 40000, "node")
 
