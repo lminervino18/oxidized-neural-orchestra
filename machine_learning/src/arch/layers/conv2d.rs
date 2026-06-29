@@ -16,47 +16,23 @@ impl Convolver {
         Self {}
     }
 
-    /// Reshapes a three-dimension image tensor into a matrix with columns that match the window
-    /// views that the kernel sees during the convolution pass.
+    /// Computes the convolution of the passed in kernel over input and writes it into the buffer.
     ///
-    /// ## Args
-    /// * `image` - The **already padded** image tensor.
-    /// * `kernel_size` - The size of the square kernel.
+    /// # Args
+    /// * `buf` - The buffer for the result.
+    /// * `input` - The **already padded** input tensor that is to be convolved.
+    /// * `kernel` - The kernel that is to be used in the convolution.
+    /// * `reverse` - Whether to reverse the kernel for the convolution, if not, then it becomes a
+    ///   correlate operation.
     /// * `stride` - The size of the kernel steps.
-    ///
-    /// ## Returns
-    /// The reshaped matrix from the image tensor.
-    fn im2col(&self, image: ArrayView3<f32>, kernel_size: usize, stride: usize) -> Array2<f32> {
-        let (channels, image_h, image_w) = image.dim();
-
-        let out_h = (image_h - kernel_size) / stride + 1;
-        let out_w = (image_w - kernel_size) / stride + 1;
-
-        let mut col_image = Array2::zeros((channels * kernel_size * kernel_size, out_h * out_w));
-
-        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
-            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
-                let window = image.slice(s![.., i..i + kernel_size, j..j + kernel_size]);
-                let col = col_image.column_mut(row_idx * out_w + col_idx);
-
-                // SAFETY: Both arrays have the same number of elements: kernel_size^2.
-                col.into_shape_with_order(window.dim())
-                    .unwrap()
-                    .assign(&window);
-            }
-        }
-
-        col_image
-    }
-
     pub fn conv_into(
         &self,
-        buf: &mut Array3<f32>,
+        buf: &mut ArrayViewMut3<f32>,
         input: ArrayView3<f32>,
         kernel: ArrayView4<f32>,
         _reverse: bool, // wip
         stride: usize,
-    ) -> Result<()> {
+    ) {
         let (channels, image_h, image_w) = input.dim();
         let (filters, in_channels, kernel_w, kernel_h) = kernel.dim();
         assert_eq!(channels, in_channels);
@@ -73,7 +49,8 @@ impl Convolver {
         let out_h = (image_h - kernel_size) / stride + 1;
         let out_w = (image_w - kernel_size) / stride + 1;
 
-        buf.reshape_inplace((filters, out_h, out_w));
+        // buf.reshape_inplace((filters, out_h, out_w));
+        // TODO: este safety va a ser "me lo reshapean afuera"
         // SAFETY: `buf` was just reshaped to have enough elements.
         let mut buf = buf
             .view_mut()
@@ -81,7 +58,40 @@ impl Convolver {
             .unwrap();
 
         linalg::general_mat_mul(1.0, &col_kernel, &col_image, 0.0, &mut buf);
-        Ok(())
+    }
+
+    /// Reshapes a three-dimension image tensor into a matrix with columns that match the window
+    /// views that the kernel sees during the convolution pass.
+    ///
+    /// # Args
+    /// * `image` - The **already padded** image tensor.
+    /// * `kernel_size` - The size of the square kernel.
+    /// * `stride` - The size of the kernel steps.
+    ///
+    /// # Returns
+    /// The reshaped matrix from the image tensor.
+    fn im2col(&self, image: ArrayView3<f32>, kernel_size: usize, stride: usize) -> Array2<f32> {
+        let (channels, image_h, image_w) = image.dim();
+
+        let out_h = (image_h - kernel_size) / stride + 1;
+        let out_w = (image_w - kernel_size) / stride + 1;
+
+        let mut col_image = Array2::zeros((channels * kernel_size * kernel_size, out_h * out_w));
+
+        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
+            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
+                let window = image.slice(s![.., i..i + kernel_size, j..j + kernel_size]);
+                let col = col_image.column_mut(row_idx * out_w + col_idx);
+
+                // SAFETY: Both arrays have the same number of elements: kernel_size^2.
+                // FIXME: es safe igual ? xd. La otra es iterar
+                col.into_shape_with_order(window.dim())
+                    .unwrap()
+                    .assign(&window);
+            }
+        }
+
+        col_image
     }
 
     fn conv2d(
@@ -228,27 +238,9 @@ impl Conv2d {
         effective_input
             .axis_iter(Axis(0))
             .zip(output.axis_iter_mut(Axis(0)))
-            .try_for_each(|(input_b, mut output_b)| -> Result<()> {
-                for f in 0..filters {
-                    let kernel_f = k.index_axis(Axis(0), f);
-
-                    let res_3d = convolver.conv3d(
-                        input_b,
-                        kernel_f,
-                        false,
-                        ConvMode::Custom {
-                            padding: [0; 3],
-                            strides: [1, stride, stride],
-                        },
-                        PaddingMode::Zeros,
-                    )?;
-                    let res_2d = res_3d.index_axis(Axis(0), 0);
-
-                    output_b.slice_mut(s![f, .., ..]).assign(&res_2d);
-                }
-
-                Ok(())
-            })?;
+            .for_each(|(input_b, mut output_b)| {
+                convolver.conv_into(&mut output_b, input_b, k, false, stride);
+            });
 
         *output += &b;
 
@@ -350,7 +342,7 @@ impl Conv2d {
     /// Performs inward dilation to a input delta and saves the result into the delta metadata
     /// array.
     ///
-    /// ## Args
+    /// # Args
     /// * `delta` - The input delta to dilate and pad.
     fn dilate(&mut self, delta: ArrayView4<f32>) {
         let Self {
