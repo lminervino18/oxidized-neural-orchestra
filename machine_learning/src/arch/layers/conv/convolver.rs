@@ -58,6 +58,35 @@ impl Convolver {
         linalg::general_mat_mul(1.0, &col_kernel, &col_image, 0.0, &mut buf);
     }
 
+    pub fn col2im(
+        &self,
+        col_image: ArrayView2<f32>,
+        image_shape: (usize, usize, usize),
+        kernel_size: usize,
+        stride: usize,
+    ) -> Array3<f32> {
+        let (_, image_h, image_w) = image_shape;
+
+        let out_w = (image_w - kernel_size) / stride + 1;
+
+        // TODO: poner esto en metadata o algo
+        let mut image = Array3::<f32>::zeros(image_shape);
+
+        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
+            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
+                let col = col_image.column(row_idx * out_w + col_idx);
+                let mut window = image.slice_mut(s![.., i..i + kernel_size, j..j + kernel_size]);
+
+                window.iter_mut().zip(col.iter()).for_each(|(w, c)| {
+                    *w += *c;
+                })
+            }
+        }
+
+        image
+    }
+
+    // TODO: no es técnicamente un reshape porq estoy básicamente copiando píxeles q no habría si no
     /// Reshapes a three-dimension image tensor into a matrix with columns that match the window
     /// views that the kernel sees during the convolution pass.
     ///
