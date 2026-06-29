@@ -183,6 +183,11 @@ ALL_MODELS = list(MODELS)
 # topology fits a single host. Adjust here to scale up.
 AR_WORKER_SCALE = [3, 5, 7]
 
+# Parameter-server scalability stops at 5 workers: with 2 servers that is 7 nodes,
+# the most that fits the 8-CPU host honestly (7w would be 9 nodes and oversubscribe,
+# which would depress samples/sec as a host artifact rather than a scaling signal).
+PS_WORKER_SCALE = [3, 5]
+
 EARLY_STOP_TOL = 1e-4
 
 # convergence-speed shares one FIXED budget across strategies (no early stopping)
@@ -305,15 +310,18 @@ def execution_speed_runs(models: list[Model]) -> list[Run]:
 
 def convergence_speed_runs(models: list[Model]) -> list[Run]:
     """Suite 3 — loss/sec and accuracy/sec under one shared fixed budget across
-    strategies (no early stopping). PS runs the blocking variant only."""
+    strategies (no early stopping). Compared at a fixed total node budget: PS/SS
+    are 3w+2s = 5 nodes, so all-reduce runs 5 workers to match. PS runs the
+    blocking variant only."""
     runs: list[Run] = []
+    ar_workers = sum(PS_TOPOLOGY)
     for model in models:
         cfg = replace(model.reference, eval=True, max_epochs=CONVERGENCE_SPEED_EPOCHS,
                       early_stopping_tolerance=None)
         for variant in PS_VARIANTS:
             runs.append(Run("convergence-speed", model, Strategy.PARAMETER_SERVER,
                             *PS_TOPOLOGY, cfg, ps_variant=variant))
-        runs.append(Run("convergence-speed", model, Strategy.ALL_REDUCE, 3, 0, cfg))
+        runs.append(Run("convergence-speed", model, Strategy.ALL_REDUCE, ar_workers, 0, cfg))
         runs.append(Run("convergence-speed", model, Strategy.STRATEGY_SWITCH,
                         *PS_TOPOLOGY, cfg, ps_variant=PSVariant.BLOCKING))
     return runs
@@ -321,15 +329,17 @@ def convergence_speed_runs(models: list[Model]) -> list[Run]:
 
 def scalability_runs(models: list[Model]) -> list[Run]:
     """Suite 4 — throughput vs node count. Short budget on a subset, no
-    convergence. All-reduce sweeps workers; PS sweeps workers/servers."""
+    convergence. Both strategies sweep workers at a fixed server count; PS stops
+    earlier (PS_WORKER_SCALE) so its node total stays within the host's CPUs."""
     runs: list[Run] = []
+    ps_servers = PS_TOPOLOGY[1]
     for model in models:
         speed = TrainingConfig(lr=model.reference.lr, batch_size=64,
                                max_epochs=SPEED_EPOCHS, subset=SPEED_SUBSET)
         for w in AR_WORKER_SCALE:
             runs.append(Run("scalability", model, Strategy.ALL_REDUCE, w, 0, speed))
-        for w, s in [(2, 1), (3, 2)]:
-            runs.append(Run("scalability", model, Strategy.PARAMETER_SERVER, w, s,
+        for w in PS_WORKER_SCALE:
+            runs.append(Run("scalability", model, Strategy.PARAMETER_SERVER, w, ps_servers,
                             speed, ps_variant=PSVariant.BLOCKING))
     return runs
 

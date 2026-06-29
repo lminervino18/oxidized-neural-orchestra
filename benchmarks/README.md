@@ -4,7 +4,7 @@ Compares the three distributed strategies — **parameter server**, **all-reduce
 
 ## Models
 
-- **Nielsen MNIST**: `28×28×1 → conv(20, 5×5) → maxpool(2×2) → dense(100) → dense(10) → softmax`.
+- **Nielsen MNIST**: `28×28×1 → conv(20, 5×5) → maxpool(2×2) → dense(100, sigmoid) → dense(10) → softmax`.
 - **LeNet5**: `conv(6, 5×5, pad2) → maxpool → conv(16, 5×5) → maxpool → dense(120) → dense(84) → dense(10)`, tanh + softmax.
 
 ### Hyper-parameters
@@ -38,27 +38,27 @@ Partial runs only re-run and re-plot the selected suite/model; every other suite
 
 All-reduce worker scale: [3, 5, 7] (configurable in `issue/suites.py`; the issue suggests 3/7/11 — kept lighter to fit one host).
 
-_Last full run: 4h 40m 34s (2026-06-26 02:14)._
+_Last full run: 4h 24m 41s (2026-06-28 22:57)._
 
 ## Convergence
 
-**Measures:** loss vs epoch and final test accuracy. Strategies are compared at a **fixed 3-worker** topology so the per-worker shard size and the cross-worker averaging frequency stay constant — the only fair way to attribute differences to the strategy. (Training is **Local SGD**: every worker runs SGD locally at `batch` per step over its data shard, then the updates are averaged across workers each epoch — the per-step batch is **not** `workers × batch`.) The all-reduce **worker-count sweep** lives in its own figure (more workers = smaller shards + more averaging). The dashed line is the single-process PyTorch reference (same recipe + same early-stopping rule).
+**Measures:** loss vs epoch and final test accuracy. Strategies are compared at a **fixed 5-node budget** (PS and SS are 3 workers + 2 servers; all-reduce runs 5 workers) so they spend the same hardware. We hold **nodes** fixed rather than **workers** because strategy switch all-reduces over *every* node until it switches, so a 3w/2s SS is really a 5-node run; at equal node budget it sits honestly next to all-reduce with that many workers instead of being mislabeled as a 3-worker run. (Training is **Local SGD**: every worker runs SGD locally at `batch` per step over its data shard, then the updates are averaged across workers each epoch — the per-step batch is **not** `workers × batch`.) The all-reduce **worker-count sweep** lives in its own figure (more workers = smaller shards + more averaging). The dashed line is the single-process PyTorch reference (same recipe + same early-stopping rule).
 **Does NOT measure:** wall-clock speed.
 
-| Model | Strategy | Topology | Batch/wkr | Epochs | Final loss | Accuracy |
-|---|---|---|---|---|---|---|
-| lenet5 | AR | 3w | 64 | 55 | 0.00759 | 0.978 |
-| lenet5 | AR | 5w | 64 | 60 | 0.0105 | 0.973 |
-| lenet5 | AR | 7w | 64 | 60 | 0.014 | 0.963 |
-| lenet5 | PS (blocking) | 3w/2s | 64 | 60 | 0.00723 | 0.980 |
-| lenet5 | SS (blocking) · no switch | 3w/2s | 64 | 60 | 0.0105 | 0.973 |
-| lenet5 | PyTorch (ref) | 1w | 64 | 60 | 0.00107 | 0.990 |
-| nielsen | AR | 3w | 10 | 52 | 0.00361 | 0.984 |
-| nielsen | AR | 5w | 10 | 60 | 0.00547 | 0.979 |
-| nielsen | AR | 7w | 10 | 60 | 0.00762 | 0.975 |
-| nielsen | PS (blocking) | 3w/2s | 10 | 60 | 0.00349 | 0.983 |
-| nielsen | SS (blocking) · no switch | 3w/2s | 10 | 60 | 0.00547 | 0.979 |
-| nielsen | PyTorch (ref) | 1w | 10 | 60 | 0.000222 | 0.989 |
+| Model | Strategy | Topology | lr | Batch/wkr | Epochs | Final loss | Accuracy |
+|---|---|---|---|---|---|---|---|
+| lenet5 | AR | 3w | 0.05 | 64 | 56 | 0.00756 | 0.978 |
+| lenet5 | AR | 5w | 0.05 | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | AR | 7w | 0.05 | 64 | 60 | 0.014 | 0.963 |
+| lenet5 | PS (blocking) | 3w/2s | 0.05 | 64 | 60 | 0.00723 | 0.980 |
+| lenet5 | SS (blocking) · no switch | 3w/2s | 0.05 | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | PyTorch (ref) | 1w | 0.05 | 64 | 60 | 0.00107 | 0.990 |
+| nielsen | AR | 3w | 0.1 | 10 | 52 | 0.00361 | 0.984 |
+| nielsen | AR | 5w | 0.1 | 10 | 60 | 0.00547 | 0.979 |
+| nielsen | AR | 7w | 0.1 | 10 | 60 | 0.00762 | 0.975 |
+| nielsen | PS (blocking) | 3w/2s | 0.1 | 10 | 60 | 0.00349 | 0.983 |
+| nielsen | SS (blocking) · no switch | 3w/2s | 0.1 | 10 | 60 | 0.00547 | 0.979 |
+| nielsen | PyTorch (ref) | 1w | 0.1 | 10 | 60 | 0.000222 | 0.989 |
 
 ![](plots/convergence_loss_nielsen.png)
 ![](plots/convergence_loss_lenet5.png)
@@ -74,29 +74,29 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 
 | Model | Strategy | Topology | offline | batch | Samples/sec | Epochs/sec |
 |---|---|---|---|---|---|---|
-| lenet5 | AR | 3w | 0 | 64 | 2954 | 0.738 |
-| lenet5 | AR | 3w | 4 | 64 | 2987 | 0.747 |
-| lenet5 | AR | 3w | 0 | 256 | 3019 | 0.755 |
-| nielsen | AR | 3w | 0 | 64 | 3824 | 0.956 |
-| nielsen | AR | 3w | 4 | 64 | 3927 | 0.982 |
-| nielsen | AR | 3w | 0 | 256 | 3685 | 0.921 |
+| lenet5 | AR | 3w | 0 | 64 | 3015 ± 57 | 0.754 ± 0.0142 |
+| lenet5 | AR | 3w | 4 | 64 | 2976 ± 104 | 0.744 ± 0.0261 |
+| lenet5 | AR | 3w | 0 | 256 | 2921 ± 5 | 0.73 ± 0.00137 |
+| nielsen | AR | 3w | 0 | 64 | 3927 ± 165 | 0.982 ± 0.0414 |
+| nielsen | AR | 3w | 4 | 64 | 3553 ± 6 | 0.888 ± 0.00155 |
+| nielsen | AR | 3w | 0 | 256 | 3593 ± 147 | 0.898 ± 0.0367 |
 
 ![](plots/execution_speed_nielsen.png)
 ![](plots/execution_speed_lenet5.png)
 
 ## Convergence speed
 
-**Measures:** loss reduction/sec and accuracy/sec under one shared fixed budget at the same worker count (only the strategy changes). SS rows state whether the switch fired.
+**Measures:** loss reduction/sec and accuracy/sec under one shared fixed budget at the same 5-node budget (only the strategy changes). SS rows state whether the switch fired.
 **Does NOT measure:** peak accuracy.
 
 | Model | Strategy | Topology | Loss/sec | Accuracy/sec |
 |---|---|---|---|---|
-| lenet5 | AR | 3w | 0.000271 | 0.00121 |
-| lenet5 | PS (blocking) | 3w/2s | 0.000271 | 0.00121 |
-| lenet5 | SS (blocking) · no switch | 3w/2s | 0.000323 | 0.00144 |
-| nielsen | AR | 3w | 0.000164 | 0.00158 |
-| nielsen | PS (blocking) | 3w/2s | 0.000145 | 0.00141 |
-| nielsen | SS (blocking) · no switch | 3w/2s | 0.000246 | 0.00174 |
+| lenet5 | AR | 5w | 0.000327 | 0.00146 |
+| lenet5 | PS (blocking) | 3w/2s | 0.000262 | 0.00117 |
+| lenet5 | SS (blocking) · no switch | 3w/2s | 0.000327 | 0.00146 |
+| nielsen | AR | 5w | 0.000241 | 0.0017 |
+| nielsen | PS (blocking) | 3w/2s | 0.000149 | 0.00145 |
+| nielsen | SS (blocking) · no switch | 3w/2s | 0.000249 | 0.00176 |
 
 ![](plots/convergence_speed_nielsen.png)
 ![](plots/convergence_speed_lenet5.png)
@@ -108,26 +108,30 @@ _Last full run: 4h 40m 34s (2026-06-26 02:14)._
 
 | Model | Strategy | Workers | Nodes | Samples/sec |
 |---|---|---|---|---|
-| lenet5 | AR | 3 | 3 | 2982 |
-| lenet5 | AR | 5 | 5 | 3607 |
-| lenet5 | AR | 7 | 7 | 4450 |
-| lenet5 | PS (blocking) | 2 | 3 | 2301 |
-| lenet5 | PS (blocking) | 3 | 5 | 3034 |
-| nielsen | AR | 3 | 3 | 3578 |
-| nielsen | AR | 5 | 5 | 4709 |
-| nielsen | AR | 7 | 7 | 5445 |
-| nielsen | PS (blocking) | 2 | 3 | 3024 |
-| nielsen | PS (blocking) | 3 | 5 | 3926 |
+| lenet5 | AR | 3 | 3 | 2979 ± 165 |
+| lenet5 | AR | 5 | 5 | 3607 ± 28 |
+| lenet5 | AR | 7 | 7 | 4193 ± 236 |
+| lenet5 | PS (blocking) | 3 | 5 | 3013 ± 24 |
+| lenet5 | PS (blocking) | 5 | 7 | 3924 ± 36 |
+| nielsen | AR | 3 | 3 | 3688 ± 183 |
+| nielsen | AR | 5 | 5 | 4622 ± 38 |
+| nielsen | AR | 7 | 7 | 5213 ± 191 |
+| nielsen | PS (blocking) | 3 | 5 | 3962 ± 4 |
+| nielsen | PS (blocking) | 5 | 7 | 5049 ± 59 |
 
 ![](plots/scalability_nielsen.png)
 ![](plots/scalability_lenet5.png)
 
 ## Methodology & fairness
 
-- **Local SGD, not large-batch.** Each worker runs SGD locally at the per-worker `batch` over its data shard, then the updates are averaged across workers each epoch (FedAvg-style). The per-step batch is **not** `workers × batch`. Adding workers shards the data finer and averages more often, which is what shifts convergence — so the strategy comparison fixes the worker count and the worker-count sweep is shown separately. The single-process baseline uses the same per-step batch, so it is a like-for-like reference, not an over-batched one.
+- **Local SGD, not large-batch.** Each worker runs SGD locally at the per-worker `batch` over its data shard, then the updates are averaged across workers each epoch (FedAvg-style). The per-step batch is **not** `workers × batch`. Adding workers shards the data finer and averages more often, which is what shifts convergence — so the strategy comparison fixes the total node budget (workers + servers) and the worker-count sweep is shown separately. The single-process baseline uses the same per-step batch, so it is a like-for-like reference, not an over-batched one.
 - **Batch differs across suites.** Speed/scalability use a larger batch on a subset (they only need throughput), so their numbers do **not** transfer to the convergence config (e.g. Nielsen converges at batch 10 but is benchmarked for speed at batch 64/256 — ~6× faster there).
 - **Throughput = samples/sec**, not epochs/sec: an epoch with a bigger batch has fewer steps, so epochs/sec would reward batch size by construction.
+- **Accuracy** is measured **once, after training**, over the **full 10,000-sample MNIST test set** (`t10k`): the trained weights are loaded into the PyTorch argmax reference and scored on every test sample — not sampled, not evaluated periodically, so there is no mid-training eval cost folded into `train_seconds`.
+- **What `train_seconds` measures.** Host wall-clock of `orchestrate().wait()`. Every node runs as a Docker container **on a single host**, so (a) compute runs in genuine parallel only up to the host core count (~8 cores here — readings past ~8 total nodes oversubscribe and stop being honest) and (b) the network is **loopback**, so inter-node communication is far cheaper than a real multi-machine cluster. Read samples/sec and scalability as a **single-host lower bound on comms cost**, not a true distributed measurement.
+- **`loss/sec` and `accuracy/sec` divide by total time**, so they reward raw speed: a faster strategy that plateaus at a slightly lower final accuracy can still score higher than a slower one that converges better. Always read them next to the final accuracy, never alone.
 - **Loss scale.** The distributed `loss` is the mean across workers of each worker's epoch-mean cross-entropy; the PyTorch baseline is the global epoch-mean cross-entropy — same scale, directly comparable. (Early stopping on the distributed side keys off the per-epoch **max** worker loss; for the 1-worker baseline max = mean.)
+- **Cross-entropy on logits, softmax once.** The PyTorch baseline computes the loss with `F.cross_entropy` on raw logits, which folds the softmax into the loss, so the distribution is normalized once — same softmax-then-cross-entropy the orchestra trainer applies. The final softmax is only materialized for the argmax accuracy, where it does not change the result.
 - **Early stopping** (both distributed and baseline): stop after 3 consecutive epochs whose loss delta stays within `1e-4` (mirrors the orchestrator's `ConvergenceTracker`).
 - **Repeats.** `--repeats N` repeats the throughput suites (execution-speed, scalability) N times — tables show `mean ± std` and bars carry error bars. The expensive convergence suites always run once (their loss/sec numbers are single-shot).
 

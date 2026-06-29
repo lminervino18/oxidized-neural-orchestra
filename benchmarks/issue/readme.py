@@ -17,11 +17,14 @@ SUITE_DOCS = {
     "convergence": (
         "Convergence",
         "**Measures:** loss vs epoch and final test accuracy. Strategies are compared "
-        f"at a **fixed {3}-worker** topology so the per-worker shard size and the "
-        "cross-worker averaging frequency stay constant — the only fair way to attribute "
-        "differences to the strategy. (Training is **Local SGD**: every worker runs SGD "
-        "locally at `batch` per step over its data shard, then the updates are averaged "
-        "across workers each epoch — the per-step batch is **not** `workers × batch`.) The "
+        "at a **fixed 5-node budget** (PS and SS are 3 workers + 2 servers; all-reduce "
+        "runs 5 workers) so they spend the same hardware. We hold **nodes** fixed rather "
+        "than **workers** because strategy switch all-reduces over *every* node until it "
+        "switches, so a 3w/2s SS is really a 5-node run; at equal node budget it sits "
+        "honestly next to all-reduce with that many workers instead of being mislabeled "
+        "as a 3-worker run. (Training is **Local SGD**: every worker runs SGD locally at "
+        "`batch` per step over its data shard, then the updates are averaged across "
+        "workers each epoch — the per-step batch is **not** `workers × batch`.) The "
         "all-reduce **worker-count sweep** lives in its own figure (more workers = smaller "
         "shards + more averaging). The dashed line is the single-process PyTorch reference "
         "(same recipe + same early-stopping rule).\n"
@@ -36,7 +39,7 @@ SUITE_DOCS = {
     "convergence-speed": (
         "Convergence speed",
         "**Measures:** loss reduction/sec and accuracy/sec under one shared fixed budget "
-        "at the same worker count (only the strategy changes). SS rows state whether the "
+        "at the same 5-node budget (only the strategy changes). SS rows state whether the "
         "switch fired.\n"
         "**Does NOT measure:** peak accuracy.",
     ),
@@ -94,8 +97,8 @@ def _suite_rows(suite, history):
                   key=lambda r: (r["model"], r.get("baseline", False), r["strategy"],
                                  r.get("ps_variant") or "", r["workers"]))
     if suite == "convergence":
-        header = ["Model", "Strategy", "Topology", "Batch/wkr", "Epochs", "Final loss", "Accuracy"]
-        rows = [[r["model"], _strat_cell(r), _topo(r),
+        header = ["Model", "Strategy", "Topology", "lr", "Batch/wkr", "Epochs", "Final loss", "Accuracy"]
+        rows = [[r["model"], _strat_cell(r), _topo(r), _fmt(r.get("lr")),
                  r.get("batch_size", 0),
                  r.get("epochs_ran", "—"), _fmt(r.get("final_loss")),
                  _fmt_pm(r, "accuracy", "{:.3f}")] for r in runs]
@@ -156,7 +159,7 @@ def render(history, meta=None):
         "",
         "## Models",
         "",
-        "- **Nielsen MNIST**: `28×28×1 → conv(20, 5×5) → maxpool(2×2) → dense(100) → dense(10) → softmax`.",
+        "- **Nielsen MNIST**: `28×28×1 → conv(20, 5×5) → maxpool(2×2) → dense(100, sigmoid) → dense(10) → softmax`.",
         "- **LeNet5**: `conv(6, 5×5, pad2) → maxpool → conv(16, 5×5) → maxpool → dense(120) → dense(84) → dense(10)`, tanh + softmax.",
         "",
         "### Hyper-parameters",
@@ -216,20 +219,41 @@ def render(history, meta=None):
         "`batch` over its data shard, then the updates are averaged across workers each "
         "epoch (FedAvg-style). The per-step batch is **not** `workers × batch`. Adding "
         "workers shards the data finer and averages more often, which is what shifts "
-        "convergence — so the strategy comparison fixes the worker count and the "
-        "worker-count sweep is shown separately. The single-process baseline uses the same "
-        "per-step batch, so it is a like-for-like reference, not an over-batched one.",
+        "convergence — so the strategy comparison fixes the total node budget (workers + "
+        "servers) and the worker-count sweep is shown separately. The single-process "
+        "baseline uses the same per-step batch, so it is a like-for-like reference, not an "
+        "over-batched one.",
         "- **Batch differs across suites.** Speed/scalability use a larger batch on a "
         "subset (they only need throughput), so their numbers do **not** transfer to the "
         "convergence config (e.g. Nielsen converges at batch 10 but is benchmarked for "
         "speed at batch 64/256 — ~6× faster there).",
         "- **Throughput = samples/sec**, not epochs/sec: an epoch with a bigger batch has "
         "fewer steps, so epochs/sec would reward batch size by construction.",
+        "- **Accuracy** is measured **once, after training**, over the **full 10,000-sample "
+        "MNIST test set** (`t10k`): the trained weights are loaded into the PyTorch argmax "
+        "reference and scored on every test sample — not sampled, not evaluated periodically, "
+        "so there is no mid-training eval cost folded into `train_seconds`.",
+        "- **What `train_seconds` measures.** Host wall-clock of `orchestrate().wait()`. "
+        "Every node runs as a Docker container **on a single host**, so (a) compute runs in "
+        "genuine parallel only up to the host core count (~8 cores here — readings past ~8 "
+        "total nodes oversubscribe and stop being honest) and (b) the network is **loopback**, "
+        "so inter-node communication is far cheaper than a real multi-machine cluster. Read "
+        "samples/sec and scalability as a **single-host lower bound on comms cost**, not a "
+        "true distributed measurement.",
+        "- **`loss/sec` and `accuracy/sec` divide by total time**, so they reward raw speed: "
+        "a faster strategy that plateaus at a slightly lower final accuracy can still score "
+        "higher than a slower one that converges better. Always read them next to the final "
+        "accuracy, never alone.",
         "- **Loss scale.** The distributed `loss` is the mean across workers of each "
         "worker's epoch-mean cross-entropy; the PyTorch baseline is the global epoch-mean "
         "cross-entropy — same scale, directly comparable. (Early stopping on the "
         "distributed side keys off the per-epoch **max** worker loss; for the 1-worker "
         "baseline max = mean.)",
+        "- **Cross-entropy on logits, softmax once.** The PyTorch baseline computes the "
+        "loss with `F.cross_entropy` on raw logits, which folds the softmax into the loss, "
+        "so the distribution is normalized once — same softmax-then-cross-entropy the "
+        "orchestra trainer applies. The final softmax is only materialized for the argmax "
+        "accuracy, where it does not change the result.",
         "- **Early stopping** (both distributed and baseline): stop after 3 consecutive "
         "epochs whose loss delta stays within `1e-4` (mirrors the orchestrator's "
         "`ConvergenceTracker`).",

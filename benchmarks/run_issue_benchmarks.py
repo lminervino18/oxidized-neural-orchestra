@@ -99,6 +99,13 @@ def main():
         check_hosts(max(nodes_for(r) for r in docker_runs))
         docker_cleanup()
 
+    # A fresh run keeps only its own results on disk: archive any prior JSONL so the
+    # CSV and plots can never pick up stale runs via load_history.
+    if args.fresh:
+        moved = R.archive_prior_jsonl()
+        if moved:
+            print(f"--fresh: archived {moved} prior result file(s) to results/archive/")
+
     out_path = R.RESULTS_DIR / f"{datetime.datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.jsonl"
     new_results = []
     done = 0
