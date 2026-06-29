@@ -83,15 +83,22 @@ where
         self.scatter().await?;
         self.gather().await?;
 
-        // The ring sums every worker's partial gradient; average it back so the
-        // effective learning rate stays independent of the worker count.
         let nworkers = self.addrs.len();
         let mut param_manager = self.build_param_manager(params);
+        Self::average_gradient(&mut param_manager, nworkers);
+
+        Ok(param_manager)
+    }
+
+    /// Averages the all-reduced gradient by the worker count.
+    ///
+    /// The ring sums every worker's partial gradient, so the aggregate scales with
+    /// the worker count; dividing it back keeps the effective learning rate
+    /// independent of how many workers participate.
+    fn average_gradient(param_manager: &mut ParamManager, nworkers: usize) {
         if let Some(n) = NonZeroUsize::new(nworkers).filter(|n| n.get() > 1) {
             param_manager.normalize_gradient(n);
         }
-
-        Ok(param_manager)
     }
 
     /// Will start the ring scattering of the gradients with the rest of
