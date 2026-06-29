@@ -14,15 +14,25 @@ plt.rcParams.update({"font.size": 8, "font.family": "serif"})
 
 
 def _box(ax, xy, w, h, text, fc=GREY, ec=DARK, fs=8):
-    ax.add_patch(FancyBboxPatch(xy, w, h, boxstyle="round,pad=0.012,rounding_size=0.02",
-                                linewidth=0.9, edgecolor=ec, facecolor=fc))
+    patch = FancyBboxPatch(xy, w, h, boxstyle="round,pad=0.012,rounding_size=0.02",
+                           linewidth=0.9, edgecolor=ec, facecolor=fc)
+    ax.add_patch(patch)
     ax.text(xy[0] + w / 2, xy[1] + h / 2, text, ha="center", va="center", fontsize=fs)
+    return patch
 
 
 def _arrow(ax, a, b, style="-|>", ls="-", lw=0.9, color=DARK):
     ax.add_patch(FancyArrowPatch(a, b, arrowstyle=style, mutation_scale=8,
                                  linewidth=lw, color=color, linestyle=ls,
                                  shrinkA=2, shrinkB=2))
+
+
+def _link(ax, ca, cb, pa, pb, style="-|>", ls="-", lw=0.9, color=DARK, rad=0.0):
+    """Arrow between two box centers, clipped to the boxes' boundaries."""
+    ax.add_patch(FancyArrowPatch(ca, cb, patchA=pa, patchB=pb, arrowstyle=style,
+                                 mutation_scale=8, linewidth=lw, color=color,
+                                 linestyle=ls, shrinkA=2, shrinkB=2,
+                                 connectionstyle=f"arc3,rad={rad}"))
 
 
 def architecture():
@@ -52,26 +62,30 @@ def architecture():
 
 
 def ps_vs_ar():
+    import numpy as np
     fig, axes = plt.subplots(1, 2, figsize=(3.4, 1.9))
     # ── Parameter Server ──
     ax = axes[0]
-    _box(ax, (0.30, 0.74), 0.40, 0.18, "server(s)\n(pesos shardeados)", fc="0.72", fs=6.5)
+    server = _box(ax, (0.24, 0.70), 0.52, 0.22, "server(s)\n(pesos shardeados)",
+                  fc="0.72", fs=5.0)
+    sc = (0.50, 0.81)
     for x in (0.02, 0.38, 0.74):
-        _box(ax, (x, 0.10), 0.24, 0.16, "worker", fs=6.5)
-        _arrow(ax, (x + 0.12, 0.26), (0.5, 0.74), style="-|>", lw=0.7)          # push grad
-        _arrow(ax, (0.5, 0.74), (x + 0.12, 0.26), style="-|>", ls=":", lw=0.7, color=ACCENT)  # pull params
+        wbox = _box(ax, (x, 0.04), 0.24, 0.16, "worker", fs=6.5)
+        wc = (x + 0.12, 0.12)
+        _link(ax, wc, sc, wbox, server, style="-|>", lw=0.7, rad=0.2)            # push grad
+        _link(ax, sc, wc, server, wbox, style="-|>", ls=":", lw=0.7,
+              color=ACCENT, rad=0.2)                                             # pull params
     ax.set_title("Parameter Server", fontsize=7)
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_axis_off()
     # ── Ring All-Reduce ──
     ax = axes[1]
-    import numpy as np
-    cx, cy, r = 0.5, 0.5, 0.32
+    cx, cy, r = 0.5, 0.5, 0.30
     pts = [(cx + r * np.cos(t), cy + r * np.sin(t))
            for t in np.linspace(0.5 * np.pi, 0.5 * np.pi + 2 * np.pi, 5)[:4]]
-    for (x, y) in pts:
-        _box(ax, (x - 0.11, y - 0.07), 0.22, 0.14, "worker", fs=6.5)
+    boxes = [_box(ax, (x - 0.11, y - 0.07), 0.22, 0.14, "worker", fs=6.5) for (x, y) in pts]
     for i in range(4):
-        _arrow(ax, pts[i], pts[(i + 1) % 4], style="-|>", lw=0.8)
+        _link(ax, pts[i], pts[(i + 1) % 4], boxes[i], boxes[(i + 1) % 4],
+              style="-|>", lw=0.8, rad=0.15)
     ax.set_title("Ring All-Reduce", fontsize=7)
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_axis_off()
     fig.tight_layout(pad=0.3)

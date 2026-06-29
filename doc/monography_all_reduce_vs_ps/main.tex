@@ -50,7 +50,8 @@ es por worker), midiendo convergencia, throughput y escalabilidad. La evidencia 
 indica que, en este entorno homog\'eneo sobre una sola m\'aquina, All-Reduce iguala a
 Parameter Server en convergencia y lo supera en throughput y tiempo hasta accuracy, porque
 el servidor central de PS introduce un cuello de serializaci\'on. PS, en cambio, escala con
-pendiente m\'as pronunciada al crecer los nodos y resulta m\'as robusto con modelos grandes.
+pendiente m\'as pronunciada al crecer los nodos; sus dem\'as ventajas estructurales
+(sharding, heterogeneidad, asincron\'ia) no se ejercitan en este entorno.
 Las conclusiones est\'an acotadas a un cl\'uster simulado sobre una \'unica m\'aquina de
 ocho n\'ucleos.
 \end{abstract}
@@ -239,12 +240,11 @@ sincr\'onico satura antes los ocho n\'ucleos f\'isicos.
 Para aislar el efecto del tama\~no de gradiente entrenamos MLPs de tama\~no creciente
 (\cref{tab:models}) a 3 nodos, con batch por worker fijo. \Cref{fig:comm} (eje
 logar\'itmico) muestra que el throughput se desploma al crecer el modelo: la
-comunicaci\'on, no el c\'omputo, domina. M\'as revelador es el cruce entre estrategias:
-con el modelo chico AR aventaja a PS; en el mediano se igualan (PS incluso por encima); y
-con el modelo grande AR \emph{no complet\'o} el entrenamiento ---el intercambio del
-gradiente excedi\'o el deadline de respuesta del transporte, de forma reproducible---
-mientras que PS, con los pesos shardeados entre servidores, s\'i lo complet\'o. Bajo
-comunicaci\'on intensa, PS result\'o m\'as robusto en esta configuraci\'on. La
+comunicaci\'on, no el c\'omputo, domina. Comparando estrategias, All-Reduce sostiene
+mayor throughput que Parameter Server tanto con el modelo chico como con el grande, y
+empatan en el tama\~no intermedio. La presi\'on de comunicaci\'on hunde el throughput
+absoluto pero no invierte la ventaja de All-Reduce: su anillo, sin servidor central,
+sigue siendo m\'as r\'apido aun cuando el gradiente denso domina el costo. La
 compresi\'on de gradientes, esparsa o cuantizada, es una mitigaci\'on conocida para esta
 presi\'on~\cite{lin2018deep,aji2017sparse}, fuera del alcance de este trabajo.
 
@@ -252,8 +252,9 @@ presi\'on~\cite{lin2018deep,aji2017sparse}, fuera del alcance de este trabajo.
   \centering
   \includegraphics[width=\columnwidth]{communication_pressure.pdf}
   \caption{Presi\'on de comunicaci\'on: throughput (log) vs.\ tama\~no de MLP a 3
-  nodos. La ventaja de AR en modelos peque\~nos se diluye al crecer el gradiente; con
-  el modelo grande AR no complet\'o el entrenamiento y PS s\'i.}
+  nodos. All-Reduce sostiene mayor throughput que Parameter Server en los extremos
+  (modelo chico y grande) y empatan en el intermedio; el throughput absoluto se
+  desploma al crecer el gradiente.}
   \label{fig:comm}
 \end{figure}
 
@@ -265,13 +266,13 @@ gradientes densos. Iguala a PS en convergencia y entrega mayor throughput y meno
 tiempo hasta accuracy, sin un servidor central que congestione. Es la opci\'on por
 defecto cuando no hay heterogeneidad que explotar.
 
-\textbf{Cu\'ando conviene Parameter Server.} Dos evidencias favorecen a PS al crecer la
-escala: (i) escala con mayor pendiente al sumar nodos, amortizando su costo fijo de
-servidor; y (ii) bajo comunicaci\'on intensa fue \emph{m\'as robusto}: con el MLP m\'as
-grande complet\'o el entrenamiento, donde All-Reduce no lo logr\'o (\cref{fig:comm}). El
-sharding de pesos entre servidores reparte la carga de comunicaci\'on. Sus restantes
-ventajas te\'oricas (heterogeneidad, stragglers, asincron\'ia) no se ejercitaron y quedan
-como trabajo futuro.
+\textbf{Cu\'ando conviene Parameter Server.} La evidencia favorece a PS en un \'unico
+aspecto del entorno evaluado: escala con mayor pendiente al sumar nodos, amortizando su
+costo fijo de servidor. Su ventaja te\'orica m\'as fuerte ---el sharding de
+par\'ametros--- ser\'ia decisiva para modelos que no entran en un solo nodo, pero el
+mayor que evaluamos s\'i complet\'o en All-Reduce, as\'i que no se ejercit\'o
+(\cref{fig:comm}). Lo mismo con sus dem\'as ventajas (heterogeneidad, stragglers,
+asincron\'ia), que quedan como trabajo futuro.
 
 \input{tables/decision_matrix.tex}
 
@@ -290,10 +291,10 @@ Respondiendo a la pregunta de investigaci\'on, en el entorno evaluado (homog\'en
 sincr\'onico y sobre una sola m\'aquina) \emph{All-Reduce es preferible}: iguala a
 Parameter Server en convergencia a batch global fijo y lo supera en throughput y tiempo
 hasta accuracy, porque el servidor central de PS introduce un cuello de serializaci\'on.
-PS recorta distancia al escalar (mayor pendiente desde una base m\'as baja) y resulta
-m\'as robusto con modelos grandes, por lo que ser\'ia la elecci\'on natural si se
-explotaran sus ventajas estructurales (heterogeneidad, asincron\'ia, sharding), que
-aqu\'i no se ejercitaron. O.N.O.\ aporta evidencia de que un sistema distribuido
+PS recorta distancia al escalar (mayor pendiente desde una base m\'as baja), pero no
+super\'o a All-Reduce en throughput ni siquiera con el modelo m\'as grande; ser\'ia la
+elecci\'on natural solo si se explotaran sus ventajas estructurales (heterogeneidad,
+asincron\'ia, sharding de modelos que no entran en un nodo), que aqu\'i no se ejercitaron. O.N.O.\ aporta evidencia de que un sistema distribuido
 implementado desde cero, con asignaci\'on de roles en runtime, permite contrastar ambas
 familias bajo un criterio de comparaci\'on justa. Como trabajo futuro: red con latencia
 realista, stragglers controlados y la evaluaci\'on de modelos y datasets de mayor

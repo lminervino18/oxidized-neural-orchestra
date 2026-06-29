@@ -148,8 +148,8 @@ def write_decision_matrix():
         r"Condici\'on & Recomendada & Justificaci\'on / evidencia\\\midrule",
         r"Cl\'uster homog\'eneo, buena red, sincron\'ia, gradientes densos, evitar servidor central & All-Reduce & "
         r"Sin punto central de contenci\'on; comunicaci\'on por worker $\approx$ independiente de $W$. \emph{Evidencia:} iguala a PS en accuracy con mayor throughput y menor tiempo hasta accuracy.\\",
-        r"Modelos grandes, mayor escala, sharding de par\'ametros, desacoplar workers/servers & Parameter Server & "
-        r"El sharding reparte la carga de comunicaci\'on. \emph{Evidencia:} escala con mayor pendiente al sumar nodos y complet\'o el entrenamiento del MLP m\'as grande, donde All-Reduce no lo logr\'o.\\",
+        r"Modelos que no entran en un nodo, mayor escala, sharding de par\'ametros, desacoplar workers/servers & Parameter Server & "
+        r"\emph{Evidencia:} escala con mayor pendiente al sumar nodos. El sharding ser\'ia decisivo para modelos que no entran en un nodo, no ejercitado aqu\'i (el mayor evaluado complet\'o en All-Reduce).\\",
         r"\bottomrule\end{tabular}", r"\end{table*}"]
     (TAB / "decision_matrix.tex").write_text("\n".join(lines) + "\n")
 

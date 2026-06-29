@@ -1,4 +1,5 @@
 label,dataset,model,strategy,synchronizer,store,nodes,workers,servers,batch_size_per_worker,effective_global_batch,final_loss,test_accuracy,total_time_sec,samples_per_sec,switched
+D_ar_large,mnist,mlp_large,all_reduce,,,3,3,0,64,192,0.027225769720365427,,73.78852104599355,6505.076849294871,
 D_ps_large,mnist,mlp_large,parameter_server,barrier,blocking,3,2,1,64,128,0.02345837616898198,,92.59402834500361,5183.919617489036,
 D_ar_medium,mnist,mlp_medium,all_reduce,,,3,3,0,64,192,0.02858410540797487,,20.089802636997774,23892.71854348746,
 D_ps_medium,mnist,mlp_medium,parameter_server,barrier,blocking,3,2,1,64,128,0.024733582446933845,,18.65313855400018,25732.93489513397,

@@ -1,4 +1,12 @@
 run_id,timestamp,dataset,model,strategy,nodes,workers,servers,synchronizer,store,batch_size_per_worker,effective_global_batch,optimizer,learning_rate,seed,max_epochs,offline_epochs,epoch,train_loss,test_loss,test_accuracy,epoch_time_sec,total_time_sec,samples_per_sec,status,notes
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,1,0.12519337725027496,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,2,0.05310211611610549,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,3,0.04058998522501534,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,4,0.035463038853457036,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,5,0.032414203311093466,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,6,0.030276257102344273,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,7,0.028568130708272965,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
+D_ar_large,,mnist,mlp_large,all_reduce,3,3,0,NA,NA,64,192,sgd,0.1,42,8,0,8,0.027225769720365427,NA,NA,9.2236,73.78852104599355,6505.076849294871,ok,AR mlp_large rerun after deadlock fix
 A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,1,0.1073116494614772,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
 A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,2,0.035523172557830496,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
 A_ar3_nielsen,exp,mnist,nielsen,all_reduce,3,3,0,NA,NA,10,30,sgd,0.1,42,60,0,3,0.02839772692911714,NA,NA,15.5107,930.6436904779985,3868.290342301642,ok,"all-reduce, 3 workers"
