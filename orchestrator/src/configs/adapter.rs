@@ -238,37 +238,16 @@ impl Adapter {
         let (servers, server_sizes, server_ordering, layer_offsets) =
             self.adapt_servers(model, training, server_addrs, addr_ids, synchronizer, store)?;
 
-        let mut switches = (0..nworkers).map(|_| WorkerPostAction::Switch {
-            server_addrs: server_addrs.to_vec(),
-            server_sizes: server_sizes.clone(),
-            server_ordering: server_ordering.clone(),
-            trainer_spec: trainer_spec.clone(),
-        });
-
-        // Bind each server's upgrade (which carries that shard's seed params) to its
-        // OWN address. `servers`/`param_ranges` are in `server_addrs` order, but the
-        // worker that switches indexes servers in that same sorted order via
-        // `server_sizes`/`server_ordering`. Consuming the upgrades sequentially while
-        // walking `worker_addrs` in TSP-ring order would seed shards onto the wrong
-        // physical servers whenever the two orders differ, so a switched worker would
-        // pull a mismatched-size shard and panic. Keying by address keeps seeding and
-        // indexing consistent regardless of the TSP walk order.
-        let mut upgrades: HashMap<&String, WorkerPostAction> = server_addrs
-            .iter()
-            .zip(
-                servers.into_iter().zip(param_ranges).map(
-                    |(ServerAdapt { spec, .. }, ranges)| WorkerPostAction::Upgrade { spec, ranges },
-                ),
-            )
-            .collect();
-
-        let post_actions = worker_addrs
-            .iter()
-            .map(|addr| upgrades.remove(addr).or_else(|| switches.next()))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(OrchErr::Adapting(
-                "post actions don't sum up to training.addrs".into(),
-            ))?;
+        let post_actions = Self::bind_strategy_switch_post_actions(
+            nworkers,
+            worker_addrs,
+            server_addrs,
+            servers,
+            param_ranges,
+            &server_sizes,
+            &server_ordering,
+            &trainer_spec,
+        )?;
 
         let tracking = StrategySwitchTracking {
             tracker,
@@ -286,6 +265,48 @@ impl Adapter {
         };
 
         Ok(adapt)
+    }
+
+    /// Builds the per-worker post-switch action for every node in TSP-ring order.
+    ///
+    /// Each server address is keyed to its OWN `Upgrade` (which carries that shard's
+    /// seed params and ranges); every remaining worker gets a `Switch`. Binding the
+    /// upgrades by address keeps shard seeding consistent regardless of the TSP walk
+    /// order, since `servers`/`param_ranges` follow `server_addrs` order while the
+    /// switching worker indexes servers via `server_sizes`/`server_ordering`.
+    fn bind_strategy_switch_post_actions(
+        nworkers: usize,
+        worker_addrs: &[String],
+        server_addrs: &[String],
+        servers: Vec<ServerAdapt>,
+        param_ranges: Vec<Vec<(usize, usize)>>,
+        server_sizes: &[usize],
+        server_ordering: &[usize],
+        trainer_spec: &TrainerSpec,
+    ) -> Result<Vec<WorkerPostAction>> {
+        let mut switches = (0..nworkers).map(|_| WorkerPostAction::Switch {
+            server_addrs: server_addrs.to_vec(),
+            server_sizes: server_sizes.to_vec(),
+            server_ordering: server_ordering.to_vec(),
+            trainer_spec: trainer_spec.clone(),
+        });
+
+        let mut upgrades: HashMap<_, _> = server_addrs
+            .iter()
+            .zip(
+                servers.into_iter().zip(param_ranges).map(
+                    |(ServerAdapt { spec, .. }, ranges)| WorkerPostAction::Upgrade { spec, ranges },
+                ),
+            )
+            .collect();
+
+        worker_addrs
+            .iter()
+            .map(|addr| upgrades.remove(addr).or_else(|| switches.next()))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(OrchErr::Adapting(
+                "post actions don't sum up to training.addrs".into(),
+            ))
     }
 
     /// Adapts both `ModelConfig` and `TrainingConfig` into a `WorkerSpec`.
