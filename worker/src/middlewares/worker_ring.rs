@@ -116,7 +116,10 @@ where
         let mut i = self.pos;
 
         for _ in 0..n.get() - 1 {
-            match self.next.push_grad(chunks[i]).await? {
+            let (sent, event) =
+                tokio::try_join!(self.next.push_grad(chunks[i]), self.prev.recv_event())?;
+
+            match sent {
                 Some(threshold) => {
                     for g in chunks[i].iter_mut() {
                         if g.abs() >= threshold {
@@ -127,11 +130,11 @@ where
                 None => chunks[i].fill(0.0),
             }
 
-            i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(agg_grad) = self.prev.recv_event().await? else {
+            let WorkerEvent::Grad(agg_grad) = event else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
+            i = (i + n.get() - 1) % n.get();
             for (acc, g) in chunks[i].iter_mut().zip(agg_grad) {
                 *acc += *g;
             }
@@ -165,7 +168,10 @@ where
         }
 
         for j in 0..n.get() - 1 {
-            if let Some(threshold) = self.next.push_grad(chunks[i]).await? {
+            let (sent, event) =
+                tokio::try_join!(self.next.push_grad(chunks[i]), self.prev.recv_event())?;
+
+            if let Some(threshold) = sent {
                 if j == 0 {
                     for g in residual_chunks[i].iter_mut() {
                         if g.abs() >= threshold {
@@ -183,11 +189,11 @@ where
                 residual_chunks[i].fill(0.0);
             }
 
-            i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(acc_grad) = self.prev.recv_event().await? else {
+            let WorkerEvent::Grad(acc_grad) = event else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
+            i = (i + n.get() - 1) % n.get();
             chunks[i].copy_from_slice(acc_grad);
         }
 
