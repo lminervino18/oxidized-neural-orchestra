@@ -106,19 +106,4 @@ impl Convolver {
             Ok(input.conv(kernel.no_reverse(), conv_mode, padding_mode)?)
         }
     }
-
-    pub fn conv3d(
-        &self,
-        input: ArrayView3<f32>,
-        kernel: ArrayView3<f32>,
-        reverse: bool,
-        conv_mode: ConvMode<3>,
-        padding_mode: PaddingMode<3, f32>,
-    ) -> Result<Array3<f32>> {
-        if reverse {
-            Ok(input.conv(kernel.reverse(), conv_mode, padding_mode)?)
-        } else {
-            Ok(input.conv(kernel.no_reverse(), conv_mode, padding_mode)?)
-        }
-    }
 }
