@@ -28,21 +28,25 @@ def _arrow(ax, a, b, style="-|>", ls="-", lw=0.9, color=DARK):
 def architecture():
     fig, ax = plt.subplots(figsize=(3.4, 2.4))
     # Top label, with a clear gap above the orchestrator box (no overlap).
-    ax.text(0.5, 1.05, "configuracion de runtime (rol por nodo)", ha="center",
+    ax.text(0.5, 1.06, "asignacion de rol en runtime", ha="center",
             va="center", fontsize=6.4, color=ACCENT)
-    _box(ax, (0.34, 0.78), 0.32, 0.13, "orchestrator\n(headless)", fc="0.82")
-    roles = ["worker", "worker", "server", "worker"]
-    xs = [0.04, 0.28, 0.52, 0.76]
+    _box(ax, (0.33, 0.80), 0.34, 0.14, "orchestrator\n(headless)", fc="0.82")
+    # Three well-separated, identical nodes (wide gaps so the links read clearly).
+    roles = ["worker", "server", "worker"]
+    xs = [0.05, 0.40, 0.75]
+    w = 0.20
     for x, r in zip(xs, roles):
         fc = "0.72" if r == "server" else GREY
-        _box(ax, (x, 0.32), 0.20, 0.13, f"node\n({r})", fc=fc, fs=7)
-        _arrow(ax, (0.50, 0.78), (x + 0.10, 0.45), style="-|>", ls=":", lw=0.7, color=ACCENT)
-    # ring among workers (AR view) + push/pull to server (PS view) shown lightly
+        _box(ax, (x, 0.36), w, 0.14, f"nodo\n({r})", fc=fc, fs=7)
+        _arrow(ax, (0.50, 0.80), (x + w / 2, 0.50), style="-|>", ls=":", lw=0.7, color=ACCENT)
+    # Inter-node communication: one clear bidirectional link in each (now wide) gap.
     for i in range(len(xs) - 1):
-        _arrow(ax, (xs[i] + 0.20, 0.38), (xs[i + 1], 0.38), style="<|-|>", lw=0.7)
-    ax.text(0.5, 0.14, "roles asignados en runtime, mismo binario en todos los nodos",
+        _arrow(ax, (xs[i] + w, 0.43), (xs[i + 1], 0.43), style="<|-|>", lw=1.0)
+    ax.text(0.5, 0.27, "comunicacion entre nodos segun la estrategia",
+            ha="center", va="center", fontsize=6.3, color=ACCENT)
+    ax.text(0.5, 0.16, "nodos identicos; el rol se asigna en cada ejecucion",
             ha="center", va="center", fontsize=6.5, style="italic")
-    ax.set_xlim(0, 1); ax.set_ylim(0.06, 1.12); ax.set_axis_off()
+    ax.set_xlim(0, 1); ax.set_ylim(0.10, 1.16); ax.set_axis_off()
     fig.savefig(FIG / "architecture_ono.pdf", bbox_inches="tight")
     plt.close(fig)
 

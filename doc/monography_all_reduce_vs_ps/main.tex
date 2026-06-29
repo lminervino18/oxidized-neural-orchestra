@@ -42,24 +42,22 @@ El entrenamiento distribuido de redes neuronales se apoya en dos familias de
 algoritmos para agregar gradientes: el \emph{Parameter Server} (PS), con servidores
 centrales que concentran y actualizan los pesos, y \emph{All-Reduce} (AR), donde los
 workers reducen gradientes entre s\'i sin servidor central. Presentamos O.N.O., un
-sistema de entrenamiento distribuido implementado desde cero en Rust con binding
-Python, en el que todos los nodos corren el mismo binario y el orquestador asigna los
-roles (worker o servidor) en tiempo de ejecuci\'on. Sobre O.N.O.\ comparamos AR y PS
-(este \'ultimo sincr\'onico, con barrera) en MNIST, bajo un criterio de \emph{batch
-global fijo} (necesario porque en O.N.O.\ el \texttt{batch\_size} es por worker),
-midiendo convergencia, throughput y escalabilidad. La evidencia observada indica que,
-en este entorno homog\'eneo sobre una sola m\'aquina, All-Reduce iguala a Parameter
-Server en convergencia (a batch global fijo, ambos cerca de $94.7$\,\% de accuracy a 5
-nodos) y lo supera en throughput y tiempo hasta accuracy, porque el servidor central de
-PS introduce un cuello de serializaci\'on. PS, en cambio, escala con pendiente m\'as
-pronunciada al crecer los nodos y resulta m\'as robusto con modelos grandes. Las
-conclusiones est\'an acotadas a un cl\'uster simulado sobre una \'unica m\'aquina de
+sistema de entrenamiento distribuido propio en el que todos los nodos son id\'enticos y
+un orquestador les asigna el rol (worker o servidor) en tiempo de ejecuci\'on. Sobre
+O.N.O.\ comparamos AR y PS (este \'ultimo sincr\'onico, con barrera) en MNIST, bajo un
+criterio de \emph{batch global fijo} (necesario porque en O.N.O.\ el \texttt{batch\_size}
+es por worker), midiendo convergencia, throughput y escalabilidad. La evidencia observada
+indica que, en este entorno homog\'eneo sobre una sola m\'aquina, All-Reduce iguala a
+Parameter Server en convergencia y lo supera en throughput y tiempo hasta accuracy, porque
+el servidor central de PS introduce un cuello de serializaci\'on. PS, en cambio, escala con
+pendiente m\'as pronunciada al crecer los nodos y resulta m\'as robusto con modelos grandes.
+Las conclusiones est\'an acotadas a un cl\'uster simulado sobre una \'unica m\'aquina de
 ocho n\'ucleos.
 \end{abstract}
 
 \begin{IEEEkeywords}
-entrenamiento distribuido, deep learning, Parameter Server, All-Reduce, Rust,
-escalabilidad.
+entrenamiento distribuido, deep learning, Parameter Server, All-Reduce, agregaci\'on de
+gradientes, escalabilidad.
 \end{IEEEkeywords}
 
 \section{Introducci\'on}
@@ -80,11 +78,11 @@ qu\'e, y qu\'e compromisos aparecen entre convergencia, throughput, escalabilida
 sincronizaci\'on?} No buscamos el estado del arte en visi\'on, sino caracterizar el
 \emph{sistema} de entrenamiento.
 
-\textbf{Contribuci\'on.} (i) Describimos O.N.O., un sistema distribuido propio en
-Rust donde los roles se asignan en runtime y que implementa AR y PS; (ii) aportamos una
-comparaci\'on experimental honesta AR vs.\ PS sobre MNIST con un criterio de
-comparaci\'on justa (\emph{batch global fijo}); y (iii) destilamos una matriz de
-decisi\'on sobre cu\'ando preferir cada enfoque, acotada a las condiciones evaluadas.
+\textbf{Contribuci\'on.} (i) Describimos O.N.O., un sistema distribuido propio donde los
+roles se asignan en runtime y que implementa AR y PS; (ii) aportamos una comparaci\'on
+experimental honesta AR vs.\ PS sobre MNIST con un criterio de comparaci\'on justa
+(\emph{batch global fijo}); y (iii) destilamos una matriz de decisi\'on sobre cu\'ando
+preferir cada enfoque, acotada a las condiciones evaluadas.
 
 \section{Fundamentos y dise\~no}
 
@@ -98,8 +96,8 @@ es \emph{por worker}, de modo que agregar workers a $b$ constante cambia el batc
 efectivo (\cref{sec:fair}).
 
 \subsection{Parameter Server}
-Los servidores almacenan los pesos, posiblemente \emph{shardeados} entre varios
-servidores; los workers hacen \emph{push} de gradientes y \emph{pull} de
+Los servidores almacenan los pesos, shardeados entre ellos cuando hay m\'as de uno; los
+workers hacen \emph{push} de gradientes y \emph{pull} de
 par\'ametros~\cite{li2014scaling}. El r\'egimen de sincronizaci\'on define el
 comportamiento: con \emph{barrera} todos los workers esperan a que el server aplique
 el update (sincr\'onico, equivalente estad\'istico a AR); sin barrera, los workers
@@ -118,11 +116,12 @@ central ni punto \'unico de contenci\'on, pero todos avanzan al ritmo del m\'as 
 (sincron\'ia estricta). O.N.O.\ promedia el gradiente reducido dividiendo por $W$.
 
 \subsection{Arquitectura de O.N.O.}
-Todas las m\'aquinas corren el mismo binario \texttt{node}. Un \texttt{orchestrator}
-se conecta a todos los nodos y env\'ia una configuraci\'on de runtime que fija el rol de
-cada nodo: los roles \emph{no} est\'an hardcodeados. El motor de ML, la comunicaci\'on
-(protocolo y serializaci\'on) y las estrategias est\'an separados en crates de un
-workspace Rust; un m\'odulo \texttt{orchestra} expone la API a Python v\'ia PyO3.
+En O.N.O.\ todos los nodos son id\'enticos y agn\'osticos al rol. Un
+\texttt{orquestador} headless se conecta a ellos y, mediante una configuraci\'on de
+runtime, fija el rol de cada uno (worker o servidor): los roles \emph{no} est\'an
+fijados de antemano, sino que se asignan en cada ejecuci\'on. El sistema separa el motor
+de aprendizaje, la comunicaci\'on (protocolo y serializaci\'on) y las estrategias de
+agregaci\'on en componentes independientes, y est\'a implementado en Rust.
 \Cref{fig:arch} resume la arquitectura y \cref{fig:concept} contrasta PS con ring
 all-reduce.
 
@@ -159,22 +158,21 @@ variar el tama\~no de gradiente.
 \input{tables/models.tex}
 
 \subsection{Estrategias y configuraciones}
-Comparamos tres configuraciones: baseline single-process (PyTorch, misma receta),
-All-Reduce (todos los nodos son workers) y Parameter Server (barrera con store de doble
-buffer). Las topolog\'ias distribuidas se detallan en \cref{tab:configs}. Para PS con
-$N$ nodos usamos $N-1$ workers y $1$ servidor. Evaluamos $N\in\{3,5\}$.
+Comparamos dos estrategias distribuidas: All-Reduce (todos los nodos son workers) y
+Parameter Server (barrera con store de doble buffer). Las topolog\'ias distribuidas se
+detallan en \cref{tab:configs}. Para PS con $N$ nodos usamos $N-1$ workers y $1$ servidor.
+Evaluamos $N\in\{3,5\}$.
 
 \input{tables/configs.tex}
 
 \subsection{Criterio de comparaci\'on justa}\label{sec:fair}
 En O.N.O.\ \texttt{batch\_size} es \emph{por worker}; el batch efectivo es
 $W\cdot b$. Por lo tanto comparamos de dos formas complementarias.
-\textbf{(1) Batch global fijo}: fijamos $W\cdot b=240$ y derivamos $b=240/W$ (divisible
-por $2,3,4$ y $5$ workers), lo que mantiene la sem\'antica de optimizaci\'on constante y
-es el criterio v\'alido para \emph{convergencia}. \textbf{(2) Batch por worker fijo}:
-$b$ constante, que mide \emph{throughput bruto} pero cambia el batch efectivo y por ende
-no es justo para convergencia. Reportamos ambos y somos expl\'icitos sobre qu\'e
-pregunta responde cada uno.
+\textbf{(1) Batch global fijo}: fijamos $W\cdot b$ y derivamos $b$ seg\'un el n\'umero de
+workers, lo que mantiene la sem\'antica de optimizaci\'on constante y es el criterio
+v\'alido para \emph{convergencia}. \textbf{(2) Batch por worker fijo}: $b$ constante, que
+mide \emph{throughput bruto} pero cambia el batch efectivo y por ende no es justo para
+convergencia. Reportamos ambos y somos expl\'icitos sobre qu\'e pregunta responde cada uno.
 
 \subsection{M\'etricas y entorno}
 Medimos p\'erdida de entrenamiento por \'epoca, accuracy de test (argmax sobre los
@@ -190,15 +188,11 @@ reproducibilidad.
 \section{Resultados}
 
 \subsection{Correctitud y convergencia}
-Ambas estrategias entrenan correctamente. Con la receta de referencia (60 \'epocas,
-batch 10 por worker) alcanzan en MNIST una accuracy de test de $98.3$ a $98.5$\,\%
-(AR $98.29$\,\%, PS $98.49$\,\%), frente al $98.95$\,\% del baseline single-process.
-\Cref{fig:loss} muestra que las curvas de p\'erdida distribuidas descienden de forma
-casi solapada hacia $\sim$$2\times10^{-3}$, con PS convergiendo marginalmente m\'as
-bajo. Que el baseline logre la mayor accuracy es esperable: usa el batch efectivo m\'as
-peque\~no (10 frente a 20 o 30) y no paga comunicaci\'on. La p\'erdida del baseline no
-se grafica junto a las distribuidas porque su formulaci\'on (entrop\'ia cruzada sobre
-logits) opera en otra escala.
+Ambas estrategias entrenan correctamente: con la receta de referencia alcanzan en MNIST
+una accuracy de test cercana al \'optimo del dataset, con PS convergiendo marginalmente
+m\'as bajo en p\'erdida. \Cref{fig:loss} muestra que las curvas de p\'erdida distribuidas
+descienden de forma casi solapada, lo que confirma que ambos esquemas de agregaci\'on
+implementan la misma sem\'antica de optimizaci\'on.
 
 \begin{figure}[t]
   \centering
@@ -209,34 +203,20 @@ logits) opera en otra escala.
 \end{figure}
 
 \subsection{Comparaci\'on justa y tiempo hasta accuracy}
-Bajo \emph{batch global fijo} (240, 40 \'epocas) AR y PS convergen a una accuracy
-pr\'acticamente igual: $94.7$\,\% ambos a 5 nodos, y $94.75$ frente a $94.69$\,\% a 3
-nodos (\cref{tab:main}). El batch global mayor reduce la accuracy respecto de la receta
-de referencia, como era de esperar. La diferencia decisiva es el \emph{tiempo}:
-\cref{fig:acctime} y los datos de tiempo hasta convergencia muestran que AR alcanza su
-accuracy objetivo en torno a \SI{870}{\second}, mientras PS necesita \SI{1136}{\second}
-(cerca de $30$\,\% m\'as) y el baseline \SI{274}{\second}. El servidor central de PS
-act\'ua como punto de serializaci\'on.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{mnist_accuracy_vs_time.pdf}
-  \caption{Accuracy de test vs.\ tiempo total (MNIST, \texttt{nielsen}, runs de
-  referencia). All-Reduce alcanza $\sim$$98.3$\,\% antes que Parameter Server; el
-  baseline single-process es el m\'as r\'apido al no pagar comunicaci\'on.}
-  \label{fig:acctime}
-\end{figure}
+Bajo \emph{batch global fijo}, AR y PS convergen a una accuracy pr\'acticamente igual
+(\cref{tab:main}); el batch global mayor reduce la accuracy respecto de la receta de
+referencia, como era de esperar. La diferencia decisiva es el \emph{tiempo}: AR alcanza
+su accuracy objetivo apreciablemente antes que PS (\cref{tab:main}), porque el servidor
+central de PS act\'ua como punto de serializaci\'on por el que pasan todos los updates.
 
 \input{tables/main_results.tex}
 
 \subsection{Throughput y escalabilidad}
-A batch por worker fijo (64), AR sostiene mayor throughput que PS en ambos tama\~nos
-(\cref{fig:throughput}): \SI{4079}{} frente a \SI{2927}{} samples/s a 3 nodos y
-\SI{4867}{} frente a \SI{4768}{} a 5. Sin embargo, PS \emph{escala} con pendiente m\'as
-pronunciada (\cref{fig:speedup}): al pasar de 3 a 5 nodos su throughput crece
-$1.63\times$ (eficiencia $0.81$) contra $1.19\times$ de AR (eficiencia $0.72$), de modo
-que casi se igualan a 5 nodos. La lectura: el servidor de PS penaliza el caso chico
-pero su costo se amortiza al sumar workers; AR parte m\'as alto pero su anillo
+A batch por worker fijo, AR sostiene mayor throughput que PS en ambos tama\~nos
+(\cref{fig:throughput}). Sin embargo, PS \emph{escala} con pendiente m\'as pronunciada
+(\cref{fig:speedup}): al sumar nodos su throughput crece m\'as r\'apido que el de AR, de
+modo que casi se igualan a 5 nodos. La lectura: el servidor de PS penaliza el caso chico
+pero su costo fijo se amortiza al sumar workers; AR parte m\'as alto pero su anillo
 sincr\'onico satura antes los ocho n\'ucleos f\'isicos.
 
 \begin{figure}[t]
@@ -256,17 +236,16 @@ sincr\'onico satura antes los ocho n\'ucleos f\'isicos.
 \end{figure}
 
 \subsection{Presi\'on de comunicaci\'on}
-Para aislar el efecto del tama\~no de gradiente entrenamos MLPs de $0.10$, $0.67$ y
-$1.86$ millones de par\'ametros (a 3 nodos, batch por worker 64). \Cref{fig:comm} (eje
-logar\'itmico) muestra que el throughput se desploma cerca de $40\times$ al crecer el
-modelo cerca de $18\times$: la comunicaci\'on, no el c\'omputo, domina. M\'as revelador
-es el cruce entre estrategias: con el modelo chico AR aventaja a PS ($\SI{222711}{}$
-frente a $\SI{166818}{}$ samples/s, un $34$\,\% m\'as); en el mediano se igualan (PS
-incluso arriba, $\SI{25733}{}$ frente a $\SI{23893}{}$); y con el modelo grande AR no
-complet\'o el entrenamiento en nuestra configuraci\'on, mientras que PS, con los pesos
-shardeados entre servidores, s\'i lo complet\'o ($\SI{5184}{}$ samples/s). Bajo
-comunicaci\'on intensa, PS result\'o m\'as robusto. La compresi\'on de gradientes,
-esparsa o cuantizada, es una mitigaci\'on conocida para esta
+Para aislar el efecto del tama\~no de gradiente entrenamos MLPs de tama\~no creciente
+(\cref{tab:models}) a 3 nodos, con batch por worker fijo. \Cref{fig:comm} (eje
+logar\'itmico) muestra que el throughput se desploma al crecer el modelo: la
+comunicaci\'on, no el c\'omputo, domina. M\'as revelador es el cruce entre estrategias:
+con el modelo chico AR aventaja a PS; en el mediano se igualan (PS incluso por encima); y
+con el modelo grande AR \emph{no complet\'o} el entrenamiento ---el intercambio del
+gradiente excedi\'o el deadline de respuesta del transporte, de forma reproducible---
+mientras que PS, con los pesos shardeados entre servidores, s\'i lo complet\'o. Bajo
+comunicaci\'on intensa, PS result\'o m\'as robusto en esta configuraci\'on. La
+compresi\'on de gradientes, esparsa o cuantizada, es una mitigaci\'on conocida para esta
 presi\'on~\cite{lin2018deep,aji2017sparse}, fuera del alcance de este trabajo.
 
 \begin{figure}[t]
@@ -274,7 +253,7 @@ presi\'on~\cite{lin2018deep,aji2017sparse}, fuera del alcance de este trabajo.
   \includegraphics[width=\columnwidth]{communication_pressure.pdf}
   \caption{Presi\'on de comunicaci\'on: throughput (log) vs.\ tama\~no de MLP a 3
   nodos. La ventaja de AR en modelos peque\~nos se diluye al crecer el gradiente; con
-  el modelo grande AR no complet\'o el entrenamiento (marca roja) y PS s\'i.}
+  el modelo grande AR no complet\'o el entrenamiento y PS s\'i.}
   \label{fig:comm}
 \end{figure}
 
@@ -287,13 +266,12 @@ tiempo hasta accuracy, sin un servidor central que congestione. Es la opci\'on p
 defecto cuando no hay heterogeneidad que explotar.
 
 \textbf{Cu\'ando conviene Parameter Server.} Dos evidencias favorecen a PS al crecer la
-escala: (i) escala con mayor pendiente al sumar nodos ($1.63\times$ frente a
-$1.19\times$), amortizando su costo fijo de servidor; y (ii) bajo comunicaci\'on
-intensa fue \emph{m\'as robusto}: con el MLP de $1.86$M de par\'ametros complet\'o el
-entrenamiento, donde All-Reduce no lo logr\'o (\cref{fig:comm}). El sharding de pesos
-entre servidores reparte la carga de comunicaci\'on. Sus restantes ventajas te\'oricas
-(heterogeneidad, stragglers, asincron\'ia) no se ejercitaron y quedan como trabajo
-futuro.
+escala: (i) escala con mayor pendiente al sumar nodos, amortizando su costo fijo de
+servidor; y (ii) bajo comunicaci\'on intensa fue \emph{m\'as robusto}: con el MLP m\'as
+grande complet\'o el entrenamiento, donde All-Reduce no lo logr\'o (\cref{fig:comm}). El
+sharding de pesos entre servidores reparte la carga de comunicaci\'on. Sus restantes
+ventajas te\'oricas (heterogeneidad, stragglers, asincron\'ia) no se ejercitaron y quedan
+como trabajo futuro.
 
 \input{tables/decision_matrix.tex}
 

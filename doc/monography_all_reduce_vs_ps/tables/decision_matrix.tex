@@ -3,7 +3,7 @@
 \footnotesize
 \begin{tabular}{p{0.30\textwidth}p{0.13\textwidth}p{0.49\textwidth}}\toprule
 Condici\'on & Recomendada & Justificaci\'on / evidencia\\\midrule
-Cl\'uster homog\'eneo, buena red, sincron\'ia, gradientes densos, evitar servidor central & All-Reduce & Sin punto central de contenci\'on; comunicaci\'on por worker $\approx$ independiente de $W$. \emph{Evidencia:} igual accuracy que PS ($94.7$\,\%) con mayor throughput ($4079$ vs.\ $2927$ samp./s a 3 nodos) y cerca de $30$\,\% menos tiempo hasta accuracy.\\
-Modelos grandes, mayor escala, sharding de par\'ametros, desacoplar workers/servers & Parameter Server & El sharding reparte la carga de comunicaci\'on. \emph{Evidencia:} escala con mayor pendiente ($\times1.63$ vs.\ $\times1.19$) y con el MLP de $1.86$M de par\'ametros complet\'o el entrenamiento, donde All-Reduce no lo logr\'o.\\
+Cl\'uster homog\'eneo, buena red, sincron\'ia, gradientes densos, evitar servidor central & All-Reduce & Sin punto central de contenci\'on; comunicaci\'on por worker $\approx$ independiente de $W$. \emph{Evidencia:} iguala a PS en accuracy con mayor throughput y menor tiempo hasta accuracy.\\
+Modelos grandes, mayor escala, sharding de par\'ametros, desacoplar workers/servers & Parameter Server & El sharding reparte la carga de comunicaci\'on. \emph{Evidencia:} escala con mayor pendiente al sumar nodos y complet\'o el entrenamiento del MLP m\'as grande, donde All-Reduce no lo logr\'o.\\
 \bottomrule\end{tabular}
 \end{table*}

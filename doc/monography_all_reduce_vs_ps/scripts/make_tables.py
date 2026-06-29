@@ -89,6 +89,8 @@ def write_configs():
     rows = _rows("summary_by_strategy.csv")
     seen, body = set(), []
     for r in sorted(rows, key=lambda r: (r["strategy"], _f(r["nodes"]) or 0)):
+        if r.get("strategy") == "baseline":
+            continue
         key = (r["strategy"], r["nodes"], r["workers"], r["servers"])
         if key in seen:
             continue
@@ -111,15 +113,11 @@ def write_configs():
 
 def write_main_results():
     rows = _rows("summary_by_strategy.csv")
-    scal = {(r["strategy"], r["nodes"]): r for r in _rows("scalability_summary.csv")}
     body = []
-    # Fair comparison only: the fixed-global-batch Exp B runs (labels Bg_*) plus
-    # the baseline. Avoids listing the same strategy/node twice (Exp A + Exp B).
-    def _keep(r):
-        lbl = r.get("label", "")
-        return lbl.startswith("Bg_") or r.get("strategy") == "baseline"
+    # Fair comparison only: the fixed-global-batch Exp B runs (labels Bg_*). The
+    # throughput-scaling speedup lives in its own figure, not in this table.
     for r in sorted(rows, key=lambda r: (r["model"], _f(r["nodes"]) or 0, r["strategy"])):
-        if r.get("model") != "nielsen" or not _keep(r):
+        if r.get("model") != "nielsen" or not r.get("label", "").startswith("Bg_"):
             continue
         acc = _f(r.get("test_accuracy"))
         accs = f"{acc*100:.2f}" if acc is not None else "--"
@@ -127,17 +125,15 @@ def write_main_results():
         ts = f"{t:.0f}" if t else "--"
         sps = _f(r.get("samples_per_sec"))
         spss = f"{sps:,.0f}".replace(",", "\\,") if sps else "--"
-        sp = scal.get((r["strategy"], r["nodes"]), {}).get("speedup_vs_min")
-        sps2 = f"{_f(sp):.2f}" if _f(sp) else "--"
         body.append(rf"{PRETTY.get(r['strategy'], r['strategy'])} & {r['nodes']} & "
-                    rf"{accs} & {ts} & {spss} & {sps2}\\")
+                    rf"{accs} & {ts} & {spss}\\")
     if not body:
-        body = [r"\multicolumn{6}{c}{(sin datos)}\\"]
+        body = [r"\multicolumn{5}{c}{(sin datos)}\\"]
     lines = [r"\begin{table}[t]\centering",
-             r"\caption{Resultados principales en MNIST/\texttt{nielsen}.}\label{tab:main}",
+             r"\caption{Resultados principales en MNIST/\texttt{nielsen} (batch global fijo).}\label{tab:main}",
              r"\footnotesize",
-             r"\begin{tabular}{lccrrc}\toprule",
-             r"Estr. & Nodos & Acc.\,(\%) & Tiempo\,(s) & samp./s & Speedup\\\midrule",
+             r"\begin{tabular}{lccrr}\toprule",
+             r"Estr. & Nodos & Acc.\,(\%) & Tiempo\,(s) & samp./s\\\midrule",
              *body, r"\bottomrule\end{tabular}", r"\end{table}"]
     (TAB / "main_results.tex").write_text("\n".join(lines) + "\n")
 
@@ -151,9 +147,9 @@ def write_decision_matrix():
         r"\begin{tabular}{p{0.30\textwidth}p{0.13\textwidth}p{0.49\textwidth}}\toprule",
         r"Condici\'on & Recomendada & Justificaci\'on / evidencia\\\midrule",
         r"Cl\'uster homog\'eneo, buena red, sincron\'ia, gradientes densos, evitar servidor central & All-Reduce & "
-        r"Sin punto central de contenci\'on; comunicaci\'on por worker $\approx$ independiente de $W$. \emph{Evidencia:} igual accuracy que PS ($94.7$\,\%) con mayor throughput ($4079$ vs.\ $2927$ samp./s a 3 nodos) y cerca de $30$\,\% menos tiempo hasta accuracy.\\",
+        r"Sin punto central de contenci\'on; comunicaci\'on por worker $\approx$ independiente de $W$. \emph{Evidencia:} iguala a PS en accuracy con mayor throughput y menor tiempo hasta accuracy.\\",
         r"Modelos grandes, mayor escala, sharding de par\'ametros, desacoplar workers/servers & Parameter Server & "
-        r"El sharding reparte la carga de comunicaci\'on. \emph{Evidencia:} escala con mayor pendiente ($\times1.63$ vs.\ $\times1.19$) y con el MLP de $1.86$M de par\'ametros complet\'o el entrenamiento, donde All-Reduce no lo logr\'o.\\",
+        r"El sharding reparte la carga de comunicaci\'on. \emph{Evidencia:} escala con mayor pendiente al sumar nodos y complet\'o el entrenamiento del MLP m\'as grande, donde All-Reduce no lo logr\'o.\\",
         r"\bottomrule\end{tabular}", r"\end{table*}"]
     (TAB / "decision_matrix.tex").write_text("\n".join(lines) + "\n")
 

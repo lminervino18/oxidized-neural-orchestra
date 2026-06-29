@@ -24,7 +24,6 @@ STYLE = {
     "all_reduce":      dict(color="#1f4e79", marker="o", label="All-Reduce"),
     "parameter_server":dict(color="#a6611a", marker="s", label="Parameter Server"),
     "strategy_switch": dict(color="#4d7c4d", marker="^", label="Strategy Switch"),
-    "baseline":        dict(color="0.25",    marker="", label="PyTorch (ref)", ls="--"),
 }
 PRETTY = {k: v["label"] for k, v in STYLE.items()}
 
@@ -74,33 +73,6 @@ def fig_loss_vs_epoch():
     ax.set_xlabel("Época"); ax.set_ylabel("Pérdida de entrenamiento")
     ax.legend(fontsize=6.5, frameon=False)
     fig.tight_layout(); fig.savefig(FIG / "mnist_loss_vs_epoch.pdf"); plt.close(fig)
-
-
-def fig_accuracy_vs_time():
-    """Final test accuracy vs total wall-clock time, one marker per strategy."""
-    rows = _rows("summary_by_strategy.csv")
-    # Use the sanity runs (label A_): they carry eval accuracy at the 98% regime,
-    # one config per strategy, so each strategy is a single clean marker.
-    pts = [r for r in rows if r.get("dataset") == "mnist" and r.get("model") == "nielsen"
-           and (r.get("label", "").startswith("A_"))
-           and _f(r.get("test_accuracy")) is not None and _f(r.get("total_time_sec"))]
-    best = {}
-    for r in pts:
-        st = r["strategy"]
-        if st not in best or _f(r["nodes"]) < _f(best[st]["nodes"]):
-            best[st] = r
-    if not best:
-        return
-    fig, ax = plt.subplots(figsize=(3.4, 2.4))
-    for st, r in best.items():
-        s = STYLE.get(st, {})
-        ax.scatter(_f(r["total_time_sec"]), _f(r["test_accuracy"]) * 100,
-                   color=s.get("color", "0.4"), marker=s.get("marker") or "o",
-                   s=45, label=s.get("label", st), zorder=3)
-    ax.set_xlabel("Tiempo total de entrenamiento (s)")
-    ax.set_ylabel("Accuracy de test (\\%)")
-    ax.legend(fontsize=6.5, frameon=False)
-    fig.tight_layout(); fig.savefig(FIG / "mnist_accuracy_vs_time.pdf"); plt.close(fig)
 
 
 def _scal():
@@ -190,7 +162,7 @@ def fig_communication_pressure():
 
 def main():
     FIG.mkdir(exist_ok=True)
-    for fn in (fig_loss_vs_epoch, fig_accuracy_vs_time, fig_throughput_vs_nodes,
+    for fn in (fig_loss_vs_epoch, fig_throughput_vs_nodes,
                fig_speedup_vs_nodes, fig_communication_pressure):
         try:
             fn()
