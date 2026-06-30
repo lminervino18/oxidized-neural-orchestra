@@ -172,13 +172,13 @@ where
                 tokio::try_join!(self.next.push_grad(chunks[i]), self.prev.recv_event())?;
 
             if let Some(threshold) = sent {
-                if j == 0 {
-                    for g in residual_chunks[i].iter_mut() {
-                        if g.abs() >= threshold {
-                            *g = 0.0;
-                        }
-                    }
-                }
+                // if j == 0 {
+                //     for g in residual_chunks[i].iter_mut() {
+                //         if g.abs() >= threshold {
+                //             *g = 0.0;
+                //         }
+                //     }
+                // }
 
                 for g in chunks[i].iter_mut() {
                     if g.abs() < threshold {

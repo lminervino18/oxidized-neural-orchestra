@@ -35,12 +35,15 @@ impl<L: TransportLayer> TransportLayer for TimeOuter<L> {
     /// # Returns
     /// A deserialized `Msg` or an io error if occurred.
     async fn recv(&mut self) -> io::Result<Msg<'_>> {
-        time::timeout(self.timeout, self.inner.recv())
-            .await
-            .map_err(|e| {
-                let text = format!("Peer took too long to respond: {e}");
-                io::Error::new(io::ErrorKind::TimedOut, text)
-            })?
+        // TODO: Ver que hacer con esta capa.
+
+        // time::timeout(self.timeout, self.inner.recv())
+        //     .await
+        //     .map_err(|e| {
+        //         let text = format!("Peer took too long to respond: {e}");
+        //         io::Error::new(io::ErrorKind::TimedOut, text)
+        //     })?
+        self.inner.recv().await
     }
 
     /// Sends the given messaege as is.
