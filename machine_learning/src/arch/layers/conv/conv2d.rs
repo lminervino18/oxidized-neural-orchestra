@@ -29,7 +29,6 @@ pub struct Conv2d {
 
     // Backward metadata
     delta_out: Array4<f32>,
-    pub(super) dilated: Array4<f32>,
 
     convolver: Convolver,
 }
@@ -64,7 +63,6 @@ impl Conv2d {
             effective_input: zeros4.clone(),
             output: zeros4.clone(),
             delta_out: zeros4.clone(),
-            dilated: zeros4,
             convolver,
         }
     }
@@ -73,7 +71,11 @@ impl Conv2d {
         self.size
     }
 
-    pub fn forward(&mut self, params: &[f32], x: ArrayView4<f32>) -> Result<ArrayView4<'_, f32>> {
+    pub fn forward(
+        &mut self,
+        params: &[f32],
+        input: ArrayView4<f32>,
+    ) -> Result<ArrayView4<'_, f32>> {
         let (kernel, bias) = self.view_params(params)?;
 
         let Self {
@@ -88,7 +90,7 @@ impl Conv2d {
             ..
         } = *self;
 
-        let (batch_size, _, input_h, input_w) = x.dim();
+        let (batch_size, _, input_h, input_w) = input.dim();
 
         *real_input_dim = (input_h, input_w);
 
@@ -98,7 +100,7 @@ impl Conv2d {
         let effective_h = (out_h - 1) * stride + kernel_size;
         let effective_w = (out_w - 1) * stride + kernel_size;
 
-        effective_input.reshape_inplace((x.dim().0, x.dim().1, effective_h, effective_w));
+        effective_input.reshape_inplace((input.dim().0, input.dim().1, effective_h, effective_w));
         effective_input.fill(0.);
 
         // dropped elements could just be padding
@@ -111,7 +113,7 @@ impl Conv2d {
             padding..padding + copy_h,
             padding..padding + copy_w,
         ]);
-        let input_view = &x.slice(s![.., .., ..copy_h, ..copy_w]);
+        let input_view = &input.slice(s![.., .., ..copy_h, ..copy_w]);
         effective_input_view.assign(input_view);
 
         output.reshape_inplace((batch_size, filters, out_h, out_w));
@@ -120,7 +122,7 @@ impl Conv2d {
             .axis_iter(Axis(0))
             .zip(output.axis_iter_mut(Axis(0)))
             .for_each(|(input_b, mut output_b)| {
-                convolver.conv_into(&mut output_b, input_b, kernel, false, stride);
+                convolver.conv_im2col_into(&mut output_b, input_b, kernel, false, stride);
             });
 
         *output += &bias;
@@ -132,26 +134,25 @@ impl Conv2d {
         &mut self,
         params: &[f32],
         grad: &mut [f32],
-        d_in: ArrayViewMut4<f32>,
+        delta_in: ArrayViewMut4<f32>,
     ) -> Result<ArrayViewMut4<'_, f32>> {
-        let (mut dk, mut db) = self.view_grad(grad)?;
-        let (k, _) = self.view_params(params)?;
-
-        self.dilate(d_in.view());
+        let (mut d_kernel, mut d_bias) = self.view_grad(grad)?;
+        let (kernel, _) = self.view_params(params)?;
 
         let Self {
             filters,
             in_channels,
+            kernel_size,
+            stride,
             padding,
             real_input_dim,
             ref effective_input,
             ref mut delta_out,
-            ref mut dilated,
             ref mut convolver,
             ..
         } = *self;
 
-        dk.fill(0.);
+        d_kernel.fill(0.);
         delta_out.reshape_inplace((
             effective_input.dim().0,
             effective_input.dim().1,
@@ -160,92 +161,22 @@ impl Conv2d {
         ));
         delta_out.fill(0.);
 
-        dilated
+        delta_in
             .axis_iter(Axis(0))
             .zip(effective_input.axis_iter(Axis(0)))
             .zip(delta_out.axis_iter_mut(Axis(0)))
-            .try_for_each(
-                |((dilated_b, effective_input_b), mut delta_out_b)| -> Result<()> {
-                    for f_idx in 0..filters {
-                        let dilated_bf = dilated_b.slice(s![f_idx, .., ..]);
+            .for_each(|((delta_in_b, effective_input_b), mut delta_out_b)| {
+                convolver.conv_col2im_into(&mut delta_out_b, delta_in_b, kernel, false, stride);
+                // let d_kernel2 = effective_input
+            });
 
-                        for c_idx in 0..in_channels {
-                            // kernel
-                            let effective_input_bc = effective_input_b.slice(s![c_idx, .., ..]);
-
-                            let dk_step = convolver.conv2d(
-                                effective_input_bc,
-                                dilated_bf,
-                                false,
-                                ConvMode::Valid,
-                                PaddingMode::Zeros,
-                            )?;
-
-                            let mut dk_view = dk.slice_mut(s![f_idx, c_idx, .., ..]);
-                            dk_view += &dk_step;
-
-                            // delta
-                            let k_fc = k.slice(s![f_idx, c_idx, .., ..]);
-
-                            let copy_h =
-                                cmp::min(real_input_dim.0, effective_input.dim().2 - padding);
-                            let copy_w =
-                                cmp::min(real_input_dim.1, effective_input.dim().3 - padding);
-
-                            let effective_delta_step = convolver.conv2d(
-                                dilated_bf,
-                                k_fc,
-                                true,
-                                ConvMode::Full,
-                                PaddingMode::Zeros,
-                            )?;
-                            let delta_step = effective_delta_step
-                                .slice(s![padding..padding + copy_h, padding..padding + copy_w]);
-
-                            let mut delta_view =
-                                delta_out_b.slice_mut(s![c_idx, ..copy_h, ..copy_w]);
-                            delta_view += &delta_step;
-                        }
-                    }
-
-                    Ok(())
-                },
-            )?;
-
-        let db_sum = d_in.sum_axis(Axis(0)).sum_axis(Axis(1)).sum_axis(Axis(1));
-        db.assign(&db_sum);
+        let db_sum = delta_in
+            .sum_axis(Axis(0))
+            .sum_axis(Axis(1))
+            .sum_axis(Axis(1));
+        d_bias.assign(&db_sum);
 
         Ok(delta_out.view_mut())
-    }
-
-    /// Performs inward dilation to a input delta and saves the result into the delta metadata
-    /// array.
-    ///
-    /// # Args
-    /// * `delta` - The input delta to dilate and pad.
-    pub(super) fn dilate(&mut self, delta: ArrayView4<f32>) {
-        let Self {
-            stride,
-            ref mut dilated,
-            ..
-        } = *self;
-
-        let inward_padding = stride - 1;
-        let (delta_filters, delta_in_channels, delta_w, delta_h) = delta.dim();
-        let dilated_w = delta_w + (delta_w - 1) * inward_padding;
-        let dilated_h = delta_h + (delta_h - 1) * inward_padding;
-
-        let dilated_dim = (delta_filters, delta_in_channels, dilated_h, dilated_w);
-
-        dilated.reshape_inplace(dilated_dim);
-        // NOTE: this might not be needed as the assigned delta overwrites the past one if
-        // dimensions match.
-        dilated.fill(0.);
-        dilated
-            .slice_mut(s![.., ..,
-                ..dilated_h; stride,
-                ..dilated_w; stride])
-            .assign(&delta);
     }
 
     /// Gives a view of the raw parameter slice as the weights and biases of this layer.

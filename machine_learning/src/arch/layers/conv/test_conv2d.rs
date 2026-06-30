@@ -36,58 +36,6 @@ fn test_conv2d00_forward_backward_consistency() {
     assert!((grads[4] - 4.).abs() < 1e-5);
 }
 
-#[test]
-fn test_conv2d01_dilate() {
-    let filters = 1;
-    let in_channels = 1;
-    let kernel_size = 2;
-    let stride = 2;
-    let padding = 0;
-    let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
-
-    let delta: Array4<f32> = array![[[
-        [1., 2., 3., 4.],
-        [5., 6., 7., 8.],
-        [9., 10., 11., 12.],
-        [13., 14., 15., 16.]
-    ]]];
-
-    let expected = array![[[
-        [1., 0., 2., 0., 3., 0., 4.],
-        [0., 0., 0., 0., 0., 0., 0.],
-        [5., 0., 6., 0., 7., 0., 8.],
-        [0., 0., 0., 0., 0., 0., 0.],
-        [9., 0., 10., 0., 11., 0., 12.],
-        [0., 0., 0., 0., 0., 0., 0.],
-        [13., 0., 14., 0., 15., 0., 16.]
-    ]]];
-
-    conv.dilate(delta.view());
-
-    assert_eq!(conv.dilated, expected);
-}
-
-#[test]
-fn test_conv2d02_dilate_with_no_stride_does_not_change_delta() {
-    let filters = 1;
-    let in_channels = 1;
-    let kernel_size = 2;
-    let stride = 1;
-    let padding = 0;
-    let mut conv = Conv2d::new(filters, in_channels, kernel_size, stride, padding);
-
-    let delta: Array4<f32> = array![[[
-        [1., 2., 3., 4.],
-        [5., 6., 7., 8.],
-        [9., 10., 11., 12.],
-        [13., 14., 15., 16.]
-    ]]];
-
-    conv.dilate(delta.view());
-
-    assert_eq!(conv.dilated, delta);
-}
-
 fn test_conv2d_forward(
     filters: usize,
     in_channels: usize,

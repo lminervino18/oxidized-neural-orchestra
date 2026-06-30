@@ -23,21 +23,21 @@ impl Convolver {
     /// * `reverse` - Whether to reverse the kernel for the convolution, if not, then it becomes a
     ///   correlate operation.
     /// * `stride` - The size of the kernel steps.
-    pub fn conv_into(
+    pub fn conv_im2col_into(
         &self,
         buf: &mut ArrayViewMut3<f32>,
-        input: ArrayView3<f32>,
+        image: ArrayView3<f32>,
         kernel: ArrayView4<f32>,
         _reverse: bool, // wip
         stride: usize,
     ) {
-        let (channels, image_h, image_w) = input.dim();
+        let (channels, image_h, image_w) = image.dim();
         let (filters, in_channels, kernel_w, kernel_h) = kernel.dim();
         assert_eq!(channels, in_channels);
         assert_eq!(kernel_w, kernel_h);
 
         let kernel_size = kernel_w;
-        let col_image = self.im2col(input, kernel_size, stride);
+        let col_image = self.im2col(image, kernel_size, stride);
 
         // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
         let col_kernel = kernel
@@ -58,32 +58,40 @@ impl Convolver {
         linalg::general_mat_mul(1.0, &col_kernel, &col_image, 0.0, &mut buf);
     }
 
-    pub fn col2im(
+    pub fn conv_col2im_into(
         &self,
-        col_image: ArrayView2<f32>,
-        image_shape: (usize, usize, usize),
-        kernel_size: usize,
+        buf: &mut ArrayViewMut3<f32>,
+        delta: ArrayView3<f32>,
+        kernel: ArrayView4<f32>,
+        _reverse: bool, // wip
         stride: usize,
-    ) -> Array3<f32> {
-        let (_, image_h, image_w) = image_shape;
+    ) {
+        let (filters2, delta_h, delta_w) = delta.dim();
+        let (filters, in_channels, kernel_w, kernel_h) = kernel.dim();
+        assert_eq!(filters, filters2); // TODO: esto lo saco
+        assert_eq!(kernel_w, kernel_h);
 
-        let out_w = (image_w - kernel_size) / stride + 1;
+        let kernel_size = kernel_h;
+
+        // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
+        let col_kernel = kernel
+            .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
+            .unwrap();
+        // SAFETY: `delta` has filters * delta_h * delta_w elements.
+        let col_delta = delta
+            .into_shape_with_order((filters, delta_h * delta_w))
+            .unwrap();
 
         // TODO: poner esto en metadata o algo
-        let mut image = Array3::<f32>::zeros(image_shape);
+        let mut col_delta_out =
+            Array2::zeros((in_channels * kernel_size * kernel_size, delta_h * delta_w));
 
-        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
-            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
-                let col = col_image.column(row_idx * out_w + col_idx);
-                let mut window = image.slice_mut(s![.., i..i + kernel_size, j..j + kernel_size]);
+        linalg::general_mat_mul(1.0, &col_kernel.t(), &col_delta, 0.0, &mut col_delta_out);
 
-                window.iter_mut().zip(col.iter()).for_each(|(w, c)| {
-                    *w += *c;
-                })
-            }
-        }
-
-        image
+        // buf dim es porque estoy suponiendo q ya reshapearon afuera, lo podría escribir mejor
+        // quizás
+        let delta_out = self.col2im(col_delta_out.view(), buf.dim(), kernel_size, stride);
+        buf.assign(&delta_out);
     }
 
     // TODO: no es técnicamente un reshape porq estoy básicamente copiando píxeles q no habría si no
@@ -118,6 +126,34 @@ impl Convolver {
         }
 
         col_image
+    }
+
+    pub fn col2im(
+        &self,
+        col_delta: ArrayView2<f32>,
+        image_shape: (usize, usize, usize),
+        kernel_size: usize,
+        stride: usize,
+    ) -> Array3<f32> {
+        let (_, image_h, image_w) = image_shape;
+
+        let out_w = (image_w - kernel_size) / stride + 1;
+
+        // TODO: poner esto en metadata o algo
+        let mut image = Array3::<f32>::zeros(image_shape);
+
+        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
+            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
+                let col = col_delta.column(row_idx * out_w + col_idx);
+                let mut window = image.slice_mut(s![.., i..i + kernel_size, j..j + kernel_size]);
+
+                window.iter_mut().zip(col.iter()).for_each(|(w, c)| {
+                    *w += *c;
+                })
+            }
+        }
+
+        image
     }
 
     // TODO: estos dos métodos vuelan
