@@ -76,7 +76,7 @@ fn test_conv_dense(
         .collect();
 
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
+    while !trainer.train(&mut param_manager).unwrap().is_last {}
 
     let x = ArrayView2::from_shape((y_size.get(), x_size.get()), symbols).unwrap();
     let y = ArrayView2::from_shape((y_size.get(), y_size.get()), labels).unwrap();
@@ -359,7 +359,7 @@ fn test_machine_learning09_5by5by2_symbols_conv_max_pooling_dense_softmax() {
         .collect();
 
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
-    while !trainer.train(&mut param_manager).unwrap().was_last {}
+    while !trainer.train(&mut param_manager).unwrap().is_last {}
 
     let x = ArrayView2::from_shape((y_size, x_size), &samples).unwrap();
     let y = ArrayView2::from_shape((y_size, y_size), &labels).unwrap();

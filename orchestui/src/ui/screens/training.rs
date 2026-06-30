@@ -356,8 +356,7 @@ impl TrainingState {
                     self.workers[worker_id].done = true;
                 }
                 self.last_upgrade = Some((worker_id, Instant::now()));
-                self.ps_server_count =
-                    self.workers.iter().filter(|w| w.became_server).count();
+                self.ps_server_count = self.workers.iter().filter(|w| w.became_server).count();
                 // If the chart was focused on the worker that just upgraded,
                 // move focus to an active worker so no server shows in graphs.
                 if self.selected_worker == worker_id {

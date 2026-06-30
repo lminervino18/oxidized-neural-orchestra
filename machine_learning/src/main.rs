@@ -64,7 +64,10 @@ fn main() {
     let mut epoch = 0;
     let epochs_until_log = 1;
     loop {
-        let TrainResult { losses, was_last } = trainer.train(&mut param_manager).unwrap();
+        let TrainResult {
+            losses,
+            is_last: was_last,
+        } = trainer.train(&mut param_manager).unwrap();
         let loss = losses.last().unwrap();
 
         if epoch % epochs_until_log == 0 {

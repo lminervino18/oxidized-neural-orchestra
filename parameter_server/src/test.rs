@@ -40,13 +40,13 @@ where
     let transport = comms::build_simple_transport(orch_rx, orch_tx);
     let mut orch_handle = OrchHandle::new(orch_id, transport);
 
-    for _ in 0..max_epochs {
+    for i in 0..max_epochs {
         let params = server_handle.pull_params().await?;
         for (g, p) in grad.iter_mut().zip(params) {
             *g = *p - 1.0;
         }
 
-        server_handle.push_grad(&grad).await?;
+        server_handle.push_grad(&grad, i == max_epochs - 1).await?;
     }
 
     server_handle.disconnect().await?;
@@ -76,6 +76,7 @@ where
     while !matches!(worker_handle.recv_event().await?, WorkerEvent::Done) {}
     while !matches!(worker_handle.recv_event().await?, WorkerEvent::Disconnect) {}
 
+    server_handle.req_params().await?;
     let params = server_handle.pull_params().await?.to_vec();
     server_handle.disconnect().await?;
     Ok(params)
@@ -83,7 +84,11 @@ where
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_lineal_convergence() -> io::Result<()> {
-    unsafe { env::set_var("RUST_BACKTRACE", "1") };
+    unsafe {
+        env::set_var("RUST_BACKTRACE", "1");
+        env::set_var("RUST_LOG", "debug");
+    };
+    env_logger::init();
 
     let ((wk_rx, wk_tx), (sv_rx, sv_tx)) = channel_pair();
     let ((sv_orch_rx, sv_orch_tx), (orch_sv_rx, orch_sv_tx)) = channel_pair();
