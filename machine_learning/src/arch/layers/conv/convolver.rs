@@ -1,7 +1,4 @@
-use crate::Result;
-
 use ndarray::{Array2, Array3, ArrayView2, ArrayView3, ArrayView4, ArrayViewMut3, linalg, s};
-use ndarray_conv::{ConvExt, ConvMode, PaddingMode, ReverseKernel};
 
 #[derive(Clone, Debug)]
 pub struct Convolver {
@@ -105,7 +102,7 @@ impl Convolver {
     ///
     /// # Returns
     /// The reshaped matrix from the image tensor.
-    fn im2col(&self, image: ArrayView3<f32>, kernel_size: usize, stride: usize) -> Array2<f32> {
+    pub fn im2col(&self, image: ArrayView3<f32>, kernel_size: usize, stride: usize) -> Array2<f32> {
         let (channels, image_h, image_w) = image.dim();
 
         let out_h = (image_h - kernel_size) / stride + 1;
@@ -154,21 +151,5 @@ impl Convolver {
         }
 
         image
-    }
-
-    // TODO: estos dos métodos vuelan
-    pub fn conv2d(
-        &mut self,
-        input: ArrayView2<f32>,
-        kernel: ArrayView2<f32>,
-        reverse: bool,
-        conv_mode: ConvMode<2>,
-        padding_mode: PaddingMode<2, f32>,
-    ) -> Result<Array2<f32>> {
-        if reverse {
-            Ok(input.conv(kernel.reverse(), conv_mode, padding_mode)?)
-        } else {
-            Ok(input.conv(kernel.no_reverse(), conv_mode, padding_mode)?)
-        }
     }
 }

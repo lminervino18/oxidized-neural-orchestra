@@ -1,7 +1,6 @@
 use std::cmp;
 
-use ndarray::prelude::*;
-use ndarray_conv::{ConvMode, PaddingMode};
+use ndarray::{linalg, prelude::*};
 
 use super::Convolver;
 use crate::{MlErr, Result, arch::InplaceReshape};
@@ -144,11 +143,10 @@ impl Conv2d {
             in_channels,
             kernel_size,
             stride,
-            padding,
             real_input_dim,
             ref effective_input,
             ref mut delta_out,
-            ref mut convolver,
+            ref convolver,
             ..
         } = *self;
 
@@ -166,8 +164,32 @@ impl Conv2d {
             .zip(effective_input.axis_iter(Axis(0)))
             .zip(delta_out.axis_iter_mut(Axis(0)))
             .for_each(|((delta_in_b, effective_input_b), mut delta_out_b)| {
+                // delta out
                 convolver.conv_col2im_into(&mut delta_out_b, delta_in_b, kernel, false, stride);
-                // let d_kernel2 = effective_input
+
+                // kernel grad
+                let col_image = convolver.im2col(effective_input_b, kernel_size, stride);
+                let col_delta = delta_in_b
+                    .into_shape_with_order((filters, delta_in_b.dim().1 * delta_in_b.dim().2))
+                    .unwrap();
+
+                // dk step mat = col_image @ col delta
+                //
+                // (in_channels, out_h * out_w) @ (filters, out_h * out_w);
+                // let mut col_dk_step = Array2::zeros((
+                //     delta_in_b.dim().1 * delta_in_b.dim().2,
+                //     effective_input.dim().2 * effective_input.dim().3,
+                // ));
+                // linalg::general_mat_mul(1.0, &col_image.t(), &col_delta, 0.0, &mut col_dk_step);
+
+                let col_dk_step = col_delta.dot(&col_image.t());
+
+                // dk += dk step .into shape
+                let col_dk_step = col_dk_step
+                    .into_shape_with_order((filters, in_channels, kernel_size, kernel_size))
+                    .unwrap();
+
+                d_kernel += &col_dk_step;
             });
 
         let db_sum = delta_in
