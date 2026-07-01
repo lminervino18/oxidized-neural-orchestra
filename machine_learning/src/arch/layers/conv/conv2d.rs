@@ -1,8 +1,7 @@
 use std::cmp;
 
-use ndarray::prelude::*;
+use ndarray::{linalg, prelude::*};
 
-use super::Convolver;
 use crate::{MlErr, Result, arch::InplaceReshape};
 
 #[derive(Clone, Debug)]
@@ -13,15 +12,13 @@ pub struct Conv2d {
     padding: usize,
 
     // Forward metadata
-    real_input_dim: (usize, usize),
+    real_input_shape: (usize, usize, usize, usize),
     /// The input that's actually used during the forward convolution
     effective_input: Array4<f32>,
     output: Array4<f32>,
 
     // Backward metadata
     delta_out: Array4<f32>,
-
-    convolver: Convolver,
 }
 
 impl Conv2d {
@@ -33,21 +30,18 @@ impl Conv2d {
         padding: usize,
     ) -> Self {
         let kernel_shape = (filters, in_channels, kernel_size, kernel_size);
-        let real_input_dim = (0, 0);
+        let real_input_shape = (0, 0, 0, 0);
 
         let zeros4 = Array4::zeros((1, 1, 1, 1));
-
-        let convolver = Convolver::new(kernel_size, None);
 
         Self {
             stride,
             padding,
             kernel_shape,
-            real_input_dim,
+            real_input_shape,
             effective_input: zeros4.clone(),
             output: zeros4.clone(),
             delta_out: zeros4.clone(),
-            convolver,
         }
     }
 
@@ -67,17 +61,16 @@ impl Conv2d {
             kernel_shape,
             stride,
             padding,
-            ref mut real_input_dim,
+            real_input_shape: ref mut real_input_dim,
             ref mut effective_input,
             ref mut output,
-            ref mut convolver,
             ..
         } = *self;
 
-        let (batch_size, _, input_h, input_w) = input.dim();
+        let (batch_size, channels, input_h, input_w) = input.dim();
         let (filters, _, kernel_size, _) = kernel_shape;
 
-        *real_input_dim = (input_h, input_w);
+        *real_input_dim = input.dim();
 
         let out_h = (input_h + 2 * padding - kernel_size) / stride + 1;
         let out_w = (input_w + 2 * padding - kernel_size) / stride + 1;
@@ -85,7 +78,7 @@ impl Conv2d {
         let effective_h = (out_h - 1) * stride + kernel_size;
         let effective_w = (out_w - 1) * stride + kernel_size;
 
-        effective_input.reshape_inplace((input.dim().0, input.dim().1, effective_h, effective_w));
+        effective_input.reshape_inplace((batch_size, channels, effective_h, effective_w));
         effective_input.fill(0.);
 
         // dropped elements could just be padding
@@ -107,7 +100,18 @@ impl Conv2d {
             .axis_iter(Axis(0))
             .zip(output.axis_iter_mut(Axis(0)))
             .for_each(|(input_b, mut output_b)| {
-                convolver.conv_im2col_into(&mut output_b, input_b, kernel, false, stride);
+                let col_image = Self::im2col(input_b, kernel_size, stride);
+                // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
+                let flat_kernel = kernel
+                    .into_shape_with_order((filters, channels * kernel_size * kernel_size))
+                    .unwrap();
+                // SAFETY: `buf` was already reshaped to have enough elements.
+                let mut flat_output = output_b
+                    .view_mut()
+                    .into_shape_with_order((filters, out_h * out_w))
+                    .unwrap();
+
+                linalg::general_mat_mul(1.0, &flat_kernel, &col_image, 0.0, &mut flat_output);
             });
 
         *output += &bias;
@@ -127,22 +131,16 @@ impl Conv2d {
         let Self {
             kernel_shape,
             stride,
-            real_input_dim,
+            real_input_shape,
             ref effective_input,
             ref mut delta_out,
-            ref convolver,
             ..
         } = *self;
 
         let (filters, in_channels, kernel_size, _) = kernel_shape;
 
         d_kernel.fill(0.);
-        delta_out.reshape_inplace((
-            effective_input.dim().0,
-            effective_input.dim().1,
-            real_input_dim.0,
-            real_input_dim.1,
-        ));
+        delta_out.reshape_inplace(real_input_shape);
         delta_out.fill(0.);
 
         delta_in
@@ -151,23 +149,42 @@ impl Conv2d {
             .zip(delta_out.axis_iter_mut(Axis(0)))
             .for_each(|((delta_in_b, effective_input_b), mut delta_out_b)| {
                 // delta out
-                convolver.conv_col2im_into(&mut delta_out_b, delta_in_b, kernel, false, stride);
-
-                // kernel grad
-                let col_image = convolver.im2col(effective_input_b, kernel_size, stride);
-                let col_delta = delta_in_b
+                // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
+                let flat_kernel = kernel
+                    .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
+                    .unwrap();
+                // SAFETY: `delta_in_b` has filters * delta_h * delta_w elements.
+                let flat_delta_in = delta_in_b
+                    // TODO: delta_in_b.dim() por out_h y out_w
                     .into_shape_with_order((filters, delta_in_b.dim().1 * delta_in_b.dim().2))
                     .unwrap();
 
-                // dk step mat = col_image @ col delta
-                //
-                // (in_channels, out_h * out_w) @ (filters, out_h * out_w);
-                // let mut col_dk_step = Array2::zeros((
-                //     delta_in_b.dim().1 * delta_in_b.dim().2,
-                //     effective_input.dim().2 * effective_input.dim().3,
-                // ));
-                // linalg::general_mat_mul(1.0, &col_image.t(), &col_delta, 0.0, &mut col_dk_step);
+                let mut col_delta_out = Array2::zeros((
+                    in_channels * kernel_size * kernel_size,
+                    delta_in_b.dim().1 * delta_in_b.dim().2,
+                ));
+                linalg::general_mat_mul(
+                    1.0,
+                    &flat_kernel.t(),
+                    &flat_delta_in,
+                    0.0,
+                    &mut col_delta_out,
+                );
 
+                let out_dim = delta_out_b.dim(); // feo xd
+                // TODO: claramente tiene q ser col2im_into ..
+                delta_out_b.assign(&Self::col2im(
+                    col_delta_out.view(),
+                    out_dim,
+                    kernel_size,
+                    stride,
+                ));
+
+                // kernel grad
+                let col_image = Self::im2col(effective_input_b, kernel_size, stride);
+                let col_delta = delta_in_b
+                    .into_shape_with_order((filters, delta_in_b.dim().1 * delta_in_b.dim().2))
+                    .unwrap();
                 let col_dk_step = col_delta.dot(&col_image.t());
 
                 // dk += dk step .into shape
@@ -185,6 +202,67 @@ impl Conv2d {
         d_bias.assign(&db_sum);
 
         Ok(delta_out.view_mut())
+    }
+
+    // TODO: no es técnicamente un reshape porq estoy básicamente copiando píxeles q no habría si no
+    /// Reshapes a three-dimension image tensor into a matrix with columns that match the window
+    /// views that the kernel sees during the convolution pass.
+    ///
+    /// # Args
+    /// * `image` - The **already padded** image tensor.
+    /// * `kernel_size` - The size of the square kernel.
+    /// * `stride` - The size of the kernel steps.
+    ///
+    /// # Returns
+    /// The reshaped matrix from the image tensor.
+    pub fn im2col(image: ArrayView3<f32>, kernel_size: usize, stride: usize) -> Array2<f32> {
+        let (channels, image_h, image_w) = image.dim();
+
+        let out_h = (image_h - kernel_size) / stride + 1;
+        let out_w = (image_w - kernel_size) / stride + 1;
+
+        // TODO: poner esto en metadata o algo
+        let mut col_image = Array2::zeros((channels * kernel_size * kernel_size, out_h * out_w));
+
+        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
+            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
+                let window = image.slice(s![.., i..i + kernel_size, j..j + kernel_size]);
+                let mut col = col_image.column_mut(row_idx * out_w + col_idx);
+
+                col.iter_mut().zip(window.iter()).for_each(|(c, w)| {
+                    *c = *w;
+                });
+            }
+        }
+
+        col_image
+    }
+
+    fn col2im(
+        col_delta: ArrayView2<f32>,
+        image_shape: (usize, usize, usize),
+        kernel_size: usize,
+        stride: usize,
+    ) -> Array3<f32> {
+        let (_, image_h, image_w) = image_shape;
+
+        let out_w = (image_w - kernel_size) / stride + 1;
+
+        // TODO: poner esto en metadata o algo
+        let mut image = Array3::<f32>::zeros(image_shape);
+
+        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
+            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
+                let col = col_delta.column(row_idx * out_w + col_idx);
+                let mut window = image.slice_mut(s![.., i..i + kernel_size, j..j + kernel_size]);
+
+                window.iter_mut().zip(col.iter()).for_each(|(w, c)| {
+                    *w += *c;
+                })
+            }
+        }
+
+        image
     }
 
     /// Gives a view of the raw parameter slice as the weights and biases of this layer.
