@@ -8,7 +8,8 @@ on disk are left untouched.
 from pathlib import Path
 
 from .plots import STRAT, VARIANT_SHORT, _topo
-from .suites import ALL_MODELS, ALL_SUITES, AR_WORKER_SCALE, MODELS
+from .suites import (ALL_MODELS, ALL_SUITES, AR_WORKER_SCALE, MODELS,
+                     SPEED_EPOCHS, SPEED_SUBSET)
 
 README = Path(__file__).resolve().parent.parent / "README.md"
 PLOTS = Path(__file__).resolve().parent.parent / "plots"
@@ -32,22 +33,25 @@ SUITE_DOCS = {
     ),
     "execution-speed": (
         "Execution speed",
-        "**Measures:** **samples/sec** (batch-invariant throughput) on a small subset. "
-        "Compares raising `offline_epochs` vs raising `batch_size`.\n"
+        f"**Measures:** **samples/sec** (batch-invariant throughput) on a fixed "
+        f"**{SPEED_SUBSET:,}-sample** training subset over a short **{SPEED_EPOCHS}-epoch** "
+        f"budget. Compares raising `offline_epochs` vs raising `batch_size`.\n"
         "**Does NOT measure:** accuracy or convergence.",
     ),
     "convergence-speed": (
         "Convergence speed",
         "**Measures:** loss reduction/sec and accuracy/sec under one shared fixed budget "
-        "at the same 5-node budget (only the strategy changes). SS rows state whether the "
-        "switch fired.\n"
+        "at the same 5-node budget (only the strategy changes), plus raw **samples/sec** as "
+        "a throughput reference decoupled from convergence quality. SS rows state whether "
+        "the switch fired.\n"
         "**Does NOT measure:** peak accuracy.",
     ),
     "scalability": (
         "Scalability",
-        "**Measures:** how **samples/sec** changes as workers increase, in **separate "
-        "panels** for all-reduce and parameter server — PS spends extra server nodes, so "
-        "the two do not share a 'workers' axis honestly (the node count is shown per point).\n"
+        f"**Measures:** how **samples/sec** changes as workers increase, on the same fixed "
+        f"**{SPEED_SUBSET:,}-sample** subset, in **separate panels** for all-reduce and "
+        "parameter server — PS spends extra server nodes, so the two do not share a "
+        "'workers' axis honestly (the node count is shown per point).\n"
         "**Does NOT measure:** convergence (re-uses the speed budget).",
     ),
 }
@@ -103,12 +107,15 @@ def _suite_rows(suite, history):
                  r.get("epochs_ran", "—"), _fmt(r.get("final_loss")),
                  _fmt_pm(r, "accuracy", "{:.3f}")] for r in runs]
     elif suite == "execution-speed":
-        header = ["Model", "Strategy", "Topology", "offline", "batch", "Samples/sec", "Epochs/sec"]
+        header = ["Model", "Strategy", "Topology", "offline", "batch", "Samples/sec"]
         rows = [[r["model"], _strat_cell(r), _topo(r), r["offline_epochs"], r["batch_size"],
-                 _fmt_pm(r, "samples_per_sec", "{:.0f}"), _fmt_pm(r, "epochs_per_sec")] for r in runs]
+                 _fmt_pm(r, "samples_per_sec", "{:.0f}")] for r in runs]
     elif suite == "convergence-speed":
-        header = ["Model", "Strategy", "Topology", "Loss/sec", "Accuracy/sec"]
+        # samples/sec is raw throughput (decoupled from convergence quality), so it
+        # complements the loss/accuracy-per-sec metrics rather than duplicating them.
+        header = ["Model", "Strategy", "Topology", "Samples/sec", "Loss/sec", "Accuracy/sec"]
         rows = [[r["model"], _strat_cell(r), _topo(r),
+                 _fmt_pm(r, "samples_per_sec", "{:.0f}"),
                  _fmt_pm(r, "loss_per_sec"), _fmt_pm(r, "accuracy_per_sec")] for r in runs]
     else:
         header = ["Model", "Strategy", "Workers", "Nodes", "Samples/sec"]
@@ -178,6 +185,9 @@ def render(history, meta=None):
         "## Strategies & variants",
         "",
         "- **PS (blocking)** — `BlockingStore` + `BarrierSync`: workers wait for a full round.",
+        "- **PS (non-block)** — `BlockingStore` + `NonBlockingSync`: same consistent store, "
+        "but workers apply and move on without the barrier (see Methodology for why the "
+        "lock-free HogWild store is excluded).",
         "- **AR** — all-reduce ring (averaged gradients).",
         "- **SS** — strategy switch (starts in all-reduce, may switch to PS).",
         "- **PyTorch (ref)** — single-process PyTorch training of the same architecture "
@@ -227,8 +237,26 @@ def render(history, meta=None):
         "subset (they only need throughput), so their numbers do **not** transfer to the "
         "convergence config (e.g. Nielsen converges at batch 10 but is benchmarked for "
         "speed at batch 64/256 — ~6× faster there).",
-        "- **Throughput = samples/sec**, not epochs/sec: an epoch with a bigger batch has "
-        "fewer steps, so epochs/sec would reward batch size by construction.",
+        "- **Throughput = samples/sec, not epochs/sec.** By construction "
+        "`epochs_per_sec = samples_per_sec / samples_per_epoch`, and samples-per-epoch is "
+        "**fixed within each suite** (the subset for the speed suites, the full set for the "
+        "convergence ones). So next to samples/sec, epochs/sec is the *same* ranking rescaled "
+        "by a constant — it carries no extra information within a figure, which is why it is "
+        "**not** added per-suite. samples/sec is the one kept because it is invariant: it "
+        "counts real work, so it stays comparable across batch sizes and across datasets, "
+        "whereas an 'epoch' means 4k samples in the speed suites but 60k in the convergence "
+        "ones — not comparable.",
+        f"- **Data sizes.** Convergence and convergence-speed train on the **full 60,000-sample "
+        f"MNIST** training set; execution-speed and scalability train on a fixed "
+        f"**{SPEED_SUBSET:,}-sample** subset (throughput only). Accuracy is always scored on "
+        "the full **10,000-sample** test set (`t10k`).",
+        "- **PS synchronizer variants.** Parameter server is benchmarked in two variants that "
+        "share the **consistent `BlockingStore`** and differ only in the synchronizer, so the "
+        "comparison isolates the barrier: **blocking** (`BarrierSync` — every worker waits for "
+        "the full aggregation round) vs **non_blocking** (`NonBlockingSync` — workers apply and "
+        "move on without the barrier). The lock-free `WildStore` (HogWild) is **deliberately "
+        "excluded**: its data races make a run hang non-deterministically (it completed some "
+        "trial runs and hung mid-epoch on others), so it has no fair, reproducible number.",
         "- **Accuracy** is measured **once, after training**, over the **full 10,000-sample "
         "MNIST test set** (`t10k`): the trained weights are loaded into the PyTorch argmax "
         "reference and scored on every test sample — not sampled, not evaluated periodically, "
@@ -244,6 +272,16 @@ def render(history, meta=None):
         "a faster strategy that plateaus at a slightly lower final accuracy can still score "
         "higher than a slower one that converges better. Always read them next to the final "
         "accuracy, never alone.",
+        "- **PS blocking vs non_blocking is compared on accuracy, not speed.** The two PS "
+        "variants are contrasted by their **converged accuracy** (reproducible from the seed, "
+        "host-load-independent): removing the barrier costs almost nothing "
+        "(nielsen 98.30 → 98.13, lenet5 98.0 ≈ 98.0). Their **timing** is *not* compared: "
+        "convergence-speed runs once (repeats=1), and single-shot `train_seconds` on this host "
+        "carries ~±25% between-run noise (seen directly in the prior campaign, where the same "
+        "blocking config timed 831 s and 658 s), which swamps any real blocking/non_blocking "
+        "difference. The non_blocking rows are also from a later campaign than AR/SS, so "
+        "cross-strategy *speed* here is only indicative — a same-session, repeated re-benchmark "
+        "is pending.",
         "- **Loss scale.** The distributed `loss` is the mean across workers of each "
         "worker's epoch-mean cross-entropy; the PyTorch baseline is the global epoch-mean "
         "cross-entropy — same scale, directly comparable. (Early stopping on the "

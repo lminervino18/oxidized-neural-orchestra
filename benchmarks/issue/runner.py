@@ -201,14 +201,21 @@ def capture_logs(nodes, label):
 def _ps_store_sync(variant):
     """Map a PS variant to its (store, sync) pair.
 
-    - blocking:     BlockingStore + BarrierSync — workers wait for a full round.
-    - non_blocking: WildStore + NonBlockingSync — workers proceed without barrier.
+    Both variants use the consistent BlockingStore and differ ONLY in the
+    synchronizer, so the comparison isolates a single axis — the barrier:
+
+    - blocking:     BlockingStore + BarrierSync     — workers wait for a full round.
+    - non_blocking: BlockingStore + NonBlockingSync — workers proceed without barrier.
+
+    The lock-free WildStore (HogWild) is intentionally not benchmarked: its data
+    races make the run hang non-deterministically (see PS_VARIANTS in suites.py),
+    so it cannot be compared fairly.
     """
-    from orchestra.store import BlockingStore, WildStore
+    from orchestra.store import BlockingStore
     from orchestra.sync import BarrierSync, NonBlockingSync
 
     if variant == "non_blocking":
-        return WildStore(), NonBlockingSync()
+        return BlockingStore(), NonBlockingSync()
     return BlockingStore(), BarrierSync()
 
 

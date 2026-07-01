@@ -65,10 +65,14 @@ class Strategy(StrEnum):
 
 
 class PSVariant(StrEnum):
-    """Parameter-server store/synchronizer pairing (see runner.build_training)."""
+    """Parameter-server synchronizer variant (see runner._ps_store_sync).
+
+    Both use the consistent BlockingStore and differ only in the synchronizer,
+    so the comparison isolates the barrier alone.
+    """
 
     BLOCKING = "blocking"          # BlockingStore + BarrierSync
-    NON_BLOCKING = "non_blocking"  # WildStore + NonBlockingSync
+    NON_BLOCKING = "non_blocking"  # BlockingStore + NonBlockingSync
 
 
 # ── Layers ───────────────────────────────────────────────────────────────────
@@ -261,11 +265,13 @@ def run_key(record: dict) -> str:
 
 # ── Suite builders ───────────────────────────────────────────────────────────
 
-# Only the blocking PS variant is benchmarked. The non-blocking variant
-# (WildStore + NonBlockingSync) hangs under concurrent workers — see the tracking
-# issue "Non-blocking parameter server hangs under concurrent workers". The store/sync
-# wiring stays in runner.py so it can be re-enabled once the runtime bug is fixed.
-PS_VARIANTS = [PSVariant.BLOCKING]
+# Both PS synchronizer variants are benchmarked: blocking (BarrierSync) vs
+# non_blocking (NonBlockingSync), holding the consistent BlockingStore fixed so
+# only the barrier changes. The lock-free WildStore (HogWild) is deliberately
+# excluded — its data races make the run hang non-deterministically (confirmed
+# empirically: it completed some runs and hung mid-epoch on others), so it has no
+# fair, reproducible number to report. See runner._ps_store_sync.
+PS_VARIANTS = [PSVariant.BLOCKING, PSVariant.NON_BLOCKING]
 
 
 def convergence_runs(models: list[Model]) -> list[Run]:
@@ -274,8 +280,8 @@ def convergence_runs(models: list[Model]) -> list[Run]:
 
     Each model trains with its *reference* recipe (Nielsen 60/10/0.1, LeNet5
     60/64/0.05) and early stopping, so the epoch budget is a ceiling. Parameter
-    server runs the blocking store/sync variant (non-blocking is disabled, see
-    PS_VARIANTS).
+    server runs both synchronizer variants — blocking (barrier) and non_blocking —
+    over the same consistent store (see PS_VARIANTS).
     """
     runs: list[Run] = []
     for model in models:
@@ -311,8 +317,8 @@ def execution_speed_runs(models: list[Model]) -> list[Run]:
 def convergence_speed_runs(models: list[Model]) -> list[Run]:
     """Suite 3 — loss/sec and accuracy/sec under one shared fixed budget across
     strategies (no early stopping). Compared at a fixed total node budget: PS/SS
-    are 3w+2s = 5 nodes, so all-reduce runs 5 workers to match. PS runs the
-    blocking variant only."""
+    are 3w+2s = 5 nodes, so all-reduce runs 5 workers to match. PS runs both
+    synchronizer variants (blocking and non_blocking)."""
     runs: list[Run] = []
     ar_workers = sum(PS_TOPOLOGY)
     for model in models:
