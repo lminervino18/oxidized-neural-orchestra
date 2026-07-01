@@ -86,8 +86,8 @@ where
                 warn!("expected an orchestrator connection, got something else");
                 continue;
             };
-            info!("orchestrator connected");
 
+            info!("orchestrator connected");
             self.handle_orch(orch_handle).await;
         }
     }

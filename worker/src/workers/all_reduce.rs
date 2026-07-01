@@ -127,8 +127,8 @@ where
                         error!("optimization step failed: {e}");
                         return Err(io::Error::other(e));
                     }
-                    param_manager.zero_grad();
 
+                    param_manager.zero_grad();
                     self.optimization_params.copy_from_slice(&self.params);
                 }
             }

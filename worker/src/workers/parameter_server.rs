@@ -81,6 +81,7 @@ where
                             error!("training step failed: {e}");
                             io::Error::other(e)
                         })?;
+
                     should_continue = !is_last;
 
                     self.cluster_manager.push_grads(is_last).await?;
