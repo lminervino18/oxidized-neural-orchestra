@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use rayon::prelude::*;
 
 use crate::{MlErr, Result, optimization::Optimizer};
@@ -167,6 +169,22 @@ impl<'mw> ParamManager<'mw> {
         self.metadatas
             .par_iter_mut()
             .for_each(|metadata| metadata.grad.fill(0.0));
+    }
+
+    /// Averages the gradient of every entity by dividing it by `n`.
+    ///
+    /// Distributed strategies aggregate partial gradients by *summing* them, so
+    /// the combined gradient scales with the number of contributors. Dividing by
+    /// `n` (e.g. the worker count) turns that sum back into a mean, keeping the
+    /// effective learning rate independent of how many workers participate.
+    ///
+    /// # Args
+    /// * `n` - The number of contributions to average over (e.g. the worker count).
+    pub fn normalize_gradient(&mut self, n: NonZeroUsize) {
+        let factor = n.get() as f32;
+        self.metadatas
+            .par_iter_mut()
+            .for_each(|metadata| metadata.grad.iter_mut().for_each(|g| *g /= factor));
     }
 
     /// Accumulates the current gradient onto the inner accumulated residual buffer.

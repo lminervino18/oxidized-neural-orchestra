@@ -9,14 +9,13 @@ for arg in "$@"; do
   [ "$arg" = "--release" ] && RELEASE="--release"
 done
 
-# Read worker and server counts from env or defaults
-WORKERS="${WORKERS:-3}"
+# Read node and server counts from env or defaults (servers must be < nodes)
+NODES="${NODES:-6}"
 SERVERS="${SERVERS:-3}"
 
-# Bring up workers and servers via Docker
+# Bring up the nodes via Docker; the orchestrator assigns server/worker roles at runtime
 python3 "$ROOT/docker/compose_up.py" \
-  --workers "$WORKERS" \
-  --servers "$SERVERS" \
+  --nodes "$NODES" \
   $RELEASE
 
 sleep 5
@@ -31,8 +30,7 @@ sleep 0.5
 
 # Run orchestra-py local.py with Docker hostnames and dataset path
 cd "$ROOT"
-WORKERS="$WORKERS" \
+NODES="$NODES" \
 SERVERS="$SERVERS" \
-DATASET_PATH="data/mnist_train.bin" \
 RUST_LOG=info \
 python3 "$ORCHESTRA_PY_DIR/local.py"
