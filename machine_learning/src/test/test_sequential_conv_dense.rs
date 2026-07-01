@@ -366,8 +366,6 @@ fn test_machine_learning09_5by5by2_symbols_conv_max_pooling_dense_softmax() {
     let y_pred = model.forward(&mut param_manager, x.into_dyn()).unwrap();
 
     let loss = loss_fn.loss(y_pred.view(), y.into_dyn());
-    println!("y:{y:#?}\n\n\ny_pred:{y_pred:#?}");
-    println!("loss: {loss}");
     assert!(loss < 0.001);
 }
 
