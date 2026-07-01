@@ -1,24 +1,16 @@
 use std::cmp;
 
-use ndarray::{linalg, prelude::*};
+use ndarray::prelude::*;
 
 use super::Convolver;
 use crate::{MlErr, Result, arch::InplaceReshape};
 
 #[derive(Clone, Debug)]
 pub struct Conv2d {
-    filters: usize,
-    in_channels: usize,
-    /// The size of the square kernel matrix.
-    kernel_size: usize,
+    /// The shape of the kernel tensor, `(filters, in_channels, kernel_size, kernel_size)`.
+    kernel_shape: (usize, usize, usize, usize),
     stride: usize,
     padding: usize,
-
-    kernels_size: usize,
-    /// The dimension of the kernels tensor, `(filters, in_channels, kernel_size,
-    /// kernel_size)`
-    kernels_dim: (usize, usize, usize, usize),
-    size: usize,
 
     // Forward metadata
     real_input_dim: (usize, usize),
@@ -40,9 +32,7 @@ impl Conv2d {
         stride: usize,
         padding: usize,
     ) -> Self {
-        let kernels_size = filters * in_channels * kernel_size * kernel_size;
-        let kernels_dim = (filters, in_channels, kernel_size, kernel_size);
-        let size = kernels_size + filters;
+        let kernel_shape = (filters, in_channels, kernel_size, kernel_size);
         let real_input_dim = (0, 0);
 
         let zeros4 = Array4::zeros((1, 1, 1, 1));
@@ -50,14 +40,9 @@ impl Conv2d {
         let convolver = Convolver::new(kernel_size, None);
 
         Self {
-            filters,
-            in_channels,
-            kernel_size,
             stride,
             padding,
-            kernels_size,
-            kernels_dim,
-            size,
+            kernel_shape,
             real_input_dim,
             effective_input: zeros4.clone(),
             output: zeros4.clone(),
@@ -67,7 +52,8 @@ impl Conv2d {
     }
 
     pub fn size(&self) -> usize {
-        self.size
+        let (filters, in_channels, kernel_size, _) = self.kernel_shape;
+        filters * in_channels * kernel_size * kernel_size + filters
     }
 
     pub fn forward(
@@ -78,8 +64,7 @@ impl Conv2d {
         let (kernel, bias) = self.view_params(params)?;
 
         let Self {
-            filters,
-            kernel_size,
+            kernel_shape,
             stride,
             padding,
             ref mut real_input_dim,
@@ -90,6 +75,7 @@ impl Conv2d {
         } = *self;
 
         let (batch_size, _, input_h, input_w) = input.dim();
+        let (filters, _, kernel_size, _) = kernel_shape;
 
         *real_input_dim = (input_h, input_w);
 
@@ -139,9 +125,7 @@ impl Conv2d {
         let (kernel, _) = self.view_params(params)?;
 
         let Self {
-            filters,
-            in_channels,
-            kernel_size,
+            kernel_shape,
             stride,
             real_input_dim,
             ref effective_input,
@@ -149,6 +133,8 @@ impl Conv2d {
             ref convolver,
             ..
         } = *self;
+
+        let (filters, in_channels, kernel_size, _) = kernel_shape;
 
         d_kernel.fill(0.);
         delta_out.reshape_inplace((
@@ -213,22 +199,19 @@ impl Conv2d {
         &self,
         params: &'a [f32],
     ) -> Result<(ArrayView4<'a, f32>, ArrayView4<'a, f32>)> {
-        let Self {
-            filters,
-            kernels_size,
-            kernels_dim,
-            size,
-            ..
-        } = *self;
+        let size = self.size();
 
         if params.len() != size {
             return Err(MlErr::size_mismatch("params", params.len(), size));
         }
 
+        let (filters, in_channels, kernel_size, _) = self.kernel_shape;
+        let weights_size = filters * in_channels * kernel_size * kernel_size;
+
         // SAFETY: The if condition above checks that the size of the
         //         parameters is exactly the size of the layer.
-        let weights = ArrayView4::from_shape(kernels_dim, &params[..kernels_size]).unwrap();
-        let biases = ArrayView4::from_shape((1, filters, 1, 1), &params[kernels_size..]).unwrap();
+        let weights = ArrayView4::from_shape(self.kernel_shape, &params[..weights_size]).unwrap();
+        let biases = ArrayView4::from_shape((1, filters, 1, 1), &params[weights_size..]).unwrap();
 
         Ok((weights, biases))
     }
@@ -245,23 +228,20 @@ impl Conv2d {
         &self,
         grad: &'a mut [f32],
     ) -> Result<(ArrayViewMut4<'a, f32>, ArrayViewMut1<'a, f32>)> {
-        let Self {
-            filters,
-            kernels_size,
-            kernels_dim,
-            size,
-            ..
-        } = *self;
+        let size = self.size();
 
         if grad.len() != size {
-            return Err(MlErr::size_mismatch("grad", grad.len(), self.size));
+            return Err(MlErr::size_mismatch("grad", grad.len(), size));
         }
+
+        let (filters, in_channels, kernel_size, _) = self.kernel_shape;
+        let weights_size = filters * in_channels * kernel_size * kernel_size;
 
         // SAFETY: The if condition above checks that the size of the
         //         gradient is exactly the size of the layer.
-        let (dw_raw, db_raw) = grad.split_at_mut(kernels_size);
+        let (dw_raw, db_raw) = grad.split_at_mut(weights_size);
 
-        let dw = ArrayViewMut4::from_shape(kernels_dim, dw_raw).unwrap();
+        let dw = ArrayViewMut4::from_shape(self.kernel_shape, dw_raw).unwrap();
         let db = ArrayViewMut1::from_shape(filters, db_raw).unwrap();
 
         Ok((dw, db))
