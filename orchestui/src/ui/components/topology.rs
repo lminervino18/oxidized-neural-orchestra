@@ -45,7 +45,6 @@ const COLOR_PARTICLE: Color = Color::Rgb(255, 200, 0);
 
 pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &TrainingState) {
     let (nodes, conns, radius) = compute_layout(state);
-    let is_active = state.is_active();
     let phase = state.phase;
 
     // Canvas units per text row. Ratatui maps labels with a `height - 1`
@@ -61,7 +60,7 @@ pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &Trainin
         .x_bounds([0.0, 200.0])
         .y_bounds([0.0, 100.0])
         .paint(|ctx| {
-            draw_connections(ctx, &nodes, &conns, state.flow_phase, is_active, phase);
+            draw_connections(ctx, &nodes, &conns, state.flow_phase, phase);
             draw_shapes(ctx, state, &nodes, phase, radius);
             draw_node_content(ctx, state, &nodes, phase, radius, row);
             draw_static_labels(ctx, state, &nodes, radius);
@@ -304,7 +303,6 @@ fn draw_connections(
     nodes: &[NodeInfo],
     conns: &[Connection],
     flow_phase: f64,
-    is_active: bool,
     phase: Phase,
 ) {
     for conn in conns {
@@ -319,7 +317,9 @@ fn draw_connections(
         });
     }
 
-    if !is_active || phase == Phase::Finished || phase == Phase::Error {
+    // Particles only flow once real data does: no movement until the first loss
+    // report flips the phase to Training (before that every node is connecting).
+    if phase != Phase::Training {
         return;
     }
 
