@@ -3,14 +3,19 @@ mod config;
 mod ui;
 
 use anyhow::Result;
+use tracing_subscriber::{fmt, EnvFilter};
 
-fn main() -> Result<()> {
-    tracing_subscriber::fmt()
+/// Initializes stderr logging, defaulting to `info` when `RUST_LOG` is unset.
+fn init_logging() {
+    fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .with_writer(std::io::stderr)
         .init();
+}
+
+fn main() -> Result<()> {
+    init_logging();
     app::run::run()
 }

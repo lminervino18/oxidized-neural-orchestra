@@ -9,6 +9,7 @@ use std::{
 use comms::floats::{Float01, FloatPositive};
 use log::{debug, info, trace};
 use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
+use tracing_subscriber::{EnvFilter, fmt};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
 const NODE_BASE_PORT: usize = 40_000;
@@ -189,14 +190,18 @@ fn make_conv_dataset() -> DatasetConfig {
     }
 }
 
-fn main() -> io::Result<()> {
-    tracing_subscriber::fmt()
+/// Initializes stderr logging, defaulting to `debug` when `RUST_LOG` is unset.
+fn init_logging() {
+    fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("debug")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
         )
         .with_writer(std::io::stderr)
         .init();
+}
+
+fn main() -> io::Result<()> {
+    init_logging();
 
     const WORKERS: usize = 2;
     const SERVERS: usize = 2;
