@@ -1,287 +1,174 @@
-# orchestui — Config Reference
+# orchestui
 
-The TUI reads two JSON config files at startup: `model.json` and `training.json`.
+`orchestui` is an interactive [ratatui](https://ratatui.rs) TUI for **oxidized-neural-orchestra**. It lets you
+configure, launch and monitor a distributed training run from a single terminal
+application. It embeds and drives the `orchestrator` crate directly: from the UI
+you point it at two JSON config files, it connects to the `node` processes
+listening on the addresses you provide, assigns server/worker roles, and streams
+live loss, per-worker progress and a topology view back into the dashboard.
 
-## Running
+In other words, orchestui is the **orchestrator side** of the system — the
+control plane. The compute nodes (`node` processes) are raised separately, either
+by hand or via Docker.
+
+---
+
+## Build & run
+
+From the repo root:
 
 ```bash
-cargo run -p orchestui
+cargo run -p orchestui --release
 ```
 
-The TUI will prompt for the paths to both config files. Leave a field blank to use `model.json` / `training.json` from the current directory. Press `?` at either prompt to see an inline config example.
+On startup the TUI prompts for the paths to two JSON files: `model.json` (the
+network architecture) and `training.json` (the distributed training setup).
+Leave a prompt blank to use `model.json` / `training.json` from the current
+working directory.
+
+> The nodes are a prerequisite: orchestui connects out to the addresses listed
+> in `training.json`, so those `node` processes must already be listening (see
+> [How it fits together](#how-it-fits-together)). If nothing answers, the TUI
+> shows a "Failed to Start Training" screen.
+
+### End-to-end helper
+
+[`run.sh`](./run.sh) brings the whole thing up in one shot:
+
+```bash
+./orchestui/run.sh
+```
+
+It reads the number of `addrs` from `training.json`, launches that many identical
+Docker nodes via `docker/compose_up.py`, opens the Docker logs in a new terminal,
+and then starts the TUI. Every node is an identical container; the orchestrator
+assigns the server/worker roles at runtime.
 
 ---
 
-## model.json
+## Using the interface
 
-Defines the neural network architecture.
+The app is a small state machine with three screens.
+
+### Main menu
+
+| Key | Action |
+|---|---|
+| `↑` / `↓` or `k` / `j` | Move selection |
+| `Enter` | Select (`Start Training`, `Repository`, `Quit`) |
+| `q` | Quit |
+
+`Repository` opens the project page in your browser.
+
+### Configuration screen
+
+A two-step wizard: step 1 asks for the `model.json` path, step 2 for the
+`training.json` path.
+
+| Key | Action |
+|---|---|
+| type / `Backspace` | Edit the path |
+| `←` / `→` | Move the cursor |
+| `Tab` or `→` (at end) | Accept the ghost-text suggestion (the default path) |
+| `?` | Show an inline config example for the current file |
+| `Enter` | Confirm and advance / load the configs |
+| `Esc` | Back (to previous step, or to the menu) |
+
+A blank field falls back to `model.json` / `training.json` in the current
+directory. If either file is missing or fails to parse, an "Invalid
+Configuration" screen shows the reason; press any key to retry or `q` / `Esc` to
+return to the menu.
+
+### Training dashboard
+
+Once the configs load, the session starts in a background thread (converting the
+dataset if needed, then connecting) and the dashboard appears: a live per-worker
+loss chart, a workers table, a parameters panel (after completion) and a scrolling
+log. The header shows the algorithm, optimizer, epoch progress and elapsed time.
+
+| Key | Action |
+|---|---|
+| `v` | Toggle between the **dashboard** and the full-screen **topology** view |
+| `←` / `→` | Switch the focused worker (charts/table highlight) |
+| `x` | Stop training (asks for confirmation; only while running) |
+| `s` | Save the trained model to a `.safetensors` file (only after it finishes) |
+| `q` / `Esc` | Back to the menu (asks for confirmation while running) |
+
+### Topology view
+
+Pressing `v` switches to a full-canvas visualization of the nodes as workers and
+servers. It updates live — with the `strategy_switch` algorithm you can watch a
+worker upgrade into a parameter server mid-run.
+
+---
+
+## Configuration
+
+Two files drive a run: `model.json` (the network architecture) and
+`training.json` (the distributed-training setup). These are the canonical
+`orchestrator` configs (`orchestrator::configs`); the TUI parses them verbatim.
+
+The full field-by-field reference — every layer, initializer, activation,
+algorithm, optimizer, dataset source, and optional field — lives in
+**[`../docs/config-schema.md`](../docs/config-schema.md)**. Working example files
+also ship with the crate: [`model.example`](./model.example) and
+[`training.example`](./training.example).
+
+### `model.json` (minimal)
 
 ```json
 {
-  "layers": [ <layer>, ... ]
+  "layers": [
+    { "dense": { "output_size": 8, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
+    { "dense": { "output_size": 1, "init": "kaiming" } }
+  ]
 }
 ```
 
-`layers` is required and must contain at least one entry.
-
-### Layer types
-
-#### `dense`
-
-A fully-connected layer.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `output_size` | integer ≥ 1 | ✅ | Number of output neurons. |
-| `init` | initializer | ✅ | Weight initialization strategy. See below. |
-| `act_fn` | activation | ❌ | Activation function applied after the linear transform. Omit for no activation. |
-
-```json
-{ "dense": { "output_size": 8, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } }
-```
-
-#### `conv`
-
-A 2D convolutional layer. The kernel is square — `kernel_size` applies to both height and width.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `input_dim` | `[integer, integer, integer]` | ✅ | Input shape as `[in_channels, height, width]`. |
-| `kernel_dim` | `[integer, integer, integer]` | ✅ | Kernel shape as `[filters, in_channels, kernel_size]`. |
-| `stride` | integer ≥ 1 | ✅ | Convolution stride applied to both spatial dimensions. |
-| `padding` | integer ≥ 0 | ✅ | Zero-padding added to each spatial side of the input. |
-| `init` | initializer | ✅ | Weight initialization strategy. See below. |
-| `act_fn` | activation | ❌ | Activation function applied after the convolution. Omit for no activation. |
-
-```json
-{ "conv": { "input_dim": [1, 28, 28], "kernel_dim": [32, 1, 3], "stride": 1, "padding": 1, "init": "kaiming" } }
-```
-
-When combining convolutional and dense layers, the output of the last `conv` layer is automatically flattened before the first `dense` layer.
-
----
-
-### Initializers (`init`)
-
-| Value | Fields | Description |
-|---|---|---|
-| `"kaiming"` | — | Kaiming (He) normal. Recommended for layers followed by ReLU-like activations. |
-| `"xavier"` | — | Xavier (Glorot) normal. Recommended for symmetric activations like sigmoid/tanh. |
-| `"lecun"` | — | LeCun normal. |
-| `"xavier_uniform"` | — | Xavier uniform variant. |
-| `"lecun_uniform"` | — | LeCun uniform variant. |
-| `{ "const": { "value": 0.0 } }` | `value: f32` | Initializes all parameters to a constant value. |
-| `{ "uniform": { "low": -0.1, "high": 0.1 } }` | `low: f32`, `high: f32` | Uniform random in `[low, high)`. |
-| `{ "uniform_inclusive": { "low": -0.1, "high": 0.1 } }` | `low: f32`, `high: f32` | Uniform random in `[low, high]`. |
-| `{ "normal": { "mean": 0.0, "std_dev": 0.1 } }` | `mean: f32`, `std_dev: f32` | Gaussian random. |
-
----
-
-### Activation functions (`act_fn`)
-
-| Value | Fields | Description |
-|---|---|---|
-| `{ "sigmoid": { "amp": 1.0 } }` | `amp: f32` | Sigmoid: `amp / (1 + e^(-x))`. Use `amp: 1.0` for the standard sigmoid. |
-| `"softmax"` | — | Softmax over the output vector. |
-
----
-
-## training.json
-
-Defines the distributed training setup.
+### `training.json` (minimal)
 
 ```json
 {
-  "worker_addrs":   [ <addr>, ... ],
-  "algorithm":      { ... },
-  "dataset":        { ... },
-  "optimizer":      { ... },
-  "loss_fn":        "mse",
-  "batch_size":     4,
-  "max_epochs":     500,
-  "offline_epochs": 0,
-  "seed":           42,
-  "serializer":     "base",
-  "early_stopping": { "tolerance": 1e-4 }
+  "addrs": ["127.0.0.1:50000", "127.0.0.1:50001", "127.0.0.1:50002"],
+  "algorithm": { "parameter_server": { "nservers": 1, "synchronizer": "barrier", "store": "blocking" } },
+  "dataset": {
+    "src": { "local": { "samples_path": "data/samples.csv", "labels_path": "data/labels.csv" } },
+    "x_size": 2,
+    "y_size": 1
+  },
+  "optimizer": { "gradient_descent": { "lr": 0.01 } },
+  "loss_fn": "mse",
+  "batch_size": 4,
+  "max_epochs": 500,
+  "offline_epochs": 0
 }
 ```
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `worker_addrs` | `["host:port", ...]` | ✅ | Socket addresses of all worker processes. At least one required. |
-| `algorithm` | object | ✅ | Distributed training algorithm. See below. |
-| `dataset` | object | ✅ | Dataset source and shape. See below. |
-| `optimizer` | object | ✅ | Optimizer to use during training. See below. |
-| `loss_fn` | string | ✅ | Loss function. See below. |
-| `batch_size` | integer ≥ 1 | ✅ | Mini-batch size. Must not exceed total number of samples. |
-| `max_epochs` | integer ≥ 1 | ✅ | Maximum number of training epochs. |
-| `offline_epochs` | integer ≥ 0 | ✅ | Extra local epochs each worker runs before syncing with servers. Use `0` to disable. |
-| `seed` | integer | ❌ | Optional random seed for reproducibility. Omit for non-deterministic runs. |
-| `serializer` | string or object | ❌ | Gradient serializer. Defaults to `"base"`. See below. |
-| `early_stopping` | object | ❌ | Stop training when loss improvement falls below a threshold. Omit to disable. |
-
-### Early stopping
-
-```json
-"early_stopping": { "tolerance": 1e-4 }
-```
-
-Training stops at the next epoch boundary when `|prev_avg_loss - curr_avg_loss| < tolerance`. `tolerance` must be strictly greater than 0.
+`algorithm` can be `"all_reduce"`, `parameter_server`, or `strategy_switch` — with
+the `strategy_switch` algorithm you can watch a worker upgrade into a parameter
+server live in the topology view. Optional fields (`seed`, `serializer`,
+`early_stopping`) and every allowed value are documented in
+[`../docs/config-schema.md`](../docs/config-schema.md).
 
 ---
 
-### Algorithm (`algorithm`)
+## How it fits together
 
-Two options:
+orchestui is the control plane. It never listens for connections itself — it
+**connects out** to the `node` processes at the `addrs` from `training.json`.
+Those nodes are identical and role-agnostic; orchestui (via the `orchestrator`
+crate) tells each one at runtime whether it will act as a worker or a parameter
+server, based on the chosen `algorithm` and `nservers`.
 
-#### `parameter_server`
+So a typical run is:
 
-Workers push gradients to centralized servers, which apply updates and return new parameters. Model parameters are sharded across servers.
+1. Raise the compute nodes — manually, or via [`run.sh`](./run.sh) /
+   `docker/compose_up.py`, which spin up one identical container per address in
+   `training.json`.
+2. Start orchestui, point it at `model.json` and `training.json`.
+3. orchestui connects to every `addr`, assigns roles, and drives training —
+   streaming loss, per-worker progress and topology back into the dashboard.
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `server_addrs` | `["host:port", ...]` | ✅ | Socket addresses of all parameter server processes. At least one required. |
-| `synchronizer` | string | ✅ | Gradient synchronization strategy. See below. |
-| `store` | string | ✅ | Parameter store strategy. See below. |
-
-```json
-"algorithm": {
-  "parameter_server": {
-    "server_addrs": ["127.0.0.1:40000", "127.0.0.1:40001"],
-    "synchronizer": "barrier",
-    "store": "blocking"
-  }
-}
-```
-
-##### Synchronizers
-
-| Value | Description |
-|---|---|
-| `"barrier"` | All workers synchronize gradients at the end of each epoch before proceeding. Ensures consistent updates. |
-| `"non_blocking"` | Workers send gradients and continue without waiting for others. Higher throughput, less consistency. |
-
-##### Stores
-
-| Value | Description |
-|---|---|
-| `"blocking"` | Parameter reads block until the latest update is applied. Consistent reads. |
-| `"wild"` | Parameter reads may return stale values. Better throughput under high concurrency. |
-
-#### `all_reduce`
-
-Workers exchange and reduce gradients directly with each other — no parameter server required. Each worker ends up with the same averaged gradient and applies it locally.
-
-```json
-"algorithm": "all_reduce"
-```
-
-No additional fields. Workers are identified solely by `worker_addrs`.
-
----
-
-### Dataset (`dataset`)
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `src` | object | ✅ | Data source. Either `local` or `inline`. |
-| `x_size` | integer ≥ 1 | ✅ | Number of input features per sample. |
-| `y_size` | integer ≥ 1 | ✅ | Number of output values per sample. |
-
-#### `local` source
-
-Reads from binary files of packed little-endian `f32` values. `.csv` and `.tsv` files are converted to binary automatically on first run.
-
-```json
-"src": {
-  "local": {
-    "samples_path": "data/mnist_train_samples.bin",
-    "labels_path":  "data/mnist_train_labels.bin"
-  }
-}
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `samples_path` | string | ✅ | Path to the samples file, relative to the working directory where the TUI is launched. |
-| `labels_path` | string | ✅ | Path to the labels file, relative to the working directory where the TUI is launched. |
-
-#### `inline` source
-
-Embeds the dataset directly in the config.
-
-```json
-"src": {
-  "inline": {
-    "samples": [1.0, 2.0, 3.0, 4.0],
-    "labels":  [2.0, 4.0, 6.0, 8.0]
-  }
-}
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `samples` | `[f32, ...]` | ✅ | Flat row-major array of input features. Length must be divisible by `x_size`. |
-| `labels` | `[f32, ...]` | ✅ | Flat row-major array of output targets. Length must be divisible by `y_size`. |
-
----
-
-### Optimizer (`optimizer`)
-
-#### `gradient_descent`
-
-Vanilla stochastic gradient descent.
-
-```json
-"optimizer": { "gradient_descent": { "lr": 0.01 } }
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `lr` | f32 | ✅ | Learning rate. Must be > 0. |
-
-#### `gradient_descent_with_momentum`
-
-Gradient descent with momentum.
-
-```json
-"optimizer": { "gradient_descent_with_momentum": { "lr": 0.01, "mu": 0.9 } }
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `lr` | f32 | ✅ | Learning rate. Must be > 0. |
-| `mu` | f32 | ✅ | Momentum coefficient. Must be in `[0, 1]`. |
-
-#### `adam`
-
-Adam optimizer.
-
-```json
-"optimizer": { "adam": { "lr": 0.001, "b1": 0.9, "b2": 0.999, "eps": 1e-8 } }
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `lr` | f32 | ✅ | Learning rate. Must be > 0. |
-| `b1` | f32 | ✅ | First moment decay. Must be in `[0, 1]`. |
-| `b2` | f32 | ✅ | Second moment decay. Must be in `[0, 1]`. |
-| `eps` | f32 | ✅ | Numerical stability constant. Must be > 0. |
-
----
-
-### Loss functions (`loss_fn`)
-
-| Value | Description |
-|---|---|
-| `"mse"` | Mean squared error. Use for regression. |
-| `"cross_entropy"` | Cross-entropy. Use for classification. |
-
----
-
-### Serializer (`serializer`)
-
-| Value | Description |
-|---|---|
-| `"base"` | Gradients are always sent in full. Default. |
-| `{ "sparse_capable": { "r": 0.95 } }` | Only gradients above threshold `r` are sent. `r` must be in `[0.0, 1.0]`. |
+Because roles are assigned at runtime, `training.json` only needs the total node
+count (the length of `addrs`) plus how many of them should be servers
+(`nservers`). There is no separate worker/server address list.

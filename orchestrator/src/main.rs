@@ -1,5 +1,5 @@
 use std::{
-    env, io,
+    io,
     num::NonZeroUsize,
     process::{Command, ExitStatus},
     thread,
@@ -7,8 +7,9 @@ use std::{
 };
 
 use comms::floats::{Float01, FloatPositive};
-use log::info;
+use log::{debug, info, trace};
 use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
+use tracing_subscriber::{EnvFilter, fmt};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
 const NODE_BASE_PORT: usize = 40_000;
@@ -189,9 +190,18 @@ fn make_conv_dataset() -> DatasetConfig {
     }
 }
 
+/// Initializes stderr logging, defaulting to `debug` when `RUST_LOG` is unset.
+fn init_logging() {
+    fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 fn main() -> io::Result<()> {
-    unsafe { env::set_var("RUST_LOG", "debug") };
-    env_logger::init();
+    init_logging();
 
     const WORKERS: usize = 2;
     const SERVERS: usize = 2;
@@ -249,13 +259,13 @@ fn main() -> io::Result<()> {
     loop {
         match rx.blocking_recv() {
             Some(TrainingEvent::PublishedLosses { losses, worker_id }) => {
-                info!("losses: {worker_id}: {losses:?}");
+                debug!("losses: {worker_id}: {losses:?}");
             }
             Some(TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
             }) => {
-                info!("params: {:?}", trained.params);
+                trace!("params: {:?}", trained.params);
                 info!("stop reason: {reason:?}");
 
                 trained

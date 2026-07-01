@@ -6,6 +6,10 @@ build-backend = "maturin"
 name = "orchestra"
 version = "0.1.0"
 
+[project.optional-dependencies]
+bench = ["numpy", "torch", "safetensors"]
+dev = ["ruff"]
+
 [tool.maturin]
 python-packages = ["orchestra"]
 module-name = "orchestra._orchestra"

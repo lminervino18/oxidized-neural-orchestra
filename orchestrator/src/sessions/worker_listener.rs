@@ -151,7 +151,7 @@ impl WorkerListener {
                 ReqResolution::Continue
             }
             WorkerRequest::PullParams => {
-                info!("pulling parmaeters from worker {id}");
+                info!("pulling parameters from worker {id}");
 
                 match self.worker_handle.pull_params().await {
                     Ok(params) => {

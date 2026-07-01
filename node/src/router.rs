@@ -87,6 +87,7 @@ where
                 continue;
             };
 
+            info!("orchestrator connected");
             self.handle_orch(orch_handle).await;
         }
     }

@@ -75,7 +75,7 @@ where
         // SAFETY: The parameter vector is the same size as
         //         the amount of parameters in the storage.
         self.store.pull_params(&mut params).unwrap();
-        info!("waiting for orchestrator to pull params");
+        info!("serving {nparams} parameters, waiting for orchestrator to pull");
 
         loop {
             let event = self.orch_handle.recv_event().await?;

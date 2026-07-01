@@ -63,17 +63,14 @@ where
     let mut params = vec![0.5; nparams];
 
     loop {
-        match worker_handle.recv_event().await? {
-            WorkerEvent::Grad { grad, is_last } => {
-                optimizer.update_params(grad, &mut params).unwrap();
+        if let WorkerEvent::Grad { grad, is_last } = worker_handle.recv_event().await? {
+            optimizer.update_params(grad, &mut params).unwrap();
 
-                if is_last {
-                    break;
-                }
-
-                worker_handle.push_params(&mut params).await?;
+            if is_last {
+                break;
             }
-            _ => {}
+
+            worker_handle.push_params(&mut params).await?;
         }
     }
 

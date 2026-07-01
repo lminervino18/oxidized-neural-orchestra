@@ -6,6 +6,7 @@ use std::{env, io, time::Duration};
 use comms::{Acceptor, Connector};
 use log::info;
 use tokio::net::TcpListener;
+use tracing_subscriber::{EnvFilter, fmt};
 
 use router::NodeRouter;
 use uuid::Uuid;
@@ -25,9 +26,19 @@ const NETWORK_EXP_BACKOFF_COEF: u32 = 2;
 /// The amount of retries to do until giving up the connection for exponential backoff.
 const NETWORK_EXP_BACKOFF_RETRIES: usize = 4;
 
+/// Initializes stderr logging, defaulting to `info` when `RUST_LOG` is unset.
+fn init_logging() {
+    fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    env_logger::init();
+    init_logging();
 
     let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
     let port = env::var("PORT").map_err(io::Error::other)?;
