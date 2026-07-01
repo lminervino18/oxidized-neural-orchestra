@@ -27,7 +27,13 @@ const NETWORK_EXP_BACKOFF_RETRIES: usize = 4;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
 
     let host = env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
     let port = env::var("PORT").map_err(io::Error::other)?;
