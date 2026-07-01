@@ -25,6 +25,7 @@ use crate::ui::{
     theme::Theme,
     utils::fmt_loss,
 };
+use crate::naming::random_model_name;
 
 /// Fastest particle traversal, so bursts of quick reports stay watchable.
 const FLOW_PERIOD_MIN_MS: f64 = 500.0;
@@ -462,6 +463,7 @@ impl TrainingState {
                     ),
                 );
                 self.final_trained = Some(trained);
+                self.auto_save();
             }
             TrainingEvent::Error(e) => {
                 self.phase = Phase::Error;
@@ -470,6 +472,23 @@ impl TrainingState {
                 self.push_log(LogLevel::Error, msg);
             }
             _ => unreachable!(),
+        }
+    }
+
+    /// Auto-saves the finished model to `safetensors/<random-name>.safetensors`
+    /// and logs the resolved path (or the failure).
+    fn auto_save(&mut self) {
+        let Some(trained) = self.final_trained.as_ref() else {
+            return;
+        };
+        let dir = "safetensors";
+        let path = format!("{dir}/{}", random_model_name());
+        let outcome = std::fs::create_dir_all(dir)
+            .map_err(|e| e.to_string())
+            .and_then(|()| trained.save_safetensors(&path).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(()) => self.push_log(LogLevel::Info, format!("model saved to {path}")),
+            Err(e) => self.push_log(LogLevel::Error, format!("failed to save model: {e}")),
         }
     }
 
@@ -674,6 +693,12 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
             state.confirm_quit = ConfirmQuit::Hidden;
             None
         }
+        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false)
+            if state.phase == Phase::Finished =>
+        {
+            state.confirm_quit = ConfirmQuit::Visible;
+            None
+        }
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => {
             Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))))
         }
@@ -746,7 +771,7 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     }
 
     if state.confirm_quit == ConfirmQuit::Visible {
-        draw_confirm_quit(f);
+        draw_confirm_quit(f, state.phase == Phase::Finished);
     }
 
     if state.confirm_stop == ConfirmStop::Visible {
