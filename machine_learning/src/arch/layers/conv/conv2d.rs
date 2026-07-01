@@ -18,6 +18,7 @@ pub struct Conv2d {
     output: Array4<f32>,
 
     // Backward metadata
+    col_delta: Array2<f32>,
     delta_out: Array4<f32>,
 }
 
@@ -41,6 +42,7 @@ impl Conv2d {
             real_input_shape,
             effective_input: zeros4.clone(),
             output: zeros4.clone(),
+            col_delta: Array2::zeros((1, 1)),
             delta_out: zeros4.clone(),
         }
     }
@@ -138,6 +140,11 @@ impl Conv2d {
 
         let (_, _, delta_in_h, delta_in_w) = delta_in.dim();
 
+        self.col_delta.reshape_inplace((
+            in_channels * kernel_size * kernel_size,
+            delta_in_h * delta_in_w,
+        ));
+
         delta_in
             .axis_iter(Axis(0))
             .zip(self.effective_input.axis_iter(Axis(0)))
@@ -154,14 +161,14 @@ impl Conv2d {
                     .into_shape_with_order((filters, delta_in_h * delta_in_w))
                     .unwrap();
 
-                // TODO: prealloc
-                let mut col_delta = Array2::zeros((
-                    in_channels * kernel_size * kernel_size,
-                    delta_in_h * delta_in_w,
-                ));
-
-                linalg::general_mat_mul(1.0, &flat_kernel.t(), &flat_delta_in, 0.0, &mut col_delta);
-                Self::col2im_into(&mut delta_out_b, col_delta.view(), kernel_size, stride);
+                linalg::general_mat_mul(
+                    1.0,
+                    &flat_kernel.t(),
+                    &flat_delta_in,
+                    0.0,
+                    &mut self.col_delta,
+                );
+                Self::col2im_into(&mut delta_out_b, self.col_delta.view(), kernel_size, stride);
 
                 // kernel grad
                 // TODO: calcular una vez en forward
