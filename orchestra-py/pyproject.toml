@@ -5,6 +5,13 @@ build-backend = "maturin"
 [project]
 name = "orchestra"
 version = "0.1.0"
+# Runtime needs nothing pure-Python: the compiled extension is self-contained.
+
+[project.optional-dependencies]
+# Benchmark harness only (PyTorch reference + evaluation + model I/O).
+bench = ["numpy", "torch", "safetensors"]
+# Development tooling (linter/formatter).
+dev = ["ruff"]
 
 [tool.maturin]
 python-packages = ["orchestra"]
