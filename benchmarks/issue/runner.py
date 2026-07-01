@@ -45,6 +45,7 @@ def _dl_raw(name, url, raw_dir):
     if dest.exists():
         return dest
     gz = raw_dir / (name + ".gz")
+    print(f"  downloading MNIST {name} (first run only)...", flush=True)
     urllib.request.urlretrieve(url, gz)
     with gzip.open(gz, "rb") as fi, open(dest, "wb") as fo:
         shutil.copyfileobj(fi, fo)
@@ -93,10 +94,12 @@ def prepare_dataset(subset=None):
         "test_l": NB_DATA_DIR / "mnist_test_labels.bin",
     }
     if not (full["train_s"].exists() and full["train_l"].exists()):
+        print("  converting MNIST train set to binary...", flush=True)
         _write_bins(_read_images(_dl_raw("train_images", MNIST_URLS["train_images"], raw)),
                     _read_labels(_dl_raw("train_labels", MNIST_URLS["train_labels"], raw)),
                     full["train_s"], full["train_l"])
     if not (full["test_s"].exists() and full["test_l"].exists()):
+        print("  converting MNIST test set to binary...", flush=True)
         _write_bins(_read_images(_dl_raw("test_images", MNIST_URLS["test_images"], raw)),
                     _read_labels(_dl_raw("test_labels", MNIST_URLS["test_labels"], raw)),
                     full["test_s"], full["test_l"])
