@@ -100,6 +100,7 @@ impl Conv2d {
             .axis_iter(Axis(0))
             .zip(output.axis_iter_mut(Axis(0)))
             .for_each(|(input_b, mut output_b)| {
+                // TODO: prealloc
                 let col_image = Self::im2col(input_b, kernel_size, stride);
                 // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
                 let flat_kernel = kernel
@@ -163,18 +164,21 @@ impl Conv2d {
                 Self::col2im_into(&mut delta_out_b, col_delta.view(), kernel_size, stride);
 
                 // kernel grad
+                // TODO: calcular una vez en forward
                 let col_image = Self::im2col(effective_input_b, kernel_size, stride);
-                let col_delta = delta_in_b
-                    .into_shape_with_order((filters, delta_in_h * delta_in_w))
-                    .unwrap();
-                let col_dk_step = col_delta.dot(&col_image.t());
 
-                // dk += dk step .into shape
-                let col_dk_step = col_dk_step
-                    .into_shape_with_order((filters, in_channels, kernel_size, kernel_size))
+                // SAFETY: `d_kernel` has filters * in_channels * kernel_size^2 elements.
+                let mut flat_d_kernel = d_kernel
+                    .view_mut()
+                    .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
                     .unwrap();
-
-                d_kernel += &col_dk_step;
+                linalg::general_mat_mul(
+                    1.0,
+                    &flat_delta_in,
+                    &col_image.t(),
+                    1.0,
+                    &mut flat_d_kernel,
+                );
             });
 
         let db_sum = delta_in
