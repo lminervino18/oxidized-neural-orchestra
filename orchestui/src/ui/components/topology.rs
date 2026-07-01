@@ -40,13 +40,11 @@ const COLOR_DONE: Color = Color::Rgb(40, 140, 255);
 const COLOR_SERVER: Color = Color::Rgb(0, 210, 210);
 const COLOR_CONN: Color = Color::Rgb(0, 55, 0);
 const COLOR_PARTICLE: Color = Color::Rgb(255, 200, 0);
-const ANIM_PERIOD_MS: u128 = 1800;
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &TrainingState) {
     let (nodes, conns, radius) = compute_layout(state);
-    let elapsed_ms = state.started_at.elapsed().as_millis();
     let is_active = state.is_active();
     let phase = state.phase;
 
@@ -63,7 +61,7 @@ pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &Trainin
         .x_bounds([0.0, 200.0])
         .y_bounds([0.0, 100.0])
         .paint(|ctx| {
-            draw_connections(ctx, &nodes, &conns, elapsed_ms, is_active, phase);
+            draw_connections(ctx, &nodes, &conns, state.flow_phase, is_active, phase);
             draw_shapes(ctx, state, &nodes, phase, radius);
             draw_node_content(ctx, state, &nodes, phase, radius, row);
             draw_static_labels(ctx, state, &nodes, radius);
@@ -305,7 +303,7 @@ fn draw_connections(
     ctx: &mut Context,
     nodes: &[NodeInfo],
     conns: &[Connection],
-    elapsed_ms: u128,
+    flow_phase: f64,
     is_active: bool,
     phase: Phase,
 ) {
@@ -329,8 +327,8 @@ fn draw_connections(
     for (ci, conn) in conns.iter().enumerate() {
         let a = &nodes[conn.from_idx];
         let b = &nodes[conn.to_idx];
-        let offset = (ci as u128 * ANIM_PERIOD_MS) / n as u128;
-        let t = ((elapsed_ms + offset) % ANIM_PERIOD_MS) as f64 / ANIM_PERIOD_MS as f64;
+        // Stagger each wire's particle so the flow reads as a continuous stream.
+        let t = (flow_phase + ci as f64 / n as f64).fract();
         let pr = (1.5_f64).min(0.18 * radius_estimate(a, b));
         ctx.draw(&Circle {
             x: a.x + t * (b.x - a.x),
