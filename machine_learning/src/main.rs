@@ -1,15 +1,16 @@
-use std::{env, fs::File, io::Read, num::NonZeroUsize, path::PathBuf};
+use std::{cell::RefCell, env, fs::File, io::Read, num::NonZeroUsize, path::PathBuf, rc::Rc};
 
 use comms::floats::FloatPositive;
 use machine_learning::{
     arch::loss::CrossEntropy,
     datasets::{DataSrc, Dataset},
+    initialization::{ParamGen, RandParamGen},
     models::make_nielsen_mnist_model,
     optimization::GradientDescent,
     param_manager::{ParamManager, ParamsMetadata},
     training::{BackpropTrainer, TrainResult, Trainer},
 };
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{SeedableRng, rngs::StdRng};
 
 const MNIST_DIR_STR: &str = "datasets/mnist/";
 const TRAIN_SAMPLES_STR: &str = "mnist_train_samples.bin";
@@ -48,11 +49,17 @@ fn main() {
         0,
         epochs,
         batch_size,
-        rng,
+        rng.clone(),
     );
 
     let nparams = model.size();
-    let mut params_grads = gen_params_grads(&[nparams]);
+    let mut param_gen = RandParamGen::kaiming(
+        Rc::new(RefCell::new(rng)),
+        nparams,
+        INPUT_HEIGHT * INPUT_WIDTH,
+    )
+    .unwrap();
+    let mut params_grads = gen_params_grads(&[nparams], &mut param_gen);
     let servers: Vec<_> = params_grads
         .iter_mut()
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
@@ -115,16 +122,15 @@ fn main() {
     println!("accuracy: {acc_percentage}%");
 }
 
-fn gen_params_grads(server_sizes: &[usize]) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> {
-    let mut rng = rand::rng();
+fn gen_params_grads(
+    server_sizes: &[usize],
+    param_gen: &mut dyn ParamGen,
+) -> Vec<(Vec<f32>, Vec<f32>, Vec<f32>)> {
     server_sizes
         .iter()
         .map(|&size| {
-            (
-                (0..size).map(|_| rng.random_range(-0.5..0.5)).collect(),
-                vec![0.; size],
-                vec![0.; size],
-            )
+            let params = param_gen.sample(size).unwrap();
+            (params, vec![0.; size], vec![0.; size])
         })
         .collect()
 }

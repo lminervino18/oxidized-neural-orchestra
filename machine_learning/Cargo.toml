@@ -8,6 +8,8 @@ bytemuck = "1.25.0"
 comms = { path = "../comms" }
 futures = "0.3.32"
 ndarray = { version = "0.17.2", features = ["rayon", "approx"] }
+# ndarray = { version = "0.17.2", features = ["rayon", "approx", "blas"] }
+# blas-src = { version = "0.8", features = ["openblas"] }
 approx = "0.5.1"
 ndarray-conv = "0.6.1" # TODO: esto vuela !!!
 ndarray-rand = "0.16.0"
