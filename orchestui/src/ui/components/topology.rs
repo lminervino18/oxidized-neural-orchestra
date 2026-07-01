@@ -50,10 +50,12 @@ pub fn draw_topology(f: &mut Frame, area: ratatui::layout::Rect, state: &Trainin
     let is_active = state.is_active();
     let phase = state.phase;
 
-    // Canvas units per text row: lets us space the node's inner lines exactly
-    // one row apart regardless of terminal height.
+    // Canvas units per text row. Ratatui maps labels with a `height - 1`
+    // resolution, so the divisor must match to keep each node line exactly one
+    // terminal row apart; otherwise adjacent lines round onto the same row and
+    // the loss overlaps the epoch counter.
     let inner_h = area.height.saturating_sub(2).max(1) as f64;
-    let row = 100.0 / inner_h;
+    let row = 100.0 / (inner_h - 1.0).max(1.0);
 
     let canvas = Canvas::default()
         .block(topology_block(state))
