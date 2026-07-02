@@ -205,17 +205,24 @@ impl Conv2d {
         kernel_size: usize,
         stride: usize,
     ) {
-        let (_, image_h, image_w) = image.dim();
-        let out_w = (image_w - kernel_size) / stride + 1;
+        let (channels, image_h, image_w) = image.dim();
 
-        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
-            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
-                let window = image.slice(s![.., i..i + kernel_size, j..j + kernel_size]);
-                let mut col = col_image.column_mut(row_idx * out_w + col_idx);
+        let mut row_idx = 0;
+        for c in 0..channels {
+            for kh in 0..kernel_size {
+                for kw in 0..kernel_size {
+                    let mut row = col_image.row_mut(row_idx);
 
-                col.iter_mut().zip(window.iter()).for_each(|(c, w)| {
-                    *c = *w;
-                });
+                    let mut out_idx = 0;
+                    for i in (0..image_h - kernel_size + 1).step_by(stride) {
+                        for j in (0..image_w - kernel_size + 1).step_by(stride) {
+                            row[out_idx] = image[[c, i + kh, j + kw]];
+                            out_idx += 1;
+                        }
+                    }
+
+                    row_idx += 1;
+                }
             }
         }
     }
@@ -236,17 +243,24 @@ impl Conv2d {
         kernel_size: usize,
         stride: usize,
     ) {
-        let (_, image_h, image_w) = im_delta.dim();
-        let out_w = (image_w - kernel_size) / stride + 1;
+        let (channels, image_h, image_w) = im_delta.dim();
 
-        for (row_idx, i) in (0..image_h - kernel_size + 1).step_by(stride).enumerate() {
-            for (col_idx, j) in (0..image_w - kernel_size + 1).step_by(stride).enumerate() {
-                let col = col_delta.column(row_idx * out_w + col_idx);
-                let mut window = im_delta.slice_mut(s![.., i..i + kernel_size, j..j + kernel_size]);
+        let mut row_idx = 0;
+        for c in 0..channels {
+            for kh in 0..kernel_size {
+                for kw in 0..kernel_size {
+                    let row = col_delta.row(row_idx);
 
-                window.iter_mut().zip(col.iter()).for_each(|(w, c)| {
-                    *w += *c;
-                })
+                    let mut out_idx = 0;
+                    for i in (0..image_h - kernel_size + 1).step_by(stride) {
+                        for j in (0..image_w - kernel_size + 1).step_by(stride) {
+                            im_delta[[c, i + kh, j + kw]] += row[out_idx];
+                            out_idx += 1;
+                        }
+                    }
+
+                    row_idx += 1;
+                }
             }
         }
     }
