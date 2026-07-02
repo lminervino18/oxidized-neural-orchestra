@@ -9,7 +9,7 @@ use crate::{
 /// Either the training must go on or the last call was the last.
 pub struct TrainResult<'trainer> {
     pub losses: &'trainer [f64],
-    pub was_last: bool,
+    pub is_last: bool,
 }
 
 /// This trait generalizes all the different concrete `ModelTrainer` variations between optimizers, loss functions, ...

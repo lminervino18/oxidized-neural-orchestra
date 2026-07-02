@@ -23,11 +23,11 @@ pub fn make_nielsen_mnist_model() -> Sequential {
     let max_pooling_output_height = (_conv_output_height + 2 * max_pooling_padding
         - max_pooling_filter_size)
         / max_pooling_stride
-        + 1; // max_pooling_stride + 1
+        + 1;
     let max_pooling_output_width = (_conv_output_width + 2 * max_pooling_padding
         - max_pooling_filter_size)
         / max_pooling_stride
-        + 1; // max_pooling_stride + 1
+        + 1;
 
     // esta no está en pytorch
     let unflatten = Layer::two_d_to4d(MNIST_IN_CHANNELS, MNIST_INPUT_HEIGHT, MNIST_INPUT_WIDTH);

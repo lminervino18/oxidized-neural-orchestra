@@ -1,14 +1,15 @@
 use std::{
-    env, io,
+    io,
     num::NonZeroUsize,
     process::{Command, ExitStatus},
     thread,
     time::{Duration, Instant},
 };
 
-use comms::floats::{Float01, FloatNonNegative, FloatPositive};
-use log::info;
+use comms::floats::{Float01, FloatPositive};
+use log::{debug, info, trace};
 use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
+use tracing_subscriber::{EnvFilter, fmt};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
 const NODE_BASE_PORT: usize = 40_000;
@@ -55,6 +56,7 @@ fn nonzero(n: usize) -> NonZeroUsize {
     NonZeroUsize::new(n).unwrap()
 }
 
+#[allow(unused)]
 fn make_nielsen_mnist_model() -> ModelConfig {
     use ActFnConfig::*;
     use LayerConfig::*;
@@ -93,6 +95,36 @@ fn make_nielsen_mnist_model() -> ModelConfig {
     ModelConfig { layers }
 }
 
+#[allow(unused)]
+fn make_conv_model() -> ModelConfig {
+    ModelConfig {
+        layers: vec![
+            LayerConfig::Conv {
+                input_dim: (
+                    NonZeroUsize::new(2).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                    NonZeroUsize::new(3).unwrap(),
+                ),
+                kernel_dim: (
+                    NonZeroUsize::new(5).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
+                    NonZeroUsize::new(2).unwrap(),
+                ),
+                stride: NonZeroUsize::new(1).unwrap(),
+                padding: 0,
+                init: ParamGenConfig::Kaiming,
+                act_fn: None,
+            },
+            LayerConfig::Dense {
+                output_size: NonZeroUsize::new(4).unwrap(),
+                init: ParamGenConfig::Kaiming,
+                act_fn: Some(ActFnConfig::Softmax),
+            },
+        ],
+    }
+}
+
+#[allow(unused)]
 fn make_mnist_dataset() -> DatasetConfig {
     let x_size = nonzero(28 * 28);
     let y_size = nonzero(10);
@@ -109,9 +141,67 @@ fn make_mnist_dataset() -> DatasetConfig {
     }
 }
 
+#[allow(unused)]
+fn make_conv_dataset() -> DatasetConfig {
+    DatasetConfig {
+        src: DataSrc::Inline {
+            samples: vec![
+                0.0, 1.0, 0.0, //
+                1.0, 1.0, 1.0, //
+                0.0, 1.0, 0.0, //
+                //
+                1.0, 0.0, 1.0, //
+                0.0, 0.0, 0.0, //
+                1.0, 0.0, 1.0, // plus sign
+                //
+                0.0, 0.0, 0.0, //
+                0.0, 1.0, 0.0, //
+                0.0, 0.0, 0.0, //
+                //
+                1.0, 1.0, 1.0, //
+                1.0, 0.0, 1.0, //
+                1.0, 1.0, 1.0, // dot
+                //
+                1.0, 0.0, 1.0, //
+                0.0, 1.0, 0.0, //
+                1.0, 0.0, 1.0, //
+                //
+                0.0, 1.0, 0.0, //
+                1.0, 0.0, 1.0, //
+                0.0, 1.0, 0.0, // cross
+                //
+                1.0, 1.0, 1.0, //
+                1.0, 0.0, 1.0, //
+                1.0, 1.0, 1.0, //
+                //
+                0.0, 0.0, 0.0, //
+                0.0, 1.0, 0.0, //
+                0.0, 0.0, 0.0, // box
+            ],
+            labels: vec![
+                1.0, 0.0, 0.0, 0.0, // plus sign
+                0.0, 1.0, 0.0, 0.0, // dot
+                0.0, 0.0, 1.0, 0.0, // cross
+                0.0, 0.0, 0.0, 1.0, // box
+            ],
+        },
+        x_size: NonZeroUsize::new(18).unwrap(),
+        y_size: NonZeroUsize::new(4).unwrap(),
+    }
+}
+
+/// Initializes stderr logging, defaulting to `debug` when `RUST_LOG` is unset.
+fn init_logging() {
+    fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 fn main() -> io::Result<()> {
-    unsafe { env::set_var("RUST_LOG", "debug") };
-    env_logger::init();
+    init_logging();
 
     const WORKERS: usize = 2;
     const SERVERS: usize = 2;
@@ -140,7 +230,7 @@ fn main() -> io::Result<()> {
         store: StoreConfig::Blocking,
     };
 
-    let model_config = make_nielsen_mnist_model();
+    let model_config = make_conv_model();
 
     let training_config = TrainingConfig {
         addrs,
@@ -148,20 +238,17 @@ fn main() -> io::Result<()> {
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
-        dataset: make_mnist_dataset(),
+        dataset: make_conv_dataset(),
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
             lr: FloatPositive::new(0.1).unwrap(),
             mu: Float01::new(0.95).unwrap(),
         },
         loss_fn: LossFnConfig::CrossEntropy,
-        batch_size: NonZeroUsize::new(10).unwrap(),
-        // max_epochs: NonZeroUsize::new(60).unwrap(),
-        max_epochs: NonZeroUsize::new(2).unwrap(),
-        offline_epochs: 0,
+        batch_size: NonZeroUsize::new(4).unwrap(),
+        max_epochs: NonZeroUsize::new(1000).unwrap(),
+        offline_epochs: 1,
         seed: Some(42),
-        early_stopping: Some(EarlyStoppingConfig {
-            tolerance: FloatNonNegative::new(0.02).unwrap(),
-        }),
+        early_stopping: None,
     };
 
     let start = Instant::now();
@@ -172,13 +259,13 @@ fn main() -> io::Result<()> {
     loop {
         match rx.blocking_recv() {
             Some(TrainingEvent::PublishedLosses { losses, worker_id }) => {
-                info!("losses: {worker_id}: {losses:?}");
+                debug!("losses: {worker_id}: {losses:?}");
             }
             Some(TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
             }) => {
-                info!("params: {:?}", trained.params);
+                trace!("params: {:?}", trained.params);
                 info!("stop reason: {reason:?}");
 
                 trained

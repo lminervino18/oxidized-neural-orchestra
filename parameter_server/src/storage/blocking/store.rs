@@ -40,12 +40,18 @@ impl<O: Optimizer> BlockingStore<O> {
     ///
     /// # Args
     /// * `shard_size` - The maximum amount of parameters per shard.
+    /// * `nworkers` - The number of workers summed per round, used to average gradients.
     /// * `param_gen` - A parameter generator.
     /// * `optimizer_factory` - An `Optimizer` factory closure.
     ///
     /// # Returns
     /// A new `BlockingStore` instance.
-    pub fn new<OF, PG>(shard_size: NonZeroUsize, param_gen: &mut PG, optimizer_factory: OF) -> Self
+    pub fn new<OF, PG>(
+        shard_size: NonZeroUsize,
+        nworkers: NonZeroUsize,
+        param_gen: &mut PG,
+        optimizer_factory: OF,
+    ) -> Self
     where
         PG: ParamGen + ?Sized,
         OF: Fn(usize) -> O,
@@ -56,7 +62,7 @@ impl<O: Optimizer> BlockingStore<O> {
         while let Some(params) = param_gen.sample(shard_size.get()) {
             nparams += params.len();
             let optimizer = optimizer_factory(params.len());
-            let shard = BlockingShard::new(params, optimizer);
+            let shard = BlockingShard::new(params, optimizer, nworkers);
             shards.push(shard);
         }
 
@@ -142,8 +148,9 @@ mod tests {
 
     fn create_test_store(params: usize, shard_size: usize) -> BlockingStore<AddOptimizer> {
         let shard_size = NonZeroUsize::new(shard_size).unwrap();
+        let nworkers = NonZeroUsize::new(1).unwrap();
         let mut param_gen = ConstParamGen::new(0., params);
-        BlockingStore::new(shard_size, &mut param_gen, |_| AddOptimizer)
+        BlockingStore::new(shard_size, nworkers, &mut param_gen, |_| AddOptimizer)
     }
 
     #[test]

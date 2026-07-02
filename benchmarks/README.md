@@ -1,163 +1,152 @@
-# MNIST End-to-End Benchmark
+# Strategy Benchmarks
 
-Runs distributed MNIST training through the full O.N.O stack (Docker → workers → parameter server → orchestrator), measures performance metrics, and generates reproducible comparison plots.
+Compares the three distributed strategies — **parameter server**, **all-reduce** and **strategy switch** — on two models (**LeNet5** and **Nielsen MNIST**) across four focused suites. Each suite states what it measures and what it does not.
 
-## Setup
+## Models
 
-All dependencies are in the repo-root `.venv` (torch, safetensors, orchestra, matplotlib). No extra install needed.
+- **Nielsen MNIST**: `28×28×1 → conv(20, 5×5) → maxpool(2×2) → dense(100, sigmoid) → dense(10) → softmax`.
+- **LeNet5**: `conv(6, 5×5, pad2) → maxpool → conv(16, 5×5) → maxpool → dense(120) → dense(84) → dense(10)`, tanh + softmax.
 
-```bash
-# Verify the venv works
-.venv/bin/python -c "import orchestra, torch, matplotlib; print('OK')"
-```
+### Hyper-parameters
 
-If you don't have the venv yet:
+Each model owns its *reference* recipe (in `issue/suites.py`). Convergence suites train with it; speed/scalability suites override `batch`/`epochs` since they do not need to converge.
 
-```bash
-cd orchestra-py && maturin develop --release && cd ..
-pip install torch safetensors matplotlib  # or use the existing .venv
-```
+| Model | lr | Batch | Epochs | Loss |
+|---|---|---|---|---|
+| nielsen | 0.1 | 10 | 60 | cross_entropy |
+| lenet5 | 0.05 | 64 | 60 | cross_entropy |
+
+`batch` is the **per-worker** mini-batch (the dataset is sharded across workers, and each worker runs SGD locally at this batch before the per-epoch averaging). Nielsen uses the canonical `network3.py` recipe (60 / 10 / 0.1 → ~98.8%); the small batch is what lets the distributed runs converge.
+
+## Strategies & variants
+
+- **PS (blocking)** — `BlockingStore` + `BarrierSync`: workers wait for a full round.
+- **PS (non-block)** — `BlockingStore` + `NonBlockingSync`: same consistent store, but workers apply and move on without the barrier (see Methodology for why the lock-free HogWild store is excluded).
+- **AR** — all-reduce ring (averaged gradients).
+- **SS** — strategy switch (starts in all-reduce, may switch to PS).
+- **PyTorch (ref)** — single-process PyTorch training of the same architecture and recipe, drawn as a dashed reference line in the convergence plots.
 
 ## Running
 
 ```bash
-# Quick smoke test — validates the full pipeline (~2 min)
-.venv/bin/python benchmarks/mnist_e2e.py --profile smoke
-
-# Full benchmark — compares configs, timing, and accuracy (~10-20 min)
-.venv/bin/python benchmarks/mnist_e2e.py --profile benchmark
+.venv/bin/python benchmarks/run_issue_benchmarks.py                 # all suites, both models
+.venv/bin/python benchmarks/run_issue_benchmarks.py --suite convergence
+.venv/bin/python benchmarks/run_issue_benchmarks.py --suite scalability --model lenet5
+.venv/bin/python benchmarks/run_issue_benchmarks.py --plots-only    # rebuild plots/README from history
 ```
 
-### Options
+Partial runs only re-run and re-plot the selected suite/model; every other suite keeps its previous results and figures.
 
-| Flag | Effect |
-|---|---|
-| `--profile smoke\|benchmark` | Which config profile to run (default: smoke) |
-| `--output path/to/file.jsonl` | Custom results file path |
-| `--keep-containers` | Don't stop Docker containers after the run |
-| `--rebuild` | Force Docker image rebuild (`--no-cache`) |
-| `--config path/to/config.json` | Custom config file (default: `mnist_configs.json`) |
+All-reduce worker scale: [3, 5, 7] (configurable in `issue/suites.py`; the issue suggests 3/7/11 — kept lighter to fit one host).
 
-## Latest Results
+_Last full run: 5h 38m 58s (2026-07-01 02:37)._
 
-> These images are regenerated automatically on every run. Open this file in VS Code or any local Markdown viewer to see fresh results.
+## Convergence
 
-### Smoke
+**Measures:** loss vs epoch and final test accuracy. Strategies are compared at a **fixed 5-node budget** (PS and SS are 3 workers + 2 servers; all-reduce runs 5 workers) so they spend the same hardware. We hold **nodes** fixed rather than **workers** because strategy switch all-reduces over *every* node until it switches, so a 3w/2s SS is really a 5-node run; at equal node budget it sits honestly next to all-reduce with that many workers instead of being mislabeled as a 3-worker run. (Training is **Local SGD**: every worker runs SGD locally at `batch` per step over its data shard, then the updates are averaged across workers each epoch — the per-step batch is **not** `workers × batch`.) The all-reduce **worker-count sweep** lives in its own figure (more workers = smaller shards + more averaging). The dashed line is the single-process PyTorch reference (same recipe + same early-stopping rule).
+**Does NOT measure:** wall-clock speed.
 
-![Smoke Results](plots/smoke_results.png)
+| Model | Strategy | Topology | lr | Batch/wkr | Epochs | Final loss | Accuracy |
+|---|---|---|---|---|---|---|---|
+| lenet5 | AR | 3w | 0.05 | 64 | 56 | 0.00756 | 0.978 |
+| lenet5 | AR | 5w | 0.05 | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | AR | 7w | 0.05 | 64 | 60 | 0.014 | 0.963 |
+| lenet5 | PS (blocking) | 3w/2s | 0.05 | 64 | 60 | 0.00723 | 0.980 |
+| lenet5 | PS (non-block) | 3w/2s | 0.05 | 64 | 60 | 0.00732 | 0.980 |
+| lenet5 | SS (blocking) · no switch | 3w/2s | 0.05 | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | PyTorch (ref) | 1w | 0.05 | 64 | 60 | 0.00107 | 0.990 |
+| nielsen | AR | 3w | 0.1 | 10 | 51 | 0.00374 | 0.983 |
+| nielsen | AR | 5w | 0.1 | 10 | 60 | 0.00547 | 0.979 |
+| nielsen | AR | 7w | 0.1 | 10 | 60 | 0.00762 | 0.975 |
+| nielsen | PS (blocking) | 3w/2s | 0.1 | 10 | 60 | 0.00349 | 0.983 |
+| nielsen | PS (non-block) | 3w/2s | 0.1 | 10 | 60 | 0.00373 | 0.982 |
+| nielsen | SS (blocking) · no switch | 3w/2s | 0.1 | 10 | 60 | 0.00547 | 0.979 |
+| nielsen | PyTorch (ref) | 1w | 0.1 | 10 | 60 | 0.000222 | 0.989 |
 
-### Benchmark
+![](plots/convergence_loss_nielsen.png)
+![](plots/convergence_loss_lenet5.png)
+![](plots/convergence_accuracy_nielsen.png)
+![](plots/convergence_accuracy_lenet5.png)
+![](plots/convergence_workers_nielsen.png)
+![](plots/convergence_workers_lenet5.png)
 
-![Benchmark Results](results/latest/benchmark_results.png)
+## Execution speed
 
----
+**Measures:** **samples/sec** (batch-invariant throughput) on a fixed **4,000-sample** training subset over a short **8-epoch** budget. Compares raising `offline_epochs` vs raising `batch_size`.
+**Does NOT measure:** accuracy or convergence.
 
-## What Gets Measured
-
-| Field | What's included | What's excluded |
-|---|---|---|
-| `train_seconds` | `orchestrate()` call → `session.wait()` returns | Docker build, container startup, dataset prep |
-| `docker_start_seconds` | `docker compose up` + 3s readiness wait | — |
-| `eval_seconds` | PyTorch inference on test set | — |
-| `accuracy` | Top-1 accuracy on N test samples | — |
-
-**Pass/fail per run**: `accuracy >= min_accuracy AND train_seconds <= max_train_seconds`.
-
-## Results Format
-
-Each run appends one line to a `.jsonl` file in `results/` (gitignored):
-
-```json
-{
-  "run_id": "2026-05-01T22-25-34_dense_tiny_ps_1w_1s_base_barrier",
-  "profile": "smoke",
-  "model_name": "dense_tiny",
-  "training_name": "ps_1w_1s_base_barrier",
-  "workers": 1,
-  "servers": 1,
-  "serializer": "base",
-  "sync": "barrier",
-  "store": "blocking",
-  "max_epochs": 5,
-  "batch_size": 256,
-  "lr": 0.5,
-  "train_samples": 60000,
-  "test_samples": 10000,
-  "docker_start_seconds": 21.6,
-  "train_seconds": 0.06,
-  "eval_seconds": 1.2,
-  "accuracy": 0.204,
-  "min_accuracy": 0.80,
-  "max_train_seconds": 300,
-  "passed": true,
-  "error": null
-}
-```
-
-## Profiles
-
-| Profile | Train | Test | Purpose | Expected time |
-|---|---|---|---|---|
-| `smoke` | full (60 k) | full (10 k) | Pipeline validation — min 80% accuracy; `dense_tiny` 15 epochs, `dense_small` 40 epochs | ~5–15 min |
-| `benchmark` | full (60 k) | full (10 k) | Scaling + convergence comparison, 30–80 epochs depending on config | ~30–90 min |
-
-## Models
-
-| Name | Architecture | Used in |
-|---|---|---|
-| `dense_tiny` | 784 → 64 → 10 (Sigmoid) | smoke + benchmark |
-| `dense_small` | 784 → 128 → 64 → 10 (Sigmoid) | smoke + benchmark |
-
-## Training Configs
-
-All defined presets (referenced by name in profile `training_presets` arrays):
-
-| Name | Workers | Servers | Serializer | Sync | Store |
+| Model | Strategy | Topology | offline | batch | Samples/sec |
 |---|---|---|---|---|---|
-| `ps_1w_1s_base_barrier` | 1 | 1 | Base | Barrier | Blocking |
-| `ps_2w_1s_base_barrier` | 2 | 1 | Base | Barrier | Blocking |
-| `ps_3w_1s_base_barrier` | 3 | 1 | Base | Barrier | Blocking |
-| `ps_3w_2s_base_barrier` | 3 | 2 | Base | Barrier | Blocking |
-| `ps_2w_1s_sparse_barrier` | 2 | 1 | Sparse (r=0.01) | Barrier | Blocking |
-| `ps_2w_1s_nonblocking` | 2 | 1 | Base | Non-blocking | Wild |
+| lenet5 | AR | 3w | 0 | 64 | 2913 ± 144 |
+| lenet5 | AR | 3w | 4 | 64 | 2816 ± 135 |
+| lenet5 | AR | 3w | 0 | 256 | 2728 ± 96 |
+| nielsen | AR | 3w | 0 | 64 | 3536 ± 8 |
+| nielsen | AR | 3w | 4 | 64 | 3559 ± 14 |
+| nielsen | AR | 3w | 0 | 256 | 3432 ± 71 |
 
-The `3w_1s` vs `3w_2s` comparison reveals whether a single parameter server becomes a bottleneck with 3 workers.
+![](plots/execution_speed_nielsen.png)
+![](plots/execution_speed_lenet5.png)
 
-## Customizing
+## Convergence speed
 
-Edit `mnist_configs.json` to add models, training presets, or change per-run defaults and overrides. The structure:
+**Measures:** loss reduction/sec and accuracy/sec under one shared fixed budget at the same 5-node budget (only the strategy changes), plus raw **samples/sec** as a throughput reference decoupled from convergence quality. SS rows state whether the switch fired.
+**Does NOT measure:** peak accuracy.
 
-```json
-{
-  "training_presets": {
-    "my_preset": { "workers": 2, "servers": 1, "serializer": "base", "sync": "barrier", "store": "blocking" }
-  },
-  "profiles": {
-    "smoke": {
-      "train_samples": null,
-      "test_samples": null,
-      "models": ["dense_tiny"],
-      "training_presets": ["my_preset"],
-      "defaults": {
-        "max_epochs": 15,
-        "batch_size": 256,
-        "lr": 0.5,
-        "offline_epochs": 0,
-        "min_accuracy": 0.80,
-        "max_train_seconds": 300
-      },
-      "overrides": {
-        "dense_small": { "max_epochs": 40 }
-      }
-    }
-  }
-}
-```
+| Model | Strategy | Topology | Samples/sec | Loss/sec | Accuracy/sec |
+|---|---|---|---|---|---|
+| lenet5 | AR | 5w | 3296 | 0.000296 | 0.00132 |
+| lenet5 | PS (blocking) | 3w/2s | 2906 | 0.000263 | 0.00118 |
+| lenet5 | PS (non-block) | 3w/2s | 2904 | 0.000263 | 0.00118 |
+| lenet5 | SS (blocking) · no switch | 3w/2s | 3425 | 0.000307 | 0.00137 |
+| nielsen | AR | 5w | 4043 | 0.000232 | 0.00164 |
+| nielsen | PS (blocking) | 3w/2s | 3362 | 0.000141 | 0.00137 |
+| nielsen | PS (non-block) | 3w/2s | 3386 | 0.000141 | 0.00138 |
+| nielsen | SS (blocking) · no switch | 3w/2s | 4124 | 0.000237 | 0.00167 |
 
-`overrides` keys can be a model name, a training preset name, or `"model+preset"` for a specific combination.
+![](plots/convergence_speed_nielsen.png)
+![](plots/convergence_speed_lenet5.png)
 
-## Notes
+## Scalability
 
-- `/etc/hosts` needs `worker-*`/`server-*` entries; managed automatically via `docker/fill_hosts.py` (requires sudo once if missing)
-- Subset dataset files are cached in `results/data/` after first run — not recreated on subsequent runs
-- Results files (`*.jsonl`) and plots are gitignored; only the script, config, and committed plot PNGs are tracked
+**Measures:** how **samples/sec** changes as workers increase, on the same fixed **4,000-sample** subset, in **separate panels** for all-reduce and parameter server — PS spends extra server nodes, so the two do not share a 'workers' axis honestly (the node count is shown per point).
+**Does NOT measure:** convergence (re-uses the speed budget).
+
+| Model | Strategy | Workers | Nodes | Samples/sec |
+|---|---|---|---|---|
+| lenet5 | AR | 3 | 3 | 2767 ± 86 |
+| lenet5 | AR | 5 | 5 | 3226 ± 120 |
+| lenet5 | AR | 7 | 7 | 3742 ± 46 |
+| lenet5 | PS (blocking) | 3 | 5 | 3002 ± 19 |
+| lenet5 | PS (blocking) | 5 | 7 | 3935 ± 47 |
+| nielsen | AR | 3 | 3 | 3601 ± 86 |
+| nielsen | AR | 5 | 5 | 4063 ± 10 |
+| nielsen | AR | 7 | 7 | 4629 ± 8 |
+| nielsen | PS (blocking) | 3 | 5 | 3910 ± 37 |
+| nielsen | PS (blocking) | 5 | 7 | 4979 ± 11 |
+
+![](plots/scalability_nielsen.png)
+![](plots/scalability_lenet5.png)
+
+## Methodology & fairness
+
+- **Local SGD, not large-batch.** Each worker runs SGD locally at the per-worker `batch` over its data shard, then the updates are averaged across workers each epoch (FedAvg-style). The per-step batch is **not** `workers × batch`. Adding workers shards the data finer and averages more often, which is what shifts convergence — so the strategy comparison fixes the total node budget (workers + servers) and the worker-count sweep is shown separately. The single-process baseline uses the same per-step batch, so it is a like-for-like reference, not an over-batched one.
+- **Batch differs across suites.** Speed/scalability use a larger batch on a subset (they only need throughput), so their numbers do **not** transfer to the convergence config (e.g. Nielsen converges at batch 10 but is benchmarked for speed at batch 64/256 — ~6× faster there).
+- **Throughput = samples/sec, not epochs/sec.** By construction `epochs_per_sec = samples_per_sec / samples_per_epoch`, and samples-per-epoch is **fixed within each suite** (the subset for the speed suites, the full set for the convergence ones). So next to samples/sec, epochs/sec is the *same* ranking rescaled by a constant — it carries no extra information within a figure, which is why it is **not** added per-suite. samples/sec is the one kept because it is invariant: it counts real work, so it stays comparable across batch sizes and across datasets, whereas an 'epoch' means 4k samples in the speed suites but 60k in the convergence ones — not comparable.
+- **Data sizes.** Convergence and convergence-speed train on the **full 60,000-sample MNIST** training set; execution-speed and scalability train on a fixed **4,000-sample** subset (throughput only). Accuracy is always scored on the full **10,000-sample** test set (`t10k`).
+- **PS synchronizer variants.** Parameter server is benchmarked in two variants that share the **consistent `BlockingStore`** and differ only in the synchronizer, so the comparison isolates the barrier: **blocking** (`BarrierSync` — every worker waits for the full aggregation round) vs **non_blocking** (`NonBlockingSync` — workers apply and move on without the barrier). The lock-free `WildStore` (HogWild) is **deliberately excluded**: its data races make a run hang non-deterministically (it completed some trial runs and hung mid-epoch on others), so it has no fair, reproducible number.
+- **Accuracy** is measured **once, after training**, over the **full 10,000-sample MNIST test set** (`t10k`): the trained weights are loaded into the PyTorch argmax reference and scored on every test sample — not sampled, not evaluated periodically, so there is no mid-training eval cost folded into `train_seconds`.
+- **What `train_seconds` measures.** Host wall-clock of `orchestrate().wait()`. Every node runs as a Docker container **on a single host**, so (a) compute runs in genuine parallel only up to the host core count (~8 cores here — readings past ~8 total nodes oversubscribe and stop being honest) and (b) the network is **loopback**, so inter-node communication is far cheaper than a real multi-machine cluster. Read samples/sec and scalability as a **single-host lower bound on comms cost**, not a true distributed measurement.
+- **`loss/sec` and `accuracy/sec` divide by total time**, so they reward raw speed: a faster strategy that plateaus at a slightly lower final accuracy can still score higher than a slower one that converges better. Always read them next to the final accuracy, never alone.
+- **PS blocking vs non_blocking is compared on accuracy, not speed.** The two PS variants are contrasted by their **converged accuracy** (reproducible from the seed, host-load-independent): removing the barrier costs almost nothing (nielsen 98.30 → 98.13, lenet5 98.0 ≈ 98.0). Their **timing** is *not* compared: convergence-speed runs once (repeats=1), and single-shot `train_seconds` on this host carries ~±25% between-run noise (seen directly in the prior campaign, where the same blocking config timed 831 s and 658 s), which swamps any real blocking/non_blocking difference. The non_blocking rows are also from a later campaign than AR/SS, so cross-strategy *speed* here is only indicative — a same-session, repeated re-benchmark is pending.
+- **Loss scale.** The distributed `loss` is the mean across workers of each worker's epoch-mean cross-entropy; the PyTorch baseline is the global epoch-mean cross-entropy — same scale, directly comparable. (Early stopping on the distributed side keys off the per-epoch **max** worker loss; for the 1-worker baseline max = mean.)
+- **Cross-entropy on logits, softmax once.** The PyTorch baseline computes the loss with `F.cross_entropy` on raw logits, which folds the softmax into the loss, so the distribution is normalized once — same softmax-then-cross-entropy the orchestra trainer applies. The final softmax is only materialized for the argmax accuracy, where it does not change the result.
+- **Early stopping** (both distributed and baseline): stop after 3 consecutive epochs whose loss delta stays within `1e-4` (mirrors the orchestrator's `ConvergenceTracker`).
+- **Repeats.** `--repeats N` repeats the throughput suites (execution-speed, scalability) N times — tables show `mean ± std` and bars carry error bars. The expensive convergence suites always run once (their loss/sec numbers are single-shot).
+
+## Raw results
+
+- Per-run records: `results/*.jsonl` (append-only, gitignored).
+- Flattened table: `results/summary.csv`.
+- Trained weights: `results/artifacts/*.safetensors`.
+
+**Metrics:** `epochs_per_sec = epochs / train_seconds`; `samples_per_sec = samples × epochs / train_seconds`; `loss_per_sec = (first_loss − final_loss) / train_seconds`; `accuracy_per_sec = accuracy / train_seconds`.

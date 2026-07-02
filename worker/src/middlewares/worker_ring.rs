@@ -74,6 +74,9 @@ where
     /// Runs the all reduce algorithm to scatter the partial gradients and
     /// then gather the total aggregated gradient into a `ParamManager`.
     ///
+    /// # Args
+    /// * `params` - The parameters that will go into the param manager.
+    ///
     /// # Returns
     /// A new `ParamManager` instance or an io error if occurred.
     pub async fn pull_grads<'a>(
@@ -82,7 +85,23 @@ where
     ) -> io::Result<ParamManager<'a>> {
         self.scatter().await?;
         self.gather().await?;
-        Ok(self.build_param_manager(params))
+
+        let nworkers = self.addrs.len();
+        let mut param_manager = self.build_param_manager(params);
+        Self::average_gradient(&mut param_manager, nworkers);
+
+        Ok(param_manager)
+    }
+
+    /// Averages the all-reduced gradient by the worker count.
+    ///
+    /// The ring sums every worker's partial gradient, so the aggregate scales with
+    /// the worker count; dividing it back keeps the effective learning rate
+    /// independent of how many workers participate.
+    fn average_gradient(param_manager: &mut ParamManager, nworkers: usize) {
+        if let Some(n) = NonZeroUsize::new(nworkers).filter(|n| n.get() > 1) {
+            param_manager.normalize_gradient(n);
+        }
     }
 
     /// Will start the ring scattering of the gradients with the rest of
@@ -100,7 +119,10 @@ where
         let mut i = self.pos;
 
         for _ in 0..n.get() - 1 {
-            match self.next.push_grad(chunks[i]).await? {
+            let (sent, event) =
+                tokio::try_join!(self.next.push_grad(chunks[i]), self.prev.recv_event())?;
+
+            match sent {
                 Some(threshold) => {
                     for g in chunks[i].iter_mut() {
                         if g.abs() >= threshold {
@@ -111,11 +133,11 @@ where
                 None => chunks[i].fill(0.0),
             }
 
-            i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(agg_grad) = self.prev.recv_event().await? else {
+            let WorkerEvent::Grad { grad: agg_grad, .. } = event else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
+            i = (i + n.get() - 1) % n.get();
             for (acc, g) in chunks[i].iter_mut().zip(agg_grad) {
                 *acc += *g;
             }
@@ -149,14 +171,17 @@ where
         }
 
         for j in 0..n.get() - 1 {
-            if let Some(threshold) = self.next.push_grad(chunks[i]).await? {
-                if j == 0 {
-                    for g in residual_chunks[i].iter_mut() {
-                        if g.abs() >= threshold {
-                            *g = 0.0;
-                        }
-                    }
-                }
+            let (sent, event) =
+                tokio::try_join!(self.next.push_grad(chunks[i]), self.prev.recv_event())?;
+
+            if let Some(threshold) = sent {
+                // if j == 0 {
+                //     for g in residual_chunks[i].iter_mut() {
+                //         if g.abs() >= threshold {
+                //             *g = 0.0;
+                //         }
+                //     }
+                // }
 
                 for g in chunks[i].iter_mut() {
                     if g.abs() < threshold {
@@ -167,11 +192,11 @@ where
                 residual_chunks[i].fill(0.0);
             }
 
-            i = (i + n.get() - 1) % n.get();
-            let WorkerEvent::Grad(acc_grad) = self.prev.recv_event().await? else {
+            let WorkerEvent::Grad { grad: acc_grad, .. } = event else {
                 return Err(io::Error::other("Received an invalid worker event"));
             };
 
+            i = (i + n.get() - 1) % n.get();
             chunks[i].copy_from_slice(acc_grad);
         }
 
