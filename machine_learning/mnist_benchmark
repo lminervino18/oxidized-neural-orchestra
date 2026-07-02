@@ -1,1 +1,2 @@
-Benchmark 1: cargo run --release --package=machine_learning
+accuracy: 98.64%
+  Time (abs ≡):        772.394 s               [User: 780.292 s, System: 0.580 s]
