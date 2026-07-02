@@ -22,14 +22,6 @@ pub enum MlErr {
         source: ShapeError,
         location: &'static Location<'static>,
     },
-    Conv3dError {
-        source: ndarray_conv::Error<3>,
-        location: &'static Location<'static>,
-    },
-    Conv2dError {
-        source: ndarray_conv::Error<2>,
-        location: &'static Location<'static>,
-    },
     EmptyEpoch,
 }
 
@@ -65,12 +57,6 @@ impl Display for MlErr {
             MlErr::MatrixError { source, location } => {
                 format!("matrix operation failed: {source} at {location}")
             }
-            MlErr::Conv3dError { source, location } => {
-                format!("convolution operation failed: {source} at {location}")
-            }
-            MlErr::Conv2dError { source, location } => {
-                format!("convolution operation failed: {source} at {location}")
-            }
             MlErr::EmptyEpoch => "this epoch has no batches".to_string(),
         };
 
@@ -83,24 +69,6 @@ impl Error for MlErr {}
 impl From<ShapeError> for MlErr {
     fn from(value: ShapeError) -> Self {
         MlErr::MatrixError {
-            source: value,
-            location: Location::caller(),
-        }
-    }
-}
-
-impl From<ndarray_conv::Error<3>> for MlErr {
-    fn from(value: ndarray_conv::Error<3>) -> Self {
-        MlErr::Conv3dError {
-            source: value,
-            location: Location::caller(),
-        }
-    }
-}
-
-impl From<ndarray_conv::Error<2>> for MlErr {
-    fn from(value: ndarray_conv::Error<2>) -> Self {
-        MlErr::Conv2dError {
             source: value,
             location: Location::caller(),
         }

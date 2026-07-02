@@ -115,11 +115,14 @@ impl Conv2d {
             .and(output.axis_iter_mut(Axis(0)))
             .for_each(|input_b, mut col_image_b, mut output_b| {
                 Self::im2col_into(&mut col_image_b, input_b, kernel_size, stride);
+
                 // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
                 let flat_kernel = kernel
                     .into_shape_with_order((filters, channels * kernel_size * kernel_size))
                     .unwrap();
-                // SAFETY: `buf` was already reshaped to have enough elements.
+
+                // SAFETY: `output_b` is an indexed axis of `output`, which was already reshaped to
+                //         have enough elements.
                 let mut flat_output = output_b
                     .view_mut()
                     .into_shape_with_order((filters, out_h * out_w))
@@ -160,11 +163,11 @@ impl Conv2d {
             .and(self.col_batch.axis_iter(Axis(0)))
             .and(self.delta_out.axis_iter_mut(Axis(0)))
             .for_each(|delta_in_b, col_image_b, mut delta_out_b| {
-                // delta out
                 // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
                 let flat_kernel = kernel
                     .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
                     .unwrap();
+
                 // SAFETY: `delta_in_b` has filters * delta_h * delta_w elements.
                 let flat_delta_in = delta_in_b
                     .into_shape_with_order((filters, delta_in_h * delta_in_w))
@@ -184,6 +187,7 @@ impl Conv2d {
                     .view_mut()
                     .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
                     .unwrap();
+
                 linalg::general_mat_mul(
                     1.0,
                     &flat_delta_in,
@@ -202,17 +206,13 @@ impl Conv2d {
         Ok(self.delta_out.view_mut())
     }
 
-    // TODO: no es técnicamente un reshape porq estoy básicamente copiando píxeles q no habría si no
-    /// Reshapes a three-dimension image tensor into a matrix with columns that match the window
+    /// Converts a three-dimension image tensor into a matrix with columns that match the window
     /// views that the kernel sees during the convolution pass.
     ///
     /// # Args
     /// * `image` - The **already padded** image tensor.
     /// * `kernel_size` - The size of the square kernel.
     /// * `stride` - The size of the kernel steps.
-    ///
-    /// # Returns
-    /// The reshaped matrix from the image tensor.
     pub fn im2col_into(
         col_image: &mut ArrayViewMut2<f32>,
         image: ArrayView3<f32>,
@@ -234,6 +234,13 @@ impl Conv2d {
         }
     }
 
+    /// Maps the contributions of the original three-dimension image tensor to the image matrix into
+    /// the passed in three-dimension tensor.
+    ///
+    /// # Args
+    /// * `image` - The **already padded** image tensor.
+    /// * `kernel_size` - The size of the square kernel.
+    /// * `stride` - The size of the kernel steps.
     fn col2im_into(
         im_delta: &mut ArrayViewMut3<f32>,
         col_delta: ArrayView2<f32>,
