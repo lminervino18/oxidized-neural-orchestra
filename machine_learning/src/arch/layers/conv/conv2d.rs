@@ -110,20 +110,18 @@ impl Conv2d {
         ));
         output.reshape_inplace((batch_size, filters, out_h, out_w));
 
+        // SAFETY: `output` was just reshaped to have enough elements.
+        let mut flat_output = output
+            .view_mut()
+            .into_shape_with_order((batch_size, filters, out_h * out_w))
+            .unwrap();
+
         Zip::from(effective_input.axis_iter(Axis(0)))
             .and(col_batch.axis_iter_mut(Axis(0)))
-            .and(output.axis_iter_mut(Axis(0)))
-            .for_each(|input_b, mut col_image_b, mut output_b| {
+            .and(flat_output.axis_iter_mut(Axis(0)))
+            .for_each(|input_b, mut col_image_b, mut flat_output_b| {
                 Self::im2col_into(&mut col_image_b, input_b, kernel_size, stride);
-
-                // SAFETY: `output_b` is an indexed axis of `output`, which was already reshaped to
-                //         have enough elements.
-                let mut flat_output = output_b
-                    .view_mut()
-                    .into_shape_with_order((filters, out_h * out_w))
-                    .unwrap();
-
-                linalg::general_mat_mul(1.0, &flat_kernel, &col_image_b, 0.0, &mut flat_output);
+                linalg::general_mat_mul(1.0, &flat_kernel, &col_image_b, 0.0, &mut flat_output_b);
             });
 
         *output += &bias;
@@ -147,26 +145,27 @@ impl Conv2d {
         self.delta_out.reshape_inplace(self.real_input_shape);
         self.delta_out.fill(0.);
 
-        let (_, _, delta_in_h, delta_in_w) = delta_in.dim();
+        let (batch_size, _, delta_in_h, delta_in_w) = delta_in.dim();
 
         self.col_delta.reshape_inplace((
             in_channels * kernel_size * kernel_size,
             delta_in_h * delta_in_w,
         ));
 
-        Zip::from(delta_in.axis_iter(Axis(0)))
+        // SAFETY: `delta_in` has batch_size * filters * delta_h * delta_w elements.
+        let flat_delta_in = delta_in
+            .view()
+            .into_shape_with_order((batch_size, filters, delta_in_h * delta_in_w))
+            .unwrap();
+
+        Zip::from(flat_delta_in.axis_iter(Axis(0)))
             .and(self.col_batch.axis_iter(Axis(0)))
             .and(self.delta_out.axis_iter_mut(Axis(0)))
-            .for_each(|delta_in_b, col_image_b, mut delta_out_b| {
-                // SAFETY: `delta_in_b` has filters * delta_h * delta_w elements.
-                let flat_delta_in = delta_in_b
-                    .into_shape_with_order((filters, delta_in_h * delta_in_w))
-                    .unwrap();
-
+            .for_each(|flat_delta_in_b, col_image_b, mut delta_out_b| {
                 linalg::general_mat_mul(
                     1.0,
                     &flat_kernel.t(),
-                    &flat_delta_in,
+                    &flat_delta_in_b,
                     0.0,
                     &mut self.col_delta,
                 );
@@ -174,7 +173,7 @@ impl Conv2d {
 
                 linalg::general_mat_mul(
                     1.0,
-                    &flat_delta_in,
+                    &flat_delta_in_b,
                     &col_image_b.t(),
                     1.0,
                     &mut flat_d_kernel,
