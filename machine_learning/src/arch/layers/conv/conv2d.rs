@@ -63,7 +63,7 @@ impl Conv2d {
         params: &[f32],
         input: ArrayView4<f32>,
     ) -> Result<ArrayView4<'_, f32>> {
-        let (kernel, bias) = self.view_params(params)?;
+        let (flat_kernel, bias) = self.view_params(params)?;
 
         let Self {
             kernel_shape,
@@ -116,11 +116,6 @@ impl Conv2d {
             .for_each(|input_b, mut col_image_b, mut output_b| {
                 Self::im2col_into(&mut col_image_b, input_b, kernel_size, stride);
 
-                // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
-                let flat_kernel = kernel
-                    .into_shape_with_order((filters, channels * kernel_size * kernel_size))
-                    .unwrap();
-
                 // SAFETY: `output_b` is an indexed axis of `output`, which was already reshaped to
                 //         have enough elements.
                 let mut flat_output = output_b
@@ -142,13 +137,13 @@ impl Conv2d {
         grad: &mut [f32],
         delta_in: ArrayViewMut4<f32>,
     ) -> Result<ArrayViewMut4<'_, f32>> {
-        let (mut d_kernel, mut d_bias) = self.view_grad(grad)?;
-        let (kernel, _) = self.view_params(params)?;
+        let (mut flat_d_kernel, mut d_bias) = self.view_grad(grad)?;
+        let (flat_kernel, _) = self.view_params(params)?;
 
         let (filters, in_channels, kernel_size, _) = self.kernel_shape;
         let stride = self.stride;
 
-        d_kernel.fill(0.);
+        flat_d_kernel.fill(0.);
         self.delta_out.reshape_inplace(self.real_input_shape);
         self.delta_out.fill(0.);
 
@@ -163,11 +158,6 @@ impl Conv2d {
             .and(self.col_batch.axis_iter(Axis(0)))
             .and(self.delta_out.axis_iter_mut(Axis(0)))
             .for_each(|delta_in_b, col_image_b, mut delta_out_b| {
-                // SAFETY: `kernel` has filters * in_channels * kernel_size^2 elements.
-                let flat_kernel = kernel
-                    .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
-                    .unwrap();
-
                 // SAFETY: `delta_in_b` has filters * delta_h * delta_w elements.
                 let flat_delta_in = delta_in_b
                     .into_shape_with_order((filters, delta_in_h * delta_in_w))
@@ -181,12 +171,6 @@ impl Conv2d {
                     &mut self.col_delta,
                 );
                 Self::col2im_into(&mut delta_out_b, self.col_delta.view(), kernel_size, stride);
-
-                // SAFETY: `d_kernel` has filters * in_channels * kernel_size^2 elements.
-                let mut flat_d_kernel = d_kernel
-                    .view_mut()
-                    .into_shape_with_order((filters, in_channels * kernel_size * kernel_size))
-                    .unwrap();
 
                 linalg::general_mat_mul(
                     1.0,
@@ -209,7 +193,10 @@ impl Conv2d {
     /// Converts a three-dimension image tensor into a matrix with columns that match the window
     /// views that the kernel sees during the convolution pass.
     ///
+    /// This method overwrites the passed result buffer.
+    ///
     /// # Args
+    /// * `col_image` - The buffer for the result.
     /// * `image` - The **already padded** image tensor.
     /// * `kernel_size` - The size of the square kernel.
     /// * `stride` - The size of the kernel steps.
@@ -237,8 +224,11 @@ impl Conv2d {
     /// Maps the contributions of the original three-dimension image tensor to the image matrix into
     /// the passed in three-dimension tensor.
     ///
+    /// This method modifies but doesn't overwrite the passed in result buffer.
+    ///
     /// # Args
-    /// * `image` - The **already padded** image tensor.
+    /// * `im_delta` - The buffer for the result.
+    /// * `col_delta` - The flat, column matrix delta.
     /// * `kernel_size` - The size of the square kernel.
     /// * `stride` - The size of the kernel steps.
     fn col2im_into(
@@ -268,12 +258,12 @@ impl Conv2d {
     /// * `params` - A slice of parameters.
     ///
     /// # Returns
-    /// A tuple containing the weights and biases or an error if there's a mismatch
+    /// A tuple containing the flat weights and biases or an error if there's a mismatch
     /// between the size of the gradient and the size of the layer.
     fn view_params<'a>(
         &self,
         params: &'a [f32],
-    ) -> Result<(ArrayView4<'a, f32>, ArrayView4<'a, f32>)> {
+    ) -> Result<(ArrayView2<'a, f32>, ArrayView4<'a, f32>)> {
         let size = self.size();
 
         if params.len() != size {
@@ -285,7 +275,11 @@ impl Conv2d {
 
         // SAFETY: The if condition above checks that the size of the
         //         parameters is exactly the size of the layer.
-        let weights = ArrayView4::from_shape(self.kernel_shape, &params[..weights_size]).unwrap();
+        let weights = ArrayView2::from_shape(
+            (filters, in_channels * kernel_size * kernel_size),
+            &params[..weights_size],
+        )
+        .unwrap();
         let biases = ArrayView4::from_shape((1, filters, 1, 1), &params[weights_size..]).unwrap();
 
         Ok((weights, biases))
@@ -297,12 +291,12 @@ impl Conv2d {
     /// * `grad` - A gradient slice.
     ///
     /// # Returns
-    /// A tuple containing the delta weights and delta biases or an error if there's
+    /// A tuple containing the flat delta weights and delta biases or an error if there's
     /// a mismatch between the size of the gradient and the size of the layer.
     fn view_grad<'a>(
         &self,
         grad: &'a mut [f32],
-    ) -> Result<(ArrayViewMut4<'a, f32>, ArrayViewMut1<'a, f32>)> {
+    ) -> Result<(ArrayViewMut2<'a, f32>, ArrayViewMut1<'a, f32>)> {
         let size = self.size();
 
         if grad.len() != size {
@@ -316,7 +310,9 @@ impl Conv2d {
         //         gradient is exactly the size of the layer.
         let (dw_raw, db_raw) = grad.split_at_mut(weights_size);
 
-        let dw = ArrayViewMut4::from_shape(self.kernel_shape, dw_raw).unwrap();
+        let dw =
+            ArrayViewMut2::from_shape((filters, in_channels * kernel_size * kernel_size), dw_raw)
+                .unwrap();
         let db = ArrayViewMut1::from_shape(filters, db_raw).unwrap();
 
         Ok((dw, db))
