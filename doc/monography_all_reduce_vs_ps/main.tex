@@ -10,11 +10,15 @@
 \usepackage{subcaption}
 \usepackage{xcolor}
 \usepackage{amsmath}
+\usepackage{placeins}
+\usepackage{float}
 \usepackage[hidelinks]{hyperref}
 \usepackage[capitalise,noabbrev]{cleveref}
-% Spanish names for cross-references (cleveref defaults to English).
+% Spanish cross-reference names. babel-spanish rotula las tablas como ``Cuadro'';
+% se fuerza ``Tabla'' tanto en los captions como en las referencias de cleveref.
+\addto\captionsspanish{\renewcommand{\tablename}{Tabla}}
 \crefname{figure}{figura}{figuras}\Crefname{figure}{Figura}{Figuras}
-\crefname{table}{cuadro}{cuadros}\Crefname{table}{Cuadro}{Cuadros}
+\crefname{table}{tabla}{tablas}\Crefname{table}{Tabla}{Tablas}
 \crefname{section}{secci\'on}{secciones}\Crefname{section}{Secci\'on}{Secciones}
 \crefname{equation}{ec.}{ecs.}\Crefname{equation}{Ec.}{Ecs.}
 \AtBeginDocument{%
@@ -41,264 +45,290 @@ Junio 2026}}
 El entrenamiento distribuido de redes neuronales se apoya en dos familias de
 algoritmos para agregar gradientes: el \emph{Parameter Server} (PS), con servidores
 centrales que concentran y actualizan los pesos, y \emph{All-Reduce} (AR), donde los
-workers reducen gradientes entre s\'i sin servidor central. Presentamos O.N.O., un
-sistema de entrenamiento distribuido propio en el que todos los nodos son id\'enticos y
-un orquestador les asigna el rol (worker o servidor) en tiempo de ejecuci\'on. Sobre
-O.N.O.\ comparamos AR y PS (este \'ultimo sincr\'onico, con barrera) en MNIST, bajo un
-criterio de \emph{batch global fijo} (necesario porque en O.N.O.\ el \texttt{batch\_size}
-es por worker), midiendo convergencia, throughput y escalabilidad. La evidencia observada
-indica que, en este entorno homog\'eneo sobre una sola m\'aquina, All-Reduce iguala a
-Parameter Server en convergencia y lo supera en throughput y tiempo hasta accuracy, porque
-el servidor central de PS introduce un cuello de serializaci\'on. PS, en cambio, escala con
-pendiente m\'as pronunciada al crecer los nodos; sus dem\'as ventajas estructurales
-(sharding, heterogeneidad, asincron\'ia) no se ejercitan en este entorno.
-Las conclusiones est\'an acotadas a un cl\'uster simulado sobre una \'unica m\'aquina de
-ocho n\'ucleos.
+workers reducen gradientes entre s\'i sin servidor central. Se presenta O.N.O., un
+sistema de entrenamiento distribuido propio que implementa ambas estrategias. Sobre
+O.N.O.\ se comparan AR y PS (este \'ultimo sincr\'onico, con barrera y con los pesos
+shardeados entre dos servidores) en MNIST y FashionMNIST, bajo un criterio de
+comparaci\'on justa a \emph{igual n\'umero de workers}, midiendo convergencia,
+throughput y escalabilidad. La evidencia observada indica que, en este entorno
+homog\'eneo, sincr\'onico y sobre una sola m\'aquina, All-Reduce y Parameter Server
+\emph{convergen a la misma accuracy} (resultado esperable, ya que el r\'egimen
+sincr\'onico hace que ambos apliquen la misma regla de actualizaci\'on), mientras que
+All-Reduce alcanza esa accuracy en menos tiempo, debido a que el servidor de PS
+introduce un cuello de serializaci\'on. Al sumar nodos, PS amortiza su costo fijo y su
+throughput crece con pendiente algo mayor; sus ventajas estructurales (sharding de
+modelos que no entran en un nodo, heterogeneidad, asincron\'ia) no se ejercitan en este
+entorno. Las conclusiones se acotan a un cl\'uster simulado sobre una \'unica m\'aquina
+de ocho n\'ucleos con red r\'apida.
 \end{abstract}
-
-\begin{IEEEkeywords}
-entrenamiento distribuido, deep learning, Parameter Server, All-Reduce, agregaci\'on de
-gradientes, escalabilidad.
-\end{IEEEkeywords}
 
 \section{Introducci\'on}
 A medida que crecen los modelos y los datos, el entrenamiento de redes neuronales se
-vuelve inviable en un \'unico proceso y se distribuye sobre varios workers que
-calculan gradientes en paralelo sobre particiones de los datos (SGD distribuido con
-paralelismo de datos)~\cite{bennun2019demystifying}. El cuello de botella deja de ser
-el c\'omputo y pasa a ser la \emph{comunicaci\'on}: c\'omo se agregan los gradientes y
-c\'omo se sincronizan los pesos. Dos enfoques dominan. El \emph{Parameter Server}
-mantiene los pesos en uno o m\'as servidores; los workers env\'ian gradientes y reciben
-par\'ametros actualizados~\cite{li2014scaling}. \emph{All-Reduce} elimina el servidor:
-los workers intercambian y promedian gradientes entre s\'i, t\'ipicamente en
+vuelve inviable en un \'unico proceso y se distribuye sobre varios \emph{workers}
+(los procesos que calculan gradientes sobre una partici\'on local de los datos) que
+trabajan en paralelo (SGD distribuido con paralelismo de
+datos)~\cite{bennun2019demystifying}. El cuello de botella deja de ser el c\'omputo y
+pasa a ser la \emph{comunicaci\'on}: c\'omo se agregan los gradientes y c\'omo se
+sincronizan los pesos. Dos enfoques dominan. El \emph{Parameter Server} mantiene los
+pesos en uno o m\'as servidores; los workers env\'ian gradientes y reciben par\'ametros
+actualizados~\cite{li2014scaling}. \emph{All-Reduce} elimina el servidor: los workers
+intercambian y promedian gradientes entre s\'i, t\'ipicamente en
 anillo~\cite{gibiansky2017bringing,sergeev2018horovod}, y cada uno aplica el mismo
 update.
 
 \textbf{Pregunta de investigaci\'on.} \emph{?`Cu\'ando conviene cada enfoque, por
 qu\'e, y qu\'e compromisos aparecen entre convergencia, throughput, escalabilidad y
-sincronizaci\'on?} No buscamos el estado del arte en visi\'on, sino caracterizar el
+sincronizaci\'on?} No se busca el estado del arte en visi\'on, sino caracterizar el
 \emph{sistema} de entrenamiento.
 
-\textbf{Contribuci\'on.} (i) Describimos O.N.O., un sistema distribuido propio donde los
-roles se asignan en runtime y que implementa AR y PS; (ii) aportamos una comparaci\'on
-experimental honesta AR vs.\ PS sobre MNIST con un criterio de comparaci\'on justa
-(\emph{batch global fijo}); y (iii) destilamos una matriz de decisi\'on sobre cu\'ando
-preferir cada enfoque, acotada a las condiciones evaluadas.
+\textbf{Contribuci\'on.} (i) Se describe O.N.O., un sistema distribuido propio que
+implementa tanto All-Reduce como Parameter Server; (ii) se aporta una comparaci\'on experimental honesta AR vs.\ PS sobre MNIST y
+FashionMNIST con un criterio de comparaci\'on justa (igual n\'umero de workers); y
+(iii) se propone una matriz de decisi\'on que indica cu\'ando preferir cada enfoque,
+acotada a las condiciones evaluadas.
 
 \section{Fundamentos y dise\~no}
 
 \subsection{SGD distribuido con paralelismo de datos}
-Con $W$ workers, cada uno procesa un mini-batch local de tama\~no $b$ y calcula un
-gradiente $g_w$. El gradiente agregado es el promedio $\bar{g}=\frac{1}{W}\sum_w g_w$,
-que equivale a un paso de SGD con \emph{batch efectivo} $W\cdot b$. Promediar (y no
-sumar) mantiene la magnitud del gradiente, y por ende el learning rate efectivo,
-independiente de $W$. Esta distinci\'on es central: en O.N.O.\ el \texttt{batch\_size}
-es \emph{por worker}, de modo que agregar workers a $b$ constante cambia el batch
-efectivo (\cref{sec:fair}).
+Con $W$ workers, cada uno procesa un mini-batch local de tama\~no $b$ (el
+\texttt{batch\_size} por worker) y calcula un gradiente $g_w$. El gradiente agregado es
+el promedio $\bar{g}=\frac{1}{W}\sum_w g_w$, que equivale a un paso de SGD con
+\emph{batch efectivo} $W\cdot b$: el tama\~no de batch que ``ve'' realmente el
+optimizador tras agregar a los $W$ workers. Promediar (y no sumar) mantiene la magnitud
+del gradiente (y por consiguiente el learning rate efectivo) independiente de $W$.
+Esta distinci\'on es central: en O.N.O.\ el \texttt{batch\_size} es \emph{por worker},
+de modo que, con $b$ constante, agregar workers cambia el batch efectivo
+(\Cref{sec:fair}).
 
 \subsection{Parameter Server}
 Los servidores almacenan los pesos, shardeados entre ellos cuando hay m\'as de uno; los
 workers hacen \emph{push} de gradientes y \emph{pull} de
 par\'ametros~\cite{li2014scaling}. El r\'egimen de sincronizaci\'on define el
-comportamiento: con \emph{barrera} todos los workers esperan a que el server aplique
-el update (sincr\'onico, equivalente estad\'istico a AR); sin barrera, los workers
-proceden con par\'ametros potencialmente \emph{stale}, ganando throughput a costa de
-ruido (estilo Hogwild~\cite{recht2011hogwild}). En este trabajo usamos el r\'egimen
-sincr\'onico (barrera con store de doble buffer), que conserva la sem\'antica de
-optimizaci\'on est\'andar.
+comportamiento: con \emph{barrera} todos los workers esperan que el servidor aplique el
+update (sincr\'onico, equivalente estad\'istico a AR); sin barrera, los workers
+proceden con par\'ametros potencialmente sobre-especializados sobre su propia partici\'on
+del dataset, ganando throughput a costa de ruido (estilo
+Hogwild~\cite{recht2011hogwild}). En este trabajo se usa el r\'egimen sincr\'onico
+(barrera con store de doble buffer), de modo que AR y PS aplican \emph{la misma regla de
+actualizaci\'on} (el mismo update de SGD).
 
 \subsection{All-Reduce}
 En \emph{ring all-reduce} los $W$ workers se ordenan en anillo y ejecutan dos fases:
 \emph{scatter-reduce} (cada worker termina con un fragmento del gradiente sumado) y
 \emph{all-gather} (se propaga el fragmento ya reducido)~\cite{gibiansky2017bringing}.
-El volumen comunicado por worker es $\approx 2\frac{W-1}{W}|g|$, independiente de $W$
-salvo factor constante, lo que da buena eficiencia de ancho de banda. No hay servidor
-central ni punto \'unico de contenci\'on, pero todos avanzan al ritmo del m\'as lento
-(sincron\'ia estricta). O.N.O.\ promedia el gradiente reducido dividiendo por $W$.
+El volumen de datos de gradiente que comunica cada worker es
+$\approx 2\frac{W-1}{W}|g|$, independiente de $W$ salvo un factor constante, lo que
+proporciona buena eficiencia de ancho de banda. No hay servidor central ni punto
+\'unico de contenci\'on, pero todos avanzan al ritmo del m\'as lento (sincron\'ia
+estricta). O.N.O.\ promedia el gradiente reducido dividiendo por $W$.
 
-\subsection{Arquitectura de O.N.O.}
-En O.N.O.\ todos los nodos son id\'enticos y agn\'osticos al rol. Un
-\texttt{orquestador} headless se conecta a ellos y, mediante una configuraci\'on de
-runtime, fija el rol de cada uno (worker o servidor): los roles \emph{no} est\'an
-fijados de antemano, sino que se asignan en cada ejecuci\'on. El sistema separa el motor
-de aprendizaje, la comunicaci\'on (protocolo y serializaci\'on) y las estrategias de
-agregaci\'on en componentes independientes, y est\'a implementado en Rust.
-\Cref{fig:arch} resume la arquitectura y \cref{fig:concept} contrasta PS con ring
-all-reduce.
+\subsection{O.N.O.}
+Los experimentos se corren sobre O.N.O., un sistema distribuido propio que implementa
+tanto All-Reduce como Parameter Server bajo una misma interfaz. La \Cref{fig:concept}
+contrasta las dos estrategias de agregaci\'on comparadas.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\columnwidth]{architecture_ono.pdf}
-  \caption{Arquitectura de O.N.O.: un orquestador headless asigna roles en runtime
-  sobre nodos id\'enticos; seg\'un la estrategia, los nodos act\'uan como workers en
-  anillo (All-Reduce) o como workers m\'as servidores (Parameter Server).}
-  \label{fig:arch}
-\end{figure}
-
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\columnwidth]{ps_vs_ar_conceptual.pdf}
-  \caption{Parameter Server (izquierda): los workers hacen push/pull contra servidores
-  centrales que pueden shardear los pesos. Ring All-Reduce (derecha): los workers
-  promedian gradientes entre s\'i sin servidor central.}
+  \caption{Parameter Server (izquierda): los workers hacen push/pull contra dos
+  servidores que shardean los pesos. Ring All-Reduce (derecha): los workers promedian
+  gradientes entre s\'i sin servidor central.}
   \label{fig:concept}
 \end{figure}
 
 \section{Metodolog\'ia experimental}
 
 \subsection{Datasets y modelos}
-Usamos \textbf{MNIST}~\cite{lecun1998mnist} (60\,000/10\,000, 28$\times$28 en escala de grises, 10 clases,
-normalizado a $[0,1]$) como benchmark base de correctitud, convergencia y
-escalabilidad. \Cref{tab:datasets} resume los datasets y \cref{tab:models} las
-arquitecturas. El modelo principal es \texttt{nielsen} (una CNN peque\~na con softmax
-y entrop\'ia cruzada). Para aislar la presi\'on de comunicaci\'on definimos MLPs
-escalables (\texttt{mlp\_small/medium/large}) cuyo objetivo no es la accuracy sino
-variar el tama\~no de gradiente.
+Como benchmark principal se usa \textbf{FashionMNIST}~\cite{xiao2017fashion}, una tarea
+m\'as exigente y menos separable que los d\'igitos, y
+\textbf{MNIST}~\cite{lecun1998mnist} como referencia de correctitud y convergencia. La
+\Cref{tab:datasets} resume los datasets y la \Cref{tab:models} las arquitecturas. El
+modelo principal es \texttt{nielsen} (una CNN peque\~na con softmax y entrop\'ia
+cruzada). Para aislar la presi\'on de comunicaci\'on se definen redes densas de tama\~no
+creciente (\texttt{Densa S/M/L}), cuyo objetivo no es la accuracy sino variar el tama\~no
+del gradiente.
 
 \input{tables/datasets.tex}
 \input{tables/models.tex}
 
 \subsection{Estrategias y configuraciones}
-Comparamos dos estrategias distribuidas: All-Reduce (todos los nodos son workers) y
-Parameter Server (barrera con store de doble buffer). Las topolog\'ias distribuidas se
-detallan en \cref{tab:configs}. Para PS con $N$ nodos usamos $N-1$ workers y $1$ servidor.
-Evaluamos $N\in\{3,5\}$.
+Se comparan dos estrategias distribuidas: All-Reduce (todos los nodos son workers) y
+Parameter Server (barrera, store de doble buffer, con los pesos shardeados entre dos
+servidores). Las topolog\'ias se detallan en la \Cref{tab:configs}. El criterio de
+equidad es \emph{igual n\'umero de workers}: para cada $N$, All-Reduce usa $N$ workers y
+Parameter Server usa los mismos $N$ workers m\'as dos servidores (los servidores son
+el costo estructural propio de PS, no un recorte de workers). Se eval\'ua
+$N\in\{3,5\}$.
 
 \input{tables/configs.tex}
 
 \subsection{Criterio de comparaci\'on justa}\label{sec:fair}
-En O.N.O.\ \texttt{batch\_size} es \emph{por worker}; el batch efectivo es
-$W\cdot b$. Por lo tanto comparamos de dos formas complementarias.
-\textbf{(1) Batch global fijo}: fijamos $W\cdot b$ y derivamos $b$ seg\'un el n\'umero de
-workers, lo que mantiene la sem\'antica de optimizaci\'on constante y es el criterio
-v\'alido para \emph{convergencia}. \textbf{(2) Batch por worker fijo}: $b$ constante, que
-mide \emph{throughput bruto} pero cambia el batch efectivo y por ende no es justo para
-convergencia. Reportamos ambos y somos expl\'icitos sobre qu\'e pregunta responde cada uno.
+En O.N.O.\ el \texttt{batch\_size} es \emph{por worker}, de modo que el batch efectivo
+es $W\cdot b$. Comparar a igual n\'umero de workers tiene una consecuencia deseable: como All-Reduce y Parameter Server usan los
+mismos $W$ workers con el mismo $b$, el batch efectivo $W\cdot b$ es id\'entico para
+ambas estrategias en cada topolog\'ia. La sem\'antica de optimizaci\'on queda entonces
+fijada, y por consiguiente la convergencia es directamente comparable. Se reportan dos
+mediciones complementarias: con un \textbf{batch por worker peque\~no} se mide
+convergencia y accuracy; con un \textbf{batch por worker mayor} se mide throughput
+bruto. Se es expl\'icito sobre qu\'e pregunta responde cada una.
 
 \subsection{M\'etricas y entorno}
-Medimos p\'erdida de entrenamiento por \'epoca, accuracy de test (argmax sobre los
-10\,000 de test, siempre el set completo), tiempo total, samples/s, speedup y
-eficiencia de escalado. El motor no calcula \emph{test loss}, por lo que esa columna
-queda como \texttt{NA}. Entorno: una \'unica m\'aquina de 8 n\'ucleos y 7.6\,GB de
-RAM; el cl\'uster se \emph{simula} con contenedores Docker (un contenedor por nodo,
-red bridge, puertos publicados). Al aumentar el n\'umero de nodos los ocho n\'ucleos
-f\'isicos se saturan: medimos escalado \emph{l\'ogico} bajo recursos compartidos, no
-escalado multi-m\'aquina (ver \cref{sec:limits}). Optimizador SGD; semilla fija para
+Se mide la p\'erdida de entrenamiento por \'epoca, la accuracy de test (la fracci\'on
+de aciertos, es decir el \emph{argmax} de la salida, sobre el conjunto de test
+completo), el tiempo total, los samples por segundo, el speedup y la
+eficiencia de escalado. Entorno: una \'unica m\'aquina de 8 n\'ucleos; el cl\'uster se
+\emph{simula} con contenedores Docker (un contenedor por nodo, red bridge, puertos
+publicados). Al aumentar el n\'umero de nodos los ocho n\'ucleos f\'isicos se saturan:
+se mide escalado \emph{l\'ogico} bajo recursos compartidos, no escalado multi-m\'aquina
+(ver \Cref{sec:limits}). Se utiliza optimizador SGD y semilla fija para
 reproducibilidad.
 
 \section{Resultados}
 
-\subsection{Correctitud y convergencia}
-Ambas estrategias entrenan correctamente: con la receta de referencia alcanzan en MNIST
-una accuracy de test cercana al \'optimo del dataset, con PS convergiendo marginalmente
-m\'as bajo en p\'erdida. \Cref{fig:loss} muestra que las curvas de p\'erdida distribuidas
-descienden de forma casi solapada, lo que confirma que ambos esquemas de agregaci\'on
-implementan la misma sem\'antica de optimizaci\'on.
+\subsection{Correcci\'on y convergencia}
+Ambas estrategias entrenan correctamente. Con la receta de referencia, a igual n\'umero
+de workers All-Reduce y Parameter Server alcanzan accuracies de test pr\'acticamente
+iguales en ambos datasets (con Parameter Server incluso marginalmente por encima en
+FashionMNIST), seg\'un la \Cref{tab:main}. La \Cref{fig:loss} muestra que las curvas de
+p\'erdida descienden de forma casi solapada.
+Este resultado es esperable: como el r\'egimen es sincr\'onico, ambos esquemas de
+agregaci\'on aplican la misma regla de actualizaci\'on, de modo que no cabe esperar una
+diferencia sistem\'atica de convergencia entre ellos en este entorno.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
-  \includegraphics[width=\columnwidth]{mnist_loss_vs_epoch.pdf}
-  \caption{Convergencia en MNIST (\texttt{nielsen}, 3 nodos). All-Reduce y Parameter
-  Server convergen de forma casi id\'entica; PS queda apenas por debajo.}
+  \includegraphics[width=\columnwidth]{convergence_loss.pdf}
+  \caption{Convergencia (p\'erdida de entrenamiento por \'epoca) a 3 workers, en
+  FashionMNIST (izquierda) y MNIST (derecha), para All-Reduce y Parameter Server.}
   \label{fig:loss}
 \end{figure}
 
 \subsection{Comparaci\'on justa y tiempo hasta accuracy}
-Bajo \emph{batch global fijo}, AR y PS convergen a una accuracy pr\'acticamente igual
-(\cref{tab:main}); el batch global mayor reduce la accuracy respecto de la receta de
-referencia, como era de esperar. La diferencia decisiva es el \emph{tiempo}: AR alcanza
-su accuracy objetivo apreciablemente antes que PS (\cref{tab:main}), porque el servidor
-central de PS act\'ua como punto de serializaci\'on por el que pasan todos los updates.
+A igual n\'umero de workers, All-Reduce y Parameter Server convergen a una accuracy
+pr\'acticamente igual en ambos datasets (\Cref{tab:main}). La diferencia decisiva es el
+\emph{tiempo}: All-Reduce alcanza esa accuracy apreciablemente antes que Parameter
+Server (\Cref{tab:main}), debido a que el servidor central de PS act\'ua como punto de
+serializaci\'on por el que pasan todos los updates.
 
 \input{tables/main_results.tex}
 
 \subsection{Throughput y escalabilidad}
-A batch por worker fijo, AR sostiene mayor throughput que PS en ambos tama\~nos
-(\cref{fig:throughput}). Sin embargo, PS \emph{escala} con pendiente m\'as pronunciada
-(\cref{fig:speedup}): al sumar nodos su throughput crece m\'as r\'apido que el de AR, de
-modo que casi se igualan a 5 nodos. La lectura: el servidor de PS penaliza el caso chico
-pero su costo fijo se amortiza al sumar workers; AR parte m\'as alto pero su anillo
-sincr\'onico satura antes los ocho n\'ucleos f\'isicos.
+En condiciones de batch por worker fijo, la \Cref{fig:throughput} muestra un cruce
+revelador. Con pocos workers All-Reduce sostiene mayor throughput que Parameter Server,
+pero al sumar workers las tendencias se invierten: el throughput de All-Reduce cae
+levemente, debido a que su anillo sincr\'onico satura los n\'ucleos f\'isicos, mientras
+que el de Parameter Server crece y llega a igualarlo. La \Cref{fig:speedup} lo expresa
+como speedup relativo a la configuraci\'on con menos workers: Parameter Server escala con
+pendiente positiva al sumar nodos, amortizando el costo fijo de sus servidores, aunque
+para ello emplea dos nodos servidores adicionales que All-Reduce no necesita.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
-  \includegraphics[width=\columnwidth]{throughput_vs_nodes.pdf}
-  \caption{Throughput (samples/s) vs.\ nodos, batch por worker fijo. AR domina pero
-  PS recorta distancia al crecer los nodos.}
+  \includegraphics[width=\columnwidth]{throughput_vs_workers.pdf}
+  \caption{Throughput (samples/s) vs.\ n\'umero de workers, batch por worker fijo, en
+  FashionMNIST. All-Reduce parte m\'as alto pero Parameter Server lo alcanza al crecer
+  los workers.}
   \label{fig:throughput}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
-  \includegraphics[width=\columnwidth]{speedup_vs_nodes.pdf}
-  \caption{Speedup de throughput de 3 a 5 nodos (referencia: la propia config de 3
-  nodos). PS escala con mayor pendiente que AR desde una base m\'as baja.}
+  \includegraphics[width=\columnwidth]{speedup_vs_workers.pdf}
+  \caption{Speedup de throughput respecto de la configuraci\'on de 3 workers. Parameter
+  Server escala con mayor pendiente que All-Reduce desde una base m\'as baja.}
   \label{fig:speedup}
 \end{figure}
 
 \subsection{Presi\'on de comunicaci\'on}
-Para aislar el efecto del tama\~no de gradiente entrenamos MLPs de tama\~no creciente
-(\cref{tab:models}) a 3 nodos, con batch por worker fijo. \Cref{fig:comm} (eje
-logar\'itmico) muestra que el throughput se desploma al crecer el modelo: la
-comunicaci\'on, no el c\'omputo, domina. Comparando estrategias, All-Reduce sostiene
-mayor throughput que Parameter Server tanto con el modelo chico como con el grande, y
-empatan en el tama\~no intermedio. La presi\'on de comunicaci\'on hunde el throughput
-absoluto pero no invierte la ventaja de All-Reduce: su anillo, sin servidor central,
-sigue siendo m\'as r\'apido aun cuando el gradiente denso domina el costo. La
-compresi\'on de gradientes, esparsa o cuantizada, es una mitigaci\'on conocida para esta
-presi\'on~\cite{lin2018deep,aji2017sparse}, fuera del alcance de este trabajo.
+Para aislar el efecto del tama\~no del gradiente se entrenan redes densas de tama\~no
+creciente (\Cref{tab:models}) a $3$ workers, con batch por worker fijo. La
+\Cref{fig:comm} (ejes logar\'itmicos) muestra que el throughput se desploma al crecer el
+modelo: la comunicaci\'on, no el c\'omputo, domina. All-Reduce sostiene mayor throughput
+que Parameter Server en los tres tama\~nos, pero su ventaja se \emph{reduce} al crecer
+el modelo (\Cref{fig:comm}). La raz\'on es estructural: con modelos m\'as grandes, el sharding de par\'ametros entre
+los dos servidores de PS reparte mejor la presi\'on de comunicaci\'on y le permite
+acortar la brecha.
 
-\begin{figure}[t]
+Este comportamiento se entiende mejor con una cuenta independiente de la red. La
+\Cref{fig:commvol} grafica el volumen de datos comunicado por paso: en All-Reduce, cada
+nodo comunica $\approx 2\frac{W-1}{W}|g|$, esencialmente constante; en Parameter Server,
+el tr\'afico que ingresa a cada servidor crece de forma lineal con el n\'umero de
+workers (atenuado por el sharding entre $S$ servidores). Esta m\'etrica anal\'itica
+explica tanto la eficiencia de ancho de banda de All-Reduce como el porqu\'e el servidor
+se vuelve el punto de presi\'on al sumar workers, con independencia de la velocidad de
+la red subyacente. La compresi\'on de gradientes, dispersa (\emph{sparse}) o cuantizada,
+es una mitigaci\'on conocida para esta presi\'on~\cite{lin2018deep}:
+O.N.O.\ la implementa, pero su evaluaci\'on queda fuera del alcance de esta monograf\'ia.
+
+\begin{figure}[H]
   \centering
   \includegraphics[width=\columnwidth]{communication_pressure.pdf}
-  \caption{Presi\'on de comunicaci\'on: throughput (log) vs.\ tama\~no de MLP a 3
-  nodos. All-Reduce sostiene mayor throughput que Parameter Server en los extremos
-  (modelo chico y grande) y empatan en el intermedio; el throughput absoluto se
-  desploma al crecer el gradiente.}
+  \caption{Presi\'on de comunicaci\'on: throughput (log) vs.\ tama\~no del modelo (log)
+  a 3 workers. All-Reduce sostiene mayor throughput en los tres tama\~nos; la ventaja se
+  reduce al crecer el modelo.}
   \label{fig:comm}
 \end{figure}
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\columnwidth]{comm_volume_analytical.pdf}
+  \caption{Volumen de datos comunicado por paso (m\'etrica anal\'itica, independiente de
+  la red) vs.\ n\'umero de workers. En All-Reduce el volumen por nodo es casi constante;
+  en Parameter Server el tr\'afico por servidor crece con los workers.}
+  \label{fig:commvol}
+\end{figure}
+
+\FloatBarrier
 \section{Discusi\'on}
 
-\textbf{Cu\'ando conviene All-Reduce.} La evidencia favorece AR en el escenario
+\textbf{Cu\'ando conviene All-Reduce.} La evidencia favorece a All-Reduce en el escenario
 evaluado: cl\'uster homog\'eneo, red r\'apida (loopback), entrenamiento sincr\'onico y
-gradientes densos. Iguala a PS en convergencia y entrega mayor throughput y menor
-tiempo hasta accuracy, sin un servidor central que congestione. Es la opci\'on por
-defecto cuando no hay heterogeneidad que explotar.
+gradientes densos. Iguala a Parameter Server en convergencia y entrega mayor throughput
+y menor tiempo hasta accuracy, sin un servidor central que congestione. Por eso, cuando
+los datos y los nodos son homog\'eneos (y no hay, por tanto, heterogeneidad ni
+stragglers que un esquema as\'incrono pueda aprovechar), All-Reduce podr\'ia
+considerarse la elecci\'on natural. Es, adem\'as, el caso en el que MNIST y FashionMNIST
+distribuidos de forma uniforme sit\'uan a este estudio.
 
-\textbf{Cu\'ando conviene Parameter Server.} La evidencia favorece a PS en un \'unico
-aspecto del entorno evaluado: escala con mayor pendiente al sumar nodos, amortizando su
-costo fijo de servidor. Su ventaja te\'orica m\'as fuerte ---el sharding de
-par\'ametros--- ser\'ia decisiva para modelos que no entran en un solo nodo, pero el
-mayor que evaluamos s\'i complet\'o en All-Reduce, as\'i que no se ejercit\'o
-(\cref{fig:comm}). Lo mismo con sus dem\'as ventajas (heterogeneidad, stragglers,
-asincron\'ia), que quedan como trabajo futuro.
+\textbf{Cu\'ando conviene Parameter Server.} La evidencia favorece a Parameter Server en
+dos aspectos parciales del entorno evaluado: escala con mayor pendiente al sumar nodos,
+amortizando el costo fijo de sus servidores, y su sharding de par\'ametros ya empieza a
+acortar la brecha de throughput con los modelos m\'as grandes. Su ventaja estructural
+m\'as fuerte (el sharding de modelos que no entran en un solo nodo) ser\'ia decisiva
+a mayor escala, pero el modelo mayor evaluado s\'i complet\'o en All-Reduce, por lo que
+no se ejercit\'o. El resto de sus ventajas (heterogeneidad, stragglers, asincron\'ia)
+son aspectos a abordar en trabajos futuros.
 
 \input{tables/decision_matrix.tex}
 
 \subsection{Limitaciones}\label{sec:limits}
-El cl\'uster es simulado en una sola m\'aquina de 8 n\'ucleos: el escalado es
-l\'ogico, no f\'isico, y la red es loopback (sin latencia ni ancho de banda
-realistas). No medimos \emph{test loss} (limitaci\'on del motor) y nos restringimos al
-r\'egimen sincr\'onico. No evaluamos stragglers, heterogeneidad de nodos ni datasets
-m\'as all\'a de MNIST, que quedan como extensiones reproducibles. O.N.O.\ es un sistema
-acad\'emico: \emph{no} compite con frameworks industriales como
-Horovod~\cite{sergeev2018horovod} o BytePS~\cite{jiang2020byteps}; los usamos solo como
+El cl\'uster se simula en una sola m\'aquina de 8 n\'ucleos: el escalado es l\'ogico, no
+f\'isico, y la red es loopback, sin latencia ni ancho de banda realistas. Esta es la
+limitaci\'on principal, y es la que m\'as pesa sobre la comparaci\'on de rendimiento: una
+red r\'apida aten\'ua el costo de comunicaci\'on de Parameter Server, de modo que la
+m\'etrica anal\'itica de \Cref{fig:commvol} debe leerse como complemento de los tiempos
+medidos. El estudio se restringe adem\'as al r\'egimen sincr\'onico y a datos
+distribuidos de forma homog\'enea; no se analizan stragglers, heterogeneidad de nodos ni
+particiones no uniformes, que en este trabajo no fueron evaluados. O.N.O.\ es un sistema
+acad\'emico: no compite con frameworks industriales como
+Horovod~\cite{sergeev2018horovod} o BytePS~\cite{jiang2020byteps}, que se usan solo como
 marco conceptual.
 
+\FloatBarrier
 \section{Conclusi\'on}
 Respondiendo a la pregunta de investigaci\'on, en el entorno evaluado (homog\'eneo,
-sincr\'onico y sobre una sola m\'aquina) \emph{All-Reduce es preferible}: iguala a
-Parameter Server en convergencia a batch global fijo y lo supera en throughput y tiempo
-hasta accuracy, porque el servidor central de PS introduce un cuello de serializaci\'on.
-PS recorta distancia al escalar (mayor pendiente desde una base m\'as baja), pero no
-super\'o a All-Reduce en throughput ni siquiera con el modelo m\'as grande; ser\'ia la
-elecci\'on natural solo si se explotaran sus ventajas estructurales (heterogeneidad,
-asincron\'ia, sharding de modelos que no entran en un nodo), que aqu\'i no se ejercitaron. O.N.O.\ aporta evidencia de que un sistema distribuido
-implementado desde cero, con asignaci\'on de roles en runtime, permite contrastar ambas
-familias bajo un criterio de comparaci\'on justa. Como trabajo futuro: red con latencia
-realista, stragglers controlados y la evaluaci\'on de modelos y datasets de mayor
-escala.
+sincr\'onico y sobre una sola m\'aquina con red r\'apida) es posible concluir que
+All-Reduce es preferible: converge a la misma accuracy que Parameter Server (a igual
+n\'umero de workers y en ambos datasets) y lo supera en throughput y en tiempo hasta
+accuracy, debido a que el servidor central de PS introduce un cuello de serializaci\'on.
+Parameter Server recorta distancia al escalar y con modelos grandes gracias al sharding,
+pero no super\'o a All-Reduce en throughput a\'un con el modelo m\'as grande; podr\'ia
+considerarse una elecci\'on natural solo si se explotaran sus ventajas estructurales
+(heterogeneidad, asincron\'ia, sharding de modelos que no entran en un nodo), que aqu\'i
+no fueron ejercitadas. O.N.O.\ aporta evidencia de que un sistema distribuido propio
+permite contrastar ambas familias bajo un criterio de comparaci\'on justa. Se plantea como
+trabajo futuro evaluar redes con latencia realista, stragglers controlados, particiones
+de datos no homog\'eneas y modelos de mayor escala.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
