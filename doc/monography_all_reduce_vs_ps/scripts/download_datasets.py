@@ -41,6 +41,19 @@ X_SIZE = 784
 EMNIST_ZIP_URL = "https://biometrics.nist.gov/cs_links/EMNIST/gzip.zip"
 EMNIST_CLASSES = {"digits": 10, "balanced": 47, "mnist": 10, "letters": 26}
 
+# FashionMNIST — same IDX format and 10-class shape as MNIST (drop-in). Zalando's
+# S3 website endpoint is the canonical source; the GitHub raw mirror is the fallback.
+FASHION_MNIST_MIRRORS = [
+    "http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/",
+    "https://raw.githubusercontent.com/zalandoresearch/fashion-mnist/master/data/fashion/",
+]
+FASHION_MNIST_FILES = {
+    "train_s": "train-images-idx3-ubyte.gz",
+    "train_l": "train-labels-idx1-ubyte.gz",
+    "test_s": "t10k-images-idx3-ubyte.gz",
+    "test_l": "t10k-labels-idx1-ubyte.gz",
+}
+
 
 # ── MNIST ─────────────────────────────────────────────────────────────────────
 
@@ -87,14 +100,16 @@ def ensure_mnist(symlink: bool = False) -> dict:
 
 # ── EMNIST (optional) ─────────────────────────────────────────────────────────
 
-def _read_idx_images(raw: bytes):
+def _read_idx_images(raw: bytes, transpose: bool = True):
     magic, n, rows, cols = struct.unpack(">IIII", raw[:16])
     assert magic == 2051, f"bad image magic {magic}"
     import numpy as np
     data = np.frombuffer(raw[16:16 + n * rows * cols], dtype=np.uint8)
     data = data.reshape(n, rows, cols)
     # EMNIST stores images column-major relative to MNIST orientation: transpose.
-    data = data.transpose(0, 2, 1)
+    # FashionMNIST uses the same row-major layout as MNIST, so it must NOT be transposed.
+    if transpose:
+        data = data.transpose(0, 2, 1)
     return data.reshape(n, rows * cols), rows, cols
 
 
@@ -173,6 +188,58 @@ def ensure_emnist(split: str) -> dict:
     return dst
 
 
+# ── FashionMNIST (optional) ───────────────────────────────────────────────────
+
+def _download_fashion(fname: str, dst: Path) -> None:
+    last = None
+    for base in FASHION_MNIST_MIRRORS:
+        try:
+            urllib.request.urlretrieve(base + fname, dst)
+            return
+        except Exception as e:  # noqa: BLE001 — try every mirror before giving up
+            last = e
+    raise SystemExit(f"ERROR: could not download {fname} from any mirror: {last}")
+
+
+def ensure_fashion_mnist() -> dict:
+    out = DATASETS_DIR / "fashion_mnist"
+    out.mkdir(parents=True, exist_ok=True)
+    raw_dir = out / "raw"
+    raw_dir.mkdir(exist_ok=True)
+
+    blobs = {}
+    for key, fname in FASHION_MNIST_FILES.items():
+        gz = raw_dir / fname
+        if not gz.exists():
+            print(f"  downloading {fname}...")
+            _download_fashion(fname, gz)
+        blobs[key] = gzip.decompress(gz.read_bytes())
+
+    # Row-major like MNIST: no transpose.
+    train_x, rows, cols = _read_idx_images(blobs["train_s"], transpose=False)
+    train_y = _read_idx_labels(blobs["train_l"])
+    test_x, _, _ = _read_idx_images(blobs["test_s"], transpose=False)
+    test_y = _read_idx_labels(blobs["test_l"])
+
+    dst = {
+        "train_s": out / "fashion_mnist_train_samples.bin",
+        "train_l": out / "fashion_mnist_train_labels.bin",
+        "test_s": out / "fashion_mnist_test_samples.bin",
+        "test_l": out / "fashion_mnist_test_labels.bin",
+    }
+    _write_bins(train_x, train_y, dst["train_s"], dst["train_l"], 10)
+    _write_bins(test_x, test_y, dst["test_s"], dst["test_l"], 10)
+
+    print("== FashionMNIST ==")
+    print(f"  source        : Zalando FashionMNIST ({FASHION_MNIST_MIRRORS[0]})")
+    print(f"  dest          : {out}")
+    print(f"  sample shape  : {rows}x{cols} -> {rows*cols} flat, float32, /255")
+    print(f"  label shape   : one-hot 10, float32")
+    print(f"  classes       : 10 (garments)")
+    print(f"  train / test  : {train_x.shape[0]} / {test_x.shape[0]}")
+    return dst
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -182,11 +249,15 @@ def main() -> int:
     ap.add_argument("--emnist", action="store_true", help="also prepare EMNIST")
     ap.add_argument("--emnist-split", default="digits",
                     choices=list(EMNIST_CLASSES), help="EMNIST split (default digits)")
+    ap.add_argument("--fashion", action="store_true",
+                    help="also prepare FashionMNIST (drop-in 10-class replacement)")
     args = ap.parse_args()
 
     ensure_mnist(symlink=args.symlink)
     if args.emnist:
         ensure_emnist(args.emnist_split)
+    if args.fashion:
+        ensure_fashion_mnist()
     print("\ndone.")
     return 0
 

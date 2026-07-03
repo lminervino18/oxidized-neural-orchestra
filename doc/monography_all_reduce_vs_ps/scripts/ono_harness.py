@@ -226,6 +226,13 @@ DATASETS = {
         source="EMNIST digits split (NIST), 28x28 grayscale /255, one-hot",
         classes="digits 0-9",
     ),
+    # FashionMNIST — Zalando drop-in for MNIST: same 28x28x1 / 10-class shape, but a
+    # harder, less-homogeneous task (lower accuracy ceiling with simple nets).
+    "fashion_mnist": DatasetSpec(
+        name="fashion_mnist", x_size=784, y_size=10,
+        source="Zalando FashionMNIST, 28x28 grayscale /255, one-hot",
+        classes="garments 0-9",
+    ),
 }
 
 
