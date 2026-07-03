@@ -81,7 +81,7 @@ def fig_convergence_loss():
         ax.tick_params(labelsize=6.5)
         # Curves decay left→right, so the upper-right corner is free of data.
         ax.legend(fontsize=6, frameon=False, loc="upper right")
-    axes[0].set_ylabel("Pérdida de entrenamiento")
+    axes[0].set_ylabel("Loss de entrenamiento")
     if not drew:
         plt.close(fig)
         raise RuntimeError("no convergence data for Bg_*_n3 runs")
