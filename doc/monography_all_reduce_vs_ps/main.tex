@@ -129,6 +129,7 @@ contrasta las dos estrategias de agregaci\'on comparadas.
 
 \begin{figure}[H]
   \centering
+  {\footnotesize\scshape Figura~\ref{fig:concept}}\par\smallskip
   \includegraphics[width=\columnwidth]{ps_vs_ar_conceptual.pdf}
   \caption{Parameter Server (izquierda): los workers hacen push/pull contra dos
   servidores que shardean los pesos. Ring All-Reduce (derecha): los workers promedian
@@ -173,7 +174,7 @@ convergencia y accuracy; con un \textbf{batch por worker mayor} se mide throughp
 bruto. Se es expl\'icito sobre qu\'e pregunta responde cada una.
 
 \subsection{M\'etricas y entorno}
-Se mide la p\'erdida de entrenamiento por \'epoca, la accuracy de test (la fracci\'on
+Se mide el loss de entrenamiento por \'epoca, la accuracy de test (la fracci\'on
 de aciertos, es decir el \emph{argmax} de la salida, sobre el conjunto de test
 completo), el tiempo total, los samples por segundo, el speedup y la
 eficiencia de escalado. Entorno: una \'unica m\'aquina de 8 n\'ucleos; el cl\'uster se
@@ -190,15 +191,16 @@ Ambas estrategias entrenan correctamente. Con la receta de referencia, a igual n
 de workers All-Reduce y Parameter Server alcanzan accuracies de test pr\'acticamente
 iguales en ambos datasets (con Parameter Server incluso marginalmente por encima en
 FashionMNIST), seg\'un la \Cref{tab:main}. La \Cref{fig:loss} muestra que las curvas de
-p\'erdida descienden de forma casi solapada.
+loss descienden de forma casi solapada.
 Este resultado es esperable: como el r\'egimen es sincr\'onico, ambos esquemas de
 agregaci\'on aplican la misma regla de actualizaci\'on, de modo que no cabe esperar una
 diferencia sistem\'atica de convergencia entre ellos en este entorno.
 
 \begin{figure}[H]
   \centering
+  {\footnotesize\scshape Figura~\ref{fig:loss}}\par\smallskip
   \includegraphics[width=\columnwidth]{convergence_loss.pdf}
-  \caption{Convergencia (p\'erdida de entrenamiento por \'epoca) a 3 workers, en
+  \caption{Convergencia (loss de entrenamiento por \'epoca) a 3 workers, en
   FashionMNIST (izquierda) y MNIST (derecha), para All-Reduce y Parameter Server.}
   \label{fig:loss}
 \end{figure}
@@ -224,6 +226,7 @@ para ello emplea dos nodos servidores adicionales que All-Reduce no necesita.
 
 \begin{figure}[H]
   \centering
+  {\footnotesize\scshape Figura~\ref{fig:throughput}}\par\smallskip
   \includegraphics[width=\columnwidth]{throughput_vs_workers.pdf}
   \caption{Throughput (samples/s) vs.\ n\'umero de workers, batch por worker fijo, en
   FashionMNIST. All-Reduce parte m\'as alto pero Parameter Server lo alcanza al crecer
@@ -233,6 +236,7 @@ para ello emplea dos nodos servidores adicionales que All-Reduce no necesita.
 
 \begin{figure}[H]
   \centering
+  {\footnotesize\scshape Figura~\ref{fig:speedup}}\par\smallskip
   \includegraphics[width=\columnwidth]{speedup_vs_workers.pdf}
   \caption{Speedup de throughput respecto de la configuraci\'on de 3 workers. Parameter
   Server escala con mayor pendiente que All-Reduce desde una base m\'as baja.}
@@ -262,6 +266,7 @@ O.N.O.\ la implementa, pero su evaluaci\'on queda fuera del alcance de esta mono
 
 \begin{figure}[H]
   \centering
+  {\footnotesize\scshape Figura~\ref{fig:comm}}\par\smallskip
   \includegraphics[width=\columnwidth]{communication_pressure.pdf}
   \caption{Presi\'on de comunicaci\'on: throughput (log) vs.\ tama\~no del modelo (log)
   a 3 workers. All-Reduce sostiene mayor throughput en los tres tama\~nos; la ventaja se
@@ -271,6 +276,7 @@ O.N.O.\ la implementa, pero su evaluaci\'on queda fuera del alcance de esta mono
 
 \begin{figure}[H]
   \centering
+  {\footnotesize\scshape Figura~\ref{fig:commvol}}\par\smallskip
   \includegraphics[width=\columnwidth]{comm_volume_analytical.pdf}
   \caption{Volumen de datos comunicado por paso (m\'etrica anal\'itica, independiente de
   la red) vs.\ n\'umero de workers. En All-Reduce el volumen por nodo es casi constante;
@@ -317,11 +323,13 @@ marco conceptual.
 \FloatBarrier
 \section{Conclusi\'on}
 Respondiendo a la pregunta de investigaci\'on, en el entorno evaluado (homog\'eneo,
-sincr\'onico y sobre una sola m\'aquina con red r\'apida) es posible concluir que
-All-Reduce es preferible: converge a la misma accuracy que Parameter Server (a igual
-n\'umero de workers y en ambos datasets) y lo supera en throughput y en tiempo hasta
-accuracy, debido a que el servidor central de PS introduce un cuello de serializaci\'on.
-Parameter Server recorta distancia al escalar y con modelos grandes gracias al sharding,
+sincr\'onico y sobre una sola m\'aquina con red r\'apida) All-Reduce result\'o la opci\'on
+m\'as conveniente: converge a la misma accuracy que Parameter Server (a igual n\'umero de
+workers y en ambos datasets) y lo supera en throughput y en tiempo hasta accuracy, debido
+a que el servidor central de PS introduce un cuello de serializaci\'on. Esta ventaja, sin
+embargo, est\'a atada a dichas condiciones: cu\'al de las dos estrategias conviene depende
+del contexto (heterogeneidad, red, escala del modelo) y no constituye una preferencia
+absoluta. Parameter Server recorta distancia al escalar y con modelos grandes gracias al sharding,
 pero no super\'o a All-Reduce en throughput a\'un con el modelo m\'as grande; podr\'ia
 considerarse una elecci\'on natural solo si se explotaran sus ventajas estructurales
 (heterogeneidad, asincron\'ia, sharding de modelos que no entran en un nodo), que aqu\'i
