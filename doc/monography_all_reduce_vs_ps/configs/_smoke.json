@@ -1,0 +1,20 @@
+{
+  "name": "_smoke",
+  "_doc": "End-to-end pipeline validation for the REDESIGN: FashionMNIST + PS with 2 SHARDED servers + equal-workers fairness. Tiny subset (3000), 2 epochs, eval on. Validates the new dataset path, the torch baseline, AR, and (critically) PS servers=2 sharding actually running.",
+  "runs": [
+    {"label": "S_baseline_fashion", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "baseline",
+     "workers": 1, "servers": 0, "batch_size": 32, "max_epochs": 2, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "subset": 3000,
+     "notes": "torch baseline smoke"},
+
+    {"label": "S_ar_fashion_n3", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 3, "servers": 0, "batch_size": 32, "max_epochs": 2, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "subset": 3000,
+     "notes": "AR 3w smoke"},
+
+    {"label": "S_ps_fashion_n3", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 3, "servers": 2, "batch_size": 32, "max_epochs": 2, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "subset": 3000,
+     "notes": "PS 3w+2s — NEW 2-server sharding, equal workers with AR"}
+  ]
+}

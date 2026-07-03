@@ -1,0 +1,25 @@
+{
+  "name": "exp_c_throughput",
+  "_doc": "Exp C (raw throughput + scalability) — AR vs PS with a FIXED PER-WORKER batch of 64, 8 epochs, no eval (throughput only). Measures samples/sec and scaling as workers grow. REDESIGN: equal-workers axis — AR sweeps 1/3/5 workers; PS runs the same 3/5 workers plus 2 sharded servers. AR 1w is the single-worker speedup reference. FashionMNIST (primary).",
+  "runs": [
+    {"label": "Bp_ar_n1", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 1, "servers": 0, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false, "notes": "AR 1w — single-worker throughput reference"},
+
+    {"label": "Bp_ar_n3", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 3, "servers": 0, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false, "notes": "AR 3w"},
+
+    {"label": "Bp_ar_n5", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 5, "servers": 0, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false, "notes": "AR 5w"},
+
+    {"label": "Bp_ps_n3", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 3, "servers": 2, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false, "notes": "PS 3w+2s"},
+
+    {"label": "Bp_ps_n5", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 5, "servers": 2, "batch_size": 64, "max_epochs": 8, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": false, "notes": "PS 5w+2s"}
+  ]
+}

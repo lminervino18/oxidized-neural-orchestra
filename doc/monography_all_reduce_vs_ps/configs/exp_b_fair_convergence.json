@@ -1,0 +1,33 @@
+{
+  "name": "exp_b_fair_convergence",
+  "_doc": "Exp B (fair convergence) — AR vs PS under EQUAL WORKERS. AR runs N workers; PS runs the SAME N workers plus 2 sharded servers (servers are PS's own overhead, not a worker handicap). With equal workers and equal per-worker batch (10), the effective global batch (N x 10) is identical for AR and PS at each N, so convergence is directly comparable. Primary dataset FashionMNIST (harder, less homogeneous), MNIST kept for reference. batch 10/worker, lr 0.1, 30 epochs, eval on full test set.",
+  "runs": [
+    {"label": "Bg_ar_fashion_n3", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 3, "servers": 0, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "AR 3w, global batch 30"},
+    {"label": "Bg_ps_fashion_n3", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 3, "servers": 2, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "PS 3w+2s, global batch 30"},
+
+    {"label": "Bg_ar_fashion_n5", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 5, "servers": 0, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "AR 5w, global batch 50"},
+    {"label": "Bg_ps_fashion_n5", "dataset": "fashion_mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 5, "servers": 2, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "PS 5w+2s, global batch 50"},
+
+    {"label": "Bg_ar_mnist_n3", "dataset": "mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 3, "servers": 0, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "AR 3w, global batch 30"},
+    {"label": "Bg_ps_mnist_n3", "dataset": "mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 3, "servers": 2, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "PS 3w+2s, global batch 30"},
+
+    {"label": "Bg_ar_mnist_n5", "dataset": "mnist", "model": "nielsen", "strategy": "all_reduce",
+     "workers": 5, "servers": 0, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "AR 5w, global batch 50"},
+    {"label": "Bg_ps_mnist_n5", "dataset": "mnist", "model": "nielsen", "strategy": "parameter_server",
+     "workers": 5, "servers": 2, "batch_size": 10, "max_epochs": 30, "offline_epochs": 0,
+     "lr": 0.1, "loss_fn": "cross_entropy", "seed": 42, "eval": true, "notes": "PS 5w+2s, global batch 50"}
+  ]
+}

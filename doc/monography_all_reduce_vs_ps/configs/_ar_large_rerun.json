@@ -1,7 +1,0 @@
-{
-  "name": "_ar_large_rerun",
-  "_doc": "Re-run of AR on the large MLP after the ring all-reduce deadlock fix (PR #196). Same params and label as the original D_ar_large so it supersedes the failed run in the aggregated summaries.",
-  "runs": [
-    {"label":"D_ar_large","dataset":"mnist","model":"mlp_large","strategy":"all_reduce","workers":3,"servers":0,"batch_size":64,"max_epochs":8,"offline_epochs":0,"lr":0.1,"loss_fn":"cross_entropy","seed":42,"eval":false,"notes":"AR mlp_large rerun after deadlock fix"}
-  ]
-}
