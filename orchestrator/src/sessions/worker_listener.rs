@@ -151,7 +151,7 @@ impl WorkerListener {
                 ReqResolution::Continue
             }
             WorkerRequest::PullParams => {
-                info!("pulling parmaeters from worker {id}");
+                info!("pulling parameters from worker {id}");
 
                 match self.worker_handle.pull_params().await {
                     Ok(params) => {
@@ -210,7 +210,7 @@ impl WorkerListener {
     /// An `EventResolution` or an orch error if the received event is invalid.
     fn handle_event(id: usize, event: WorkerEvent<'_>) -> Result<EventResolution> {
         match event {
-            WorkerEvent::Loss(losses) => {
+            WorkerEvent::Loss { losses } => {
                 debug!("worker {id} reported {} losses", losses.len());
 
                 let training_event = TrainingEvent::PublishedLosses {

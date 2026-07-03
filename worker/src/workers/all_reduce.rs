@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::{OrchEvent, OrchHandle, TransportLayer, specs::machine_learning::ParamGenSpec};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 
 use super::{Run, Worker};
@@ -62,13 +62,13 @@ where
                 .ring_manager
                 .build_param_manager(&mut self.optimization_params);
 
-            let TrainResult { losses, was_last } = self
+            let TrainResult { losses, is_last } = self
                 .trainer
                 .train(&mut param_manager)
                 .map_err(io::Error::other)?;
 
             self.orch_handle.push_losses(losses).await?;
-            should_continue = !was_last;
+            should_continue = !is_last;
 
             tokio::select! {
                 biased;
@@ -114,14 +114,21 @@ where
                 response = self.ring_manager.pull_grads(&mut self.params) => {
                     debug!("received gradients from all workers, training...");
 
-                    let Ok(mut param_manager) = response else {
-                        continue;
+                    let mut param_manager = match response {
+                        Ok(pm) => pm,
+                        Err(e) => {
+                            debug!("gradient pull failed, retrying round: {e}");
+                            continue;
+                        }
                     };
 
                     // SAFETY: The parameter and gradient buffer have the same size.
-                    self.trainer.optimize(&mut param_manager).unwrap();
-                    param_manager.zero_grad();
+                    if let Err(e) = self.trainer.optimize(&mut param_manager) {
+                        error!("optimization step failed: {e}");
+                        return Err(io::Error::other(e));
+                    }
 
+                    param_manager.zero_grad();
                     self.optimization_params.copy_from_slice(&self.params);
                 }
             }

@@ -99,7 +99,11 @@ def _torch_modules(model: Model):
         elif isinstance(layer, MaxPool):
             steps.append(("pool", nn.MaxPool2d(layer.size, stride=layer.stride), None))
         else:
-            steps.append(("dense", nn.Linear(in_dim, out_dim), layer.act))
+            if layer.act == Activation.SOFTMAX:
+                # PyTorch's cross_entropy folds the softmax into the loss, so skip it.
+                steps.append(("dense", nn.Linear(in_dim, out_dim), None))
+            else: 
+                steps.append(("dense", nn.Linear(in_dim, out_dim), layer.act))
     return steps
 
 

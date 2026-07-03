@@ -25,6 +25,19 @@ use crate::ui::{
     theme::Theme,
     utils::fmt_loss,
 };
+use crate::naming::random_model_name;
+
+/// Fastest particle traversal, so bursts of quick reports stay watchable.
+const FLOW_PERIOD_MIN_MS: f64 = 500.0;
+/// Slowest particle traversal, and the initial speed before any measurement:
+/// slow enough to read as "warming up", but still visibly moving.
+const FLOW_PERIOD_MAX_MS: f64 = 10_000.0;
+/// The flow tracks the real per-epoch interval compressed by this factor, so it
+/// stays watchable when epochs are tens of seconds apart while remaining
+/// proportional to the true reporting speed.
+const FLOW_SPEEDUP: f64 = 6.0;
+/// Weight of the newest sample in the smoothed per-epoch interval (EMA).
+const FLOW_SMOOTHING: f64 = 0.3;
 
 /// Per-worker colors for charts and table highlights.
 pub const WORKER_COLORS: &[Color] = &[
@@ -135,6 +148,17 @@ pub struct TrainingState {
     pub max_epochs: usize,
     pub phase: Phase,
     pub started_at: Instant,
+    /// Normalized [0, 1) position of the data-flow particles, advanced every
+    /// frame at a rate derived from how fast workers actually report losses.
+    pub flow_phase: f64,
+    /// Wall-clock of the previous frame, used to advance `flow_phase` by the
+    /// real elapsed time regardless of the render cadence.
+    last_frame_at: Instant,
+    /// Wall-clock of the most recent loss report, used to measure the interval
+    /// between reports.
+    last_loss_at: Option<Instant>,
+    /// Smoothed real interval between per-epoch loss reports, in milliseconds.
+    loss_interval_ms: Option<f64>,
     pub workers: Vec<WorkerState>,
     /// Per-worker loss time series as (epoch, loss) pairs.
     pub loss_series: Vec<Vec<(f64, f64)>>,
@@ -249,6 +273,10 @@ impl TrainingState {
             max_epochs,
             phase: initial_phase,
             started_at: Instant::now(),
+            flow_phase: 0.0,
+            last_frame_at: Instant::now(),
+            last_loss_at: None,
+            loss_interval_ms: None,
             workers,
             loss_series,
             logs: vec![(LogLevel::Info, initial_log)],
@@ -314,6 +342,50 @@ impl TrainingState {
         for event in events {
             self.apply(event);
         }
+
+        self.advance_flow();
+    }
+
+    /// Advances the data-flow animation by the real time elapsed since the last
+    /// frame, at a rate proportional to how fast workers report losses.
+    fn advance_flow(&mut self) {
+        let now = Instant::now();
+        let dt_ms = now.duration_since(self.last_frame_at).as_secs_f64() * 1000.0;
+        self.last_frame_at = now;
+        self.flow_phase = (self.flow_phase + dt_ms / self.flow_period_ms()).fract();
+    }
+
+    /// Records the arrival of a loss report, updating the smoothed per-epoch
+    /// interval that drives the flow animation speed.
+    fn record_loss_rate(&mut self, epochs: usize) {
+        let now = Instant::now();
+        if let Some(prev) = self.last_loss_at {
+            let per_epoch =
+                now.duration_since(prev).as_secs_f64() * 1000.0 / epochs.max(1) as f64;
+            // Blend from the current interval — seeded at the slow-start value — so
+            // the flow accelerates progressively toward the measured rate instead
+            // of snapping to it on the first report.
+            let current = self
+                .loss_interval_ms
+                .unwrap_or(FLOW_PERIOD_MAX_MS * FLOW_SPEEDUP);
+            self.loss_interval_ms =
+                Some(current * (1.0 - FLOW_SMOOTHING) + per_epoch * FLOW_SMOOTHING);
+        }
+        self.last_loss_at = Some(now);
+    }
+
+    /// Milliseconds for one full particle traversal of a connection.
+    ///
+    /// Tracks the real per-epoch reporting interval, compressed by `FLOW_SPEEDUP`
+    /// so it stays legible when epochs are slow, and clamped to a watchable range.
+    /// Before any measurement it starts slow and speeds up as reports arrive.
+    fn flow_period_ms(&self) -> f64 {
+        match self.loss_interval_ms {
+            Some(interval) => {
+                (interval / FLOW_SPEEDUP).clamp(FLOW_PERIOD_MIN_MS, FLOW_PERIOD_MAX_MS)
+            }
+            None => FLOW_PERIOD_MAX_MS,
+        }
     }
 
     /// Applies a single training event to the state.
@@ -321,6 +393,7 @@ impl TrainingState {
         match event {
             TrainingEvent::PublishedLosses { worker_id, losses } => {
                 self.phase = Phase::Training;
+                self.record_loss_rate(losses.len());
 
                 if worker_id < self.workers.len() {
                     for loss in &losses {
@@ -356,8 +429,7 @@ impl TrainingState {
                     self.workers[worker_id].done = true;
                 }
                 self.last_upgrade = Some((worker_id, Instant::now()));
-                self.ps_server_count =
-                    self.workers.iter().filter(|w| w.became_server).count();
+                self.ps_server_count = self.workers.iter().filter(|w| w.became_server).count();
                 // If the chart was focused on the worker that just upgraded,
                 // move focus to an active worker so no server shows in graphs.
                 if self.selected_worker == worker_id {
@@ -391,6 +463,7 @@ impl TrainingState {
                     ),
                 );
                 self.final_trained = Some(trained);
+                self.auto_save();
             }
             TrainingEvent::Error(e) => {
                 self.phase = Phase::Error;
@@ -399,6 +472,23 @@ impl TrainingState {
                 self.push_log(LogLevel::Error, msg);
             }
             _ => unreachable!(),
+        }
+    }
+
+    /// Auto-saves the finished model to `safetensors/<random-name>.safetensors`
+    /// and logs the resolved path (or the failure).
+    fn auto_save(&mut self) {
+        let Some(trained) = self.final_trained.as_ref() else {
+            return;
+        };
+        let dir = "safetensors";
+        let path = format!("{dir}/{}", random_model_name());
+        let outcome = std::fs::create_dir_all(dir)
+            .map_err(|e| e.to_string())
+            .and_then(|()| trained.save_safetensors(&path).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(()) => self.push_log(LogLevel::Info, format!("model saved to {path}")),
+            Err(e) => self.push_log(LogLevel::Error, format!("failed to save model: {e}")),
         }
     }
 
@@ -603,6 +693,12 @@ pub fn handle_key(state: &mut TrainingState, key: KeyCode) -> Option<Action> {
             state.confirm_quit = ConfirmQuit::Hidden;
             None
         }
+        (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false)
+            if state.phase == Phase::Finished =>
+        {
+            state.confirm_quit = ConfirmQuit::Visible;
+            None
+        }
         (KeyCode::Char('q') | KeyCode::Esc, ConfirmQuit::Hidden, false) => {
             Some(Action::Transition(Box::new(Screen::Menu(MenuState::new()))))
         }
@@ -675,7 +771,7 @@ pub fn draw(f: &mut Frame, state: &mut TrainingState) {
     }
 
     if state.confirm_quit == ConfirmQuit::Visible {
-        draw_confirm_quit(f);
+        draw_confirm_quit(f, state.phase == Phase::Finished);
     }
 
     if state.confirm_stop == ConfirmStop::Visible {

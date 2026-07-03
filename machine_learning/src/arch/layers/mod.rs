@@ -1,4 +1,4 @@
-mod conv2d;
+mod conv;
 mod dense;
 mod layer;
 mod max_pooling;
@@ -10,7 +10,7 @@ mod tanh;
 
 use std::mem;
 
-pub(super) use conv2d::Conv2d;
+pub(super) use conv::Conv2d;
 pub(super) use dense::Dense;
 pub use layer::{Inner, Layer};
 pub(super) use max_pooling::MaxPooling;

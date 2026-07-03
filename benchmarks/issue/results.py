@@ -72,11 +72,22 @@ def save_result(result, jsonl_path):
 
 
 def load_history():
-    """Return {run_key: result}, newest file wins for a repeated key."""
-    history = {}
+    """Return {run_key: aggregated_result}.
+
+    Each run is persisted as one JSONL line *per repeat* (never pre-aggregated),
+    so the mean ± std that the README/plots show would be lost if we just kept the
+    last line. We therefore group the repeats of a key and `aggregate` them.
+
+    Newest file still wins for a repeated key: a later result file fully replaces
+    an earlier file's repeats for that key (so a partial re-run overrides cleanly),
+    instead of mixing repeats from two different campaigns into one mean.
+    """
     if not RESULTS_DIR.exists():
-        return history
+        return {}
+    # key -> list of repeat records, taken only from the newest file holding the key
+    reps_by_key: dict[str, list] = {}
     for path in sorted(RESULTS_DIR.glob("*.jsonl")):
+        file_reps: dict[str, list] = {}
         try:
             with open(path) as f:
                 for line in f:
@@ -90,10 +101,14 @@ def load_history():
                     # A valid run_key has the full suite|model|strategy|... shape.
                     # Skip malformed keys left by older/aborted runs.
                     if "|" in rec.get("run_key", ""):
-                        history[rec["run_key"]] = rec
+                        file_reps.setdefault(rec["run_key"], []).append(rec)
         except OSError:
-            pass
-    return history
+            continue
+        # This file is newer than anything seen before, so its repeats fully
+        # replace the prior file's repeats for the same key.
+        reps_by_key.update(file_reps)
+    return {key: (aggregate(reps) if len(reps) > 1 else reps[0])
+            for key, reps in reps_by_key.items()}
 
 
 def merge(history, new_results):

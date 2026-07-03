@@ -1,0 +1,10 @@
+# Ruff — fast Python linter + formatter (https://docs.astral.sh/ruff)
+# Run via: `make py-lint` (check) and `make py-fmt` (format).
+target-version = "py312"
+line-length = 100
+exclude = [".venv", "target", "notebooks", "docs", "wheels", "dist"]
+
+[lint]
+# E/W pycodestyle, F pyflakes, I isort, UP pyupgrade, B bugbear
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"] # line length is managed by `ruff format`

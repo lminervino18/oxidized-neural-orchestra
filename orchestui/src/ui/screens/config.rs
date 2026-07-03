@@ -85,8 +85,8 @@ const EXAMPLE_TRAINING: &str = concat!(
     "  { \"gradient_descent\": { \"lr\": 0.01 } },\n",
     "  { \"gradient_descent_with_momentum\": { \"lr\": 0.01, \"mu\": 0.9 } },\n",
     "  { \"adam\": { \"lr\": 0.001, \"b1\": 0.9, \"b2\": 0.999, \"eps\": 1e-8 } }\n",
-    "server_addrs: one or more parameter servers\n",
-    "  parameters are distributed via bin-packing",
+    "nservers hold the model; params are sharded\n",
+    "  across them via bin-packing",
 );
 
 #[derive(Debug, Clone, PartialEq)]

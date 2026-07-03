@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 comms = { path = "../comms" }
-env_logger = "0.11.8"
 log = { version = "0.4.29", features = ["kv"] }
 machine_learning = { path = "../machine_learning" }
 parameter_server = { path = "../parameter_server" }
@@ -17,6 +16,7 @@ tokio = { version = "1", features = [
   "signal",
   "sync",
 ] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3.32"
 uuid = { version = "1.23.3", features = ["v4"] }
 

@@ -9,6 +9,7 @@ use comms::{
 const PING_ROUNDS: usize = 10;
 
 /// Obtains the statistics from the nodes in the network.
+#[derive(Default)]
 pub struct StatRequester;
 
 impl StatRequester {

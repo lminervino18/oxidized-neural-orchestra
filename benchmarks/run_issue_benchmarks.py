@@ -44,6 +44,9 @@ def parse_args():
     p.add_argument("--strategy", action="append",
                    choices=["parameter_server", "all_reduce", "strategy_switch"],
                    help="Strategy(ies) to run (default: all)")
+    p.add_argument("--variant", action="append", choices=["blocking", "non_blocking"],
+                   help="PS synchronizer variant(s) to run (default: all). Filters to "
+                        "parameter-server runs with the given variant.")
     p.add_argument("--rebuild", action="store_true", help="Force a Docker image rebuild")
     p.add_argument("--keep-containers", action="store_true", help="Leave containers up at the end")
     p.add_argument("--plots-only", action="store_true",
@@ -88,6 +91,8 @@ def main():
     runs = build_runs(suites, models)
     if args.strategy:
         runs = [r for r in runs if r["strategy"] in set(args.strategy)]
+    if args.variant:
+        runs = [r for r in runs if r.get("ps_variant") in set(args.variant)]
     if not runs:
         sys.exit("No runs for the given suites/models/strategies.")
 
