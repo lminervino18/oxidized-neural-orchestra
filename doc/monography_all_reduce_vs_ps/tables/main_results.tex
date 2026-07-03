@@ -1,11 +1,17 @@
-\begin{table}[t]\centering
-\caption{Resultados principales en MNIST/\texttt{nielsen} (batch global fijo).}\label{tab:main}
+\begin{table}[H]\centering
+\caption{Resultados de convergencia justa (batch 10 por \emph{worker} con evaluaci\'on en test) para ambas estrategias en cada conjunto de datos.}\label{tab:main}
 \footnotesize
-\begin{tabular}{lccrr}\toprule
-Estr. & Nodos & Acc.\,(\%) & Tiempo\,(s) & samp./s\\\midrule
-AR & 3 & 94.75 & 589 & 4\,077\\
-PS & 3 & 94.69 & 797 & 3\,012\\
-AR & 5 & 94.70 & 493 & 4\,865\\
-PS & 5 & 94.75 & 501 & 4\,792\\
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llcS[table-format=2.2,round-precision=2]S[table-format=3.1,round-precision=1]}\toprule
+Dataset & Estrategia & Workers & {Acc.\ test (\%)} & {Tiempo total (s)}\\\midrule
+FashionMNIST & AR & 3 & 87.28 & 210.9\\
+FashionMNIST & PS & 3 & 87.58 & 257.6\\
+FashionMNIST & AR & 5 & 86.25 & 248.1\\
+FashionMNIST & PS & 5 & 86.49 & 272.5\\
+\midrule
+MNIST & AR & 3 & 97.82 & 213.8\\
+MNIST & PS & 3 & 97.62 & 251.5\\
+MNIST & AR & 5 & 97.00 & 253.4\\
+MNIST & PS & 5 & 96.75 & 269.1\\
 \bottomrule\end{tabular}
 \end{table}

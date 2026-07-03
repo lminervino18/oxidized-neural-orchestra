@@ -1,9 +1,13 @@
-\begin{table*}[t]\centering
-\caption{Matriz de decisi\'on All-Reduce vs.\ Parameter Server (acotada al entorno evaluado).}\label{tab:decision}
+\begin{table}[H]\centering
+\caption{Matriz de decisi\'on cualitativa All-Reduce vs.\ Parameter Server (acotada al entorno evaluado).}\label{tab:decision}
 \footnotesize
-\begin{tabular}{p{0.30\textwidth}p{0.13\textwidth}p{0.49\textwidth}}\toprule
-Condici\'on & Recomendada & Justificaci\'on / evidencia\\\midrule
-Cl\'uster homog\'eneo, buena red, sincron\'ia, gradientes densos, evitar servidor central & All-Reduce & Sin punto central de contenci\'on; comunicaci\'on por worker $\approx$ independiente de $W$. \emph{Evidencia:} iguala a PS en accuracy con mayor throughput y menor tiempo hasta accuracy.\\
-Modelos que no entran en un nodo, mayor escala, sharding de par\'ametros, desacoplar workers/servers & Parameter Server & \emph{Evidencia:} escala con mayor pendiente al sumar nodos. El sharding ser\'ia decisivo para modelos que no entran en un nodo, no ejercitado aqu\'i (el mayor evaluado complet\'o en All-Reduce).\\
+\begin{tabular}{@{}p{0.24\columnwidth}p{0.33\columnwidth}p{0.33\columnwidth}@{}}\toprule
+Criterio & All-Reduce & Parameter Server\\\midrule
+Convergencia & Empate: misma sem\'antica s\'incrona. & Empate: misma sem\'antica s\'incrona.\\
+Throughput / tiempo hasta \emph{accuracy} & Favorable: sin servidor central. & Menor: sobrecarga del servidor.\\
+Escalado al sumar nodos & Escala bien, pendiente base. & Amortiza su costo fijo: pendiente algo mayor.\\
+Eficiencia de hardware & No requiere nodos servidores extra. & Requiere nodos servidores dedicados.\\
+Presi\'on de comunicaci\'on / modelos grandes & Sostiene la ventaja. & El \emph{sharding} acorta la brecha.\\
+Heterogeneidad / \emph{stragglers} / asincron\'ia & S\'incrono: sensible a \emph{stragglers}. & Ventaja estructural (asincron\'ia); no ejercitada aqu\'i.\\
 \bottomrule\end{tabular}
-\end{table*}
+\end{table}

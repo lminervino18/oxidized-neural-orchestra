@@ -1,11 +1,12 @@
-\begin{table}[t]\centering
-\caption{Modelos y tama\~no aproximado.}\label{tab:models}
+\begin{table}[H]\centering
+\caption{Modelos empleados y su tama\~no aproximado. Las redes Densa S/M/L son totalmente conectadas.}\label{tab:models}
 \footnotesize
-\begin{tabular}{lll}\toprule
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llr}\toprule
 Modelo & Arquitectura & Par\'ametros\\\midrule
-\texttt{nielsen} & Conv20@5--Pool--FC100--FC10 & 289\,630\\
-\texttt{mlp\_small} & FC128--FC10 & 101\,770\\
-\texttt{mlp\_medium} & FC512--FC512--FC10 & 669\,706\\
-\texttt{mlp\_large} & FC1024--FC1024--FC10 & 1\,863\,690\\
+Nielsen & Conv20@5 $\to$ Pool $\to$ Dense100 $\to$ Dense10 & \num{289630}\\
+Densa S & Dense128 $\to$ Dense10 & \num{101770}\\
+Densa M & Dense512 $\to$ Dense512 $\to$ Dense10 & \num{669706}\\
+Densa L & Dense1024 $\to$ Dense1024 $\to$ Dense10 & \num{1863690}\\
 \bottomrule\end{tabular}
 \end{table}

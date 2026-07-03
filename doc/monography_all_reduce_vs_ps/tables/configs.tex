@@ -1,11 +1,11 @@
-\begin{table}[t]\centering
-\caption{Configuraciones distribuidas evaluadas.}\label{tab:configs}
+\begin{table}[H]\centering
+\caption{Topolog\'ias distribuidas bajo el dise\~no de \emph{workers} iguales. PS emplea 2 servidores con par\'ametros fragmentados (\emph{sharding}); los \emph{workers} se igualan a All-Reduce para preservar la equidad. Batch efectivo $=$ \emph{workers}$\,\times\,$10.}\label{tab:configs}
 \footnotesize
-\begin{tabular}{lcccll}\toprule
-Estr. & Nodos & W & S & sync/store & Batch ef.\\\midrule
-AR & 3 & 3 & 0 & --/-- & 192\\
-AR & 5 & 5 & 0 & --/-- & 240\\
-PS & 3 & 2 & 1 & barrier/blocking & 128\\
-PS & 5 & 4 & 1 & barrier/blocking & 240\\
+\begin{tabular}{lcccc}\toprule
+Estrategia & Workers & Servidores & Nodos & Batch efectivo\\\midrule
+AR & 3 & 0 & 3 & 30\\
+AR & 5 & 0 & 5 & 50\\
+PS & 3 & 2 & 5 & 30\\
+PS & 5 & 2 & 7 & 50\\
 \bottomrule\end{tabular}
 \end{table}
