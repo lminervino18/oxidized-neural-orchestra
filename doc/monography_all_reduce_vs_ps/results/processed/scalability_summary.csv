@@ -1,5 +1,5 @@
 dataset,model,strategy,nodes,workers,samples_per_sec,speedup_vs_min,efficiency
-mnist,nielsen,all_reduce,3,3,4079.015992813296,1.0,1.0
-mnist,nielsen,all_reduce,5,5,4866.523320458317,1.193,0.716
-mnist,nielsen,parameter_server,3,2,2927.3585603882852,1.0,1.0
-mnist,nielsen,parameter_server,5,4,4768.355232688159,1.629,0.814
+fashion_mnist,nielsen,all_reduce,3,3,9782.86046374722,1.0,1.0
+fashion_mnist,nielsen,all_reduce,5,5,9413.645776944963,0.962,0.577
+fashion_mnist,nielsen,parameter_server,5,3,8799.334378283414,1.0,1.0
+fashion_mnist,nielsen,parameter_server,7,5,9526.279610048561,1.083,0.65

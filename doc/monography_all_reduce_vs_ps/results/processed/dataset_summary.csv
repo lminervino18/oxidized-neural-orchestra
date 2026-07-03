@@ -1,2 +1,3 @@
 dataset,train_size,test_size,input_shape,classes
 mnist,60000,10000,28x28x1,10
+fashion_mnist,60000,10000,28x28x1,10
