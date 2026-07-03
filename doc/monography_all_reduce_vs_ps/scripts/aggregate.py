@@ -168,7 +168,10 @@ def write_summaries(raw):
 def write_descriptors(raw):
     """Static descriptors required by the spec: dataset_summary + model_summary."""
     # dataset_summary.csv
-    datasets = {"mnist": ("60000", "10000", "28x28x1", "10")}
+    datasets = {
+        "mnist": ("60000", "10000", "28x28x1", "10"),
+        "fashion_mnist": ("60000", "10000", "28x28x1", "10"),
+    }
     if list((ROOT / "datasets" / "emnist").glob("*train*samples*.bin")):
         datasets["emnist"] = ("240000", "40000", "28x28x1", "10")
     with open(OUT / "dataset_summary.csv", "w", newline="") as f:

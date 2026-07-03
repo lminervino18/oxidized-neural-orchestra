@@ -40,7 +40,7 @@ def architecture():
     # Top label, with a clear gap above the orchestrator box (no overlap).
     ax.text(0.5, 1.06, "asignacion de rol en runtime", ha="center",
             va="center", fontsize=6.4, color=ACCENT)
-    _box(ax, (0.33, 0.80), 0.34, 0.14, "orchestrator\n(headless)", fc="0.82")
+    _box(ax, (0.33, 0.80), 0.34, 0.14, "orquestador\ncentral", fc="0.82")
     # Three well-separated, identical nodes (wide gaps so the links read clearly).
     roles = ["worker", "server", "worker"]
     xs = [0.05, 0.40, 0.75]
@@ -63,30 +63,31 @@ def architecture():
 
 def ps_vs_ar():
     import numpy as np
-    fig, axes = plt.subplots(1, 2, figsize=(3.4, 1.9))
-    # ── Parameter Server ──
+    fig, axes = plt.subplots(1, 2, figsize=(3.5, 2.1))
+    # ── Parameter Server (parameters sharded across TWO servers) ──
     ax = axes[0]
-    server = _box(ax, (0.24, 0.70), 0.52, 0.22, "server(s)\n(pesos shardeados)",
-                  fc="0.72", fs=5.0)
-    sc = (0.50, 0.81)
-    for x in (0.02, 0.38, 0.74):
-        wbox = _box(ax, (x, 0.04), 0.24, 0.16, "worker", fs=6.5)
-        wc = (x + 0.12, 0.12)
-        _link(ax, wc, sc, wbox, server, style="-|>", lw=0.7, rad=0.2)            # push grad
-        _link(ax, sc, wc, server, wbox, style="-|>", ls=":", lw=0.7,
-              color=ACCENT, rad=0.2)                                             # pull params
-    ax.set_title("Parameter Server", fontsize=7)
+    servers = []
+    for x, name in ((0.04, "servidor 1"), (0.52, "servidor 2")):
+        sb = _box(ax, (x, 0.74), 0.44, 0.19, f"{name}\n(shard)", fc="0.72", fs=6.3)
+        servers.append((sb, (x + 0.22, 0.835)))
+    # Three workers along the bottom; each exchanges grads/params with BOTH shards.
+    for x in (0.01, 0.38, 0.75):
+        wbox = _box(ax, (x, 0.02), 0.24, 0.16, "worker", fs=6.3)
+        wc = (x + 0.12, 0.10)
+        for sb, sc in servers:
+            _link(ax, wc, sc, wbox, sb, style="<|-|>", lw=0.55, rad=0.10)  # push grad / pull params
+    ax.set_title("Parameter Server", fontsize=7.5)
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_axis_off()
     # ── Ring All-Reduce ──
     ax = axes[1]
     cx, cy, r = 0.5, 0.5, 0.30
     pts = [(cx + r * np.cos(t), cy + r * np.sin(t))
            for t in np.linspace(0.5 * np.pi, 0.5 * np.pi + 2 * np.pi, 5)[:4]]
-    boxes = [_box(ax, (x - 0.11, y - 0.07), 0.22, 0.14, "worker", fs=6.5) for (x, y) in pts]
+    boxes = [_box(ax, (x - 0.11, y - 0.07), 0.22, 0.14, "worker", fs=6.3) for (x, y) in pts]
     for i in range(4):
         _link(ax, pts[i], pts[(i + 1) % 4], boxes[i], boxes[(i + 1) % 4],
               style="-|>", lw=0.8, rad=0.15)
-    ax.set_title("Ring All-Reduce", fontsize=7)
+    ax.set_title("Ring All-Reduce", fontsize=7.5)
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_axis_off()
     fig.tight_layout(pad=0.3)
     fig.savefig(FIG / "ps_vs_ar_conceptual.pdf", bbox_inches="tight")

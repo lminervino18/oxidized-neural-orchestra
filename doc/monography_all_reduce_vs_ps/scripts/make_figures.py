@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Data figures for the paper, built from results/processed/*.csv.
+"""Data figures for the IEEE monography (All-Reduce vs. Parameter Server).
 
-Sober, grayscale-friendly, legible at single-column width. Each figure degrades
-gracefully if its data is absent (e.g. communication pressure needs MLP runs).
+Built from results/processed/*.csv. Sober, grayscale, legible at single-column
+width (~3.4in). Each figure is isolated in try/except so one failure never
+blocks the others. Axes are labelled in Spanish; figure captions (in the paper)
+carry the interpretation, so nothing is annotated on the plots themselves.
 """
 import csv
-from collections import defaultdict
 from pathlib import Path
 
 import matplotlib
@@ -16,16 +17,15 @@ ROOT = Path(__file__).resolve().parent.parent
 PROC = ROOT / "results" / "processed"
 FIG = ROOT / "figures"
 
-plt.rcParams.update({"font.size": 8, "font.family": "serif", "axes.grid": True,
-                     "grid.alpha": 0.3, "lines.linewidth": 1.3})
+plt.rcParams.update({
+    "font.size": 8, "font.family": "serif",
+    "axes.grid": True, "grid.alpha": 0.3, "grid.linewidth": 0.5,
+    "lines.linewidth": 1.3,
+})
 
-# Distinct, print-safe styles per strategy (no loud colors).
-STYLE = {
-    "all_reduce":      dict(color="#1f4e79", marker="o", label="All-Reduce"),
-    "parameter_server":dict(color="#a6611a", marker="s", label="Parameter Server"),
-    "strategy_switch": dict(color="#4d7c4d", marker="^", label="Strategy Switch"),
-}
-PRETTY = {k: v["label"] for k, v in STYLE.items()}
+# Grayscale, print-safe styles. AR = solid + circles; PS = dashed + squares.
+AR = dict(color="0.0", ls="-", marker="o", label="All-Reduce")
+PS = dict(color="0.45", ls="--", marker="s", label="Parameter Server")
 
 
 def _rows(name):
@@ -43,127 +43,183 @@ def _f(x, default=None):
         return default
 
 
-def fig_loss_vs_epoch():
-    """Per-epoch train loss by strategy, on the sanity runs at 3 nodes."""
-    rows = _rows("results.csv")
-    curves = defaultdict(list)  # strategy -> [(epoch, loss)]
+def _curve(rows, run_id):
+    """Sorted [(epoch, train_loss)] for a single run_id from results.csv."""
+    pts = []
     for r in rows:
-        if r.get("dataset") != "mnist" or r.get("model") != "nielsen":
-            continue
-        # sanity runs (Exp A) at 3 nodes. The PyTorch baseline uses a different
-        # loss formulation (CE on logits, ~2.3 scale) than the engine (~0.23),
-        # so its loss values are not comparable — keep it out of this axis.
-        if not r.get("run_id", "").startswith("A_"):
-            continue
-        if r.get("strategy") == "baseline":
+        if r.get("run_id") != run_id:
             continue
         e, tl = _f(r.get("epoch")), _f(r.get("train_loss"))
-        if e is None or tl is None:
-            continue
-        curves[r["strategy"]].append((e, tl))
-    if not curves:
-        return
-    fig, ax = plt.subplots(figsize=(3.4, 2.4))
-    for strat, pts in curves.items():
-        pts.sort()
-        xs, ys = zip(*pts)
-        st = STYLE.get(strat, {})
-        ax.plot(xs, ys, color=st.get("color", "0.4"), ls=st.get("ls", "-"),
-                label=st.get("label", strat), marker="", markersize=3)
-    ax.set_xlabel("Época"); ax.set_ylabel("Pérdida de entrenamiento")
-    ax.legend(fontsize=6.5, frameon=False)
-    fig.tight_layout(); fig.savefig(FIG / "mnist_loss_vs_epoch.pdf"); plt.close(fig)
+        if e is not None and tl is not None:
+            pts.append((e, tl))
+    pts.sort()
+    return pts
 
 
-def _scal():
-    rows = _rows("scalability_summary.csv")
-    by = defaultdict(list)
-    for r in rows:
-        if r.get("dataset") == "mnist":
-            by[r["strategy"]].append(r)
-    for v in by.values():
-        v.sort(key=lambda r: _f(r["nodes"]) or 0)
-    return by
+# ── Figure 1: convergence (train loss vs. epoch), 2 panels ──────────────────
+def fig_convergence_loss():
+    rows = _rows("results.csv")
+    panels = [
+        ("FashionMNIST", "Bg_ar_fashion_n3", "Bg_ps_fashion_n3"),
+        ("MNIST", "Bg_ar_mnist_n3", "Bg_ps_mnist_n3"),
+    ]
+    fig, axes = plt.subplots(1, 2, figsize=(3.4, 2.1))
+    drew = False
+    for ax, (title, ar_id, ps_id) in zip(axes, panels):
+        for run_id, st in ((ar_id, AR), (ps_id, PS)):
+            pts = _curve(rows, run_id)
+            if not pts:
+                continue
+            xs, ys = zip(*pts)
+            ax.plot(xs, ys, color=st["color"], ls=st["ls"], label=st["label"],
+                    marker="", markersize=2.5)
+            drew = True
+        # Log-y spreads the decade the loss traverses; keeps late epochs readable.
+        ax.set_yscale("log")
+        ax.set_title(title, fontsize=8)
+        ax.set_xlabel("Época")
+        ax.tick_params(labelsize=6.5)
+        # Curves decay left→right, so the upper-right corner is free of data.
+        ax.legend(fontsize=6, frameon=False, loc="upper right")
+    axes[0].set_ylabel("Pérdida de entrenamiento")
+    if not drew:
+        plt.close(fig)
+        raise RuntimeError("no convergence data for Bg_*_n3 runs")
+    fig.tight_layout(pad=0.4)
+    fig.savefig(FIG / "convergence_loss.pdf")
+    plt.close(fig)
 
 
-def fig_throughput_vs_nodes():
-    by = _scal()
-    if not by:
-        return
-    fig, ax = plt.subplots(figsize=(3.4, 2.4))
-    for st, rs in by.items():
-        s = STYLE.get(st, {})
-        xs = [_f(r["nodes"]) for r in rs]
-        ys = [_f(r["samples_per_sec"]) for r in rs]
-        ax.plot(xs, ys, color=s.get("color", "0.4"), marker=s.get("marker") or "o",
-                label=s.get("label", st))
-    ax.set_xlabel("Nodos"); ax.set_ylabel("Throughput (samples/s)")
-    ax.legend(fontsize=6.5, frameon=False)
-    fig.tight_layout(); fig.savefig(FIG / "throughput_vs_nodes.pdf"); plt.close(fig)
-
-
-def fig_speedup_vs_nodes():
-    by = _scal()
-    if not by:
-        return
-    fig, ax = plt.subplots(figsize=(3.4, 2.4))
-    allx = set()
-    for st, rs in by.items():
-        s = STYLE.get(st, {})
-        xs = [_f(r["nodes"]) for r in rs]
-        ys = [_f(r["speedup_vs_min"]) for r in rs]
-        allx.update(xs)
-        ax.plot(xs, ys, color=s.get("color", "0.4"), marker=s.get("marker") or "o",
-                label=s.get("label", st))
-    if allx:
-        lo, hi = min(allx), max(allx)
-        ax.plot([lo, hi], [lo / lo, hi / lo], color="0.6", ls=":", label="ideal")
-    ax.set_xlabel("Nodos"); ax.set_ylabel("Speedup (vs. mín.)")
-    ax.legend(fontsize=6.5, frameon=False)
-    fig.tight_layout(); fig.savefig(FIG / "speedup_vs_nodes.pdf"); plt.close(fig)
-
-
-def fig_communication_pressure():
-    """Throughput vs model size, AR vs PS — only if MLP runs exist."""
+# ── Figure 2: throughput vs. number of workers ──────────────────────────────
+def fig_throughput_vs_workers():
     rows = _rows("summary_by_strategy.csv")
-    mlp = [r for r in rows if (r.get("model") or "").startswith("mlp")
-           and _f(r.get("samples_per_sec"))]
-    if not mlp:
-        return
-    order = {"mlp_small": 0, "mlp_medium": 1, "mlp_large": 2}
-    by = defaultdict(list)
-    for r in mlp:
-        by[r["strategy"]].append(r)
-    cats = ["small", "medium", "large"]
-    fig, ax = plt.subplots(figsize=(3.4, 2.4))
-    for st, rs in by.items():
-        rs.sort(key=lambda r: order.get(r["model"], 99))
-        s = STYLE.get(st, {})
-        xs = [r["model"].replace("mlp_", "") for r in rs]
-        ys = [_f(r["samples_per_sec"]) for r in rs]
-        ax.plot(xs, ys, color=s.get("color", "0.4"), marker=s.get("marker") or "o",
-                label=s.get("label", st))
-    # Mark a strategy that failed at the largest model (e.g. AR ring timeout).
-    for st, rs in by.items():
-        done = {r["model"].replace("mlp_", "") for r in rs}
-        for c in cats:
-            if c not in done and any(c in {x["model"].replace("mlp_", "")
-                                          for x in by[o]} for o in by if o != st):
-                ax.scatter([c], [min(_f(r["samples_per_sec"]) for r in rs)],
-                           marker="x", color="firebrick", s=40, zorder=5)
-                ax.annotate("no completo", ("large", min(_f(r["samples_per_sec"]) for r in rs)),
-                            fontsize=6, color="firebrick", ha="right", va="bottom")
+    by = {"all_reduce": [], "parameter_server": []}
+    for r in rows:
+        if not (r.get("label") or "").startswith("Bp_"):
+            continue
+        strat = r.get("strategy")
+        if strat in by:
+            w, sps = _f(r.get("workers")), _f(r.get("samples_per_sec"))
+            if w is not None and sps is not None:
+                by[strat].append((w, sps))
+    if not any(by.values()):
+        raise RuntimeError("no Bp_* throughput rows")
+    fig, ax = plt.subplots(figsize=(3.4, 2.3))
+    for strat, st in (("all_reduce", AR), ("parameter_server", PS)):
+        pts = sorted(by[strat])
+        if not pts:
+            continue
+        xs, ys = zip(*pts)
+        ax.plot(xs, ys, color=st["color"], ls=st["ls"], marker=st["marker"],
+                markersize=4, label=st["label"])
+    ax.set_xticks([3, 5])
+    ax.set_xlabel("Cantidad de workers")
+    ax.set_ylabel("Throughput (muestras/s)")
+    ax.legend(fontsize=6.5, frameon=False, loc="lower right")
+    fig.tight_layout(pad=0.4)
+    fig.savefig(FIG / "throughput_vs_workers.pdf")
+    plt.close(fig)
+
+
+# ── Figure 3: speedup vs. number of workers ─────────────────────────────────
+def fig_speedup_vs_workers():
+    rows = _rows("scalability_summary.csv")
+    by = {"all_reduce": [], "parameter_server": []}
+    for r in rows:
+        strat = r.get("strategy")
+        if strat in by and r.get("dataset") == "fashion_mnist":
+            w, sp = _f(r.get("workers")), _f(r.get("speedup_vs_min"))
+            if w is not None and sp is not None:
+                by[strat].append((w, sp))
+    if not any(by.values()):
+        raise RuntimeError("no scalability rows")
+    fig, ax = plt.subplots(figsize=(3.4, 2.3))
+    allx = set()
+    for strat, st in (("all_reduce", AR), ("parameter_server", PS)):
+        pts = sorted(by[strat])
+        if not pts:
+            continue
+        xs, ys = zip(*pts)
+        allx.update(xs)
+        ax.plot(xs, ys, color=st["color"], ls=st["ls"], marker=st["marker"],
+                markersize=4, label=st["label"])
+    if allx:
+        ax.axhline(1.0, color="0.7", ls=":", lw=0.8, zorder=0)
+    ax.set_xticks(sorted(allx) or [3, 5])
+    ax.set_xlabel("Cantidad de workers")
+    ax.set_ylabel("Speedup (vs. 3 workers)")
+    ax.legend(fontsize=6.5, frameon=False, loc="lower left")
+    fig.tight_layout(pad=0.4)
+    fig.savefig(FIG / "speedup_vs_workers.pdf")
+    plt.close(fig)
+
+
+# ── Figure 4: communication pressure (throughput vs. model size) ────────────
+def fig_communication_pressure():
+    rows = _rows("summary_by_strategy.csv")
+    # Parameter counts per dense model (fixed by architecture, not in the CSV).
+    params = {"mlp_small": 101770, "mlp_medium": 669706, "mlp_large": 1863690}
+    by = {"all_reduce": [], "parameter_server": []}
+    for r in rows:
+        if not (r.get("label") or "").startswith("D_"):
+            continue
+        strat, model = r.get("strategy"), r.get("model")
+        if strat in by and model in params:
+            sps = _f(r.get("samples_per_sec"))
+            if sps is not None:
+                by[strat].append((params[model], sps))
+    if not any(by.values()):
+        raise RuntimeError("no D_* dense-model rows")
+    fig, ax = plt.subplots(figsize=(3.4, 2.3))
+    for strat, st in (("all_reduce", AR), ("parameter_server", PS)):
+        pts = sorted(by[strat])
+        if not pts:
+            continue
+        xs, ys = zip(*pts)
+        ax.plot(xs, ys, color=st["color"], ls=st["ls"], marker=st["marker"],
+                markersize=4, label=st["label"])
+    ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlim(-0.3, 2.3)
-    ax.set_xlabel("Tamaño de modelo (MLP)"); ax.set_ylabel("Throughput (samples/s, log)")
-    ax.legend(fontsize=6.5, frameon=False)
-    fig.tight_layout(); fig.savefig(FIG / "communication_pressure.pdf"); plt.close(fig)
+    # Widen x a touch beyond the extreme points so the trend past the crossover
+    # region reads clearly (the old figure clipped right at the largest model).
+    ax.set_xlim(8e4, 2.6e6)
+    ax.set_xlabel("Cantidad de parámetros del modelo (log)")
+    ax.set_ylabel("Throughput (muestras/s, log)")
+    ax.legend(fontsize=6.5, frameon=False, loc="upper right")
+    fig.tight_layout(pad=0.4)
+    fig.savefig(FIG / "communication_pressure.pdf")
+    plt.close(fig)
+
+
+# ── Figure 5: analytical communication volume per SGD step ───────────────────
+def fig_comm_volume_analytical():
+    P = 289630          # nielsen model parameters
+    BYTES = 4           # float32
+    S = 2               # PS servers
+    ws = list(range(2, 9))
+    # Ring All-Reduce: bandwidth-optimal, per-node traffic ~ constant in W.
+    ar = [2.0 * (w - 1) / w * P * BYTES / 1e6 for w in ws]
+    # Parameter Server: per-server ingress grows linearly with W (S servers).
+    ps = [2.0 * P * BYTES * w / S / 1e6 for w in ws]
+    fig, ax = plt.subplots(figsize=(3.4, 2.3))
+    ax.plot(ws, ar, color=AR["color"], ls=AR["ls"], marker=AR["marker"],
+            markersize=4, label="All-Reduce (por nodo)")
+    ax.plot(ws, ps, color=PS["color"], ls=PS["ls"], marker=PS["marker"],
+            markersize=4, label="Parameter Server (por servidor, S=2)")
+    ax.set_xticks(ws)
+    ax.set_xlabel("Cantidad de workers (W)")
+    ax.set_ylabel("Bytes comunicados por paso (MB)")
+    ax.legend(fontsize=6.3, frameon=False, loc="upper left")
+    fig.tight_layout(pad=0.4)
+    fig.savefig(FIG / "comm_volume_analytical.pdf")
+    plt.close(fig)
 
 
 def main():
     FIG.mkdir(exist_ok=True)
-    for fn in (fig_loss_vs_epoch, fig_throughput_vs_nodes,
-               fig_speedup_vs_nodes, fig_communication_pressure):
+    for fn in (fig_convergence_loss, fig_throughput_vs_workers,
+               fig_speedup_vs_workers, fig_communication_pressure,
+               fig_comm_volume_analytical):
         try:
             fn()
             print("ok:", fn.__name__)
