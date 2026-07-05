@@ -1,4 +1,5 @@
 mod framer;
+mod heartbeater;
 mod layer;
 mod recon;
 mod retryer;
@@ -7,6 +8,7 @@ mod timeouter;
 use std::time::Duration;
 
 pub use framer::Framer;
+pub use heartbeater::Hearbeater;
 pub use layer::TransportLayer;
 pub use recon::Recon;
 pub use retryer::Retryer;
