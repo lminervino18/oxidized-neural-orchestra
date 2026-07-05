@@ -93,6 +93,7 @@ pub enum Command<'a> {
 pub enum Msg<'a> {
     Control(Command<'a>),
     Data(Payload<'a>),
+    Heartbeat,
 }
 
 impl<'a> Msg<'a> {
@@ -141,6 +142,12 @@ impl<'a> Msg<'a> {
                 out.extend_from_slice(&header);
                 Some(data)
             }
+            Msg::Heartbeat => {
+                let header = (5 as Header).to_be_bytes();
+                out.extend_from_slice(&header);
+
+                None
+            }
         }
     }
 
@@ -174,6 +181,7 @@ impl<'a> Msg<'a> {
 
                 Ok(Msg::Data(payload))
             }
+            5 => Ok(Msg::Heartbeat),
             byte => Msg::invalid_kind_byte(byte),
         }
     }
