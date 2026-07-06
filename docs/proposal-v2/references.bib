@@ -1,0 +1,71 @@
+# all-reduce
+@inproceedings{10.1145/3146347.3146350,
+author = {Li, Zhenyu and Davis, James and Jarvis, Stephen},
+title = {An Efficient Task-based All-Reduce for Machine Learning Applications},
+year = {2017},
+isbn = {9781450351379},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3146347.3146350},
+doi = {10.1145/3146347.3146350},
+abstract = {All-Reduce is a collective-combine operation frequently utilised in synchronous parameter updates in parallel machine learning algorithms. The performance of this operation - and subsequently of the algorithm itself - is heavily dependent on its implementation, configuration and on the supporting hardware on which it is run. Given the pivotal role of all-reduce, a failure in any of these regards will significantly impact the resulting scientific output.In this research we explore the performance of alternative all-reduce algorithms in data-flow graphs and compare these to the commonly used reduce-broadcast approach. We present an architecture and interface for all-reduce in task-based frameworks, and a parallelization scheme for object-serialization and computation. We present a concrete, novel application of a butterfly all-reduce algorithm on the Apache Spark framework on a high-performance compute cluster, and demonstrate the effectiveness of the new butterfly algorithm with a logarithmic speed-up with respect to the vector length compared with the original reduce-broadcast method - a 9x speed-up is observed for vector lengths in the order of 108. This improvement is comprised of both algorithmic changes (65\%) and parallel-processing optimization (35\%).The effectiveness of the new butterfly all-reduce is demonstrated using real-world neural network applications with the Spark framework. For the model-update operation we observe significant speed-ups using the new butterfly algorithm compared with the original reduce-broadcast, for both smaller (Cifar and Mnist) and larger (ImageNet) datasets.},
+booktitle = {Proceedings of the Machine Learning on HPC Environments},
+articleno = {2},
+numpages = {8},
+keywords = {Apache Spark, Butterfly All-Reduce, Data-flow Frameworks, Synchronous Model Training},
+location = {Denver, CO, USA},
+series = {MLHPC'17}
+}
+
+# parameter server
+@inproceedings{10.5555/2685048.2685095,
+author = {Li, Mu and Andersen, David G. and Park, Jun Woo and Smola, Alexander J. and Ahmed, Amr and Josifovski, Vanja and Long, James and Shekita, Eugene J. and Su, Bor-Yiing},
+title = {Scaling distributed machine learning with the parameter server},
+year = {2014},
+isbn = {9781931971164},
+publisher = {USENIX Association},
+address = {USA},
+abstract = {We propose a parameter server framework for distributed machine learning problems. Both data and workloads are distributed over worker nodes, while the server nodes maintain globally shared parameters, represented as dense or sparse vectors and matrices. The framework manages asynchronous data communication between nodes, and supports flexible consistency models, elastic scalability, and continuous fault tolerance.To demonstrate the scalability of the proposed framework, we show experimental results on petabytes of real data with billions of examples and parameters on problems ranging from Sparse Logistic Regression to Latent Dirichlet Allocation and Distributed Sketching.},
+booktitle = {Proceedings of the 11th USENIX Conference on Operating Systems Design and Implementation},
+pages = {583–598},
+numpages = {16},
+location = {Broomfield, CO},
+series = {OSDI'14}
+}
+
+# strategy-switch
+@article{article,
+author = {Provatas, Nikodimos and Chalas, Iasonas and Konstantinou, Ioannis and Koziris, Nectarios},
+year = {2025},
+month = {01},
+pages = {1-1},
+title = {Strategy-Switch: From All-Reduce to Parameter Server for Faster Efficient Training},
+volume = {PP},
+journal = {IEEE Access},
+doi = {10.1109/ACCESS.2025.3528248}
+}
+
+# tensorflow
+@software{2021zndo4758419D,
+       author = {{Developers}, TensorFlow},
+        title = "{TensorFlow}",
+         year = 2021,
+        month = may,
+          eid = {10.5281/zenodo.4758419},
+          doi = {10.5281/zenodo.4758419},
+      version = {v2.5.0},
+    publisher = {Zenodo},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2021zndo...4758419D},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+
+# pytorch
+@misc{paszke2019pytorchimperativestylehighperformance,
+      title={PyTorch: An Imperative Style, High-Performance Deep Learning Library}, 
+      author={Adam Paszke and Sam Gross and Francisco Massa and Adam Lerer and James Bradbury and Gregory Chanan and Trevor Killeen and Zeming Lin and Natalia Gimelshein and Luca Antiga and Alban Desmaison and Andreas Köpf and Edward Yang and Zach DeVito and Martin Raison and Alykhan Tejani and Sasank Chilamkurthy and Benoit Steiner and Lu Fang and Junjie Bai and Soumith Chintala},
+      year={2019},
+      eprint={1912.01703},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/1912.01703}, 
+}
