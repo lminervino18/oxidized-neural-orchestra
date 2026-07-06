@@ -192,6 +192,7 @@ impl Connector {
     /// Both socket ends or an io error if occurred.
     async fn connect_io(&self, addr: &str) -> io::Result<(R, W)> {
         let stream = TcpStream::connect(addr).await?;
+        stream.set_keepalive();
         Ok(stream.into_split())
     }
 

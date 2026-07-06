@@ -8,7 +8,7 @@ mod timeouter;
 use std::time::Duration;
 
 pub use framer::Framer;
-pub use heartbeater::Hearbeater;
+pub use heartbeater::KeepAliver;
 pub use layer::TransportLayer;
 pub use recon::Recon;
 pub use retryer::Retryer;

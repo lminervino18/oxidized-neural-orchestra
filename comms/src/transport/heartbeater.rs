@@ -15,7 +15,7 @@ use tokio::{
 const BUFF_SIZE: usize = 1024; // TODO
 
 #[derive(Debug)]
-pub struct Hearbeater<'a, R, W, T>
+pub struct KeepAliver<'a, R, W, T>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -29,7 +29,7 @@ where
     _phantom: PhantomData<(R, W)>,
 }
 
-impl<R, W, T> Hearbeater<'_, R, W, T>
+impl<R, W, T> KeepAliver<'_, R, W, T>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
@@ -92,7 +92,8 @@ where
                 }
                 _ = sleep(heartbeat_timeout) => {
                     let now = Instant::now();
-                    if last_seen + heartbeat_timeout > now {
+
+                    if last_seen + heartbeat_timeout < now {
                         break; // TODO: comunicar el timeout para arriba y además avisarle al peer
                                // por las dudas de q sea un falso positivo, como estamos en local no
                                // debería haber delay tal como para que pase esto pero por las dudas
@@ -105,7 +106,7 @@ where
 }
 
 // TODO: unwraps, no sé si convienen las options o qué
-impl<R, W, T> TransportLayer<R, W> for Hearbeater<'_, R, W, T>
+impl<R, W, T> TransportLayer<R, W> for KeepAliver<'_, R, W, T>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
