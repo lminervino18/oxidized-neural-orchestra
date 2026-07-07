@@ -1,4 +1,5 @@
 mod framer;
+mod keep_aliver;
 mod layer;
 mod retryer;
 mod timeouter;
@@ -6,6 +7,7 @@ mod timeouter;
 use std::time::Duration;
 
 pub use framer::Framer;
+pub use keep_aliver::KeepAliver;
 pub use layer::TransportLayer;
 pub use retryer::Retryer;
 pub use timeouter::TimeOuter;
