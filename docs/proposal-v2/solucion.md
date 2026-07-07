@@ -1,14 +1,15 @@
 \newpage
 # Solución propuesta
-Se propone implementar un sistema distribuido de entrenamiento de modelos de aprendizaje profundo que sirva como base para la investigación de los trabajos previos, actuales y que surjan sobre esta temática. La idea es hacer el sistema tan *parametrizable* como sea posible, de modo de facilitar la posterior comparación entre estrategias de distribución y el desarrollo de mejoras que optimicen los tiempos de ejecución.
+Se propone implementar un sistema distribuido de entrenamiento de modelos de aprendizaje profundo que sirva como base para la investigación de los trabajos previos, actuales y que surjan sobre esta temática. La idea es que sea un sistema *parametrizable*, de modo de facilitar la posterior comparación entre estrategias de distribución y el desarrollo de mejoras que optimicen los tiempos de ejecución.
 
 Sobre esa base se implementarán los algoritmos que hoy sirven como punto de partida del área: *Parameter Server*, *All-Reduce* y *Strategy-Switch*. Estas implementaciones funcionarán como referencia para la comparación con las futuras mejoras que se estudien y desarrollen, tanto en la comunicación entre nodos como en la sincronización de las copias del modelo. En términos generales, el desarrollo del trabajo conlleva:
 
 1. Desarrollar un sistema distribuido de entrenamiento de modelos de aprendizaje profundo en Rust.
 2. Implementar y comparar los distintos algoritmos que se utilicen para la ejecución del entrenamiento distribuido, sobre el sistema implementado.
-3. Implementar una interfaz funcional externa para poder usar el sistema a desarrollar en Python.
-4. Simular la ejecución sobre distintas configuraciones del sistema distribuido, para así obtener datos que se puedan analizar, y obtener comparaciones de los distintos algoritmos que se implementen, usando Python.
-5. Confeccionar un informe detallado de la evolución del trabajo y los resultados obtenidos.
+3. Proveer una biblioteca en Python, construida sobre una interfaz de funciones externas (FFI), que permita configurar y utilizar el sistema desarrollado desde ese lenguaje.
+4. Desarrollar una interfaz interactiva de terminal (TUI) que permita configurar, lanzar y monitorear en vivo los entrenamientos distribuidos sobre el sistema.
+5. Simular la ejecución sobre distintas configuraciones del sistema distribuido, para así obtener datos que se puedan analizar, y obtener comparaciones de los distintos algoritmos que se implementen, usando Python.
+6. Confeccionar un informe detallado de la evolución del trabajo y los resultados obtenidos.
 
 ## Tecnologías
 Las tecnologías que van a ser utilizadas para el desarrollo de este proyecto son:
