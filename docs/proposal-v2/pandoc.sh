@@ -16,7 +16,6 @@ pandoc \
     plan_actividades.md \
     aportes_individuales.md \
     referencias.md \
-    anexos.md \
     --citeproc \
     --bibliography=references.bib \
     --number-sections \

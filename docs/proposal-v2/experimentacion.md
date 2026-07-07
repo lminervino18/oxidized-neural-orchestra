@@ -2,13 +2,8 @@
 # Experimentación, validación y control de calidad
 La validación del trabajo se apoya en dos frentes complementarios. Por un lado, el sistema desarrollado se prueba con tests unitarios y de integración, que verifican el comportamiento de sus componentes de forma aislada y en conjunto. Por otro lado, se simula la ejecución de los algoritmos implementados sobre el sistema distribuido base en distintas configuraciones de nodos, con el fin de obtener métricas que muestren el rendimiento del sistema según los parámetros que este use, para distintas combinaciones de máquinas con distintas capacidades de cómputo. Los resultados obtenidos de la comparación de los algoritmos se analizan y se vuelcan utilizando gráficos en Python. El conjunto de pruebas se entrega como resultado final del proyecto y como verificación del mismo.
 
-[COMPLETAR]
+**Pruebas y automatización.** El sistema se verifica con pruebas unitarias, que ejercitan cada componente de forma aislada, y con pruebas de integración, que validan la interacción entre nodos durante una ejecución distribuida. Estas pruebas se ejecutan de forma automatizada sobre el conjunto de herramientas del lenguaje y se versionan junto con el código, de modo que cada cambio pueda validarse antes de integrarse al trabajo.
 
-<!--
-Detallar el plan de validación (podrá ajustarse más adelante):
-- Herramientas de prueba a utilizar y grado de automatización.
-- Tipos de prueba (unitarias, de integración, de rendimiento/simulación) y qué valida cada una.
-- Métricas concretas de comparación entre algoritmos (tiempo de ejecución, convergencia, escalabilidad).
-- Roles para ejecutar (si son manuales) y/o especificar (si son automatizadas) las pruebas.
-- Entornos de simulación y su reproducibilidad (por ejemplo, mediante Docker).
--->
+**Métricas de comparación.** Para comparar los algoritmos implementados se consideran tres métricas principales: el tiempo total de ejecución del entrenamiento, la convergencia de la optimización, seguida a través de la evolución de la función de costo y de la exactitud alcanzada, y la escalabilidad, entendida como la variación del rendimiento a medida que cambia la cantidad de nodos que participan. A estas se suma el comportamiento del sistema en configuraciones heterogéneas, en las que los nodos disponen de capacidades de cómputo distintas.
+
+**Entornos y reproducibilidad.** Las simulaciones se ejecutan sobre entornos contenedizados con Docker, lo que permite reproducir de forma controlada distintas configuraciones de nodos y limitar los recursos de cómputo asignados a cada uno para emular máquinas heterogéneas. Los resultados obtenidos se recopilan, analizan y grafican con Python, y se documentan junto con la configuración que los generó para que las comparaciones sean reproducibles.
