@@ -21,11 +21,9 @@ herramientas concretas que el equipo ya usa o va a usar):
 -->
 
 ## Riesgos iniciales
-[COMPLETAR]
+Se identifican los siguientes riesgos iniciales, junto con las medidas previstas para mitigarlos:
 
-<!--
-Listar los riesgos iniciales del proyecto (por ejemplo: complejidad de la implementación
-distribuida en Rust, disponibilidad de hardware para simulaciones representativas,
-dependencia de trabajos previos, estimación de tiempos), con una breve descripción de
-cada uno y, si corresponde, su mitigación.
--->
+- **Complejidad de la implementación distribuida en Rust.** La coordinación entre nodos y el manejo de la concurrencia son intrínsecamente complejos y propensos a errores sutiles, como bloqueos o condiciones de carrera. Como mitigación, el desarrollo es incremental y se apoya en las garantías de *fearless-concurrency* del lenguaje y en una cobertura de pruebas unitarias y de integración que acompaña cada avance.
+- **Disponibilidad de hardware para simulaciones representativas.** Reproducir un entorno distribuido realista requiere de múltiples máquinas, algo no siempre disponible. Para mitigarlo, las simulaciones se ejecutan sobre contenedores Docker con límites de recursos por nodo, lo que permite emular configuraciones heterogéneas de forma controlada; se asume que los resultados así obtenidos son una aproximación y no un reemplazo exacto de un despliegue sobre máquinas físicas separadas.
+- **Dependencia de trabajos previos.** Parte del trabajo se apoya en algoritmos y resultados publicados, como *Strategy-Switch*, cuya interpretación e implementación pueden diferir de lo documentado. La mitigación consiste en implementar versiones de referencia de los algoritmos base y validarlas antes de construir mejoras sobre ellas.
+- **Amplitud del alcance y estimación de tiempos.** El trabajo abarca tanto el sistema base como varias líneas de optimización (comunicación, sincronización y carga en configuraciones heterogéneas), lo que dificulta la estimación del esfuerzo. Para mitigarlo, se prioriza primero un sistema base funcional junto con las implementaciones de referencia, y las optimizaciones se abordan de forma incremental según el avance, con reuniones semanales de seguimiento para reajustar prioridades.
