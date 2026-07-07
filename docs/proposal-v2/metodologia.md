@@ -8,17 +8,13 @@ En cuanto a los roles, el Ing. Ricardo A. Veiga cumple la función de tutor y el
 ## Proceso de desarrollo
 El método de desarrollo es incremental: el trabajo se organiza en iteraciones con entregables intermedios y una cadencia de prácticas de seguimiento y mejora continua. Las tareas de desarrollo, prueba y despliegue que se puedan automatizar estarán automatizadas, y todo el código y los artefactos que requieran versionarse se gestionan con una herramienta de control de versiones.
 
-<!--
-[COMPLETAR] Para cumplir las pautas del reglamento de la asignatura, detallar (con las
-herramientas concretas que el equipo ya usa o va a usar):
-- Herramienta de versionado de código y de artefactos (por ejemplo, Git/GitHub).
-- Automatización de desarrollo, prueba y despliegue (CI, Docker).
-- Herramienta de calidad profesional para gestionar el proceso, seguimiento de tickets y bugs.
-- Artefactos de gestión: alcance, riesgos, métricas de calidad del producto, criticidad de
-  bugs, indicadores de tiempos y costos, minutas.
-- Criterios de aceptación de entregas y pruebas de aceptación de las funcionalidades.
-- Indicadores de calidad de proceso definidos y cómo se miden.
--->
+El código y los artefactos que requieren versionarse se gestionan con **Git**, sobre un repositorio alojado en **GitHub**. El trabajo se organiza en ramas por funcionalidad que se integran mediante *pull requests*, y los mensajes de los *commits* siguen la convención de *Conventional Commits*, lo que mantiene un historial legible y trazable de la evolución del proyecto.
+
+El seguimiento del proceso, la gestión de tickets y el registro de errores se realizan con las *issues* del repositorio en GitHub, categorizadas mediante etiquetas por tipo (*bug*, *enhancement*, *documentation*) y por componente del sistema (por ejemplo, *parameter-server*, *comms*, *worker*, *ffi*, *tui*). Cada *pull request* se somete a revisión de código por parte de otro integrante antes de integrarse; esta revisión, junto con la ejecución exitosa de las pruebas asociadas, funciona como criterio de aceptación de cada entrega. Como artefactos de gestión se llevan minutas de las reuniones periódicas y se mantiene el registro del alcance y de los riesgos del proyecto.
+
+En cuanto a la automatización, la construcción y las pruebas del sistema se ejecutan con las herramientas del ecosistema de Rust, y los entornos de simulación se levantan de forma automatizada mediante scripts sobre **Docker**, lo que hace reproducible el despliegue de las distintas configuraciones de nodos.
+
+Algunas cuestiones metodológicas todavía no están definidas a esta altura, como la incorporación de un flujo de integración continua que ejecute automáticamente las pruebas ante cada cambio; su adopción dependerá de la evolución del proyecto y de las necesidades que surjan durante el desarrollo.
 
 ## Riesgos iniciales
 Se identifican los siguientes riesgos iniciales, junto con las medidas previstas para mitigarlos:

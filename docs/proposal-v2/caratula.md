@@ -7,7 +7,7 @@ lang: es
 
 \title{     \textbf{Propuesta de Trabajo Profesional \\ de Ingeniería en Informática}\\[2.5ex]
 \textit{Oxidized Neural Orchestra} \\[1.2ex]
-\normalsize{\textit{[COMPLETAR: descripción breve del proyecto, no más de 25 palabras]}} }
+\normalsize{\textit{Sistema distribuido de entrenamiento de modelos de aprendizaje profundo en Rust para implementar y comparar estrategias de distribución como Parameter Server y All-Reduce.}} }
 
 \author{
              \textbf{Tutor:}  Ing. Ricardo Andrés Veiga \\[2.5ex]
