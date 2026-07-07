@@ -1,6 +1,6 @@
 \newpage
 # Acta de Acuerdo y aval del director
-En la Ciudad Autónoma de Buenos Aires, al día veinticinco del mes de noviembre del año dos mil veinticinco, se reúnen el profesor Ing. Ricardo A. Veiga y el profesor Dr. Ing. J. Ignacio Alvarez-Hamelin con los estudiantes de la carrera de Ingeniería en Informática el Sr. Alejo Ordoñez (Padrón 108397, DNI [COMPLETAR]), el Sr. Lorenzo Minervino (Padrón 107863, DNI [COMPLETAR]) y el Sr. Marcos Bianchi Fernández (Padrón 108921, DNI [COMPLETAR]). El objetivo de la reunión es acordar el tema de Trabajo Profesional de Ingeniería en Informática.
+En la Ciudad Autónoma de Buenos Aires, al día veinticinco del mes de noviembre del año dos mil veinticinco, se reúnen el profesor Ing. Ricardo A. Veiga y el profesor Dr. Ing. J. Ignacio Alvarez-Hamelin con los estudiantes de la carrera de Ingeniería en Informática el Sr. Alejo Ordoñez (Padrón 108397, DNI [COMPLETAR]), el Sr. Lorenzo Minervino (Padrón 107863, DNI [COMPLETAR]) y el Sr. Marcos Bianchi Fernández (Padrón 108921, DNI 43874791). El objetivo de la reunión es acordar el tema de Trabajo Profesional de Ingeniería en Informática.
 
 Luego de haber conversado sobre las áreas de interés de los estudiantes, se acuerda establecer como Tema de Trabajo Profesional en Ingeniería en Informática: "Oxidized Neural Orchestra".
 

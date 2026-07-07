@@ -6,7 +6,11 @@ El desarrollo del trabajo se plantea como una responsabilidad compartida: las et
 
 **Lorenzo Minervino (Padrón 107863).** [COMPLETAR: foco principal del integrante.]
 
-**Marcos Bianchi Fernández (Padrón 108921).** [COMPLETAR: foco principal del integrante.]
+**Marcos Bianchi Fernández (Padrón 108921).**
+
+* Algoritmos de entrenamiento distribuido.
+* Módulo de Comunicaciones.
+* Módulo del Servidor.
 
 <!--
 Completar el foco de cada integrante eligiendo entre las áreas del Plan de actividades,
