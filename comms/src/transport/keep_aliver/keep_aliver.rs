@@ -1,15 +1,21 @@
-use crate::{TransportLayer, protocol::Msg};
 use std::{
     io,
     marker::PhantomData,
     mem,
     time::{Duration, Instant},
 };
+
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::mpsc::{self, Receiver, Sender},
     task::{self, JoinHandle},
     time::sleep,
+};
+
+use crate::{
+    TransportLayer,
+    codec::{Sink, Source},
+    protocol::Msg,
 };
 
 const BUFF_SIZE: usize = 1024; // TODO
@@ -19,13 +25,14 @@ pub struct KeepAliver<'a, R, W, T>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
-    T: TransportLayer<R, W>,
 {
     hearbeat_delay: Duration,
     messages_tx: Option<Sender<&'a Msg<'a>>>,
     messages_rx: Option<Receiver<Msg<'a>>>,
     handle: Option<JoinHandle<()>>,
-    inner: Option<T>,
+    // o sea así ahora es la capa más baja
+    rx: Source<R>,
+    tx: Sink<W>,
     _phantom: PhantomData<(R, W)>,
 }
 
@@ -33,20 +40,20 @@ impl<R, W, T> KeepAliver<'_, R, W, T>
 where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
-    T: TransportLayer<R, W> + 'static,
 {
-    pub fn new(hearbeat_delay: Duration, inner: T) -> Self {
+    pub fn new(hearbeat_delay: Duration, reader: R, writer: W) -> Self {
         Self {
             hearbeat_delay,
             messages_tx: None,
             messages_rx: None,
             handle: None,
-            inner: Some(inner),
+            rx: Source::new(reader),
+            tx: Sink::new(writer),
             _phantom: PhantomData,
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn start(mut self) {
         let (incoming_tx, incoming_rx) = mpsc::channel(BUFF_SIZE);
         let (outgoing_tx, outgoing_rx) = mpsc::channel(BUFF_SIZE);
 
