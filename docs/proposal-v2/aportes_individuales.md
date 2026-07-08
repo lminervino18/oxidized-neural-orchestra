@@ -19,12 +19,3 @@ El desarrollo del trabajo se plantea como una responsabilidad compartida: las et
 * Algoritmos de entrenamiento distribuido.
 * Módulo de Comunicaciones.
 * Módulo del Servidor.
-
-<!--
-Completar el foco de cada integrante eligiendo entre las áreas del Plan de actividades,
-por ejemplo: sistema distribuido base en Rust; implementación de Parameter Server,
-All-Reduce y Strategy-Switch; optimizaciones de comunicación entre nodos; optimizaciones
-de sincronización de las copias del modelo; interfaz de funciones externas (FFI) en Python
-y la TUI; simulación en configuraciones heterogéneas y análisis de resultados en Python;
-documentación e informe final.
--->
