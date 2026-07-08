@@ -1,7 +1,7 @@
 \newpage
 # Metodología
 ## Gestión y roles
-Se establece un compromiso por parte de cada estudiante para dedicar un total de 500 horas al desarrollo del trabajo profesional. Esto representa, en promedio, 15 horas semanales por persona a la ejecución de las tareas asignadas. Este compromiso se mantendrá a lo largo de 32 semanas (dos cuatrimestres). Además, se tiene previsto llevar a cabo encuentros periódicos en formato virtual entre los miembros del equipo y los tutores, cada semana. El propósito de estas reuniones es informar el avance y desarrollo del proyecto en curso. Asimismo, se abordarán aspectos como la definición de prioridades en las labores a realizar y la planificación requerida para la próxima etapa del proceso.
+Se establece un compromiso por parte de cada estudiante para dedicar un total de 500 horas al desarrollo del trabajo profesional. Esto representa, en promedio, unas 16 horas semanales por persona a la ejecución de las tareas asignadas. Este compromiso se mantendrá a lo largo de 32 semanas (dos cuatrimestres). Además, se tiene previsto llevar a cabo encuentros periódicos en formato virtual entre los miembros del equipo y los tutores, cada semana. El propósito de estas reuniones es informar el avance y desarrollo del proyecto en curso. Asimismo, se abordarán aspectos como la definición de prioridades en las labores a realizar y la planificación requerida para la próxima etapa del proceso.
 
 En cuanto a los roles, el Ing. Ricardo A. Veiga cumple la función de tutor y el Dr. Ing. J. Ignacio Alvarez-Hamelin la de co-tutor, orientando el desarrollo y revisando periódicamente el avance. Los tres estudiantes realizan todas las etapas de análisis, implementación y pruebas del proyecto.
 
@@ -10,11 +10,21 @@ El método de desarrollo es incremental: el trabajo se organiza en iteraciones c
 
 El código y los artefactos que requieren versionarse se gestionan con **Git**, sobre un repositorio alojado en **GitHub**. El trabajo se organiza en ramas por funcionalidad que se integran mediante *pull requests*, y los mensajes de los *commits* siguen la convención de *Conventional Commits*, lo que mantiene un historial legible y trazable de la evolución del proyecto.
 
-El seguimiento del proceso, la gestión de tickets y el registro de errores se realizan con las *issues* del repositorio en GitHub, categorizadas mediante etiquetas por tipo (*bug*, *enhancement*, *documentation*) y por componente del sistema (por ejemplo, *parameter-server*, *comms*, *worker*, *ffi*, *tui*). Cada *pull request* se somete a revisión de código por parte de otro integrante antes de integrarse; esta revisión, junto con la ejecución exitosa de las pruebas asociadas, funciona como criterio de aceptación de cada entrega. Como artefactos de gestión se llevan minutas de las reuniones periódicas y se mantiene el registro del alcance y de los riesgos del proyecto.
+El seguimiento del proceso, la gestión de tickets y el registro de errores se realizan con las *issues* del repositorio en GitHub, categorizadas mediante etiquetas por tipo (*bug*, *enhancement*, *documentation*) y por componente del sistema (por ejemplo, *parameter-server*, *comms*, *worker*, *ffi*, *tui*).
 
 En cuanto a la automatización, la construcción y las pruebas del sistema se ejecutan con las herramientas del ecosistema de Rust, y los entornos de simulación se levantan de forma automatizada mediante scripts sobre **Docker**, lo que hace reproducible el despliegue de las distintas configuraciones de nodos.
 
 Algunas cuestiones metodológicas todavía no están definidas a esta altura, como la incorporación de un flujo de integración continua que ejecute automáticamente las pruebas ante cada cambio; su adopción dependerá de la evolución del proyecto y de las necesidades que surjan durante el desarrollo.
+
+## Criterios de aceptación
+Cada *pull request* se somete a revisión de código por parte de otro integrante antes de integrarse. Una entrega se considera aceptada cuando se cumplen, de forma conjunta, tres condiciones: la revisión de código fue aprobada, la totalidad de las pruebas automatizadas asociadas se ejecuta con éxito, y la funcionalidad requerida queda demostrada mediante una prueba de aceptación. Para las funcionalidades que involucran la coordinación entre nodos, esa prueba de aceptación consiste en una ejecución completa de entrenamiento distribuido sobre el entorno simulado en Docker, verificando que la convergencia obtenida sea consistente con la del entrenamiento secuencial equivalente.
+
+## Artefactos de gestión e indicadores
+Como artefactos de gestión se llevan minutas de las reuniones periódicas, el registro del alcance y el registro de riesgos del proyecto, este último revisado en cada reunión de seguimiento. Los errores registrados como *issues* se clasifican además por criticidad, distinguiendo aquellos que impiden el avance del trabajo de los que admiten una corrección diferida, lo que permite priorizar su tratamiento dentro de cada iteración.
+
+Sobre la calidad del proceso se definen y miden los siguientes indicadores: el tiempo transcurrido entre la apertura y el cierre de una *issue*, la proporción de *pull requests* que requieren correcciones tras la revisión de código, y el desvío entre las horas planificadas en el Plan de actividades y las horas efectivamente dedicadas a cada tarea. Este último funciona a la vez como indicador de tiempos; dado que el trabajo se desarrolla sobre hardware propio y con herramientas de código abierto, el costo del proyecto se reduce a las horas-persona invertidas.
+
+Sobre la calidad del producto se consideran la cobertura de las pruebas automatizadas, la proporción de pruebas exitosas sobre el total, y la cantidad de advertencias reportadas por las herramientas de análisis estático del lenguaje. Estos indicadores se relevan de forma periódica y se discuten en las reuniones de seguimiento, de modo que su evolución sirva para reajustar las prioridades del trabajo.
 
 ## Riesgos iniciales
 Se identifican los siguientes riesgos iniciales, junto con las medidas previstas para mitigarlos:
