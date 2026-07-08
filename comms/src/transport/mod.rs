@@ -1,15 +1,12 @@
 mod framer;
 mod keep_aliver;
 mod layer;
-mod retryer;
 mod timeouter;
 
 use std::time::Duration;
 
 pub use framer::Framer;
-pub use keep_aliver::KeepAliver;
 pub use layer::TransportLayer;
-pub use retryer::Retryer;
 pub use timeouter::TimeOuter;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -17,7 +14,7 @@ use tokio::{
 };
 
 /// The reliable transport.
-pub type Rtp<R, W> = Retryer<TimeOuter<Framer<R, W>>>;
+pub type Rtp<R, W> = TimeOuter<Framer<R, W>>;
 
 /// The simple transport;
 pub type Stp<R, W> = Framer<R, W>;
@@ -50,8 +47,7 @@ where
     W: AsyncWrite + Unpin + Send,
 {
     let framer = Framer::new(reader, writer);
-    let timeouter = TimeOuter::new(timeout, framer);
-    Retryer::new(base_retry_dur, retry_coef, retries, timeouter)
+    TimeOuter::new(timeout, framer)
 }
 
 /// Builds an uninitialized simple transport.
