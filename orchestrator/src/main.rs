@@ -203,8 +203,8 @@ fn init_logging() {
 fn main() -> io::Result<()> {
     init_logging();
 
-    const WORKERS: usize = 2;
-    const SERVERS: usize = 2;
+    const WORKERS: usize = 4;
+    const SERVERS: usize = 0;
     const NODES: usize = WORKERS + SERVERS;
     const RELEASE: bool = false;
 
@@ -214,17 +214,17 @@ fn main() -> io::Result<()> {
     let addrs = build_addresses(NODES);
 
     #[allow(unused_variables)]
-    let parameter_server_config = AlgorithmConfig::ParameterServer {
+    let parameter_server_config = || AlgorithmConfig::ParameterServer {
         nservers: NonZeroUsize::new(SERVERS).unwrap(),
         synchronizer: SynchronizerConfig::NonBlocking,
         store: StoreConfig::Wild,
     };
 
     #[allow(unused_variables)]
-    let all_reduce_config = AlgorithmConfig::AllReduce;
+    let all_reduce_config = || AlgorithmConfig::AllReduce;
 
     #[allow(unused_variables)]
-    let strategy_switch_config = AlgorithmConfig::StrategySwitch {
+    let strategy_switch_config = || AlgorithmConfig::StrategySwitch {
         nservers: NonZeroUsize::new(SERVERS).unwrap(),
         synchronizer: SynchronizerConfig::Barrier,
         store: StoreConfig::Blocking,
@@ -234,7 +234,7 @@ fn main() -> io::Result<()> {
 
     let training_config = TrainingConfig {
         addrs,
-        algorithm: parameter_server_config,
+        algorithm: all_reduce_config(),
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
@@ -246,7 +246,7 @@ fn main() -> io::Result<()> {
         loss_fn: LossFnConfig::CrossEntropy,
         batch_size: NonZeroUsize::new(4).unwrap(),
         max_epochs: NonZeroUsize::new(1000).unwrap(),
-        offline_epochs: 1,
+        offline_epochs: 4,
         seed: Some(42),
         early_stopping: None,
     };
