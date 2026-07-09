@@ -158,9 +158,8 @@ impl ProgressReporter {
             done,
             handle,
             is_tty,
-            worker_epochs,
-            last_loss,
             max_epochs,
+            loss_history,
             ..
         } = self;
 
@@ -172,22 +171,20 @@ impl ProgressReporter {
 
         if is_tty {
             let mark = if success { "✓" } else { "✗" };
-            let epoch = if success {
-                max_epochs
-            } else {
-                worker_epochs.iter().copied().max().unwrap_or_default()
-            };
+            let epoch = loss_history.len();
 
-            print!(
-                "\x1b[2A\r  {} [{}] {}/{}\n  avg_loss={}\n\n",
-                mark,
-                "█".repeat(BAR_WIDTH),
-                epoch,
-                max_epochs,
-                fmt_loss(avg_loss(&last_loss)),
-            );
+            if let Some(&last_loss) = loss_history.last() {
+                print!(
+                    "\x1b[2A\r  {} [{}] {}/{}\n  avg_loss={}\n\n",
+                    mark,
+                    "█".repeat(BAR_WIDTH),
+                    epoch,
+                    max_epochs,
+                    fmt_loss(last_loss),
+                );
 
-            let _ = io::stdout().flush();
+                let _ = io::stdout().flush();
+            }
         }
     }
 }
