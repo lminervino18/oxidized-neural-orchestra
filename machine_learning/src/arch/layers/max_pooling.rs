@@ -25,7 +25,6 @@ pub struct MaxPooling {
 impl MaxPooling {
     pub fn new(filter_size: usize, stride: usize, padding: usize) -> Self {
         let real_input_dim = (0, 0);
-
         let zeros4 = Array4::zeros((1, 1, 1, 1));
         let max_indices = Array4::from_elem((1, 1, 1, 1), (0, 0));
 
@@ -36,7 +35,7 @@ impl MaxPooling {
             real_input_dim,
             effective_input: zeros4.clone(),
             output: zeros4.clone(),
-            delta_out: zeros4.clone(),
+            delta_out: zeros4,
             max_indices,
         }
     }
@@ -45,7 +44,7 @@ impl MaxPooling {
         0
     }
 
-    pub fn forward(&mut self, x: ArrayView4<f32>) -> Result<ArrayView4<'_, f32>> {
+    pub fn forward(&mut self, input: ArrayView4<f32>) -> Result<ArrayView4<'_, f32>> {
         let Self {
             filter_size,
             stride,
@@ -57,33 +56,33 @@ impl MaxPooling {
             ..
         } = *self;
 
-        let (batch_size, filters, input_height, input_width) = x.dim();
-        *real_input_dim = (input_height, input_width);
+        let (batch_size, filters, input_h, input_w) = input.dim();
+        *real_input_dim = (input_h, input_w);
 
-        let output_height = (input_height + 2 * padding - filter_size) / stride + 1;
-        let output_width = (input_width + 2 * padding - filter_size) / stride + 1;
+        let output_h = (input_h + 2 * padding - filter_size) / stride + 1;
+        let output_width = (input_w + 2 * padding - filter_size) / stride + 1;
 
-        let effective_height = (output_height - 1) * stride + filter_size;
-        let effective_width = (output_width - 1) * stride + filter_size;
+        let effective_h = (output_h - 1) * stride + filter_size;
+        let effective_w = (output_width - 1) * stride + filter_size;
 
-        effective_input.reshape_inplace((x.dim().0, x.dim().1, effective_height, effective_width));
+        effective_input.reshape_inplace((input.dim().0, input.dim().1, effective_h, effective_w));
         effective_input.fill(0.);
 
         // dropped elements could just be padding
-        let copy_height = cmp::min(input_height, effective_height - padding);
-        let copy_width = cmp::min(input_width, effective_width - padding);
+        let copy_h = cmp::min(input_h, effective_h - padding);
+        let copy_w = cmp::min(input_w, effective_w - padding);
 
         let mut effective_input_view = effective_input.slice_mut(s![
             ..,
             ..,
-            padding..padding + copy_height,
-            padding..padding + copy_width,
+            padding..padding + copy_h,
+            padding..padding + copy_w,
         ]);
-        let input_view = &x.slice(s![.., .., ..copy_height, ..copy_width]);
+        let input_view = &input.slice(s![.., .., ..copy_h, ..copy_w]);
         effective_input_view.assign(input_view);
 
-        output.reshape_inplace((batch_size, filters, output_height, output_width));
-        max_indices.reshape_inplace((batch_size, filters, output_height, output_width));
+        output.reshape_inplace((batch_size, filters, output_h, output_width));
+        max_indices.reshape_inplace((batch_size, filters, output_h, output_width));
 
         for b in 0..batch_size {
             let input_b = effective_input.index_axis(Axis(0), b);
@@ -95,7 +94,7 @@ impl MaxPooling {
                 let mut output_bf = output_b.index_axis_mut(Axis(0), f);
                 let mut max_indices_bf = max_indices_b.index_axis_mut(Axis(0), f);
 
-                for h in 0..output_height {
+                for h in 0..output_h {
                     for w in 0..output_width {
                         let chunk_origin = (h * stride, w * stride);
 
@@ -123,7 +122,7 @@ impl MaxPooling {
         Ok(output.view())
     }
 
-    pub fn backward(&mut self, d_in: ArrayViewMut4<f32>) -> Result<ArrayViewMut4<'_, f32>> {
+    pub fn backward(&mut self, delta_in: ArrayViewMut4<f32>) -> Result<ArrayViewMut4<'_, f32>> {
         let Self {
             padding,
             real_input_dim,
@@ -132,14 +131,16 @@ impl MaxPooling {
             ..
         } = *self;
 
-        let (batches, in_channels, _, _) = d_in.dim();
-        delta_out.reshape_inplace((batches, in_channels, real_input_dim.0, real_input_dim.1));
+        let (batch_size, in_channels, _, _) = delta_in.dim();
+
+        delta_out.reshape_inplace((batch_size, in_channels, real_input_dim.0, real_input_dim.1));
         delta_out.fill(0.);
 
-        for b in 0..batches {
+        for b in 0..batch_size {
             for c in 0..in_channels {
-                let d_bc = d_in.slice(s![b, c, .., ..]);
+                let d_bc = delta_in.slice(s![b, c, .., ..]);
                 let max_indices_bc = max_indices.slice(s![b, c, .., ..]);
+
                 azip!((&d in &d_bc, &idx in &max_indices_bc) {
                     if let (Some(row), Some(col)) =
                         (idx.0.checked_sub(padding), idx.1.checked_sub(padding))
@@ -300,10 +301,7 @@ mod tests {
         max_pooling.forward(input.view()).unwrap();
 
         // upstream delta: distinct per channel so mixing would be visible.
-        let mut delta_in = array![[
-            [[1., 2.], [3., 4.]],
-            [[10., 20.], [30., 40.]]
-        ]];
+        let mut delta_in = array![[[[1., 2.], [3., 4.]], [[10., 20.], [30., 40.]]]];
 
         let output = max_pooling.backward(delta_in.view_mut()).unwrap();
 
