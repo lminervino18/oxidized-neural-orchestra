@@ -60,10 +60,10 @@ impl MaxPooling {
         *real_input_dim = (input_h, input_w);
 
         let output_h = (input_h + 2 * padding - filter_size) / stride + 1;
-        let output_width = (input_w + 2 * padding - filter_size) / stride + 1;
+        let output_w = (input_w + 2 * padding - filter_size) / stride + 1;
 
         let effective_h = (output_h - 1) * stride + filter_size;
-        let effective_w = (output_width - 1) * stride + filter_size;
+        let effective_w = (output_w - 1) * stride + filter_size;
 
         effective_input.reshape_inplace((input.dim().0, input.dim().1, effective_h, effective_w));
         effective_input.fill(0.);
@@ -81,8 +81,8 @@ impl MaxPooling {
         let input_view = &input.slice(s![.., .., ..copy_h, ..copy_w]);
         effective_input_view.assign(input_view);
 
-        output.reshape_inplace((batch_size, filters, output_h, output_width));
-        max_indices.reshape_inplace((batch_size, filters, output_h, output_width));
+        output.reshape_inplace((batch_size, filters, output_h, output_w));
+        max_indices.reshape_inplace((batch_size, filters, output_h, output_w));
 
         for b in 0..batch_size {
             let input_b = effective_input.index_axis(Axis(0), b);
@@ -95,7 +95,7 @@ impl MaxPooling {
                 let mut max_indices_bf = max_indices_b.index_axis_mut(Axis(0), f);
 
                 for h in 0..output_h {
-                    for w in 0..output_width {
+                    for w in 0..output_w {
                         let chunk_origin = (h * stride, w * stride);
 
                         let input_chunk = input_bf.slice(s![
@@ -147,7 +147,7 @@ impl MaxPooling {
                         && row < real_input_dim.0
                         && col < real_input_dim.1
                     {
-                        delta_out[[b, c, row, col]] = d;
+                        delta_out[[b, c, row, col]] += d;
                     }
                 });
             }
