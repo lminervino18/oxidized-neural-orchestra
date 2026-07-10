@@ -16,6 +16,4 @@ pub use handles::{
     WorkerHandle,
 };
 pub use protocol::specs;
-pub use transport::{
-    NetRtp, Rtp, Stp, TransportLayer, build_reliable_transport, build_simple_transport,
-};
+pub use transport::{NetStp, Stp, TransportLayer, build_simple_transport};
