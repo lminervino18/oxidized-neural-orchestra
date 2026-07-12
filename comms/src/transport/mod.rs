@@ -27,6 +27,5 @@ where
     R: AsyncRead + Unpin + Send,
     W: AsyncWrite + Unpin + Send,
 {
-    let inner = Framer::new(reader, writer);
-    inner
+    Framer::new(reader, writer)
 }
