@@ -1,6 +1,6 @@
 use std::{mem, num::NonZeroUsize};
 
-use comms::{NetRtp, ParamServerHandle};
+use comms::{NetStp, ParamServerHandle};
 use log::info;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -13,7 +13,7 @@ use crate::{
 /// The main loop over the training events in the system.
 pub struct EventListener<'a> {
     cancel_rx: Receiver<()>,
-    server_handles: &'a mut Vec<ParamServerHandle<NetRtp>>,
+    server_handles: &'a mut Vec<ParamServerHandle<NetStp>>,
     req_txs: &'a mut [Sender<WorkerRequest>],
     event_rx: &'a mut Receiver<TrainingEvent>,
     event_tx: Sender<TrainingEvent>,
@@ -44,7 +44,7 @@ impl<'a> EventListener<'a> {
     pub fn new(
         cancel_rx: Receiver<()>,
         req_txs: &'a mut [Sender<WorkerRequest>],
-        server_handles: &'a mut Vec<ParamServerHandle<NetRtp>>,
+        server_handles: &'a mut Vec<ParamServerHandle<NetStp>>,
         loss_recorder: LossRecorder,
         convergence_tracker: Option<ConvergenceTracker>,
         event_rx: &'a mut Receiver<TrainingEvent>,

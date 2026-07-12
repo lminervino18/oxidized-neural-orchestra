@@ -8,7 +8,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs, io,
     path::PathBuf,
-    time::Duration,
 };
 
 use comms::{Connector, NodeHandle, TransportLayer, protocol::Entity};
@@ -57,19 +56,7 @@ pub fn train(model: ModelConfig, mut training: TrainingConfig) -> Result<Session
     let validator = Validator::new();
     validator.validate(&model, &training)?;
 
-    // TODO: De momento lo dejaría acá, no creo que sea muy importante poder
-    //       configurar esto, si tenemos tiempo y vemos que viene bien lo
-    //       podemos mover y que sea parte de un `CommsConfig`.
-    let transport_factory = |rx, tx| {
-        comms::build_reliable_transport(
-            rx,
-            tx,
-            Duration::from_secs(5),
-            Duration::from_secs(2),
-            2,
-            4,
-        )
-    };
+    let transport_factory = comms::build_simple_transport;
 
     let id = Uuid::nil();
     let mut connector = Connector::new(id, transport_factory);
