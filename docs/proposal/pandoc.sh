@@ -1,14 +1,24 @@
 pandoc \
     caratula.md \
     acuerdo.md \
+    lugar.md \
     resumen.md \
-    situacion.md \
-    objetivos.md \
-    tecnologias.md \
-    planificacion.md \
+    palabras_clave.md \
+    abstract.md \
+    keywords.md \
+    introduccion.md \
+    estado_del_arte.md \
+    problema.md \
+    solucion.md \
+    impacto.md \
+    metodologia.md \
+    experimentacion.md \
+    plan_actividades.md \
+    aportes_individuales.md \
     referencias.md \
+    anexos.md \
     --citeproc \
     --bibliography=references.bib \
     --number-sections \
-    --csl=ieee.csl \
+    --csl=apa-6th-edition.csl \
     -o propuesta.pdf
