@@ -1,5 +1,7 @@
 use std::{borrow::Cow, io};
 
+use uuid::Uuid;
+
 use super::DatasetSrc;
 use crate::{
     protocol::{Command, Msg, Payload},
@@ -14,6 +16,7 @@ use crate::{
 
 /// The handle for communicating with an `Orchestrator`.
 pub struct OrchHandle<T: TransportLayer> {
+    id: Uuid,
     transport: T,
 }
 
@@ -49,12 +52,21 @@ where
     /// Creates a new `OrchHandle`.
     ///
     /// # Args
+    /// * `id` - The id of the orchestrator.
     /// * `transport` - The transport layer of the communication.
     ///
     /// # Returns
     /// A new `OrchHandle` instance.
-    pub fn new(transport: T) -> Self {
-        Self { transport }
+    pub fn new(id: Uuid, transport: T) -> Self {
+        Self { id, transport }
+    }
+
+    /// The orchestrator's id.
+    ///
+    /// # Returns
+    /// The unique user id of the orchestrator.
+    pub fn id(&self) -> Uuid {
+        self.id
     }
 
     /// Pushes the latest parameters to the orchestrator.

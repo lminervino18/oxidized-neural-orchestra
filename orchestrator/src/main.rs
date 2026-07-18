@@ -1,5 +1,5 @@
 use std::{
-    env, io,
+    io,
     num::NonZeroUsize,
     process::{Command, ExitStatus},
     thread,
@@ -7,8 +7,9 @@ use std::{
 };
 
 use comms::floats::{Float01, FloatPositive};
-use log::info;
+use log::{debug, info, trace};
 use orchestrator::{CancelHandle, TrainingEvent, configs::*, train};
+use tracing_subscriber::{EnvFilter, fmt};
 
 const MODEL_OUTPUT_PATH: &str = "model.safetensors";
 const NODE_BASE_PORT: usize = 40_000;
@@ -51,38 +52,52 @@ fn build_addresses(nodes: usize) -> Vec<String> {
         .collect()
 }
 
-fn main() -> io::Result<()> {
-    unsafe { env::set_var("RUST_LOG", "debug") };
-    env_logger::init();
+fn nonzero(n: usize) -> NonZeroUsize {
+    NonZeroUsize::new(n).unwrap()
+}
 
-    const WORKERS: usize = 2;
-    const SERVERS: usize = 2;
-    const NODES: usize = WORKERS + SERVERS;
-    const RELEASE: bool = false;
+#[allow(unused)]
+fn make_nielsen_mnist_model() -> ModelConfig {
+    use ActFnConfig::*;
+    use LayerConfig::*;
+    use ParamGenConfig::*;
 
-    setup_docker(NODES, RELEASE)?;
+    let layers = vec![
+        Conv {
+            input_dim: (nonzero(1), nonzero(28), nonzero(28)),
+            kernel_dim: (nonzero(10), nonzero(1), nonzero(5)),
+            stride: nonzero(1),
+            padding: 0,
+            init: Kaiming,
+            act_fn: None,
+        },
+        // MaxPooling {
+        //     input_dim: (nonzero(10), nonzero(24), nonzero(24)),
+        //     filter_size: nonzero(2),
+        //     stride: nonzero(2),
+        //     padding: 0,
+        //     act_fn: None,
+        // },
+        Dense {
+            output_size: nonzero(100),
+            init: Kaiming,
+            act_fn: Some(ReLU {
+                slope: Float01::new(0.0).unwrap(),
+            }),
+        },
+        Dense {
+            output_size: nonzero(10),
+            init: Kaiming,
+            act_fn: Some(Softmax),
+        },
+    ];
 
-    thread::sleep(Duration::from_secs(4));
-    let addrs = build_addresses(NODES);
+    ModelConfig { layers }
+}
 
-    #[allow(unused_variables)]
-    let parameter_server_config = AlgorithmConfig::ParameterServer {
-        nservers: NonZeroUsize::new(SERVERS).unwrap(),
-        synchronizer: SynchronizerConfig::NonBlocking,
-        store: StoreConfig::Wild,
-    };
-
-    #[allow(unused_variables)]
-    let all_reduce_config = AlgorithmConfig::AllReduce;
-
-    #[allow(unused_variables)]
-    let strategy_switch_config = AlgorithmConfig::StrategySwitch {
-        nservers: NonZeroUsize::new(SERVERS).unwrap(),
-        synchronizer: SynchronizerConfig::Barrier,
-        store: StoreConfig::Blocking,
-    };
-
-    let model_config = ModelConfig {
+#[allow(unused)]
+fn make_conv_model() -> ModelConfig {
+    ModelConfig {
         layers: vec![
             LayerConfig::Conv {
                 input_dim: (
@@ -106,67 +121,132 @@ fn main() -> io::Result<()> {
                 act_fn: Some(ActFnConfig::Softmax),
             },
         ],
+    }
+}
+
+#[allow(unused)]
+fn make_mnist_dataset() -> DatasetConfig {
+    let x_size = nonzero(28 * 28);
+    let y_size = nonzero(10);
+
+    let src = DataSrc::Local {
+        samples_path: "datasets/mnist/mnist_train_samples.bin".into(),
+        labels_path: "datasets/mnist/mnist_train_labels.bin".into(),
     };
+
+    DatasetConfig {
+        src,
+        x_size,
+        y_size,
+    }
+}
+
+#[allow(unused)]
+fn make_conv_dataset() -> DatasetConfig {
+    DatasetConfig {
+        src: DataSrc::Inline {
+            samples: vec![
+                0.0, 1.0, 0.0, //
+                1.0, 1.0, 1.0, //
+                0.0, 1.0, 0.0, //
+                //
+                1.0, 0.0, 1.0, //
+                0.0, 0.0, 0.0, //
+                1.0, 0.0, 1.0, // plus sign
+                //
+                0.0, 0.0, 0.0, //
+                0.0, 1.0, 0.0, //
+                0.0, 0.0, 0.0, //
+                //
+                1.0, 1.0, 1.0, //
+                1.0, 0.0, 1.0, //
+                1.0, 1.0, 1.0, // dot
+                //
+                1.0, 0.0, 1.0, //
+                0.0, 1.0, 0.0, //
+                1.0, 0.0, 1.0, //
+                //
+                0.0, 1.0, 0.0, //
+                1.0, 0.0, 1.0, //
+                0.0, 1.0, 0.0, // cross
+                //
+                1.0, 1.0, 1.0, //
+                1.0, 0.0, 1.0, //
+                1.0, 1.0, 1.0, //
+                //
+                0.0, 0.0, 0.0, //
+                0.0, 1.0, 0.0, //
+                0.0, 0.0, 0.0, // box
+            ],
+            labels: vec![
+                1.0, 0.0, 0.0, 0.0, // plus sign
+                0.0, 1.0, 0.0, 0.0, // dot
+                0.0, 0.0, 1.0, 0.0, // cross
+                0.0, 0.0, 0.0, 1.0, // box
+            ],
+        },
+        x_size: NonZeroUsize::new(18).unwrap(),
+        y_size: NonZeroUsize::new(4).unwrap(),
+    }
+}
+
+/// Initializes stderr logging, defaulting to `debug` when `RUST_LOG` is unset.
+fn init_logging() {
+    fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
+}
+
+fn main() -> io::Result<()> {
+    init_logging();
+
+    const WORKERS: usize = 4;
+    const SERVERS: usize = 0;
+    const NODES: usize = WORKERS + SERVERS;
+    const RELEASE: bool = false;
+
+    setup_docker(NODES, RELEASE)?;
+
+    thread::sleep(Duration::from_secs(4));
+    let addrs = build_addresses(NODES);
+
+    #[allow(unused_variables)]
+    let parameter_server_config = || AlgorithmConfig::ParameterServer {
+        nservers: NonZeroUsize::new(SERVERS).unwrap(),
+        synchronizer: SynchronizerConfig::NonBlocking,
+        store: StoreConfig::Wild,
+    };
+
+    #[allow(unused_variables)]
+    let all_reduce_config = || AlgorithmConfig::AllReduce;
+
+    #[allow(unused_variables)]
+    let strategy_switch_config = || AlgorithmConfig::StrategySwitch {
+        nservers: NonZeroUsize::new(SERVERS).unwrap(),
+        synchronizer: SynchronizerConfig::Barrier,
+        store: StoreConfig::Blocking,
+    };
+
+    let model_config = make_conv_model();
 
     let training_config = TrainingConfig {
         addrs,
-        algorithm: parameter_server_config,
+        algorithm: all_reduce_config(),
         serializer: SerializerConfig::SparseCapable {
             r: Float01::new(0.9).unwrap(),
         },
-        dataset: DatasetConfig {
-            src: DataSrc::Inline {
-                samples: vec![
-                    0.0, 1.0, 0.0, //
-                    1.0, 1.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 0.0, 0.0, //
-                    1.0, 0.0, 1.0, // plus sign
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, //
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, // dot
-                    //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    //
-                    0.0, 1.0, 0.0, //
-                    1.0, 0.0, 1.0, //
-                    0.0, 1.0, 0.0, // cross
-                    //
-                    1.0, 1.0, 1.0, //
-                    1.0, 0.0, 1.0, //
-                    1.0, 1.0, 1.0, //
-                    //
-                    0.0, 0.0, 0.0, //
-                    0.0, 1.0, 0.0, //
-                    0.0, 0.0, 0.0, // box
-                ],
-                labels: vec![
-                    1.0, 0.0, 0.0, 0.0, // plus sign
-                    0.0, 1.0, 0.0, 0.0, // dot
-                    0.0, 0.0, 1.0, 0.0, // cross
-                    0.0, 0.0, 0.0, 1.0, // box
-                ],
-            },
-            x_size: NonZeroUsize::new(18).unwrap(),
-            y_size: NonZeroUsize::new(4).unwrap(),
-        },
+        dataset: make_conv_dataset(),
         optimizer: OptimizerConfig::GradientDescentWithMomentum {
-            lr: FloatPositive::new(1.0).unwrap(),
+            lr: FloatPositive::new(0.1).unwrap(),
             mu: Float01::new(0.95).unwrap(),
         },
-        loss_fn: LossFnConfig::Mse,
+        loss_fn: LossFnConfig::CrossEntropy,
         batch_size: NonZeroUsize::new(4).unwrap(),
-        max_epochs: NonZeroUsize::new(300).unwrap(),
-        offline_epochs: 0,
+        max_epochs: NonZeroUsize::new(1000).unwrap(),
+        offline_epochs: 4,
         seed: Some(42),
         early_stopping: None,
     };
@@ -179,13 +259,13 @@ fn main() -> io::Result<()> {
     loop {
         match rx.blocking_recv() {
             Some(TrainingEvent::PublishedLosses { losses, worker_id }) => {
-                info!("losses: {worker_id}: {losses:?}");
+                debug!("losses: {worker_id}: {losses:?}");
             }
             Some(TrainingEvent::TrainingComplete {
                 model: trained,
                 stop_reason: reason,
             }) => {
-                info!("params: {:?}", trained.params);
+                trace!("params: {:?}", trained.params);
                 info!("stop reason: {reason:?}");
 
                 trained

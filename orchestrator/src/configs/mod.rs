@@ -17,6 +17,7 @@ pub use training::{
     AlgorithmConfig, DataSrc, DatasetConfig, EarlyStoppingConfig, LossFnConfig, OptimizerConfig,
     SerializerConfig, StoreConfig, SynchronizerConfig, TrainingConfig,
 };
+use uuid::Uuid;
 pub use validator::Validator;
 
 use crate::sessions::{ConvergenceTracker, LossRecorder, SwitchTracker};
@@ -67,5 +68,5 @@ pub struct OrchAdapt {
     pub switch_tracking: Option<StrategySwitchTracking>,
     pub model_config: ModelConfig,
     pub algorithm_config: AlgorithmConfig,
-    pub layer_param_offsets: Vec<(usize, usize, usize)>,
+    pub layer_param_offsets: Vec<(Uuid, usize, usize)>,
 }

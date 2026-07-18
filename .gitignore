@@ -31,6 +31,10 @@ datasets/
 # Logs
 *.log
 temp/
+tmp/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
 
 # Python build artifacts
 *.egg-info/

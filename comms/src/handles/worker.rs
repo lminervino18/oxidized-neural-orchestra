@@ -2,6 +2,7 @@ use std::io;
 
 use rand::{SeedableRng, rngs::StdRng};
 use tokio::io::AsyncRead;
+use uuid::Uuid;
 
 use super::{Compressor, compressor::CompressedGrad};
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
 
 /// The handle for communicating with a `Worker`.
 pub struct WorkerHandle<T> {
-    id: usize,
+    id: Uuid,
     transport: T,
     grad: Vec<f32>,
     compressor: Compressor<StdRng>,
@@ -24,9 +25,8 @@ pub struct WorkerHandle<T> {
 /// A notified worker event.
 #[derive(Debug)]
 pub enum WorkerEvent<'a> {
-    Grad(&'a [f32]),
-    Loss(Vec<f64>),
-    RequestParams,
+    Grad { grad: &'a [f32], is_last: bool },
+    Loss { losses: Vec<f64> },
     Disconnect,
     Done,
     Upgraded,
@@ -36,18 +36,26 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// Creates a new `WorkerHandle`.
     ///
     /// # Args
-    /// * `id` - The id number of the worker.
+    /// * `id` - The id of the worker.
     /// * `transport` - The transport layer of the communication.
     ///
     /// # Returns
     /// A new `WorkerHandle` instance.
-    pub fn new(id: usize, transport: T) -> Self {
+    pub fn new(id: Uuid, transport: T) -> Self {
         Self {
             id,
             transport,
             grad: Vec::new(),
             compressor: Compressor::new(),
         }
+    }
+
+    /// The worker's id.
+    ///
+    /// # Returns
+    /// The unique user id of the worker.
+    pub fn id(&self) -> Uuid {
+        self.id
     }
 
     /// Enables the sparse gradient capability for this handle.
@@ -73,7 +81,7 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// A `WorkerEvent` message or an io error if occurred.
     pub async fn recv_event(&mut self) -> io::Result<WorkerEvent<'_>> {
         let response = match self.transport.recv().await? {
-            Msg::Data(Payload::DenseGrad(grad)) => {
+            Msg::Data(Payload::DenseGrad { grad, is_last }) => {
                 if let Some(additional) = grad.len().checked_sub(self.grad.capacity()) {
                     self.grad.reserve(additional);
                 }
@@ -86,11 +94,17 @@ impl<T: TransportLayer> WorkerHandle<T> {
                     *r = g.to_f32();
                 }
 
-                WorkerEvent::Grad(&self.grad)
+                WorkerEvent::Grad {
+                    grad: &self.grad,
+                    is_last,
+                }
             }
-            Msg::Data(Payload::SparseGrad(grad)) => {
-                sparse::grad_lift_into(&mut self.grad, grad).map_err(io::Error::other)?;
-                WorkerEvent::Grad(&self.grad)
+            Msg::Data(Payload::SparseGrad { sparse, is_last }) => {
+                sparse::grad_lift_into(&mut self.grad, sparse).map_err(io::Error::other)?;
+                WorkerEvent::Grad {
+                    grad: &self.grad,
+                    is_last,
+                }
             }
             Msg::Control(Command::Upgraded) => WorkerEvent::Upgraded,
             Msg::Control(Command::ReportLoss { losses }) => {
@@ -100,9 +114,10 @@ impl<T: TransportLayer> WorkerHandle<T> {
                     return Err(io::Error::other("loss diverged: NaN or Inf detected"));
                 }
 
-                WorkerEvent::Loss(losses.into_owned())
+                WorkerEvent::Loss {
+                    losses: losses.into_owned(),
+                }
             }
-            Msg::Control(Command::RequestParams) => WorkerEvent::RequestParams,
             Msg::Control(Command::Disconnect) => WorkerEvent::Disconnect,
             Msg::Control(Command::Done) => WorkerEvent::Done,
             msg => {
@@ -140,10 +155,16 @@ impl<T: TransportLayer> WorkerHandle<T> {
     /// Either `Some(threshold)` if sparse gradient was used or `None` if dense gradient was used.
     /// Or an io error if occurred.
     pub async fn push_grad(&mut self, residual: &[f32]) -> io::Result<Option<f32>> {
+        let is_last = false;
+
         let (payload, threshold) = match self.compressor.compress(residual) {
-            CompressedGrad::Dense { grad } => (Payload::DenseGrad(grad), None),
+            CompressedGrad::Dense { grad } => {
+                let msg = Payload::DenseGrad { grad, is_last };
+                (msg, None)
+            }
             CompressedGrad::Sparse { sparse, threshold } => {
-                (Payload::SparseGrad(sparse), Some(threshold))
+                let msg = Payload::SparseGrad { sparse, is_last };
+                (msg, Some(threshold))
             }
         };
 
@@ -236,7 +257,6 @@ impl<T: TransportLayer> WorkerHandle<T> {
         spec: ServerSpec,
         ranges: Vec<(usize, usize)>,
     ) -> io::Result<()> {
-        self.id = spec.id;
         let msg = Msg::Control(Command::Upgrade { spec, ranges });
         self.transport.send(&msg).await
     }

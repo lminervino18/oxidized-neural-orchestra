@@ -1,4 +1,4 @@
-use comms::{NetRtp, WorkerEvent, WorkerHandle};
+use comms::{NetStp, WorkerEvent, WorkerHandle};
 use log::{debug, error, info, warn};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -21,7 +21,7 @@ enum EventResolution {
 /// The worker handle manager.
 pub struct WorkerListener {
     id: usize,
-    worker_handle: WorkerHandle<NetRtp>,
+    worker_handle: WorkerHandle<NetStp>,
     stopping: bool,
 }
 
@@ -34,7 +34,7 @@ impl WorkerListener {
     ///
     /// # Returns
     /// A new `WorkerListener` instance.
-    pub fn new(id: usize, worker_handle: WorkerHandle<NetRtp>) -> Self {
+    pub fn new(id: usize, worker_handle: WorkerHandle<NetStp>) -> Self {
         Self {
             id,
             worker_handle,
@@ -151,7 +151,7 @@ impl WorkerListener {
                 ReqResolution::Continue
             }
             WorkerRequest::PullParams => {
-                info!("pulling parmaeters from worker {id}");
+                info!("pulling parameters from worker {id}");
 
                 match self.worker_handle.pull_params().await {
                     Ok(params) => {
@@ -210,7 +210,7 @@ impl WorkerListener {
     /// An `EventResolution` or an orch error if the received event is invalid.
     fn handle_event(id: usize, event: WorkerEvent<'_>) -> Result<EventResolution> {
         match event {
-            WorkerEvent::Loss(losses) => {
+            WorkerEvent::Loss { losses } => {
                 debug!("worker {id} reported {} losses", losses.len());
 
                 let training_event = TrainingEvent::PublishedLosses {

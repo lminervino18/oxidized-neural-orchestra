@@ -221,7 +221,7 @@ impl TrainerBuilder {
                         stride,
                         padding,
                         ..
-                    } => self.spatial_size(input_dim, filter_size, stride, padding, input_dim.2),
+                    } => self.spatial_size(input_dim, filter_size, stride, padding, input_dim.0),
                     _ => unreachable!(),
                 };
                 layers.push(Layer::four_d_to2d(out_c, out_h, out_w))

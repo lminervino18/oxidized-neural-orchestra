@@ -2,6 +2,7 @@ use std::{io, num::NonZeroUsize, thread};
 
 use comms::{
     Acceptor, Connection, OrchHandle, TransportLayer, WorkerHandle,
+    protocol::Entity,
     specs::{
         machine_learning::OptimizerSpec,
         server::{ServerSpec, StoreSpec, SynchronizerSpec},
@@ -86,12 +87,14 @@ where
         G: AsyncFnMut(&mut WorkerHandle<T>) -> io::Result<()>,
     {
         let nworkers = spec.nworkers;
+        let src = Entity::ParamServer;
+
         let mut server = self
             .resolve_optimizer(spec, orch_handle)
             .map_err(io::Error::other)?;
 
         for _ in 0..nworkers {
-            let Connection::Worker(mut worker_handle) = self.acceptor.accept().await? else {
+            let Connection::Worker(mut worker_handle) = self.acceptor.accept(src).await? else {
                 return Err(io::Error::other("Unexpected non worker connection"));
             };
 
@@ -158,6 +161,7 @@ where
         O: Optimizer + Send + 'static,
         OF: Fn(usize) -> O,
     {
+        let nworkers = NonZeroUsize::new(spec.nworkers).unwrap_or(NonZeroUsize::MIN);
         let param_gen_builder = ParamGenBuilder::new();
         let mut param_gen = param_gen_builder.build(spec.param_gen.clone(), spec.seed)?;
 
@@ -170,7 +174,8 @@ where
 
         match spec.store {
             StoreSpec::Blocking => {
-                let store = BlockingStore::new(shard_size, param_gen.as_mut(), optimizer_factory);
+                let store =
+                    BlockingStore::new(shard_size, nworkers, param_gen.as_mut(), optimizer_factory);
                 Ok(self.resolve_synchronizer(spec, orch_handle, store))
             }
             StoreSpec::Wild => {

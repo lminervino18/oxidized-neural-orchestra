@@ -222,6 +222,73 @@ impl Conv2d {
     }
 }
 
+/// A 2D max pooling layer.
+#[pyclass(skip_from_py_object)]
+#[derive(Clone)]
+pub struct MaxPooling {
+    pub input_dim: (NonZeroUsize, NonZeroUsize, NonZeroUsize),
+    pub filter_size: NonZeroUsize,
+    pub stride: NonZeroUsize,
+    pub padding: usize,
+    pub act_fn: Option<PyActFn>,
+}
+
+#[pymethods]
+impl MaxPooling {
+    /// Creates a MaxPooling layer configuration.
+    ///
+    /// # Args
+    /// * `input_dim` - Tuple `(in_channels, height, width)` of the input tensor.
+    /// * `filter_size` - Side of the square pooling window. Must be > 0.
+    /// * `stride` - Pooling stride. Must be > 0.
+    /// * `padding` - Zero-padding applied to each spatial side of the input.
+    /// * `act_fn` - Optional activation function (e.g. `Sigmoid()`). Defaults to `None`.
+    ///
+    /// # Returns
+    /// A MaxPooling layer configuration.
+    ///
+    /// # Errors
+    /// Raises a `ValueError` if any dimension, the filter size or the stride is zero.
+    /// Raises a `TypeError` if `act_fn` is not a supported type.
+    #[new]
+    #[pyo3(signature = (input_dim, filter_size, stride, padding, act_fn = None))]
+    pub fn new(
+        input_dim: (usize, usize, usize),
+        filter_size: usize,
+        stride: usize,
+        padding: usize,
+        act_fn: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Self> {
+        let make_nonzero = |v: usize, name: &'static str| {
+            NonZeroUsize::new(v).ok_or_else(|| PyValueError::new_err(format!("{name} must be > 0")))
+        };
+
+        Ok(Self {
+            input_dim: (
+                make_nonzero(input_dim.0, "input_dim.channels")?,
+                make_nonzero(input_dim.1, "input_dim.height")?,
+                make_nonzero(input_dim.2, "input_dim.width")?,
+            ),
+            filter_size: make_nonzero(filter_size, "filter_size")?,
+            stride: make_nonzero(stride, "stride")?,
+            padding,
+            act_fn: extract_act_fn(act_fn)?,
+        })
+    }
+}
+
+impl MaxPooling {
+    pub fn to_layer_config(&self) -> LayerConfig {
+        LayerConfig::MaxPooling {
+            input_dim: self.input_dim,
+            filter_size: self.filter_size,
+            stride: self.stride,
+            padding: self.padding,
+            act_fn: self.act_fn.as_ref().map(py_act_fn_to_config),
+        }
+    }
+}
+
 /// A sequential model — layers are applied in order.
 #[pyclass]
 pub struct Sequential {
@@ -233,14 +300,14 @@ impl Sequential {
     /// Creates a sequential model configuration.
     ///
     /// # Args
-    /// * `layers` - List of `Dense` or `Conv2d` layers. At least one required.
+    /// * `layers` - List of `Dense`, `Conv2d` or `MaxPooling` layers. At least one required.
     ///
     /// # Returns
     /// A sequential model configuration.
     ///
     /// # Errors
     /// Raises a `ValueError` if `layers` is empty.
-    /// Raises a `TypeError` if any element is not a `Dense` or `Conv2d` instance.
+    /// Raises a `TypeError` if any element is not a `Dense`, `Conv2d` or `MaxPooling` instance.
     #[new]
     pub fn new(layers: Vec<Bound<'_, PyAny>>) -> PyResult<Self> {
         if layers.is_empty() {
@@ -254,9 +321,11 @@ impl Sequential {
                     Ok(d.to_layer_config())
                 } else if let Ok(c) = l.extract::<PyRef<Conv2d>>() {
                     Ok(c.to_layer_config())
+                } else if let Ok(m) = l.extract::<PyRef<MaxPooling>>() {
+                    Ok(m.to_layer_config())
                 } else {
                     Err(PyTypeError::new_err(
-                        "each layer must be a Dense or Conv2d instance",
+                        "each layer must be a Dense, Conv2d or MaxPooling instance",
                     ))
                 }
             })

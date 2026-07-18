@@ -1,7 +1,7 @@
 use std::io;
 
 use comms::{OrchEvent, OrchHandle, TransportLayer};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use machine_learning::training::{TrainResult, Trainer};
 
 use super::{Run, Worker};
@@ -76,17 +76,21 @@ where
                     debug!("received parameters from all servers, training...");
 
                     let mut param_manager = response?;
-                    let TrainResult { losses, was_last } = self.trainer.train(&mut param_manager).unwrap();
-                    self.cluster_manager.push_grads().await?;
+                    let TrainResult { losses, is_last } =
+                        self.trainer.train(&mut param_manager).map_err(|e| {
+                            error!("training step failed: {e}");
+                            io::Error::other(e)
+                        })?;
 
+                    should_continue = !is_last;
+
+                    self.cluster_manager.push_grads(is_last).await?;
                     self.orch_handle.push_losses(losses).await?;
-                    should_continue = !was_last;
                 }
             }
         }
 
         self.orch_handle.done().await?;
-        self.cluster_manager.disconnect().await?;
         self.orch_handle.disconnect().await?;
         Ok(Run::Done)
     }

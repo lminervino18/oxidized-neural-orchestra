@@ -13,6 +13,7 @@ pub enum AlgorithmSpec {
         server_ordering: Vec<usize>,
     },
     AllReduce {
+        pos: usize,
         worker_addrs: Vec<String>,
         param_gen: ParamGenSpec,
         amount_of_layers: usize,
@@ -30,7 +31,6 @@ pub enum SerializerSpec {
 /// The specification for the `Worker`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerSpec {
-    pub worker_id: usize,
     pub trainer: TrainerSpec,
     pub algorithm: AlgorithmSpec,
     pub serializer: SerializerSpec,

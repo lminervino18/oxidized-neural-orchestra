@@ -1,5 +1,6 @@
 use std::{
     io::{self, IsTerminal, Write},
+    mem,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
@@ -23,20 +24,23 @@ fn fmt_loss(loss: f64) -> String {
     }
 }
 
-fn avg_loss(last_loss: &[Option<f64>]) -> f64 {
+fn avg_loss<I>(losses: I) -> f64
+where
+    I: IntoIterator<Item = f64>,
+{
     let mut sum = 0.0;
-    let mut count = 0.0;
+    let mut count = 0usize;
 
-    for &loss in last_loss.iter().flatten() {
+    for loss in losses.into_iter() {
         sum += loss;
-        count += 1.0;
+        count += 1;
     }
 
-    if count == 0.0 {
+    if count == 0 {
         return 0.0;
     }
 
-    sum / count
+    sum / count as f64
 }
 
 /// Tracks per-worker training progress and renders it to stdout.
@@ -44,8 +48,8 @@ fn avg_loss(last_loss: &[Option<f64>]) -> f64 {
 /// In TTY mode renders an animated spinner with an in-place progress bar.
 /// In non-TTY mode (pipes, CI) prints one line per epoch update instead.
 struct ProgressReporter {
-    worker_epochs: Vec<usize>,
-    last_loss: Vec<Option<f64>>,
+    worker_losses: Vec<Vec<f64>>,
+    loss_history: Vec<f64>,
     max_epochs: usize,
     is_tty: bool,
     current_epoch: Arc<AtomicUsize>,
@@ -98,8 +102,8 @@ impl ProgressReporter {
         };
 
         Self {
-            worker_epochs: vec![0; worker_count],
-            last_loss: vec![None; worker_count],
+            worker_losses: vec![vec![]; worker_count],
+            loss_history: Vec::new(),
             max_epochs,
             is_tty,
             current_epoch,
@@ -109,30 +113,43 @@ impl ProgressReporter {
         }
     }
 
-    fn update(&mut self, worker_id: usize, losses: &[f64]) {
-        for &loss in losses {
-            if worker_id < self.worker_epochs.len() {
-                self.worker_epochs[worker_id] += 1;
-                self.last_loss[worker_id] = Some(loss);
-            }
+    fn add_losses(&mut self, worker_id: usize, losses: &[f64]) {
+        if worker_id < self.worker_losses.len() {
+            self.worker_losses[worker_id].extend_from_slice(losses);
         }
+    }
 
-        let epoch = self.worker_epochs.iter().copied().max().unwrap_or(0);
-        let avg = avg_loss(&self.last_loss);
+    fn update_avg_losses(&mut self) {
+        loop {
+            let epoch = self.loss_history.len();
 
-        self.current_epoch.store(epoch, Ordering::Relaxed);
-        self.avg_loss_bits
-            .store(avg.to_bits() as usize, Ordering::Relaxed);
+            let maybe_epoch_losses = self
+                .worker_losses
+                .iter()
+                .map(|wls| wls.get(epoch).copied())
+                .collect::<Option<Vec<_>>>();
 
-        if !self.is_tty {
-            println!(
-                "  epoch {}/{} avg_loss={}",
-                epoch,
-                self.max_epochs,
-                fmt_loss(avg)
-            );
+            let Some(epoch_losses) = maybe_epoch_losses else {
+                break;
+            };
 
-            let _ = io::stdout().flush();
+            let avg_loss = avg_loss(epoch_losses);
+            self.loss_history.push(avg_loss);
+
+            let avg_loss_bits = avg_loss.to_bits() as usize;
+            self.avg_loss_bits.store(avg_loss_bits, Ordering::Relaxed);
+            self.current_epoch.store(epoch, Ordering::Relaxed);
+
+            if !self.is_tty {
+                println!(
+                    "  epoch {}/{} avg_loss={}",
+                    epoch,
+                    self.max_epochs,
+                    fmt_loss(avg_loss)
+                );
+
+                let _ = io::stdout().flush();
+            }
         }
     }
 
@@ -141,9 +158,8 @@ impl ProgressReporter {
             done,
             handle,
             is_tty,
-            worker_epochs,
-            last_loss,
             max_epochs,
+            loss_history,
             ..
         } = self;
 
@@ -155,22 +171,20 @@ impl ProgressReporter {
 
         if is_tty {
             let mark = if success { "✓" } else { "✗" };
-            let epoch = if success {
-                max_epochs
-            } else {
-                worker_epochs.iter().copied().max().unwrap_or(0)
-            };
+            let epoch = loss_history.len();
 
-            print!(
-                "\x1b[2A\r  {} [{}] {}/{}\n  avg_loss={}\n\n",
-                mark,
-                "█".repeat(BAR_WIDTH),
-                epoch,
-                max_epochs,
-                fmt_loss(avg_loss(&last_loss)),
-            );
+            if let Some(&last_loss) = loss_history.last() {
+                print!(
+                    "\x1b[2A\r  {} [{}] {}/{}\n  avg_loss={}\n\n",
+                    mark,
+                    "█".repeat(BAR_WIDTH),
+                    epoch,
+                    max_epochs,
+                    fmt_loss(last_loss),
+                );
 
-            let _ = io::stdout().flush();
+                let _ = io::stdout().flush();
+            }
         }
     }
 }
@@ -178,6 +192,7 @@ impl ProgressReporter {
 #[pyclass]
 pub struct TrainedModel {
     pub inner: orchestrator::TrainedModel,
+    pub loss_history: Vec<f64>,
 }
 
 #[pymethods]
@@ -191,6 +206,14 @@ impl TrainedModel {
     /// The trained parameters in a flat vector.
     pub fn weights(&self) -> Vec<f32> {
         self.inner.params.to_vec()
+    }
+
+    /// Returns the average training loss recorded at each epoch.
+    ///
+    /// # Returns
+    /// One loss value per completed epoch, in order.
+    pub fn loss_history(&self) -> Vec<f64> {
+        self.loss_history.clone()
     }
 
     /// Saves the trained model in safetensors format.
@@ -252,7 +275,8 @@ impl Session {
                     let result = loop {
                         match rx.blocking_recv() {
                             Some(TrainingEvent::PublishedLosses { worker_id, losses }) => {
-                                reporter.update(worker_id, &losses);
+                                reporter.add_losses(worker_id, &losses);
+                                reporter.update_avg_losses();
                             }
                             Some(TrainingEvent::TrainingComplete { model: trained, .. }) => {
                                 break Ok(trained)
@@ -263,14 +287,21 @@ impl Session {
                         }
                     };
 
+                    let loss_history = mem::take(&mut reporter.loss_history);
                     reporter.finish(result.is_ok());
-                    result
+                    result.map(|trained| (trained, loss_history))
                 })
                 .join()
                 .map_err(|_| "session thread panicked".to_string())?
             })
             .map_err(PyRuntimeError::new_err)?;
 
-        Ok(TrainedModel { inner: trained })
+        let (trained, loss_history) = trained;
+        let trained_model = TrainedModel {
+            inner: trained,
+            loss_history,
+        };
+
+        Ok(trained_model)
     }
 }

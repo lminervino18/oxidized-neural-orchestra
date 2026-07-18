@@ -18,6 +18,7 @@ fn _orchestra(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<arch::Sequential>()?;
     m.add_class::<arch::Dense>()?;
     m.add_class::<arch::Conv2d>()?;
+    m.add_class::<arch::MaxPooling>()?;
 
     m.add_class::<activations::Sigmoid>()?;
     m.add_class::<activations::Tanh>()?;

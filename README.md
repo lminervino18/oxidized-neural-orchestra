@@ -68,6 +68,26 @@ Training begins as All-Reduce and, once gradients converge, the orchestrator pro
 
 ---
 
+## Project Layout
+
+O.N.O is a Cargo workspace of focused crates, plus a Python package and a benchmark harness:
+
+| Module | What it does |
+|---|---|
+| [`comms`](comms/README.md) | Networking layer — reliable/simple transports, the `Acceptor`/`Connector` handshake, wire-protocol specs, and typed node handles. |
+| [`machine_learning`](machine_learning/README.md) | The neural-network engine — layers, models, initializers, optimizers, datasets, and the training loop. |
+| [`parameter_server`](parameter_server/README.md) | Parameter-server runtime embedded in a node: parameter stores and gradient synchronizers. |
+| [`worker`](worker/README.md) | Worker runtime for both roles (all-reduce and parameter-server), including the ring/cluster middlewares. |
+| [`orchestrator`](orchestrator/README.md) | Drives a run — owns the config schema, connects to nodes, assigns roles, and streams training events. |
+| [`node`](node/README.md) | The single role-agnostic binary every machine runs; the orchestrator tells it whether to be a worker or a server. |
+| [`orchestui`](orchestui/README.md) | Interactive ratatui TUI to configure, launch and monitor a run. |
+| [`orchestra-py`](orchestra-py/README.md) | Python bindings (PyO3 / maturin) to drive runs programmatically. |
+| [`benchmarks`](benchmarks/README.md) | Harness comparing the strategies (accuracy, convergence, scalability). |
+
+Node roles are assigned at runtime: every machine runs `node`, and the orchestrator hands each one its spec on connection.
+
+---
+
 ## Running
 
 O.N.O is a **distributed** system: every machine runs the same `node` binary, and one orchestrator connects to all of them, hands each its role, and drives training. Roles are **not** hardcoded — a node becomes a worker or a parameter server from the spec it receives on connection.
@@ -144,58 +164,31 @@ You can also bring up a **single** node to try things out — with Docker (`--no
 
 ## Config Files
 
+A run is driven by two JSON files: `model.json` (the network architecture) and
+`training.json` (the distributed-training setup). The complete field reference —
+every field, its type, allowed values, and which are optional — lives in
+**[`docs/config-schema.md`](docs/config-schema.md)**. A minimal pair:
+
 ### `model.json`
 ```json
 {
   "layers": [
     { "dense": { "output_size": 8, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
-    { "dense": { "output_size": 4, "init": "kaiming", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
     { "dense": { "output_size": 1, "init": "kaiming" } }
   ]
 }
 ```
 
 ### `training.json`
-
-Two algorithm options — pick one:
-
-**Parameter Server:**
-```json
-{
-  "addrs": ["node-0:40000", "node-1:40001", "node-2:40002", "node-3:40003", "node-4:40004"],
-  "algorithm": {
-    "parameter_server": {
-      "nservers": 2,
-      "synchronizer": "barrier",
-      "store": "blocking"
-    }
-  },
-  "dataset": {
-    "src": {
-      "inline": {
-        "samples": [1.0, 2.0, 3.0, 4.0],
-        "labels": [2.0, 4.0, 6.0, 8.0]
-      }
-    },
-    "x_size": 1,
-    "y_size": 1
-  },
-  "optimizer": { "gradient_descent": { "lr": 0.01 } },
-  "loss_fn": "mse",
-  "batch_size": 4,
-  "max_epochs": 500,
-  "offline_epochs": 0,
-  "seed": 42,
-  "early_stopping": { "tolerance": 1e-4 }
-}
-```
-
-**All-Reduce:**
 ```json
 {
   "addrs": ["node-0:40000", "node-1:40001", "node-2:40002"],
-  "algorithm": "all_reduce",
-  "dataset": { ... },
+  "algorithm": { "parameter_server": { "nservers": 1, "synchronizer": "barrier", "store": "blocking" } },
+  "dataset": {
+    "src": { "inline": { "samples": [1.0, 2.0, 3.0, 4.0], "labels": [2.0, 4.0, 6.0, 8.0] } },
+    "x_size": 1,
+    "y_size": 1
+  },
   "optimizer": { "gradient_descent": { "lr": 0.01 } },
   "loss_fn": "mse",
   "batch_size": 4,
@@ -204,11 +197,11 @@ Two algorithm options — pick one:
 }
 ```
 
-`addrs` lists every node; `nservers` (PS / Strategy Switch) sets how many of them become servers — the rest are workers.  
-Synchronizer options (PS / Strategy Switch): `"barrier"` | `"non_blocking"`  
-Store options (PS / Strategy Switch): `"blocking"` | `"wild"`  
-`seed`, `serializer`, `early_stopping`, and `act_fn` are optional — omit them to use defaults.  
-For a local dataset use `"src": { "local": { "samples_path": "...", "labels_path": "..." } }` instead of `inline`.
+`algorithm` can be `"all_reduce"`, `parameter_server`, or `strategy_switch`;
+`nservers` (for the server-based strategies) sets how many of the `addrs` become
+servers — the rest are workers. See [`docs/config-schema.md`](docs/config-schema.md)
+for every algorithm, optimizer, layer, initializer, activation, dataset source,
+and the optional fields (`seed`, `serializer`, `early_stopping`).
 
 ---
 

@@ -9,7 +9,7 @@ mod trained_model;
 mod worker_listener;
 
 use comms::{
-    NetRtp, ParamServerHandle,
+    NetStp, ParamServerHandle,
     specs::{machine_learning::TrainerSpec, server::ServerSpec},
 };
 
@@ -63,7 +63,7 @@ pub enum TrainingEvent {
         worker_id: usize,
     },
     Upgraded {
-        server_handle: Box<ParamServerHandle<NetRtp>>,
+        server_handle: Box<ParamServerHandle<NetStp>>,
         worker_id: usize,
     },
     Error(OrchErr),

@@ -1,7 +1,12 @@
-use std::{collections::HashSet, io::SeekFrom, path::Path, thread};
+use std::{
+    collections::{HashMap, HashSet},
+    io::SeekFrom,
+    path::Path,
+    thread,
+};
 
 use comms::{
-    Connector, NetRtp, ParamServerHandle, TransportLayer, WorkerHandle, protocol::Entity,
+    Connector, NetStp, ParamServerHandle, TransportLayer, WorkerHandle, protocol::Entity,
     share_dataset,
 };
 use futures::future;
@@ -16,6 +21,7 @@ use tokio::{
     runtime::{Builder, Runtime},
     sync::mpsc::{self, Receiver, Sender},
 };
+use uuid::Uuid;
 
 use super::{EventListener, TrainedModel, WorkerListener, WorkerRequest};
 use crate::{
@@ -30,8 +36,8 @@ use crate::{
 pub struct Session {
     runtime: Runtime,
     orch_adapt: OrchAdapt,
-    worker_handles: Vec<WorkerHandle<NetRtp>>,
-    server_handles: Vec<ParamServerHandle<NetRtp>>,
+    worker_handles: Vec<WorkerHandle<NetStp>>,
+    server_handles: Vec<ParamServerHandle<NetStp>>,
 }
 
 impl Session {
@@ -52,10 +58,10 @@ impl Session {
         orch: OrchAdapt,
         workers: Vec<WorkerAdapt<'_>>,
         servers: Vec<ServerAdapt>,
-        connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
+        connector: Connector<OwnedReadHalf, OwnedWriteHalf, NetStp, F>,
     ) -> Result<Self>
     where
-        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetStp,
     {
         let runtime = Builder::new_multi_thread().enable_all().build()?;
         let (nworkers, nservers) = (workers.len(), servers.len());
@@ -177,7 +183,7 @@ impl Session {
     /// # Returns
     /// The worker listener requesters and the stopping reason for the training.
     async fn start_training(
-        worker_handles: Vec<WorkerHandle<NetRtp>>,
+        worker_handles: Vec<WorkerHandle<NetStp>>,
         event_rx: &mut Receiver<TrainingEvent>,
         event_tx: &Sender<TrainingEvent>,
         cancel_rx: Receiver<()>,
@@ -185,7 +191,7 @@ impl Session {
         convergence_tracker: Option<ConvergenceTracker>,
         user_event_tx: &Sender<TrainingEvent>,
         switch_tracking: Option<StrategySwitchTracking>,
-        server_handles: &mut Vec<ParamServerHandle<NetRtp>>,
+        server_handles: &mut Vec<ParamServerHandle<NetStp>>,
     ) -> (Option<StopReason>, Vec<Sender<WorkerRequest>>) {
         let mut req_txs = Self::spawn_worker_listeners(worker_handles, event_tx);
 
@@ -221,7 +227,7 @@ impl Session {
         user_event_tx: &Sender<TrainingEvent>,
         req_txs: &mut [Sender<WorkerRequest>],
         event_rx: &mut Receiver<TrainingEvent>,
-        layer_offsets: &[(usize, usize, usize)],
+        layer_offsets: &[(Uuid, usize, usize)],
     ) -> Vec<f32>
     where
         T: TransportLayer + 'static,
@@ -251,7 +257,7 @@ impl Session {
     /// # Returns
     /// A list of senders to make requests to the listeners.
     fn spawn_worker_listeners(
-        worker_handles: Vec<WorkerHandle<NetRtp>>,
+        worker_handles: Vec<WorkerHandle<NetStp>>,
         event_tx: &Sender<TrainingEvent>,
     ) -> Vec<Sender<WorkerRequest>> {
         let mut req_txs = Vec::with_capacity(worker_handles.len());
@@ -286,14 +292,14 @@ impl Session {
     /// The trained parameters of the model in layer order.
     async fn finalize_parameter_server<T>(
         server_handles: Vec<ParamServerHandle<T>>,
-        layer_offsets: &[(usize, usize, usize)],
+        layer_offsets: &[(Uuid, usize, usize)],
         user_event_tx: &Sender<TrainingEvent>,
     ) -> Vec<f32>
     where
         T: TransportLayer,
     {
         debug!("all workers done, reading final params from all servers");
-        let mut server_params = vec![Vec::new(); server_handles.len()];
+        let mut server_params = HashMap::with_capacity(server_handles.len());
 
         let req_err = async |i, e| {
             let details = format!("unexpected error from server {i}: {e}");
@@ -303,7 +309,6 @@ impl Session {
         };
 
         for (i, mut server_handle) in server_handles.into_iter().enumerate() {
-            let server_id = server_handle.id();
             // TODO: Acá eventualmente hay que ver como manejamos las caídas de
             //       los servidores. Capaz conviene tener a mano al Acceptor y
             //       en caso de que un servidor no responda que se vuelva a
@@ -313,6 +318,8 @@ impl Session {
             //       Si se corta el internet por ejemplo por un rato después se
             //       van a intentar reconectar varios y necesitamos saber quién
             //       es quién.
+            let server_id = server_handle.id();
+
             loop {
                 if let Err(e) = server_handle.req_params().await {
                     req_err(i, e).await;
@@ -322,7 +329,7 @@ impl Session {
                 match server_handle.pull_params().await {
                     Ok(params) => {
                         debug!("server {i}: pulled {} params", params.len());
-                        server_params[server_id] = params.to_vec();
+                        server_params.insert(server_id, params.to_vec());
 
                         if let Err(e) = server_handle.disconnect().await {
                             error!("Failed to disconnect server {i}: {e}");
@@ -343,7 +350,7 @@ impl Session {
         let mut model_params = Vec::with_capacity(total);
 
         for (layer_i, &(server_id, start, end)) in layer_offsets.iter().enumerate() {
-            let params = &server_params[server_id];
+            let params = &server_params[&server_id];
             debug!("layer {layer_i}: server {server_id} [{start}..{end}]");
             model_params.extend_from_slice(&params[start..end]);
         }
@@ -414,15 +421,15 @@ impl Session {
     /// The worker handles or an orch error if occurred.
     async fn create_servers<I, F>(
         servers: I,
-        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
-    ) -> Result<Vec<ParamServerHandle<NetRtp>>>
+        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetStp, F>,
+    ) -> Result<Vec<ParamServerHandle<NetStp>>>
     where
         I: IntoIterator<Item = ServerAdapt>,
-        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetStp,
     {
         let mut handles = Vec::new();
 
-        for (i, ServerAdapt { addr, spec }) in servers.into_iter().enumerate() {
+        for ServerAdapt { addr, spec } in servers {
             debug!("connecting to server at {addr}");
 
             let stream =
@@ -435,7 +442,7 @@ impl Session {
 
             let (rx, tx) = stream.into_split();
             let node_handle = connector
-                .connect_node(i, rx, tx, Entity::Orchestrator)
+                .connect_node(rx, tx, Entity::Orchestrator)
                 .await
                 .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
 
@@ -457,44 +464,41 @@ impl Session {
     /// The worker handles or an orch error if occurred.
     async fn create_workers<'a, F, I>(
         workers: I,
-        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetRtp, F>,
-    ) -> Result<Vec<WorkerHandle<NetRtp>>>
+        connector: &Connector<OwnedReadHalf, OwnedWriteHalf, NetStp, F>,
+    ) -> Result<Vec<WorkerHandle<NetStp>>>
     where
-        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetRtp,
+        F: Fn(OwnedReadHalf, OwnedWriteHalf) -> NetStp,
         I: IntoIterator<Item = WorkerAdapt<'a>>,
     {
         const CHUNK_SIZE: usize = 8192;
 
-        let futs = workers
-            .into_iter()
-            .enumerate()
-            .map(|(i, adapt)| async move {
-                let WorkerAdapt {
-                    addr,
-                    spec,
-                    partition,
-                } = adapt;
+        let futs = workers.into_iter().map(|adapt| async move {
+            let WorkerAdapt {
+                addr,
+                spec,
+                partition,
+            } = adapt;
 
-                debug!("connecting to worker at {addr}");
+            debug!("connecting to worker at {addr}");
 
-                let stream =
-                    TcpStream::connect(&addr)
-                        .await
-                        .map_err(|e| OrchErr::ConnectionFailed {
-                            addr: addr.clone(),
-                            source: e,
-                        })?;
-
-                let (rx, tx) = stream.into_split();
-                let node_handle = connector
-                    .connect_node(i, rx, tx, Entity::Orchestrator)
+            let stream =
+                TcpStream::connect(&addr)
                     .await
-                    .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
+                    .map_err(|e| OrchErr::ConnectionFailed {
+                        addr: addr.clone(),
+                        source: e,
+                    })?;
 
-                let mut worker_handle = node_handle.create_worker(spec).await?;
-                Self::send_partition(&mut worker_handle, partition, CHUNK_SIZE).await?;
-                Ok::<_, OrchErr>(worker_handle)
-            });
+            let (rx, tx) = stream.into_split();
+            let node_handle = connector
+                .connect_node(rx, tx, Entity::Orchestrator)
+                .await
+                .map_err(|e| OrchErr::ConnectionFailed { addr, source: e })?;
+
+            let mut worker_handle = node_handle.create_worker(spec).await?;
+            Self::send_partition(&mut worker_handle, partition, CHUNK_SIZE).await?;
+            Ok::<_, OrchErr>(worker_handle)
+        });
 
         future::try_join_all(futs).await
     }
