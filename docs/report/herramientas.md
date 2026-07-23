@@ -7,15 +7,13 @@ La propuesta fijó tres tecnologías desde el inicio, Rust, Python y Docker, y d
 
 ## Lenguajes y entornos
 
-**Rust.** Se eligió como lenguaje del sistema principal por tres motivos. El primero es el control de bajo nivel que ofrece sin renunciar a garantías de seguridad, lo que resultó determinante para un sistema cuyo camino crítico exige manipular memoria sin copias. El segundo es la *concurrencia sin miedo*: el compilador verifica estáticamente una clase completa de errores de concurrencia. El tercero es la relevancia creciente del lenguaje en el ámbito de los sistemas.
-
-Corresponde evaluar esa elección a posteriori, ya que la sección de lecciones aprendidas la retoma en detalle. Las garantías del lenguaje cumplieron exactamente lo que prometen: ninguna condición de carrera sobre memoria compartida llegó a producción. No cubrieron, ni podían cubrir, los bloqueos de coordinación distribuida ni los errores de derivación de gradientes, que fueron las dos fuentes reales de dificultad. El único punto en el que el sistema salió de las garantías del lenguaje, la implementación sin bloqueos del almacenamiento de parámetros, es también el único que resultó incorrecto.
+**Rust.** Se eligió como lenguaje del sistema principal por tres motivos. El primero es el control de bajo nivel que ofrece sin renunciar a garantías de seguridad, lo que resultó determinante para un sistema cuyo camino crítico exige manipular memoria sin copias. El segundo es la *concurrencia sin miedo*: el compilador verifica estáticamente una clase completa de errores de concurrencia. El tercero es la relevancia creciente del lenguaje en el ámbito de los sistemas. La evaluación a posteriori de esa elección, y el alcance exacto de lo que sus garantías cubren, se retoma en las lecciones aprendidas.
 
 El ecosistema se utilizó completo: `cargo` para construcción y gestión de dependencias, `cargo test` como arnés de pruebas, `cargo clippy` para análisis estático y `cargo fmt` para formato. No se incorporó ninguna herramienta externa a él, según el criterio fijado en la propuesta.
 
 **Python.** Se utilizó para tres propósitos: la interfaz de funciones externas del sistema, por ser el lenguaje dominante en aprendizaje profundo; la suite de experimentación y el análisis de resultados; y los scripts de generación y despliegue del entorno contenedizado. El código Python se verifica con `ruff` como analizador estático y formateador.
 
-**Docker.** Se utilizó para simular la ejecución del sistema sobre múltiples nodos y para automatizar el despliegue. Es la herramienta que hizo posible la experimentación, y también la fuente de la limitación transversal del trabajo, ya que un clúster simulado sobre una única máquina no reproduce la latencia ni el ancho de banda de una red real. Se acompaña de `cargo-chef` para cachear las capas de dependencias en la construcción de la imagen, lo que reduce de forma sustancial el tiempo de reconstrucción.
+**Docker.** Se utilizó para simular la ejecución del sistema sobre múltiples nodos y para automatizar el despliegue. Se acompaña de `cargo-chef` para cachear las capas de dependencias en la construcción de la imagen, lo que reduce de forma sustancial el tiempo de reconstrucción.
 
 **Git y GitHub.** Control de versiones y gestión del proceso: ramas por funcionalidad, *pull requests* con revisión obligatoria, e *issues* para el seguimiento de tickets, errores y debates de diseño.
 
@@ -46,7 +44,7 @@ La elección de cada una respondió a los criterios enunciados. Todas son de có
 
 Tres de estas elecciones merecen justificarse porque tenían alternativas reales.
 
-**`ndarray` en lugar de un framework de aprendizaje profundo.** Es la decisión que define el alcance del trabajo. Se eligió una biblioteca que provee *únicamente* operaciones sobre arreglos numéricos, sin diferenciación automática, sin capas y sin optimizadores, porque el objetivo del trabajo incluía implementar el motor de aprendizaje desde cero. Usar un framework existente habría hecho el trabajo considerablemente más simple y considerablemente menos valioso.
+**`ndarray` en lugar de un framework de aprendizaje profundo.** Es la decisión que define el alcance del trabajo. Se eligió una biblioteca que provee *únicamente* operaciones sobre arreglos numéricos, sin diferenciación automática, sin capas y sin optimizadores, porque el objetivo del trabajo incluía implementar el motor de aprendizaje. Usar un framework existente habría hecho el trabajo considerablemente más simple y considerablemente menos valioso.
 
 **`bytemuck` para la serialización del plano de datos.** Aquí operó de forma directa el primer criterio de la propuesta. Una biblioteca de serialización de propósito general habría introducido una copia y un costo de codificación en el camino crítico, exactamente el tipo de sobrecarga que podría distorsionar la comparación entre estrategias que comunican de maneras distintas. La reinterpretación de memoria elimina esa variable.
 
@@ -63,7 +61,7 @@ Tres de estas elecciones merecen justificarse porque tenían alternativas reales
 | `torch` | Línea de base de referencia |
 | `ruff` | Análisis estático y formato |
 
-El uso de **PyTorch** requiere una aclaración explícita, porque podría malinterpretarse dado que el trabajo declara no usar frameworks de aprendizaje profundo. PyTorch **no participa del sistema en ninguna forma**: no se utiliza para entrenar, ni para calcular gradientes, ni para representar modelos. Se lo emplea exclusivamente como **línea de base externa**, entrenando en un solo proceso el mismo modelo con la misma receta de hiperparámetros, para tener un punto de referencia contra el cual contrastar la exactitud que alcanza el motor propio. Es un instrumento de medición, y su presencia en el repositorio es una dependencia opcional del entorno de experimentación, separada de las dependencias de ejecución del sistema.
+El uso de PyTorch requiere una aclaración, porque el trabajo declara no apoyarse en frameworks de aprendizaje profundo. PyTorch no participa del sistema en ninguna forma: no se utiliza para entrenar, ni para calcular gradientes, ni para representar modelos. Se lo emplea exclusivamente como línea de base externa, entrenando en un solo proceso el mismo modelo con la misma receta de hiperparámetros, para contrastar la exactitud que alcanza el motor propio. Su presencia en el repositorio es una dependencia opcional del entorno de experimentación, separada de las dependencias de ejecución del sistema.
 
 ## Documentación y edición del informe
 
@@ -77,4 +75,4 @@ Los integrantes del equipo asumen la responsabilidad plena sobre la totalidad de
 
 ## Consideración sobre licencias
 
-La totalidad de las herramientas y bibliotecas utilizadas son de código abierto, con licencias permisivas (MIT o Apache 2.0 en su mayoría). El sistema desarrollado se publica bajo licencia abierta, de modo que pueda ser retomado y extendido por terceros, según el criterio establecido en la propuesta. No se incurrió en costos de licenciamiento, y el trabajo se desarrolló sobre hardware propio de los integrantes.
+La totalidad de las herramientas y bibliotecas utilizadas son de código abierto, con licencias permisivas (MIT o Apache 2.0 en su mayoría). El sistema desarrollado se publica bajo licencia abierta, de modo que pueda ser retomado y extendido por terceros, según el criterio establecido en la propuesta. No se incurrió en costos de licenciamiento.
