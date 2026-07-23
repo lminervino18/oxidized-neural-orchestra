@@ -21,6 +21,7 @@ pandoc \
     aportes_individuales.md \
     referencias.md \
     anexos.md \
+    --include-in-header=preamble.tex \
     --citeproc \
     --bibliography=references.bib \
     --number-sections \
