@@ -88,7 +88,6 @@ async fn test_lineal_convergence() -> io::Result<()> {
         env::set_var("RUST_BACKTRACE", "1");
         env::set_var("RUST_LOG", "debug");
     };
-    env_logger::init();
 
     let ((wk_rx, wk_tx), (sv_rx, sv_tx)) = channel_pair();
     let ((sv_orch_rx, sv_orch_tx), (orch_sv_rx, orch_sv_tx)) = channel_pair();
