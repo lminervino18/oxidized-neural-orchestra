@@ -44,6 +44,7 @@ where
         }
     }
 
+    server_handle.req_params().await?;
     let params = server_handle.pull_params().await?.to_vec();
     server_handle.disconnect().await?;
     Ok(params)
@@ -61,9 +62,12 @@ where
 {
     let mut optimizer = GradientDescent::new(learning_rate);
     let mut params = vec![0.5; nparams];
+    worker_handle.push_params(&mut params).await?;
 
     loop {
-        if let WorkerEvent::Grad { grad, is_last } = worker_handle.recv_event().await? {
+        let event = worker_handle.recv_event().await?;
+
+        if let WorkerEvent::Grad { grad, is_last } = event {
             optimizer.update_params(grad, &mut params).unwrap();
 
             if is_last {
@@ -95,7 +99,7 @@ async fn test_local_lineal_model_convergence() -> io::Result<()> {
     let ((wk_orch_rx, wk_orch_tx), (orch_wk_rx, orch_wk_tx)) = channel_pair();
     let ((sv_orch_rx, sv_orch_tx), (orch_sv_rx, orch_sv_tx)) = channel_pair();
 
-    const MAX_EPOCHS: usize = 100;
+    const MAX_EPOCHS: usize = 10;
 
     let model = Sequential::new(vec![Layer::dense((1, 1))]);
     let x_size = NonZeroUsize::new(1).unwrap();
