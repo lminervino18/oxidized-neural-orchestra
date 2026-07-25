@@ -56,7 +56,7 @@ impl LossRecorder {
         self.losses.clear();
     }
 
-    /// Checks wheather the inner losses map is full or not.
+    /// Checks whether the inner losses map is full or not.
     ///
     /// # Args
     /// * `workers` - The amount of workers currently expected to report.

@@ -2,7 +2,7 @@ use comms::floats::FloatNonNegative;
 
 use super::GreaterThanOneUsize;
 
-/// Tracks wheather the training is converging or not.
+/// Tracks whether the training is converging or not.
 #[derive(Debug)]
 pub struct ConvergenceTracker {
     winsize: GreaterThanOneUsize,

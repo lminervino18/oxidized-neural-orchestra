@@ -22,10 +22,11 @@ const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/
 /// # Args
 /// * `nodes` - The amount of nodes to use.
 /// * `release` - The compilation mode for the rust compiler.
+/// * `pumba` - Whether to simulate limited network bandwidth with Pumba.
 ///
 /// # Returns
 /// The exit status of the compose script.
-fn setup_docker(nodes: usize, release: bool) -> io::Result<ExitStatus> {
+fn setup_docker(nodes: usize, release: bool, pumba: bool) -> io::Result<ExitStatus> {
     let mut cmd = Command::new("python3");
 
     cmd.arg(COMPOSE_FILE_PATH)
@@ -34,6 +35,10 @@ fn setup_docker(nodes: usize, release: bool) -> io::Result<ExitStatus> {
 
     if release {
         cmd.arg("--release");
+    }
+
+    if pumba {
+        cmd.arg("--pumba");
     }
 
     cmd.spawn()?.wait()
@@ -207,8 +212,9 @@ fn main() -> io::Result<()> {
     const SERVERS: usize = 0;
     const NODES: usize = WORKERS + SERVERS;
     const RELEASE: bool = false;
+    const PUMBA: bool = true;
 
-    setup_docker(NODES, RELEASE)?;
+    setup_docker(NODES, RELEASE, PUMBA)?;
 
     thread::sleep(Duration::from_secs(4));
     let addrs = build_addresses(NODES);
