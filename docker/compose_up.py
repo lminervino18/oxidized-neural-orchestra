@@ -34,7 +34,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--pumba",
         action="store_true",
-        help="Wheather to simulate limited network bandwidth with Pumba",
+        help="Whether to simulate limited network bandwidth with Pumba",
     )
 
     return parser.parse_args()

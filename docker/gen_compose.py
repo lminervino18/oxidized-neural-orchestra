@@ -85,7 +85,7 @@ def generate_services(nodes: int, release: bool, pumba: bool) -> dict[str, YmlFi
     # Args
     * `nodes` - The amount of nodes to create.
     * `release` - If the executable should be compiled as release mode.
-    * `pumba` - Wheather to simulate limited network bandwidth with Pumba.
+    * `pumba` - Whether to simulate limited network bandwidth with Pumba.
 
     # Returns
     A dictionary containing the services part of the compose file.
@@ -119,7 +119,7 @@ def generate_compose(nodes: int, release: bool, pumba: bool) -> dict[str, YmlFie
     # Args
     * `nodes` - The amount of nodes to create.
     * `release` - If the executable should be compiled as release mode.
-    * `pumba` - Wheather to simulate limited network bandwidth with Pumba.
+    * `pumba` - Whether to simulate limited network bandwidth with Pumba.
 
     # Returns
     A dictionary containing the whole project's docker compose file.
