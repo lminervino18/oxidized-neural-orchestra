@@ -11,7 +11,6 @@ pandoc \
     problema.md \
     solucion.md \
     metodologia.md \
-    herramientas.md \
     experimentacion.md \
     cronograma.md \
     riesgos.md \
