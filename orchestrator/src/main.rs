@@ -22,7 +22,7 @@ const COMPOSE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../docker/
 /// # Args
 /// * `nodes` - The amount of nodes to use.
 /// * `release` - The compilation mode for the rust compiler.
-/// * `pumba` - The network is simulated using pumba.
+/// * `pumba` - Wheather to simulate limited network bandwidth with Pumba.
 ///
 /// # Returns
 /// The exit status of the compose script.

@@ -21,10 +21,9 @@ def generate_pumba(nodes: int) -> dict[str, YmlField]:
     The pumba container dictionary.
     """
     cmd = [
-        "netem --duration 0s",
-        "delay --time 10ms --jitter 3ms --distribution normal",
-        "loss  --percent 0.5 --correlation 20",
-        '"re2:^node-"',
+        "netem --duration 300m",
+        "rate --rate 100mbit",
+        *(f"node-{i}" for i in range(nodes)),
     ]
 
     return {
@@ -86,7 +85,7 @@ def generate_services(nodes: int, release: bool, pumba: bool) -> dict[str, YmlFi
     # Args
     * `nodes` - The amount of nodes to create.
     * `release` - If the executable should be compiled as release mode.
-    * `pumba` - If to use network simulation with pumba.
+    * `pumba` - Wheather to simulate limited network bandwidth with Pumba.
 
     # Returns
     A dictionary containing the services part of the compose file.
@@ -120,7 +119,7 @@ def generate_compose(nodes: int, release: bool, pumba: bool) -> dict[str, YmlFie
     # Args
     * `nodes` - The amount of nodes to create.
     * `release` - If the executable should be compiled as release mode.
-    * `pumba` - If to use network simulation with pumba.
+    * `pumba` - Wheather to simulate limited network bandwidth with Pumba.
 
     # Returns
     A dictionary containing the whole project's docker compose file.
