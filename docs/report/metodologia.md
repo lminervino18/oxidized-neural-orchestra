@@ -27,7 +27,7 @@ Los errores se clasificaron por criticidad, distinguiendo los que impedían el a
 
 La construcción y las pruebas del sistema se ejecutan con las herramientas del ecosistema de Rust (`cargo test`), y los entornos de simulación se levantan de forma automatizada mediante Docker y un `Makefile` autodocumentado, lo que hace reproducible el despliegue de las distintas configuraciones de nodos.
 
-La construcción, las pruebas, el análisis estático, la ejecución de entornos multinodo y de benchmarks completos quedaron totalmente automatizados y de ejecución desatendida: el conjunto final de 38 configuraciones se ejecutó de un solo comando durante ~6 horas sin intervención. La suite de tests se ejecuta cada vez que se commitea en un Pull Requests que mergea en la rama principal mediante github actions, es obligatorio que la totalidad de las pruebas pase de forma satisfactoria para habilitar el merge.
+La construcción, las pruebas, el análisis estático, la ejecución de entornos multinodo y de benchmarks completos quedaron totalmente automatizados y de ejecución desatendida: el conjunto final de 38 configuraciones se ejecutó de un solo comando durante ~6 horas sin intervención. La suite de tests se ejecuta cada vez que se commitea en un Pull Request que mergea en la rama principal mediante github actions, es obligatorio que la totalidad de las pruebas pase de forma satisfactoria para habilitar el merge.
 
 ## Criterios de aceptación
 
