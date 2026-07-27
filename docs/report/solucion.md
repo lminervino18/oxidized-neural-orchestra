@@ -9,10 +9,10 @@ Esta sección describe la arquitectura resultante. El énfasis está puesto en l
 1. **Capa de Comunicación (`comms`):** Abstrae la infraestructura de red mediante un protocolo propio optimizado. Separa el plano de control (comandos en formato JSON) del plano de datos (tensores y gradientes mediante reinterpretación de memoria sin copias).
 2. **Motor de Redes Neuronales (`machine_learning`):** Provee la biblioteca de aprendizaje profundo (capas, funciones de activación, optimizadores, pérdidas, entrenadores y modelos). Su diseño organiza el modelo como un buffer de memoria plano sobre el cual operan las capas, facilitando la partición y transmisión de parámetros sin serializaciones complejas.
 3. **Plano de Control y Orquestación (`orchestrator`):** Administra el ciclo de vida del entrenamiento. Realiza mediciones de latencia en la red para seleccionar topologías óptimas, coordina la ejecución orientada a eventos y gestiona criterios de detención temprana de los entrenamientos realizados.
-4. **Nodos de Cómputo (`node`, `worker`, `parameter_server`):** Arquitectura agnóstica de rol donde todos los nodos ejecutan el mismo binario base (`node`). Según la especificación asignada dinámicamente por el orquestador, un nodo opera como *Worker* o como *Parameter Server*.
+4. **Nodos de Cómputo (`node`):** Arquitectura agnóstica de rol donde todos los nodos ejecutan el mismo binario base (`node`). Según la especificación asignada dinámicamente por el orquestador, un nodo opera como *Worker* o como *Parameter Server*.
 5. **Estrategias de Sincronización Distribución:** Soporta tres esquemas de distribución integrados:
   * **Parameter Server:** Sincronización multi-servidor con particionado de capas.
-  * **Ring All-Reduce:** Algoritmo descentralizado y balanceado en ancho de banda.
+  * **Ring All-Reduce:** Algoritmo descentralizado con comunicación lógica de anillo entre los nodos.
   * **Strategy-Switch:** Conmutación dinámica de All-Reduce a Parameter Server según la curva de pérdida.
 6. **Interfaces de Usuario:** Exposición del sistema mediante una interfaz gráfica de terminal interactiva (`orchestui`) y una librería de bindings para Python vía FFI (`orchestra-py`).
 
@@ -22,7 +22,7 @@ El stack tecnológico de la solución se define a partir de las siguientes herra
 
 | Dominio | Tecnología / Herramienta | Justificación técnica |
 | --- | --- | --- |
-| **Lenguaje principal** | **Rust** | Familiaridad, gusto, performance y expresabilidad. |
+| **Lenguaje principal** | `Rust` | Familiaridad, gusto, performance y expresabilidad. |
 | **Ecosistema de datos** | `ndarray` | Base para la representación y manipulación eficiente de tensores $n$-dimensionales. |
 | **Integración / FFI** | `PyO3`, `maturin`  | Permite la generación de bindings de Python nativos sobre el código en Rust. |
 | **Interfaz de usuario** | `ratatui` | Renderizado de la interfaz interactiva de terminal para monitoreo en tiempo real. |
@@ -31,5 +31,6 @@ El stack tecnológico de la solución se define a partir de las siguientes herra
 | **Serialización de modelos** | `safetensors` | Utilidad para serializar los modelos ya entrenados |
 | **Automatización** | `Makefile` y Cargo Workspace | Gestión unificada de compilación, ejecución de suites de pruebas y benchmarks automatizados. |
 | **Benchmarks** | `numpy`, `matplotlib`, `torch` | Estado del arte para visualización y `pytorch` se uso de base comparativa |
+| **Simulación de Red** | `pumba` | Facil de usar y bastante parametrizable |
 
 La totalidad de las herramientas y bibliotecas utilizadas son de código abierto, con licencias permisivas (MIT o Apache 2.0 en su mayoría). El sistema desarrollado se publica bajo licencia abierta, de modo que pueda ser retomado y extendido por terceros, según el criterio establecido en la propuesta. No se incurrió en costos de licenciamiento.
