@@ -15,22 +15,3 @@ Esta sección describe la arquitectura resultante. El énfasis está puesto en l
   * **Ring All-Reduce:** Algoritmo descentralizado con comunicación lógica de anillo entre los nodos.
   * **Strategy-Switch:** Conmutación dinámica de All-Reduce a Parameter Server según la curva de pérdida.
 6. **Interfaces de Usuario:** Exposición del sistema mediante una interfaz gráfica de terminal interactiva (`orchestui`) y una librería de bindings para Python vía FFI (`orchestra-py`).
-
-## Tecnologías utilizadas
-
-El stack tecnológico de la solución se define a partir de las siguientes herramientas y bibliotecas:
-
-| Dominio | Tecnología / Herramienta | Justificación técnica |
-| --- | --- | --- |
-| **Lenguaje principal** | `Rust` | Familiaridad, gusto, performance y expresabilidad. |
-| **Ecosistema de datos** | `ndarray` | Base para la representación y manipulación eficiente de tensores $n$-dimensionales. |
-| **Integración / FFI** | `PyO3`, `maturin`  | Permite la generación de bindings de Python nativos sobre el código en Rust. |
-| **Interfaz de usuario** | `ratatui` | Renderizado de la interfaz interactiva de terminal para monitoreo en tiempo real. |
-| **Executor asincrónico** | `tokio` | Completitud, es el estado del arte en runtimes asincrónicos del lenguaje |
-| **Despliegue y simulación** | **Docker / Docker Compose** | Creación de entornos multinodo aislados y reproducibles para pruebas locales y emulación de topologías. |
-| **Serialización de modelos** | `safetensors` | Utilidad para serializar los modelos ya entrenados |
-| **Automatización** | `Makefile` y Cargo Workspace | Gestión unificada de compilación, ejecución de suites de pruebas y benchmarks automatizados. |
-| **Benchmarks** | `numpy`, `matplotlib`, `torch` | Estado del arte para visualización y `pytorch` se uso de base comparativa |
-| **Simulación de Red** | `pumba` | Facil de usar y bastante parametrizable |
-
-La totalidad de las herramientas y bibliotecas utilizadas son de código abierto, con licencias permisivas (MIT o Apache 2.0 en su mayoría). El sistema desarrollado se publica bajo licencia abierta, de modo que pueda ser retomado y extendido por terceros, según el criterio establecido en la propuesta. No se incurrió en costos de licenciamiento.
