@@ -47,7 +47,7 @@ $$\bar{g}=\frac{1}{W}\sum_{w=1}^{W} g_w,$$
 
 que equivale a un paso de descenso por gradiente con batch efectivo $W\cdot b$, es decir, el tamaño de batch que efectivamente "ve" el optimizador tras agregar a los $W$ workers. Promediar, y no sumar, mantiene la magnitud del gradiente, y por consiguiente la tasa de aprendizaje efectiva, independiente de $W$. Esta distinción es central para el diseño experimental: en O.N.O. el `batch_size` es por worker, de modo que, con $b$ constante, agregar workers cambia el batch efectivo.
 
-En el régimen de Parameter Server evaluado, los servidores almacenan los pesos fragmentados entre ellos, y los workers hacen *push* de gradientes y *pull* de parámetros. El régimen de sincronización define el comportamiento: con barrera, todos los workers esperan a que el servidor aplique la actualización. En ring All-Reduce, los $W$ workers se ordenan en anillo y ejecutan dos fases, *scatter-reduce* y *all-gather*; el volumen de gradiente que comunica cada worker es aproximadamente
+Ambas estrategias se describen en el *Estado del arte*; lo que interesa aquí es el volumen que comunican. En Parameter Server los workers hacen *push* de gradientes y *pull* de parámetros contra servidores que fragmentan los pesos, y esperan en una barrera a que la actualización se aplique. En ring All-Reduce los $W$ workers se ordenan en anillo y ejecutan dos fases, *scatter-reduce* y *all-gather*, de modo que cada worker comunica aproximadamente
 
 $$2\,\frac{W-1}{W}\,|g|,$$
 
@@ -55,15 +55,13 @@ esencialmente independiente de $W$ salvo un factor constante, lo que le confiere
 
 Este estudio utiliza el régimen sincrónico con barrera para Parameter Server. La consecuencia es deliberada y debe tenerse presente al leer los resultados: bajo ese régimen, ambas estrategias aplican la misma regla de actualización, de modo que no cabe esperar una diferencia sistemática de convergencia entre ellas. Lo que se compara, entonces, es el costo de llegar al mismo lugar.
 
-![Parameter Server (izquierda): los workers hacen push y pull contra dos servidores que fragmentan los pesos. Ring All-Reduce (derecha): los workers promedian gradientes entre sí sin servidor central.](figures/ps_vs_ar_conceptual.pdf){width=78%}
-
 ### Criterio de comparación justa
 
 Comparar dos estrategias que no consumen los mismos recursos exige explicitar el criterio de equidad, porque distintos criterios conducen a conclusiones distintas. El criterio adoptado es igual número de workers: para cada $N$, All-Reduce usa $N$ workers y Parameter Server usa los mismos $N$ workers más dos servidores. Los servidores se consideran el costo estructural propio de Parameter Server, no un recorte de su capacidad de cómputo.
 
 Este criterio tiene una consecuencia deseable. Como ambas estrategias usan los mismos $W$ workers con el mismo $b$, el batch efectivo $W\cdot b$ es idéntico para ambas en cada topología. La semántica de optimización queda fijada y, por consiguiente, la convergencia es directamente comparable. El costo del criterio, que se declara abiertamente, es que Parameter Server ocupa más nodos totales para el mismo trabajo, lo cual queda registrado como una desventaja suya en la matriz de decisión final.
 
-Se reportan dos mediciones complementarias, y se es explícito sobre qué pregunta responde cada una: con un batch por worker pequeño se mide convergencia y exactitud; con un batch por worker mayor se mide throughput bruto.
+Se reportan dos mediciones complementarias, y se es explícito sobre qué pregunta responde cada una: con un batch por worker pequeño se mide convergencia y exactitud; con un batch por worker mayor se mide throughput bruto. Ambas difieren también en el número de repeticiones. Los ensayos de convergencia entrenan sobre el conjunto de datos completo y, por su costo, se ejecutan una sola vez por configuración; los de throughput y escalabilidad se repiten tres veces y se reportan en media. Esa asimetría determina cuánto peso admite cada medición de tiempo y se retoma al discutir los resultados.
 
 | Estrategia | Workers | Servidores | Nodos | Batch efectivo |
 |------------|---------|------------|-------|----------------|
@@ -85,7 +83,7 @@ Los modelos empleados se detallan en la Tabla 3. El modelo principal es `nielsen
 
 : Modelos empleados y su tamaño aproximado. Las redes Densa S/M/L son totalmente conectadas.
 
-Se utilizó el optimizador de descenso por gradiente estocástico con tasa de aprendizaje $0{,}1$ y semilla fija, sobre una máquina de ocho núcleos.
+Se utilizó el optimizador de descenso por gradiente estocástico con tasa de aprendizaje $0{,}1$ y semilla fija. Todos los ensayos de este estudio se ejecutaron sobre un procesador Intel Core i5-8350U de cuatro núcleos físicos y ocho hilos lógicos, con 8 GB de memoria. El dato condiciona la lectura de los resultados de escalabilidad: a partir de cinco workers las configuraciones evaluadas superan la cantidad de núcleos físicos disponibles, y Parameter Server lo hace antes que All-Reduce porque suma dos nodos servidores.
 
 ### Resultados: convergencia
 
@@ -108,15 +106,13 @@ Este resultado no es una sorpresa sino una confirmación de corrección: como el
 
 : Resultados de convergencia justa (batch 10 por worker, evaluación sobre el conjunto de test completo) para ambas estrategias en cada conjunto de datos.
 
-La diferencia decisiva, entonces, es el tiempo. All-Reduce alcanza la misma exactitud apreciablemente antes que Parameter Server, con una brecha del orden del 15 % a 20 % en las configuraciones de 3 workers. La explicación es estructural: el servidor de Parameter Server actúa como punto de serialización por el que pasan todas las actualizaciones.
+La diferencia, entonces, está en el tiempo. All-Reduce alcanza la misma exactitud antes que Parameter Server en las cuatro configuraciones medidas: la brecha es del 15 % al 18 % del tiempo de Parameter Server con 3 workers, y se reduce al 6 % al 9 % con 5 workers. Como estos ensayos se ejecutan una sola vez, la magnitud puntual de cada brecha no admite lectura fina. Lo que sostiene la conclusión es la convergencia de tres evidencias independientes: el signo de la diferencia se repite en las cuatro configuraciones; su estrechamiento al sumar workers coincide con lo que muestran los ensayos de escalabilidad, que sí están repetidos; y existe una explicación estructural, ya que el servidor de Parameter Server actúa como punto de serialización por el que pasan todas las actualizaciones.
 
 ### Resultados: throughput y escalabilidad
 
 Con batch por worker fijo, el comportamiento al sumar nodos revela un cruce que matiza la conclusión anterior. Con pocos workers, All-Reduce sostiene mayor throughput; al sumar workers, las tendencias se invierten: el throughput de All-Reduce cae levemente, porque su anillo sincrónico satura los núcleos físicos, mientras que el de Parameter Server crece y llega a igualarlo.
 
 ![Throughput (muestras por segundo) frente al número de workers, con batch por worker fijo, en FashionMNIST. All-Reduce parte más alto pero Parameter Server lo alcanza al crecer los workers.](figures/throughput_vs_workers.pdf){width=78%}
-
-![Speedup de throughput respecto de la configuración de 3 workers. Parameter Server escala con mayor pendiente que All-Reduce desde una base más baja.](figures/speedup_vs_workers.pdf){width=78%}
 
 Parameter Server escala con pendiente positiva al sumar nodos, amortizando el costo fijo de sus servidores. Debe recordarse, sin embargo, que para hacerlo emplea dos nodos servidores adicionales que All-Reduce no necesita, y que la saturación de núcleos observada en All-Reduce es un artefacto del entorno de máquina única, no una propiedad del algoritmo.
 
