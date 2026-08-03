@@ -7,20 +7,20 @@ El plan de actividades de la propuesta fijó dieciséis tareas repartidas en cua
 
 El desarrollo puede reconstruirse en once fases. Las fechas son aproximadas y corresponden a rangos de actividad, ya que varias fases se solaparon.
 
-| Fase | Período | Contenido |
-|---|---|---|
-| 0 | Ago–Nov 2025 | Propuesta, relevamiento bibliográfico y un primer diseño descartado |
-| 1 | Nov 2025–Ene 2026 | Capa de comunicación |
-| 2 | Dic 2025–Feb 2026 | Parameter Server y Worker |
-| 3 | Ene–Mar 2026 | Motor de redes neuronales |
-| 4 | Feb–Mar 2026 | Orchestrator, interfaz de terminal e interfaz de Python |
-| 5 | Mar 2026 | Multi-servidor, conjuntos de datos y eficiencia de red |
-| 6 | Mar–May 2026 | All-Reduce en anillo y unificación del nodo |
-| 7 | Abr–May 2026 | Early stopping y la saga de bloqueos |
-| 8 | May–Jun 2026 | Strategy Switch, topología y benchmarks |
-| 9 | Jun 2026 | Endurecimiento y exposición de funcionalidad |
-| 10 | Jun–Jul 2026 | Consolidación del benchmark y auditoría de corrección |
-| 11 | Jul 2026 | Retracción de la tolerancia a fallos, optimización final y documentación |
+| Fase | Período           | Contenido                                                           |
+|------|-------------------|---------------------------------------------------------------------|
+| 0    | Ago–Nov 2025      | Propuesta, relevamiento bibliográfico y un primer diseño descartado |
+| 1    | Nov 2025–Ene 2026 | Capa de comunicación                                                |
+| 2    | Dic 2025–Feb 2026 | Parameter Server y Worker                                           |
+| 3    | Ene–Mar 2026      | Motor de redes neuronales                                           |
+| 4    | Feb–Mar 2026      | Orchestrator, interfaz de terminal e interfaz de Python             |
+| 5    | Mar 2026          | Multi-servidor, conjuntos de datos y eficiencia de red              |
+| 6    | Mar–May 2026      | All-Reduce en anillo y unificación del nodo                         |
+| 7    | Abr–May 2026      | Early stopping y la saga de bloqueos                                |
+| 8    | May–Jun 2026      | Strategy Switch, topología y benchmarks                             |
+| 9    | Jun 2026          | Endurecimiento y exposición de funcionalidad                        |
+| 10   | Jun–Jul 2026      | Consolidación del benchmark y auditoría de corrección               |
+| 11   | Jul 2026          | Optimización final y documentación                                  |
 
 : Fases del desarrollo efectivamente recorridas.
 
@@ -34,28 +34,53 @@ El desarrollo puede reconstruirse en once fases. Las fechas son aproximadas y co
 
 **Lo que se ejecutó sin estar planificado.** Aparecieron cuatro líneas no previstas: la selección de topología mediante estadísticas de latencia, la auditoría de corrección distribuida que surgió de la construcción de la suite de benchmarks, la optimización del motor de convolución, y las dos monografías que constituyen los estudios experimentales de este informe, que excedieron en profundidad lo que la tarea 14 contemplaba.
 
-**Una observación sobre la estimación.** La distribución de horas de la propuesta asignaba 200 horas a investigar las implementaciones distribuidas de TensorFlow y PyTorch (tareas 2 y 3). En la práctica ese estudio se realizó de forma mucho más acotada y en modalidad de consulta puntual, y el esfuerzo se redistribuyó hacia la implementación y la depuración del motor de aprendizaje. La lección de estimación es la habitual y no por conocida menos real: el esfuerzo se subestima sistemáticamente en aquello que no se conoce de antemano, que en este trabajo fue todo lo relativo a la corrección numérica del entrenamiento y a la coordinación distribuida.
+**Una observación sobre la estimación.** La distribución de horas de la propuesta asignaba 200 horas a investigar las implementaciones distribuidas de TensorFlow y PyTorch (tareas 2 y 3). En la práctica ese estudio se realizó de forma mucho más acotada y en modalidad de consulta puntual, y el esfuerzo se redistribuyó hacia la implementación y la depuración del motor de aprendizaje profundo. La lección de estimación es la habitual y no por conocida menos real: el esfuerzo se subestima sistemáticamente en aquello que no se conoce de antemano, que en este trabajo fue todo lo relativo a la corrección numérica del entrenamiento y a la coordinación distribuida.
 
 ## Carga horaria efectiva
 
-| Nro. | Tarea | Horas estimadas | Horas reales |
-|---|---|---|---|
-| 1 | Leer y analizar los trabajos previos | 100 | 130 |
-| 2 | Investigar la implementación distribuida de TensorFlow | 50 | 20 |
-| 3 | Investigar la implementación distribuida de PyTorch | 50 | 25 |
-| 4 | Desarrollar el sistema distribuido en Rust | 150 | 310 |
-| 5 | Implementar Parameter Server | 100 | 125 |
-| 6 | Implementar All-Reduce | 100 | 145 |
-| 7 | Implementar Strategy-Switch | 100 | 85 |
-| 8 | Optimizaciones de comunicación entre nodos | 150 | 135 |
-| 9 | Optimizaciones de sincronización de las copias del modelo | 150 | 205 |
-| 10 | Interfaz de funciones externas en Python e interfaz de terminal | 50 | 95 |
-| 11 | Pruebas unitarias y de integración | 50 | 45 |
-| 12 | Simulación sobre distintas configuraciones de nodos | 100 | 105 |
-| 13 | Optimizaciones de carga en configuraciones heterogéneas | 150 | 0 (no ejecutada) |
-| 14 | Análisis de resultados y gráficos | 100 | 175 |
-| 15 | Documentación del código y del proceso | 50 | 65 |
-| 16 | Informe final | 50 | 85 |
-|  | Total | 1500 | 1750 |
+| Nro. | Tarea                                                           | Horas estimadas | Horas reales     |
+|------|-----------------------------------------------------------------|-----------------|------------------|
+| 1    | Leer y analizar los trabajos previos                            | 100             | 40               |
+| 2    | Investigar la implementación distribuida de TensorFlow          | 50              | 5                |
+| 3    | Investigar la implementación distribuida de PyTorch             | 50              | 25               |
+| 4    | Desarrollar el sistema distribuido en Rust                      | 150             | 400              |
+| 5    | Implementar Parameter Server                                    | 100             | 200              |
+| 6    | Implementar All-Reduce                                          | 100             | 50               |
+| 7    | Implementar Strategy-Switch                                     | 100             | 50               |
+| 8    | Optimizaciones de comunicación entre nodos                      | 150             | 100              |
+| 9    | Optimizaciones de sincronización de las copias del modelo       | 150             | 100              |
+| 10   | Interfaz de funciones externas en Python e interfaz de terminal | 50              | 100              |
+| 11   | Pruebas unitarias y de integración                              | 50              | 100              |
+| 12   | Simulación sobre distintas configuraciones de nodos             | 100             | 150              |
+| 13   | Optimizaciones de carga en configuraciones heterogéneas         | 150             | 0 (no ejecutada) |
+| 14   | Análisis de resultados y gráficos                               | 100             | 100              |
+| 15   | Documentación del código y del proceso                          | 50              | 100              |
+| 16   | Informe final                                                   | 50              | 50               |
+|      | Total                                                           | 1500            | 1570             |
 
 : Contraste entre la carga horaria estimada en la propuesta y la efectivamente dedicada.
+
+## Carga horaria por integrante
+
+<!-- PENDIENTE: completar con las horas efectivamente dedicadas por integrante y por tarea. -->
+
+| Tarea                                                           | Lorenzo Minervino | Alejo Ordóñez | Marcos Bianchi |
+|-----------------------------------------------------------------|-------------------|---------------|----------------|
+| Cantidad de horas insumidas                                     |                   |               |                |
+| Leer y analizar los trabajos previos                            |                   |               |                |
+| Investigar la implementación distribuida de TensorFlow          |                   |               |                |
+| Investigar la implementación distribuida de PyTorch             |                   |               |                |
+| Desarrollar el sistema distribuido en Rust                      |                   |               |                |
+| Implementar Parameter Server                                    |                   |               |                |
+| Implementar All-Reduce                                          |                   |               |                |
+| Implementar Strategy-Switch                                     |                   |               |                |
+| Optimizaciones de comunicación entre nodos                      |                   |               |                |
+| Optimizaciones de sincronización de las copias del modelo       |                   |               |                |
+| Interfaz de funciones externas en Python e interfaz de terminal |                   |               |                |
+| Pruebas unitarias y de integración                              |                   |               |                |
+| Simulación sobre distintas configuraciones de nodos             |                   |               |                |
+| Optimizaciones de carga en configuraciones heterogéneas         |                   |               |                |
+| Análisis de resultados y gráficos                               |                   |               |                |
+| Documentación del código y del proceso                          |                   |               |                |
+| Informe final                                                   |                   |               |                |
+| Total                                                           |                   |               |                |
