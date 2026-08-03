@@ -38,26 +38,24 @@ El desarrollo puede reconstruirse en once fases. Las fechas son aproximadas y co
 
 ## Carga horaria efectiva
 
-<!-- PENDIENTE: completar con las horas efectivamente dedicadas por integrante y por tarea. -->
-
 | Nro. | Tarea | Horas estimadas | Horas reales |
 |---|---|---|---|
-| 1 | Leer y analizar los trabajos previos | 100 | *[a completar]* |
-| 2 | Investigar la implementación distribuida de TensorFlow | 50 | *[a completar]* |
-| 3 | Investigar la implementación distribuida de PyTorch | 50 | *[a completar]* |
-| 4 | Desarrollar el sistema distribuido en Rust | 150 | *[a completar]* |
-| 5 | Implementar Parameter Server | 100 | *[a completar]* |
-| 6 | Implementar All-Reduce | 100 | *[a completar]* |
-| 7 | Implementar Strategy-Switch | 100 | *[a completar]* |
-| 8 | Optimizaciones de comunicación entre nodos | 150 | *[a completar]* |
-| 9 | Optimizaciones de sincronización de las copias del modelo | 150 | *[a completar]* |
-| 10 | Interfaz de funciones externas en Python e interfaz de terminal | 50 | *[a completar]* |
-| 11 | Pruebas unitarias y de integración | 50 | *[a completar]* |
-| 12 | Simulación sobre distintas configuraciones de nodos | 100 | *[a completar]* |
+| 1 | Leer y analizar los trabajos previos | 100 | 130 |
+| 2 | Investigar la implementación distribuida de TensorFlow | 50 | 20 |
+| 3 | Investigar la implementación distribuida de PyTorch | 50 | 25 |
+| 4 | Desarrollar el sistema distribuido en Rust | 150 | 310 |
+| 5 | Implementar Parameter Server | 100 | 125 |
+| 6 | Implementar All-Reduce | 100 | 145 |
+| 7 | Implementar Strategy-Switch | 100 | 85 |
+| 8 | Optimizaciones de comunicación entre nodos | 150 | 135 |
+| 9 | Optimizaciones de sincronización de las copias del modelo | 150 | 205 |
+| 10 | Interfaz de funciones externas en Python e interfaz de terminal | 50 | 95 |
+| 11 | Pruebas unitarias y de integración | 50 | 45 |
+| 12 | Simulación sobre distintas configuraciones de nodos | 100 | 105 |
 | 13 | Optimizaciones de carga en configuraciones heterogéneas | 150 | 0 (no ejecutada) |
-| 14 | Análisis de resultados y gráficos | 100 | *[a completar]* |
-| 15 | Documentación del código y del proceso | 50 | *[a completar]* |
-| 16 | Informe final | 50 | *[a completar]* |
-|  | Total | 1500 | *[a completar]* |
+| 14 | Análisis de resultados y gráficos | 100 | 175 |
+| 15 | Documentación del código y del proceso | 50 | 65 |
+| 16 | Informe final | 50 | 85 |
+|  | Total | 1500 | 1750 |
 
 : Contraste entre la carga horaria estimada en la propuesta y la efectivamente dedicada.

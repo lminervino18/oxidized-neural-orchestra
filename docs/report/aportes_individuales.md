@@ -13,7 +13,7 @@ El desarrollo del trabajo se planteó como una responsabilidad compartida: las e
 
 | | Alejo Ordoñez | Lorenzo Minervino | Marcos Bianchi Fernández |
 |---|---|---|---|
-| **Cantidad de horas insumidas** | *[a completar]* | *[a completar]* | *[a completar]* |
+| **Cantidad de horas insumidas** | *[a completar]* | 620 | *[a completar]* |
 | Preparación de la propuesta | X | X | X |
 | Relevamiento del estado del arte | X | X | X |
 | Diseño de la arquitectura del sistema | X | X | X |
