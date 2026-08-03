@@ -1,4 +1,4 @@
 \newpage
 # Palabras clave
 
-Aprendizaje profundo, entrenamiento distribuido, sistemas distribuidos, paralelismo de datos, *Parameter Server*, *All-Reduce*, *Strategy-Switch*, convergencia, escalabilidad, Rust.
+Aprendizaje profundo, entrenamiento distribuido, paralelismo de datos, *Parameter Server*, *All-Reduce*, *Strategy-Switch*, Rust.
