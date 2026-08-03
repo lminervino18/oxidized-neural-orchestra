@@ -134,7 +134,7 @@ def generate_compose(nodes: int, release: bool, pumba: bool) -> dict[str, YmlFie
 def main():
     nodes = int(os.environ["NODES"])
     release = os.environ["RELEASE"].lower() == "true"
-    pumba = os.environ["PUMBA"].lower() == "true"
+    pumba = os.environ.get("PUMBA", "false").lower() == "true"
 
     docker_compose = generate_compose(nodes, release, pumba)
 
