@@ -9,11 +9,9 @@ El desarrollo del trabajo se planteó como una responsabilidad compartida: las e
 
 **Marcos Bianchi Fernández (Padrón 108921).** Los algoritmos de entrenamiento distribuido y su coordinación. El módulo de comunicaciones y el protocolo entre nodos, incluidas las técnicas de reducción de tráfico. El módulo del Servidor de parámetros. La monografía sobre el impacto de las épocas offline, que constituye el segundo estudio experimental del informe.
 
-<!-- PENDIENTE: completar la fila de horas insumidas por cada integrante. -->
-
 | | Alejo Ordoñez | Lorenzo Minervino | Marcos Bianchi Fernández |
 |---|---|---|---|
-| **Cantidad de horas insumidas** | *[a completar]* | 620 | *[a completar]* |
+| **Cantidad de horas insumidas** | 520 | 545 | 525 |
 | Preparación de la propuesta | X | X | X |
 | Relevamiento del estado del arte | X | X | X |
 | Diseño de la arquitectura del sistema | X | X | X |
