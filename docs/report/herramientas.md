@@ -19,7 +19,7 @@
 
 **Docker** Se utilizó para simular la ejecución del sistema sobre múltiples nodos y para automatizar el despliegue. Se acompaña de `cargo-chef` para cachear las capas de dependencias en la construcción de la imagen, lo que reduce de forma sustancial el tiempo de reconstrucción.
 
-**Git, GitHub y GitHub Projects** Control de versiones y gestión del proceso: ramas por funcionalidad, *pull requests* con revisión obligatoria, e *issues* para el seguimiento de tickets, errores y debates de diseño.
+**Git, GitHub, GitHub Projects y GitHub Actions** Control de versiones y gestión del proceso: ramas por funcionalidad, *pull requests* con revisión obligatoria, e *issues* para el seguimiento de tickets, errores y debates de diseño. Se hizo uso de Actions para CI/CD del repositorio.
 
 **Pumba** Se utilizó para simular una red real durante los benchmarks del sistema en entornos conteinerizados de Docker. Es facil de usar y muy parametrizable.
 
