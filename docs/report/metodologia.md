@@ -5,7 +5,7 @@ Esta sección actualiza lo planteado en la propuesta, contrastando lo previsto c
 
 ## Gestión y roles
 
-Se estableció un compromiso de 500 horas por estudiante a lo largo de dos cuatrimestres, lo que representa un promedio de unas 16 horas semanales por persona sobre 32 semanas. El Ing. Ricardo A. Veiga cumplió la función de tutor y el Dr. Ing. J. Ignacio Alvarez-Hamelin la de co-tutor y orientador en el campo de desempeño, en el marco del CoNexDat, Grupo de Redes Complejas y Comunicación de Datos de la Facultad de Ingeniería.
+Se estableció un compromiso de 500 horas por estudiante a lo largo de dos cuatrimestres, lo que representa un promedio de unas 16 horas semanales por persona sobre 32 semanas. El Ing. Ricardo A. Veiga cumplió la función de tutor y el Dr. Ing. J. Ignacio Álvarez-Hamelin la de co-tutor y orientador en el campo de desempeño, en el marco del CoNexDat, Grupo de Redes Complejas y Comunicación de Datos de la Facultad de Ingeniería.
 
 Los tres estudiantes participaron de todas las etapas de análisis, implementación y pruebas, y cada integrante concentró su foco principal en un conjunto de componentes, según se detalla en *Aportes individuales*. Esa especialización, que emergió del desarrollo y no estaba impuesta por la propuesta, tuvo un efecto secundario relevante: la revisión cruzada de código se volvió el principal mecanismo de difusión de conocimiento entre componentes, y en varios casos las discusiones de revisión terminaron modificando decisiones de diseño y no solo detalles de implementación.
 
