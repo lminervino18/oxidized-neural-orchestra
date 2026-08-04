@@ -9,34 +9,25 @@ El desarrollo del trabajo se planteó como una responsabilidad compartida: las e
 
 **Marcos Bianchi Fernández (Padrón 108921).** Los algoritmos de entrenamiento distribuido y su coordinación. El módulo de comunicaciones y el protocolo entre nodos, incluidas las técnicas de reducción de tráfico. El módulo del Servidor de parámetros. La monografía sobre el impacto de las épocas offline, que constituye el segundo estudio experimental del informe.
 
-| | Alejo Ordoñez | Lorenzo Minervino | Marcos Bianchi Fernández |
-|---|---|---|---|
-| **Cantidad de horas insumidas** | 520 | 545 | 525 |
-| Preparación de la propuesta | X | X | X |
-| Relevamiento del estado del arte | X | X | X |
-| Diseño de la arquitectura del sistema | X | X | X |
-| Capa de comunicaciones y protocolo | | | X |
-| Motor de redes neuronales | X | | |
-| Capas convolucionales y max-pooling | X | | |
-| Manejo y distribución de datasets | X | | |
-| Parameter Server | | | X |
-| Worker y All-Reduce en anillo | | X | |
-| Strategy-Switch | | X | X |
-| Orchestrator y coordinación | | X | X |
-| Optimizaciones de comunicación | | | X |
-| Optimizaciones de sincronización | | X | X |
-| Optimización del motor de aprendizaje | X | | |
-| Interfaz de funciones externas en Python | | X | |
-| Interfaz interactiva de terminal | | X | |
-| Entornos de simulación con Docker | | X | X |
-| Definición de casos de prueba | X | X | X |
-| Revisión de código | X | X | X |
-| Suite de benchmarks | | X | |
-| Análisis experimental de resultados | | X | |
-| Monografía: All-Reduce frente a Parameter Server | | X | |
-| Monografía: impacto de las épocas offline | | | X |
-| Monografía: Strategy-Switch | X | | |
-| Documentación técnica del sistema | X | X | X |
-| Elaboración del Informe Final | X | X | X |
 
-: Distribución del trabajo individual por tipo de tarea.
+|                                                                 | Alejo Ordoñez | Lorenzo Minervino | Marcos Bianchi Fernández |
+|-----------------------------------------------------------------|---|---|---|
+| **Cantidad de horas insumidas**                                 | 520 | 545 | 525 |
+| Leer y analizar los trabajos previos                            | 25 | 20 | 15 |
+| Investigar la implementación distribuida de TensorFlow          | 0 | 5 | 0 |
+| Investigar la implementación distribuida de PyTorch             | 20 | 0 | 5 |
+| Desarrollar el sistema distribuido en Rust                      | 120 | 70 | 210 |
+| Implementar Parameter Server                                    | 90 | 10 | 100 |
+| Implementar All-Reduce                                          | 10 | 20 | 20 |
+| Implementar Strategy-Switch                                     | 15 | 0 | 35 |
+| Optimizaciones de comunicación entre nodos                      | 50 | 0 | 50 |
+| Optimizaciones de sincronización de las copias del modelo       | 20 | 80 | 0 |
+| Interfaz de funciones externas en Python e interfaz de terminal | 0 | 100 | 0 |
+| Pruebas unitarias y de integración                              | 20 | 60 | 20 |
+| Simulación sobre distintas configuraciones de nodos             | 30 | 100 | 20 |
+| Optimizaciones de carga en configuraciones heterogéneas         | 0 | 0 | 0 |
+| Análisis de resultados y gráficos                               | 50 | 40 | 10 |
+| Documentación del código y del proceso                          | 60 | 10 | 30 |
+| Informe final                                                   | 10 | 30 | 10 |
+
+: Horas dedicadas por cada integrante a cada tarea del plan de actividades.
