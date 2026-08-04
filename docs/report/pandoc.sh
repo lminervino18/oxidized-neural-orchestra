@@ -10,6 +10,7 @@ pandoc \
     estado_del_arte.md \
     problema.md \
     solucion.md \
+    benchmarks.md \
     metodologia.md \
     herramientas.md \
     experimentacion.md \
