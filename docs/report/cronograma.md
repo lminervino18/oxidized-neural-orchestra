@@ -40,7 +40,7 @@ El desarrollo puede reconstruirse en once fases. Las fechas son aproximadas y co
 
 | Nro. | Tarea                                                           | Horas estimadas | Horas reales     |
 |------|-----------------------------------------------------------------|-----------------|------------------|
-| 1    | Leer y analizar los trabajos previos                            | 100             | 40               |
+| 1    | Leer y analizar los trabajos previos                            | 100             | 60               |
 | 2    | Investigar la implementación distribuida de TensorFlow          | 50              | 5                |
 | 3    | Investigar la implementación distribuida de PyTorch             | 50              | 25               |
 | 4    | Desarrollar el sistema distribuido en Rust                      | 150             | 400              |
@@ -56,31 +56,29 @@ El desarrollo puede reconstruirse en once fases. Las fechas son aproximadas y co
 | 14   | Análisis de resultados y gráficos                               | 100             | 100              |
 | 15   | Documentación del código y del proceso                          | 50              | 100              |
 | 16   | Informe final                                                   | 50              | 50               |
-|      | Total                                                           | 1500            | 1570             |
+|      | Total                                                           | 1500            | 1590             |
 
 : Contraste entre la carga horaria estimada en la propuesta y la efectivamente dedicada.
 
 ## Carga horaria por integrante
 
-<!-- PENDIENTE: completar con las horas efectivamente dedicadas por integrante y por tarea. -->
-
 | Tarea                                                           | Lorenzo Minervino | Alejo Ordóñez | Marcos Bianchi |
 |-----------------------------------------------------------------|-------------------|---------------|----------------|
-| Cantidad de horas insumidas                                     |                   |               |                |
-| Leer y analizar los trabajos previos                            |                   |               |                |
-| Investigar la implementación distribuida de TensorFlow          |                   |               |                |
-| Investigar la implementación distribuida de PyTorch             |                   |               |                |
-| Desarrollar el sistema distribuido en Rust                      |                   |               |                |
-| Implementar Parameter Server                                    |                   |               |                |
-| Implementar All-Reduce                                          |                   |               |                |
-| Implementar Strategy-Switch                                     |                   |               |                |
-| Optimizaciones de comunicación entre nodos                      |                   |               |                |
-| Optimizaciones de sincronización de las copias del modelo       |                   |               |                |
-| Interfaz de funciones externas en Python e interfaz de terminal |                   |               |                |
-| Pruebas unitarias y de integración                              |                   |               |                |
-| Simulación sobre distintas configuraciones de nodos             |                   |               |                |
-| Optimizaciones de carga en configuraciones heterogéneas         |                   |               |                |
-| Análisis de resultados y gráficos                               |                   |               |                |
-| Documentación del código y del proceso                          |                   |               |                |
-| Informe final                                                   |                   |               |                |
+| Cantidad de horas insumidas                                     |       545         |      520      |      525       |
+| Leer y analizar los trabajos previos                            |        20         |       25      |       15       |
+| Investigar la implementación distribuida de TensorFlow          |         5         |        0      |        0       |
+| Investigar la implementación distribuida de PyTorch             |         0         |       20      |        5       |
+| Desarrollar el sistema distribuido en Rust                      |        90         |      110      |      200       |
+| Implementar Parameter Server                                    |        10         |       90      |      100       |
+| Implementar All-Reduce                                          |         0         |       20      |       30       |
+| Implementar Strategy-Switch                                     |         0         |       15      |       35       |
+| Optimizaciones de comunicación entre nodos                      |         0         |       50      |       50       |
+| Optimizaciones de sincronización de las copias del modelo       |        80         |       20      |        0       |
+| Interfaz de funciones externas en Python e interfaz de terminal |       100         |        0      |        0       |
+| Pruebas unitarias y de integración                              |        60         |       20      |       20       |
+| Simulación sobre distintas configuraciones de nodos             |       100         |       30      |       20       |
+| Optimizaciones de carga en configuraciones heterogéneas         |         0         |        0      |        0       |
+| Análisis de resultados y gráficos                               |        40         |       50      |       10       |
+| Documentación del código y del proceso                          |        10         |       60      |       30       |
+| Informe final                                                   |        30         |       10      |       10       |
 | Total                                                           |                   |               |                |
