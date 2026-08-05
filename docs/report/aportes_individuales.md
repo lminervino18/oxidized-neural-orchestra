@@ -10,8 +10,8 @@ El desarrollo del trabajo se planteó como una responsabilidad compartida: las e
 **Marcos Bianchi Fernández (Padrón 108921).** Los algoritmos de entrenamiento distribuido y su coordinación. El módulo de comunicaciones y el protocolo entre nodos, incluidas las técnicas de reducción de tráfico. El módulo del Servidor de parámetros. La monografía sobre el impacto de las épocas offline, que constituye el segundo estudio experimental del informe.
 
 
-|                                                                 | Alejo Ordoñez | Lorenzo Minervino | Marcos Bianchi Fernández |
-|-----------------------------------------------------------------|---|---|---|
+|                                                         | Alejo | Lorenzo | Marcos |
+|---------------------------------------------------------|-------|---------|--------|
 | **Cantidad de horas insumidas**                                 | 520 | 545 | 525 |
 | Leer y analizar los trabajos previos                            | 25 | 20 | 15 |
 | Investigar la implementación distribuida de TensorFlow          | 0 | 5 | 0 |
@@ -25,7 +25,7 @@ El desarrollo del trabajo se planteó como una responsabilidad compartida: las e
 | Interfaz de funciones externas en Python e interfaz de terminal | 0 | 100 | 0 |
 | Pruebas unitarias y de integración                              | 20 | 60 | 20 |
 | Simulación sobre distintas configuraciones de nodos             | 30 | 100 | 20 |
-| Optimizaciones de carga en configuraciones heterogéneas         | 0 | 0 | 0 |
+| Optimizaciones de carga en configuraciones heterogéneas (no ejecutada) | 0 | 0 | 0 |
 | Análisis de resultados y gráficos                               | 50 | 40 | 10 |
 | Documentación del código y del proceso                          | 60 | 10 | 30 |
 | Informe final                                                   | 10 | 30 | 10 |
