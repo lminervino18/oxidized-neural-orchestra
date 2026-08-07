@@ -34,7 +34,7 @@ install-dev: venv ## Dev install: orchestra + benchmark & lint deps (torch, nump
 	cargo fetch
 
 dataset: ## Download MNIST into datasets/
-	bash scripts/download_mnist.sh
+	$(PYTHON) scripts/download_mnist.py
 
 # ── Build ─────────────────────────────────────────────────
 build: ## Build the whole Rust workspace

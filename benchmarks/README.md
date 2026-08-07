@@ -39,7 +39,7 @@ Partial runs only re-run and re-plot the selected suite/model; every other suite
 
 All-reduce worker scale: [3, 5, 7] (configurable in `issue/suites.py`; the issue suggests 3/7/11 — kept lighter to fit one host).
 
-_Last full run: 5h 38m 58s (2026-07-01 02:37)._
+_Last full run: 2h 37m 36s (2026-08-03 20:37)._
 
 ## Convergence
 
@@ -48,18 +48,18 @@ _Last full run: 5h 38m 58s (2026-07-01 02:37)._
 
 | Model | Strategy | Topology | lr | Batch/wkr | Epochs | Final loss | Accuracy |
 |---|---|---|---|---|---|---|---|
-| lenet5 | AR | 3w | 0.05 | 64 | 56 | 0.00756 | 0.978 |
-| lenet5 | AR | 5w | 0.05 | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | AR | 3w | 0.05 | 64 | 56 | 0.00755 | 0.978 |
+| lenet5 | AR | 5w | 0.05 | 64 | 60 | 0.0105 | 0.972 |
 | lenet5 | AR | 7w | 0.05 | 64 | 60 | 0.014 | 0.963 |
 | lenet5 | PS (blocking) | 3w/2s | 0.05 | 64 | 60 | 0.00723 | 0.980 |
-| lenet5 | PS (non-block) | 3w/2s | 0.05 | 64 | 60 | 0.00732 | 0.980 |
-| lenet5 | SS (blocking) · no switch | 3w/2s | 0.05 | 64 | 60 | 0.0105 | 0.973 |
+| lenet5 | PS (non-block) | 3w/2s | 0.05 | 64 | 60 | 0.00735 | 0.980 |
+| lenet5 | SS (blocking) · no switch | 3w/2s | 0.05 | 64 | 60 | 0.0105 | 0.972 |
 | lenet5 | PyTorch (ref) | 1w | 0.05 | 64 | 60 | 0.00107 | 0.990 |
 | nielsen | AR | 3w | 0.1 | 10 | 51 | 0.00374 | 0.983 |
 | nielsen | AR | 5w | 0.1 | 10 | 60 | 0.00547 | 0.979 |
 | nielsen | AR | 7w | 0.1 | 10 | 60 | 0.00762 | 0.975 |
 | nielsen | PS (blocking) | 3w/2s | 0.1 | 10 | 60 | 0.00349 | 0.983 |
-| nielsen | PS (non-block) | 3w/2s | 0.1 | 10 | 60 | 0.00373 | 0.982 |
+| nielsen | PS (non-block) | 3w/2s | 0.1 | 10 | 60 | 0.00373 | 0.983 |
 | nielsen | SS (blocking) · no switch | 3w/2s | 0.1 | 10 | 60 | 0.00547 | 0.979 |
 | nielsen | PyTorch (ref) | 1w | 0.1 | 10 | 60 | 0.000222 | 0.989 |
 
@@ -77,12 +77,12 @@ _Last full run: 5h 38m 58s (2026-07-01 02:37)._
 
 | Model | Strategy | Topology | offline | batch | Samples/sec |
 |---|---|---|---|---|---|
-| lenet5 | AR | 3w | 0 | 64 | 2913 ± 144 |
-| lenet5 | AR | 3w | 4 | 64 | 2816 ± 135 |
-| lenet5 | AR | 3w | 0 | 256 | 2728 ± 96 |
-| nielsen | AR | 3w | 0 | 64 | 3536 ± 8 |
-| nielsen | AR | 3w | 4 | 64 | 3559 ± 14 |
-| nielsen | AR | 3w | 0 | 256 | 3432 ± 71 |
+| lenet5 | AR | 3w | 0 | 64 | 9675 ± 87 |
+| lenet5 | AR | 3w | 4 | 64 | 9827 ± 25 |
+| lenet5 | AR | 3w | 0 | 256 | 8928 ± 76 |
+| nielsen | AR | 3w | 0 | 64 | 8353 ± 65 |
+| nielsen | AR | 3w | 4 | 64 | 8527 ± 62 |
+| nielsen | AR | 3w | 0 | 256 | 7721 ± 82 |
 
 ![](plots/execution_speed_nielsen.png)
 ![](plots/execution_speed_lenet5.png)
@@ -94,14 +94,14 @@ _Last full run: 5h 38m 58s (2026-07-01 02:37)._
 
 | Model | Strategy | Topology | Samples/sec | Loss/sec | Accuracy/sec |
 |---|---|---|---|---|---|
-| lenet5 | AR | 5w | 3296 | 0.000296 | 0.00132 |
-| lenet5 | PS (blocking) | 3w/2s | 2906 | 0.000263 | 0.00118 |
-| lenet5 | PS (non-block) | 3w/2s | 2904 | 0.000263 | 0.00118 |
-| lenet5 | SS (blocking) · no switch | 3w/2s | 3425 | 0.000307 | 0.00137 |
-| nielsen | AR | 5w | 4043 | 0.000232 | 0.00164 |
-| nielsen | PS (blocking) | 3w/2s | 3362 | 0.000141 | 0.00137 |
-| nielsen | PS (non-block) | 3w/2s | 3386 | 0.000141 | 0.00138 |
-| nielsen | SS (blocking) · no switch | 3w/2s | 4124 | 0.000237 | 0.00167 |
+| lenet5 | AR | 5w | 10849 | 0.000973 | 0.00434 |
+| lenet5 | PS (blocking) | 3w/2s | 9276 | 0.000841 | 0.00377 |
+| lenet5 | PS (non-block) | 3w/2s | 9485 | 0.000859 | 0.00385 |
+| lenet5 | SS (blocking) · no switch | 3w/2s | 11212 | 0.00101 | 0.00449 |
+| nielsen | AR | 5w | 7818 | 0.000449 | 0.00317 |
+| nielsen | PS (blocking) | 3w/2s | 7396 | 0.00031 | 0.00302 |
+| nielsen | PS (non-block) | 3w/2s | 7433 | 0.000311 | 0.00303 |
+| nielsen | SS (blocking) · no switch | 3w/2s | 8206 | 0.000471 | 0.00333 |
 
 ![](plots/convergence_speed_nielsen.png)
 ![](plots/convergence_speed_lenet5.png)
@@ -113,16 +113,16 @@ _Last full run: 5h 38m 58s (2026-07-01 02:37)._
 
 | Model | Strategy | Workers | Nodes | Samples/sec |
 |---|---|---|---|---|
-| lenet5 | AR | 3 | 3 | 2767 ± 86 |
-| lenet5 | AR | 5 | 5 | 3226 ± 120 |
-| lenet5 | AR | 7 | 7 | 3742 ± 46 |
-| lenet5 | PS (blocking) | 3 | 5 | 3002 ± 19 |
-| lenet5 | PS (blocking) | 5 | 7 | 3935 ± 47 |
-| nielsen | AR | 3 | 3 | 3601 ± 86 |
-| nielsen | AR | 5 | 5 | 4063 ± 10 |
-| nielsen | AR | 7 | 7 | 4629 ± 8 |
-| nielsen | PS (blocking) | 3 | 5 | 3910 ± 37 |
-| nielsen | PS (blocking) | 5 | 7 | 4979 ± 11 |
+| lenet5 | AR | 3 | 3 | 9624 ± 31 |
+| lenet5 | AR | 5 | 5 | 10012 ± 24 |
+| lenet5 | AR | 7 | 7 | 10899 ± 93 |
+| lenet5 | PS (blocking) | 3 | 5 | 9970 ± 107 |
+| lenet5 | PS (blocking) | 5 | 7 | 11356 ± 88 |
+| nielsen | AR | 3 | 3 | 8296 ± 30 |
+| nielsen | AR | 5 | 5 | 8404 ± 41 |
+| nielsen | AR | 7 | 7 | 8605 ± 101 |
+| nielsen | PS (blocking) | 3 | 5 | 8227 ± 318 |
+| nielsen | PS (blocking) | 5 | 7 | 8920 ± 141 |
 
 ![](plots/scalability_nielsen.png)
 ![](plots/scalability_lenet5.png)
