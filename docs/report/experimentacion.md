@@ -3,7 +3,7 @@
 
 La validación se apoyó en dos frentes. El primero es el de las pruebas automatizadas, que verifican que el sistema hace lo que dice hacer. El segundo, y el que da sentido al proyecto, es el de los estudios experimentales: como O.N.O. fue concebido para comparar estrategias de distribución de forma controlada, la validación última consiste en demostrar que esa base produce evidencia comparable.
 
-Los estudios se organizan como tres investigaciones independientes, cada una con su pregunta, su metodología y sus conclusiones acotadas al entorno evaluado. Las tres corren sobre la misma base, de modo que la única variable entre configuraciones es aquella que cada estudio se propone aislar.
+Los estudios se organizan como tres investigaciones independientes, cada una con su pregunta, su metodología y sus conclusiones acotadas al entorno evaluado. Los tres comparten el sistema y la infraestructura de despliegue, aunque no las condiciones de red, según se declara más abajo. Dentro de cada estudio, la única variable entre configuraciones es aquella que ese estudio se propone aislar.
 
 ## Pruebas automatizadas
 
@@ -15,9 +15,11 @@ Las dos primeras se escribieron con el arnés de pruebas nativo de Rust y se eje
 
 El despliegue se realiza con una única imagen de Docker, coherente con el agnosticismo de rol del sistema: no hay imagen de trabajador ni imagen de servidor. Un conjunto de scripts genera la configuración del clúster, ajusta la resolución de nombres y levanta el entorno a partir de un único parámetro con la cantidad de nodos.
 
-Todas las mediciones se realizaron sobre clústeres simulados en una única máquina física: un contenedor por nodo, red *bridge* y puertos publicados. Esta decisión, tomada al inicio del trabajo por la imposibilidad de disponer de múltiples máquinas dedicadas, es la limitación transversal a los tres estudios y condiciona la lectura de todos los resultados de rendimiento. La infraestructura no fija afinidad de núcleos, no limita CPU por contenedor y no emula latencia ni ancho de banda: al aumentar la cantidad de nodos los núcleos físicos se saturan, de modo que lo que se mide es escalado lógico bajo recursos compartidos y no escalado multimáquina. La red, además, es efectivamente loopback, lo que favorece sistemáticamente a las estrategias que comunican más y hace que los tiempos medidos sean una cota inferior del costo de comunicación.
+Todas las mediciones se realizaron sobre clústeres simulados en una única máquina física: un contenedor por nodo, red *bridge* y puertos publicados. Esta decisión, tomada al inicio del trabajo por la imposibilidad de disponer de múltiples máquinas dedicadas, es la limitación transversal a los tres estudios y condiciona la lectura de todos los resultados de rendimiento. La infraestructura no fija afinidad de núcleos ni limita el uso de CPU por contenedor: al aumentar la cantidad de nodos los núcleos físicos se saturan, de modo que lo que se mide es escalado lógico bajo recursos compartidos y no escalado multimáquina.
 
-Esta es la única declaración de la limitación en el informe, y los tres estudios se leen bajo ella. Para separar lo que es propiedad de un algoritmo de lo que es artefacto del entorno, los resultados de tiempo se acompañan de la métrica analítica que se introduce en el primer estudio.
+Las condiciones de red, en cambio, no son uniformes entre los estudios, y corresponde declararlo antes de leer cualquier resultado de tiempo. El segundo estudio se ejecutó con emulación de red, cuyas características se detallan en su metodología. El primero no la empleó: su red es efectivamente loopback, lo que favorece de forma sistemática a las estrategias que comunican más y convierte sus tiempos medidos en una cota inferior del costo real de comunicación. La consecuencia es que los tiempos de un estudio y del otro no admiten comparación directa entre sí, y cada uno debe leerse dentro de sus propias condiciones.
+
+Para separar lo que es propiedad de un algoritmo de lo que es artefacto del entorno, los resultados de tiempo se acompañan de la métrica analítica de volumen de comunicación que se introduce en el primer estudio, que es independiente de la velocidad de la red y por lo tanto ajena a esta diferencia.
 
 La suite de experimentación está escrita en Python y organizada de forma declarativa en cuatro conjuntos de ensayos que miden convergencia, velocidad de ejecución, velocidad de convergencia y escalabilidad. Persiste los resultados de forma incremental, agrega repeticiones en media y desvío, y regenera su propia documentación en cada corrida. Documenta además de forma explícita sus criterios de equidad y sus fuentes de ruido: justifica el presupuesto fijo de nodos, aclara qué significa una época en cada ensayo, y explica por qué ciertas variantes se comparan por exactitud y no por velocidad, dado que una medición de tiempo aislada tiene un ruido cercano al 25 %.
 
@@ -83,7 +85,7 @@ Los modelos empleados se detallan en la Tabla 3. El modelo principal es `nielsen
 
 : Modelos empleados y su tamaño aproximado. Las redes Densa S/M/L son totalmente conectadas.
 
-Se utilizó el optimizador de descenso por gradiente estocástico con tasa de aprendizaje $0{,}1$ y semilla fija. Todos los ensayos de este estudio se ejecutaron sobre un procesador Intel Core i5-8350U de cuatro núcleos físicos y ocho hilos lógicos, con 8 GB de memoria. El dato condiciona la lectura de los resultados de escalabilidad: a partir de cinco workers las configuraciones evaluadas superan la cantidad de núcleos físicos disponibles, y Parameter Server lo hace antes que All-Reduce porque suma dos nodos servidores.
+Se utilizó el optimizador de descenso por gradiente estocástico con tasa de aprendizaje $0{,}1$ y semilla fija. Todos los ensayos de este estudio se ejecutaron sobre un procesador Intel Core i5-8350U de cuatro núcleos físicos y ocho hilos lógicos, con 8 GB de memoria, y sin emulación de red. El dato condiciona la lectura de los resultados de escalabilidad: a partir de cinco workers las configuraciones evaluadas superan la cantidad de núcleos físicos disponibles, y Parameter Server lo hace antes que All-Reduce porque suma dos nodos servidores.
 
 ### Resultados: convergencia
 
@@ -251,6 +253,6 @@ El uso de épocas offline en O.N.O. altera el balance entre comunicación y fide
 
 ## Síntesis de la validación
 
-Los tres estudios responden preguntas distintas y convergen en la misma observación sobre el entorno: la simulación del clúster sobre una única máquina gobierna todos los resultados de rendimiento. Los resultados de convergencia y exactitud, en cambio, son independientes de esa limitación y pueden leerse con mayor confianza.
+Los tres estudios responden preguntas distintas y convergen en la misma observación sobre el entorno: la simulación del clúster sobre una única máquina gobierna todos los resultados de rendimiento, se emule o no la red, porque los nodos siguen compartiendo los mismos núcleos físicos. Los resultados de convergencia y exactitud, en cambio, son independientes de esa limitación y pueden leerse con mayor confianza. Lo que no admite lectura conjunta son los tiempos de un estudio y de otro, porque no se midieron bajo las mismas condiciones de red.
 
 La segunda observación transversal es que el sistema cumplió su propósito. Validada la corrección de ambas estrategias por la vía de su convergencia, las diferencias de tiempo, throughput y escalabilidad admiten atribuirse al algoritmo y no a su implementación, que era exactamente el problema que este trabajo se propuso resolver.
