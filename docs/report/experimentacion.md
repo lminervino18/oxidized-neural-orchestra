@@ -156,30 +156,30 @@ La conclusión, entonces, es condicional y no absoluta: bajo estas condiciones c
 
 Permitir que los nodos operen de forma autónoma durante varias épocas posterga el intercambio de parámetros, disminuyendo la dependencia de la red y priorizando el cómputo local. Sin embargo, demorar la sincronización introduce divergencia entre los pesos de los nodos, un fenómeno conocido como *client drift* [@mcmahan2017federated]. O.N.O. expone este mecanismo como un parámetro de configuración, las épocas offline ($E$), lo que permite estudiarlo de forma directa.
 
-La pregunta es: ¿cómo impactan las épocas offline en la velocidad y en la eficacia del modelo entrenado? La hipótesis de partida era la que motiva la técnica: que un $E$ mayor reduciría el tiempo total a costa de alguna pérdida de exactitud, y que existiría un punto de equilibrio aprovechable.
+La pregunta es: ¿Cómo impacta la variación de las épocas offline $E$ en la velocidad de convergencia, el tiempo de comunicación y la eficacia del modelo entrenado bajo distintas topologías de red en un entorno distribuido con restricciones de red reales?
 
 ### Metodología
 
-Se ejecutaron entrenamientos sobre una misma arquitectura, conjunto de datos e hiperparámetros, variando únicamente el algoritmo distribuido, la cantidad de nodos y el valor de $E$. Todos los ensayos se realizaron de forma secuencial sobre la misma máquina, sumando un total de 10,5 horas de ejecución.
+Se ejecutaron entrenamientos sobre una misma arquitectura, conjunto de datos e hiperparámetros, variando únicamente el algoritmo distribuido, la cantidad de nodos y el valor de $E$. Todos los ensayos se realizaron de forma secuencial sobre la misma máquina, sumando un total de 11 horas y 15 minutos de ejecución.
 
-| Categoría | Parámetro | Valores |
-|---|---|---|
-| Modelo y datos | Dataset | MNIST completo [@lecun1998gradient] |
-|  | Arquitectura | LeNet-5 |
-|  | Función de pérdida | Entropía cruzada |
-| Optimización | Optimizador | Adam ($\alpha=0{,}01$; $\beta_1=0{,}9$; $\beta_2=0{,}999$; $\epsilon=10^{-8}$) |
-|  | Tamaño de mini-batch | 64 |
-|  | Épocas máximas | 48 |
-| Infraestructura | Serialización | Dispersa ($r=0{,}5$) |
-| Variables libres | Algoritmo | All-Reduce, Parameter Server sincrónico |
-|  | Nodos | 2, 4, 6, 8, 10 |
-|  | Épocas offline | 0, 1, 2, 3, 4 |
+| Categoría        | Parámetro            | Valores                                                                        |
+|------------------|----------------------|--------------------------------------------------------------------------------|
+| Modelo y datos   | Dataset              | MNIST completo [@lecun1998gradient]                                            |
+|                  | Arquitectura         | LeNet-5                                                                        |
+|                  | Función de pérdida   | Entropía cruzada                                                               |
+| Optimización     | Optimizador          | Adam ($\alpha=0{,}01$; $\beta_1=0{,}9$; $\beta_2=0{,}999$; $\epsilon=10^{-8}$) |
+|                  | Tamaño de mini-batch | 64                                                                             |
+|                  | Épocas máximas       | 48                                                                             |
+| Infraestructura  | Serialización        | Dispersa ($r=0{,}5$)                                                           |
+| Variables libres | Algoritmo            | All-Reduce, Parameter Server sincrónico                                        |
+|                  | Nodos                | 2, 4, 6, 8, 10                                                                 |
+|                  | Épocas offline       | 0, 1, 2, 3, 4                                                                  |
 
 : Configuración de los ensayos. En Parameter Server, la mitad de los nodos son workers y la otra mitad servidores.
 
-Al parametrizar $E>0$, los nodos entrenan aislados durante múltiples ciclos y el tráfico de red se reduce de forma aproximadamente inversamente proporcional a $E$. Al alcanzar la etapa de sincronización, la consolidación se realiza por promedio directo de los gradientes parciales, de modo que bajo descenso por gradiente la actualización responde a
+Al parametrizar $E>0$, los nodos entrenan aislados durante múltiples ciclos y el tráfico de red se reduce de forma aproximada inversamente proporcional a $E$. Al alcanzar la etapa de sincronización, la consolidación se realiza por promedio directo de los gradientes parciales, de modo que bajo descenso por gradiente la actualización responde a
 
-$$W_{t+1} = W_{t} - \frac{\lambda}{N}\sum_{i=1}^{N} G_{i}.$$
+$$W_{t + E} = W_{t} - \frac{\lambda}{N} \sum_{i=1}^{N} G_{i}^{(E)}$$
 
 Los ensayos se realizaron con la serialización dispersa que implementa el sistema, siguiendo el enfoque de Aji y Heafield [@aji2017sparse]. El parámetro $r$ acota el muestreo del gradiente que se transmite: se calcula la cardinalidad efectiva del mensaje como
 
@@ -187,7 +187,9 @@ $$k = \operatorname{round}\bigl(|g|\cdot(1-r)\bigr),$$
 
 y ese valor $k$ se utiliza para escoger los $k$ elementos de mayor magnitud absoluta del tensor de gradientes local, fijando un umbral mínimo. Los elementos descartados se acumulan en un gradiente residual que se considera en el mensaje siguiente. Con $r=0{,}5$, la mitad de los componentes queda fuera de cada mensaje.
 
-El entorno de ejecución fue un procesador Intel Core i5-8350U (4 núcleos físicos, 8 hilos lógicos, 1,7 GHz base y 3,6 GHz turbo) con 8 GB de memoria DDR4, sobre Ubuntu 24.04 LTS, Docker 29.6.1, Rust 1.96.1 y CPython 3.14.0.
+El entorno de ejecución fue un procesador Intel Core i5-8350U (4 núcleos físicos, 8 hilos lógicos, 1,7 GHz base y 3,6 GHz turbo) con 8 GB de memoria DDR4, sobre Ubuntu 24.04 LTS, Docker 29.6.1, Rust 1.96.1, CPython 3.14.0 y Pumba 1.1.7.
+
+Con Pumba se logró emular una red hogareña típica en cuestión de delay, jitter y ancho de banda.
 
 ### Resultados: tiempo de ejecución
 
@@ -227,7 +229,7 @@ En All-Reduce se observa un patrón similar, aunque con oscilaciones relativamen
 
 ### Discusión y limitaciones
 
-La ventaja de introducir épocas offline es estrictamente reducir el tiempo de entrenamiento. En un entorno local simulado, eliminar el costo de comunicación no compensa el costo de obtener un peor modelo: en estos experimentos no se evidenció ninguna ventaja de utilizar un $E$ mayor a 0.
+La ventaja de introducir épocas offline es estrictamente reducir el tiempo de entrenamiento. En un entorno local simulado, reducir el costo de comunicación no compensa el costo de obtener un peor modelo: en estos experimentos no se evidenció ninguna ventaja de utilizar un $E$ mayor a 0.
 
 En contraposición, en un despliegue multimáquina sobre una red física, retrasar la agregación de gradientes puede resultar crítico para amortizar el tiempo de comunicación. La decisión depende de tres factores: el tamaño del modelo, la velocidad de la red y la cantidad de nodos. Con modelos más grandes, los mensajes que contienen gradientes y parámetros son también más grandes. Para entrenamientos con mucho dato y poco modelo, el cuello de botella es el cómputo de gradientes; en cambio, para entrenamientos con poco dato y mucho modelo, donde la comunicación toma protagonismo, incrementar $E$ puede ser útil para reducir los tiempos de ejecución.
 
