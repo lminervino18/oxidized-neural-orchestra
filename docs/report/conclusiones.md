@@ -1,0 +1,14 @@
+\newpage
+# Conclusiones
+
+El trabajo se propuso estudiar las principales estrategias de entrenamiento distribuido de modelos de aprendizaje profundo y construir un sistema que permitiera compararlas de forma controlada. Ese objetivo se cumplió.
+
+**Sobre el producto.** Se construyó O.N.O., un sistema distribuido de entrenamiento que incluye una biblioteca de redes neuronales propia, una capa de comunicación con su propio protocolo, un plano de control y tres interfaces de uso. Sobre esa base se implementaron los tres algoritmos de referencia del área, se agregaron técnicas de reducción del tráfico de red y se instrumentó todo con una suite de experimentación reproducible.
+
+**Sobre los resultados.** Los estudios experimentales muestran que, en un entorno homogéneo y sincrónico, All-Reduce y Parameter Server convergen a la misma exactitud, y que All-Reduce la alcanza en menos tiempo porque el servidor central introduce un punto de serialización; que la ventaja de All-Reduce se reduce al crecer el modelo, porque el fragmentado de parámetros reparte mejor la presión de comunicación; y que postergar la sincronización mediante épocas offline degrada la exactitud de forma monótona sin aportar, en ese entorno, la ganancia de tiempo que la motiva. Los resultados de rendimiento están acotados al clúster simulado descrito en *Experimentación y validación*; los de convergencia y exactitud no dependen de esa limitación.
+
+**Sobre la contribución.** El trabajo no innova en algoritmos: los tres implementados están publicados. La contribución es el instrumento, y responde exactamente al problema detectado en la propuesta: la ausencia de una base común sobre la cual comparar estrategias sin que la diferencia medida mezcle el efecto del algoritmo con el de su implementación. La evidencia de que esa base funciona es, paradójicamente, el resultado que menos llama la atención del informe: que las dos estrategias converjan a la misma exactitud.
+
+**Sobre la formación.** El trabajo obligó a atravesar de punta a punta tres dominios que la carrera aborda por separado. El de los sistemas distribuidos, donde la lección más dura fue descubrir dónde termina exactamente el alcance de las garantías de un lenguaje seguro. El del aprendizaje profundo, donde derivar y depurar la propagación hacia atrás a mano, sin la red de contención de la diferenciación automática, dejó una comprensión del entrenamiento que ningún framework habría permitido adquirir. Y el de la ingeniería de software, donde la lección central fue que la instrumentación no es un anexo de medición sino una herramienta de detección, según se detalla en *Riesgos materializados y lecciones aprendidas*.
+
+Se cierra el trabajo con un sistema funcionando, con evidencia experimental que lo respalda, con las limitaciones de esa evidencia declaradas y con las líneas que quedaron abiertas documentadas al detalle suficiente para que otro las retome.
