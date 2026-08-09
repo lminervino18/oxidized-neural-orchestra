@@ -3,7 +3,7 @@
 
 ## Anexo A: Repositorio del proyecto
 
-El código fuente, su documentación técnica y el historial completo del desarrollo están alojados en el siguiente repositorio público, que se mantendrá disponible al menos hasta un año después de la defensa:
+El código fuente, su documentación técnica y el historial completo del desarrollo están alojados en el siguiente repositorio público:
 
 \begin{center}
 \texttt{https://github.com/lminervino18/oxidized-neural-orchestra}
