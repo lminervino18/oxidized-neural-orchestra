@@ -1,6 +1,8 @@
 \newpage
 # NOTAS
 - TODO, algo como: La penalización por no sincronizar frecuentemente se incrementa con la varianza del dataset. Cada nodo va a recibir una partición del dataset cuya superficie de error va a ser muy distinta a la de los demás.
+- TODO: gráficos efficiency o speedup, time spent, después otro copado podría ser parameter server y gráfico de tiempo vs. cantidad de workers, con una curva base q es la cantidad con bandwidth infinita y la otra con bandwidth limitada y comparando con ambos resultados teóricos.
+- TODO: quizás gráficos que muestren tiempo con workers fijos vs d_trans, o sea S/R, y por supuesto afectando únicamente a R porque no voy a tocar el modelo.
 
 # Benchmarks
 El objetivo principal de los algoritmos que se implementan en este trabajo es el de reducir el tiempo de entrenamiento de un modelo de deep learning $T_1$.  
@@ -48,7 +50,7 @@ A diferencia de parameter server, el factor afectado por la cantidad de workers 
 $$
 \lim_{N_W\rightarrow \infty} d_\text{sync, AR} = 2 \frac{S}{R}.
 $$
-El delay de sincronización se mantiene constante cuando los workers se incrementan al infinito.
+El delay de sincronización está acotado por el doble del delay de transmición del tamaño de los parámetros del modelo.
 
 ## Parameter server sincrónico con $N_S$ servers
 Como ya vimos, la mayor parte del delay de sincronización en parameter server viene del hecho de que que todos los workers tienen que comunicarse con un único server, y dado que este server puede enviar y recibir una sóla tira de parámetros/gradientes a la vez, el delay escala con $N_W$.  
@@ -64,15 +66,22 @@ $$
 d_\text{sync, Multi-PS} = 2 \frac{N_W-1}{N_S} \frac{S}{R}.
 $$
 
-Notar que
-$$
-\lim_{N_S\rightarrow \infty} d_\text{sync, Multi-PS} = 2 \frac{S}{R},
-$$
-que es el mismo resultado obtenido en all-reduce.
-
+Notar que $\lim_{N_S\rightarrow \infty} d_\text{sync, Multi-PS} = 2 \frac{S}{R}$, que es el mismo resultado obtenido que para all-reduce.
 
 ## Parameter server asincrónico
-TODO
+El delay de sincronización desarollado en los puntos anteriores se da luego de cada ronda de epochs de *todos* los workers. Esto es, cada worker computa una epoch (o más, si `offline_epochs` está configurado) para luego sincronizar sus parámetros con el resto.  
+
+Parameter server asincrónico libera al entrenamiento distribuido de esta restricción, dejando que el parameter server mueva los parámetros del modelo a medida que van llegando gradientes de los workers *sin necesidad de esperar al resto*. En este caso el costo de sincronización se elimina porque la sincronización simplemente desaparece, aunque aún se tiene que considerar el delay de transmición $2\frac{S}{R}$ de cada worker.  
+El problema con esta estrategia es que la convergencia empeora mucho cuando la desincronización es grande, es decir, cuando los workers mueven demasiado los pesos en la dirección sesgada que les dicta su partición de los datos.
 
 ## Strategy switch
-TODO
+Strategy switch combina la convergencia de all-reduce y la velocidad de ejecución de parameter server asincrónico. La idea es encontrar un buen mínimo local con el primer algoritmo para luego seguir bajándolo por medio del segundo.  
+El delay de sincronización de strategy switch depende entonces de si se realizo el *switch*:
+$$
+d_\text{sync, SS} =
+\begin{cases}
+2(1-\frac{1}{N_W}) \frac{S}{R}, & \text{antes del switch (All-reduce)}\\
+-, & \text{después (Parameter server asincrónico)}.
+\end{cases}
+$$
+TODO: definir bien d_sync para poder poner 0 en vez de - ?
