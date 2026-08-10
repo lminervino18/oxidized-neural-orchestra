@@ -17,7 +17,7 @@
 2. Por ser un lenguaje dominante en la industria del *Deep Learning*.
 3. Familiaridad con el lenguaje.
 
-**Docker** Se utilizó para simular la ejecución del sistema sobre múltiples nodos y para automatizar el despliegue. Se acompaña de `cargo-chef` para cachear las capas de dependencias en la construcción de la imagen, lo que reduce de forma sustancial el tiempo de reconstrucción.
+**Docker** Se utilizó para simular la ejecución del sistema sobre múltiples nodos y para automatizar el despliegue.
 
 **Git, GitHub, GitHub Projects y GitHub Actions** Control de versiones y gestión del proceso: ramas por funcionalidad, *pull requests* con revisión obligatoria, e *issues* para el seguimiento de tickets, errores y debates de diseño. Se hizo uso de Actions para CI/CD del repositorio.
 
