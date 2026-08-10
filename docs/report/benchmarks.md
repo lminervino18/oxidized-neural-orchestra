@@ -13,10 +13,10 @@ T_P = \frac{T_1}{P}.
 $$
 Ahora bien, el mundo no es perfecto y el costo de sincronización no es despreciable; más aún, veremos a continuación que en algunos casos puede incluso crecer con la cantidad de máquinas que deben sincronizarse.
 
-A continuación, se realiza un análisis de la reducción del tiempo de entrenamiento esperada para cada algoritmo y se la compara con la que fue obtenida con ONO.  
+A continuación, se realiza un análisis de los tiempos de entrenamiento esperados para cada algoritmo y se los compara con los que fueron obtenidos con ONO.
 
 Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultados contra el dataset MNIST. Como veremos a continuación, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red.  
-Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, para tener una relación $S/R$ buena para evaluación, se elige un $R$ subrealistamente bajo para evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.
+Para poder simular un ambiente multi computadora en una sóla máquina, se usó Docker para limitar la cantidad de CPUs asignada a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, para tener una relación $S/R$ buena para evaluación, se configuró $R=10\text{Mbps}$ subrealistamente bajo, para evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
 
 ## Parameter server sincrónico con un sólo servidor
 En una configuración con un sólo server, el delay que introduce la sincronización del sistema está dado por el tiempo de comunicación de la ida de los parámetros del server hacia los workers, y de la vuelta de los gradientes de los workers hacia el server.  
@@ -85,3 +85,8 @@ d_\text{sync, SS} =
 \end{cases}
 $$
 TODO: definir bien d_sync para poder poner 0 en vez de - ?
+
+## Resultados obtenidos
+Se muestra primero la comparativa de resultados de los algoritmos que operan de manera sincrónica.
+
+![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce (izquierda) y Parameter Server (derecha).](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
