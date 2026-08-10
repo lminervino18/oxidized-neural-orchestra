@@ -60,7 +60,7 @@ where
     ///
     /// # Args
     /// * `residuals` - The residuals for each of the servers.
-    /// * `is_last` - Wheather this gradient message is the last one or not.
+    /// * `is_last` - Whether this gradient message is the last one or not.
     ///
     /// # Returns
     /// The thresholds for cleaning the residual vecs or io errors if occurred.

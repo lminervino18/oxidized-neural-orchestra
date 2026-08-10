@@ -1,6 +1,5 @@
 use std::{
     io::{self, IsTerminal, Write},
-    mem,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
@@ -287,7 +286,7 @@ impl Session {
                         }
                     };
 
-                    let loss_history = mem::take(&mut reporter.loss_history);
+                    let loss_history = reporter.loss_history.clone();
                     reporter.finish(result.is_ok());
                     result.map(|trained| (trained, loss_history))
                 })
