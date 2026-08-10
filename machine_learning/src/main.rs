@@ -1,4 +1,6 @@
-use std::{cell::RefCell, env, fs::File, io::Read, num::NonZeroUsize, path::PathBuf, rc::Rc};
+use std::{
+    cell::RefCell, env, fs::File, io::Read, num::NonZeroUsize, path::PathBuf, rc::Rc, time::Instant,
+};
 
 use comms::floats::FloatPositive;
 use machine_learning::{
@@ -70,6 +72,8 @@ fn main() {
 
     let mut epoch = 0;
     let epochs_until_log = 1;
+
+    let start = Instant::now();
     loop {
         let TrainResult {
             losses,
@@ -86,6 +90,8 @@ fn main() {
             break;
         }
     }
+    let end = Instant::now();
+    let elapsed = end - start;
 
     let test_size = None; // whole dataset
     let test_dataset = make_mnist_dataset(test_size, TEST_SAMPLES_STR, TEST_LABELS_STR); // whole
@@ -123,6 +129,7 @@ fn main() {
 
     let acc_percentage = (got_right as f32 / test_dataset.rows() as f32) * 100.;
     println!("accuracy: {acc_percentage}%");
+    println!("took: {} seconds", elapsed.as_secs());
 }
 
 fn gen_params_grads(
