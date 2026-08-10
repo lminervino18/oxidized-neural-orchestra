@@ -5,6 +5,8 @@ import os
 
 # base port for nodes.
 BASE_PORT = 40_000
+# the number of available cpus for each node.
+CPUS = 1
 
 # The various values for a yaml field.
 type YmlField = bool | int | float | str | list[YmlField] | dict[str, YmlField]
@@ -22,7 +24,7 @@ def generate_pumba(nodes: int) -> dict[str, YmlField]:
     """
     cmd = [
         "netem --duration 300m",
-        "rate --rate 100mbit",
+        "rate --rate 10mbit",
         *(f"node-{i}" for i in range(nodes)),
     ]
 
@@ -60,6 +62,13 @@ def generate_nodes(nodes: int, release: bool) -> dict[str, YmlField]:
                 "dockerfile": "node/Dockerfile",
                 "args": {
                     "MODE": mode,
+                },
+            },
+            "deploy": {
+                "resources": {
+                    "limits": {
+                        "cpus": f"{CPUS}",
+                    },
                 },
             },
             "ports": [
