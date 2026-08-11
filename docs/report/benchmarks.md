@@ -20,7 +20,7 @@ $$
 En un entorno de computación distribuida, una pasada por el dataset en cada epoch se divide entre la cantidad de workers que las computan.
 
 Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultados contra el dataset MNIST. Como veremos a continuación, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red.  
-Para poder simular un ambiente multi computadora en una sóla máquina, se usó Docker para limitar la cantidad de CPUs asignada a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
+Para poder simular un ambiente multi computadora en una sóla máquina, se usó Docker para limitar la cantidad de CPUs asignados a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
 Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, para tener una relación $S/R$ buena para evaluación, se configuró $R=10\text{Mbps}$ subrealistamente bajo, de manera tal de evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
 El modelo que se entrenó es LeNet5, que tiene 61706 parámetros. Como los parámetros y los gradientes se comparten en la red como números flotantes de 16 bits, el tamaño del modelo a los ojos de la red es de casi 1 Mb. El delay de transmisión es entonces aproximadamente $d_\text{trans}=1 \ \text{segundos}$.  
 Por último, el tiempo total de entrenamiento en una sóla máquina, sin hacer uso de ningún algoritmo distribuido, es $T_1=600 \ \text{segundos}$.
@@ -28,19 +28,16 @@ Por último, el tiempo total de entrenamiento en una sóla máquina, sin hacer u
 ## Parameter server sincrónico con un sólo servidor
 En una configuración con un sólo server, el delay que introduce la sincronización del sistema está dado por el tiempo de comunicación de la ida de los parámetros del server hacia los workers, y de la vuelta de los gradientes de los workers hacia el server.  
 
-Suponiendo un mismo bandwidth $R$ para todos los nodos, delays de encolado, propagación y procesamiento despreciables; y un modelo de tamaño $S$ ($S=N_\text{params} \times 2 \text{bytes}$, dado que los parámetros se serializan como flotantes de 16 bits); el tiempo que tarda la ida de los parámetros es el su envío en $N_W$ mensajes unicast $N_W \frac{S}{R}$.  
+Suponiendo un mismo bandwidth $R$ para todos los nodos, delays de encolado, propagación y procesamiento despreciables; y un modelo de tamaño $S$ ($S=N_\text{params} \times 2 \text{bytes}$, dado que los parámetros se serializan como flotantes de 16 bits); el tiempo que tarda la ida de los parámetros es el de su envío en $N_W$ mensajes unicast $N_W \frac{S}{R}$.  
 Suponiendo un ambiente homogéneo, en el que el tiempo de procesamiento de los workers es similar, todos comienzan a contestar con los respectivos gradientes en simultáneo. Sin embargo, el server sólo tiene una tarjeta de red con la cuál recibir estos gradientes, por lo que el tiempo que tarda la vuelta de los gradientes es también $N_W \frac{S}{R}$.  
 
 El delay de sincronización de parameter server sincrónico con un sólo servidor es entonces
 $$
 d_\text{sync, PS} = 2 N_W \frac{S}{R}.
 $$
-Nótese que el delay crece con la cantidad de nodos del sistema.
+Nótese que el delay crece con la cantidad de workers.
 
-Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando mucho cómputo siendo que esta entidad es I/O bounded. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula y por tanto
-$$
-d_\text{sync, PS} = 2 (N_W-1) \frac{S}{R}.
-$$
+Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando su CPU siendo que la entidad del parameter server es I/O bounded. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula, y por tanto $d_\text{sync, PS} = 2 (N_W-1) \frac{S}{R}$.
 
 ## Ring all-reduce
 El delay de sincronización de ring all-reduce está dado por el delay del *scatter* y por el delay del *gather*. Ambas etapas del algoritmo son de $N_W-1$ iteraciones. En ambas, la sincronización en una iteración consiste en enviar una $N_W$-ésima parte del gradiente del $i$-ésimo al $i+1$-ésimo nodo. Como despreciamos los delays de encolado, propagación y procesamiento; y como las tarjetas de red son *full-duplex* (tienen canales dedicados para leer y escribir), podemos pensar que la comunicación en anillo se realiza en paralelo.
@@ -60,20 +57,16 @@ $$
 El delay de sincronización está acotado por el doble del delay de transmición del tamaño de los parámetros del modelo.
 
 ## Parameter server sincrónico con $N_S$ servers
-Como ya vimos, la mayor parte del delay de sincronización en parameter server viene del hecho de que que todos los workers tienen que comunicarse con un único server, y dado que este server puede enviar y recibir una sóla tira de parámetros/gradientes a la vez, el delay escala con $N_W$.  
+Como ya vimos, la mayor parte del delay de sincronización en parameter server viene del hecho de que todos los workers tienen que comunicarse con un único server, y dado que este server puede enviar y recibir una sóla tira de parámetros/gradientes a la vez, el delay escala con $N_W$.  
 Una forma de resolver este problema es incrementar la cantidad de servidores. Cada servidor tiene una porción disjunta de los parámetros del modelo y los workers solicitan parámetros y envían gradientes al server que corresponda.
 
 En parameter server, por tratarse de comunicación de uno a muchos, el cuello de botella de la sincronización está del lado del servidor. Con un sólo servidor ya vimos que el envío de parámetros y la recepción de gradientes ambos tardan $N_W \frac{S}{R}$, que es el máximo entre el delay desde el punto de vista de un worker y desde el del server: $\max{\left(\frac{S}{R}, N_W \frac{S}{R}\right)}$. Pero con $N_S$ servers, el delay del lado del servidor se transforma en $N_W \frac{S/N_S}{R}$. Por lo tanto
 $$
 d_\text{sync, Multi-PS} = 2 \frac{N_W}{N_S} \frac{S}{R} \qquad (N_S\leq N_W).
 $$
-
-Vale la misma aclaración que hicimos en el caso para un solo servidor con respecto a que los nodos que ejecutan un server normalmente van a estar también ejecutando un worker, por lo que los delays de transmisión se anulan en esos nodos
-$$
-d_\text{sync, Multi-PS} = 2 \frac{N_W-1}{N_S} \frac{S}{R}.
-$$
-
 Notar que $\lim_{N_S\rightarrow \infty} d_\text{sync, Multi-PS} = 2 \frac{S}{R}$, que es el mismo resultado obtenido que para all-reduce.
+
+Vale la misma aclaración que hicimos en el caso para un solo servidor con respecto a que los nodos que ejecutan un server normalmente van a estar también ejecutando un worker, por lo que los delays de transmisión se anulan en esos nodos: $d_\text{sync, Multi-PS} = 2 \frac{N_W-1}{N_S} \frac{S}{R}$.
 
 ## Parameter server asincrónico
 El delay de sincronización desarollado en los puntos anteriores se da luego de cada ronda de epochs de *todos* los workers. Esto es, cada worker computa una epoch (o más, si `offline_epochs` está configurado) para luego sincronizar sus parámetros con el resto.
@@ -83,7 +76,7 @@ El problema con esta estrategia es que la convergencia empeora mucho cuando la d
 
 ## Strategy switch
 Strategy switch combina la convergencia de all-reduce y la velocidad de ejecución de parameter server asincrónico. La idea es encontrar un buen mínimo local con el primer algoritmo para luego seguir bajándolo por medio del segundo.  
-Si consideramos que $d_\text{sync}$ es el tiempo en el que los nodos permanecen sin realizar ningún cómputo, ni comunicarse directamente con otro nodo por esperar que termine la sincronización, podemos decir entonces que luego del switch no está acotado inferiormente. En el peor de los casos, cuando todos los nodos se comunican con el parameter server en simultáneo, el delay llega a $d_\text{sync, PS}$.  
+Si consideramos que $d_\text{sync}$ es el tiempo en el que los nodos permanecen sin realizar ningún cómputo, ni comunicarse directamente con otro nodo, por esperar que termine la sincronización, podemos decir entonces que luego del switch no está acotado inferiormente. En el peor de los casos, cuando todos los nodos se comunican con el parameter server en simultáneo, el delay llega a $d_\text{sync, PS}$.  
 El delay de sincronización de strategy switch depende entonces de si se realizo el *switch*:
 $$
 d_\text{sync, SS} =
@@ -99,13 +92,13 @@ Se muestra primero la comparativa de resultados de los algoritmos que operan de 
 
 ![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce y Parameter Server.](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
 
-Podemos observar que el delay de sincronización hace que la performance de parameter server empiece a empeorar a partir de $N_W=6$. Por otro lado, la sincronización no empeora con la cantidad de workers para all reduce puesto que se mantiene constante con la cantidad de workers, pero sí agrega una cota inferior al tiempo de ejecución.
+Podemos observar que el delay de sincronización hace que la performance de parameter server empiece a empeorar a partir de $N_W=6$. Por otro lado, la sincronización no empeora con la cantidad de workers para all reduce puesto que el delay está acotado, pero sí agrega una cota inferior al tiempo de ejecución.
 
 A continuación se muestran los resultados obtenidos para parameter server asincrónico y para strategy switch.
 
 ![Tiempo de entrenamiento de MNIST VS. cantidad de workers para Parameter Server asincrónico y Strategy Switch.](figures/execution_times_async_parameter_server_and_strategy_switch.png){width=78%}
 
-Los resultados son muy prometedores y muy similares para ambos algoritmos. Sin embargo, al examinar cómo evoluciona la accuracy obtenida sobre el set de test en parameter server asincrónico nos econtramos con que la acumulación de gradientes de manera descontrolada arruina por completo los resultados.
+Los resultados son muy prometedores y muy similares para ambos algoritmos. Sin embargo, al examinar cómo evoluciona la accuracy obtenida sobre el set de test en parameter server asincrónico, nos econtramos con que la acumulación de gradientes de manera descontrolada arruina por completo los resultados de convergencia.
 
 ![Evolución de la accuracy de MNIST VS. cantidad de workers para Parameter Server asincrónico.](figures/accuracies_async_parameter_server.png){width=78%}
 
