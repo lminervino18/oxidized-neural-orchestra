@@ -2,13 +2,13 @@ use std::{
     cell::RefCell, env, fs::File, io::Read, num::NonZeroUsize, path::PathBuf, rc::Rc, time::Instant,
 };
 
-use comms::floats::FloatPositive;
+use comms::floats::{Float01, FloatPositive};
 use machine_learning::{
     arch::loss::CrossEntropy,
     datasets::{DataSrc, Dataset},
     initialization::{ParamGen, RandParamGen},
-    models::make_nielsen_mnist_model,
-    optimization::GradientDescent,
+    models::make_lenet5_mnist_model,
+    optimization::Adam,
     param_manager::{ParamManager, ParamsMetadata},
     training::{BackpropTrainer, TrainResult, Trainer},
 };
@@ -31,16 +31,19 @@ fn main() {
         env::set_var("RUST_BACKTRACE", "1");
     }
 
-    let mut model = make_nielsen_mnist_model();
+    let mut model = make_lenet5_mnist_model();
 
     let train_size = None; // whole dataset
     let train_dataset = make_mnist_dataset(train_size, TRAIN_SAMPLES_STR, TRAIN_LABELS_STR);
 
-    let learning_rate = FloatPositive::new(0.1).unwrap();
-    let optimizer = GradientDescent::new(learning_rate);
+    let learning_rate = FloatPositive::new(0.01).unwrap();
+    let beta1 = Float01::new(0.9).unwrap();
+    let beta2 = Float01::new(0.999).unwrap();
+    let epsilon = FloatPositive::new(1e-8).unwrap();
+    let optimizer = Adam::new(model.size(), learning_rate, beta1, beta2, epsilon);
     let loss_fn = CrossEntropy::new();
-    let epochs = NonZeroUsize::new(60).unwrap();
-    let batch_size = NonZeroUsize::new(10).unwrap();
+    let epochs = NonZeroUsize::new(48).unwrap();
+    let batch_size = NonZeroUsize::new(64).unwrap();
     let rng = StdRng::from_os_rng();
 
     let mut trainer = BackpropTrainer::new(
@@ -67,7 +70,7 @@ fn main() {
         .map(|(params, grad, acc_grad_buf)| ParamsMetadata::new(params, grad, acc_grad_buf))
         .collect();
 
-    let ordering = [0, 0, 0];
+    let ordering = [0, 0, 0, 0, 0]; // 5 layers with params in lenet5
     let mut param_manager = ParamManager::for_parameter_server(servers, &ordering);
 
     let mut epoch = 0;
@@ -122,10 +125,6 @@ fn main() {
             got_right += 1;
         }
     }
-
-    // let mut params_iter = param_manager.front();
-    // let params = params_iter.next(nparams);
-    // println!("params: {params:#?}");
 
     let acc_percentage = (got_right as f32 / test_dataset.rows() as f32) * 100.;
     println!("accuracy: {acc_percentage}%");
