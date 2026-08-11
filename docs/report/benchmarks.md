@@ -1,22 +1,29 @@
 \newpage
-# NOTAS
-- TODO, algo como: La penalización por no sincronizar frecuentemente se incrementa con la varianza del dataset. Cada nodo va a recibir una partición del dataset cuya superficie de error va a ser muy distinta a la de los demás.
-- TODO: gráficos efficiency o speedup, time spent, después otro copado podría ser parameter server y gráfico de tiempo vs. cantidad de workers, con una curva base q es la cantidad con bandwidth infinita y la otra con bandwidth limitada y comparando con ambos resultados teóricos.
-- TODO: quizás gráficos que muestren tiempo con workers fijos vs d_trans, o sea S/R, y por supuesto afectando únicamente a R porque no voy a tocar el modelo.
-
+<!-- # NOTAS -->
+<!-- - TODO, algo como: La penalización por no sincronizar frecuentemente se incrementa con la varianza del dataset. Cada nodo va a recibir una partición del dataset cuya superficie de error va a ser muy distinta a la de los demás. -->
+<!-- - TODO: gráficos efficiency o speedup, time spent, después otro copado podría ser parameter server y gráfico de tiempo vs. cantidad de workers, con una curva base q es la cantidad con bandwidth infinita y la otra con bandwidth limitada y comparando con ambos resultados teóricos. -->
+<!-- - TODO: quizás gráficos que muestren tiempo con workers fijos vs d_trans, o sea S/R, y por supuesto afectando únicamente a R porque no voy a tocar el modelo. -->
 # Benchmarks
 El objetivo principal de los algoritmos que se implementan en este trabajo es el de reducir el tiempo de entrenamiento de un modelo de deep learning $T_1$.  
-$T_1$, a su vez, está dado por la suma de $T_\text{ser}$ y $T_\text{par}$, los tiempos de procesamiento de las porciones de trabajo serializado y paralelizable, respectivamente. Dado que $T_\text{ser}\ll T_\text{par}$, pues, para los algoritmos que se presentan, el trabajo serializado consiste en compartir el dataset y la metadata del modelo entre los nodos, y que además $T_{ser}$ no cambia entre los algoritmos, podemos despreciar $T_\text{ser}$ y hablar de $T_\text{par}$ como $T_1$.  
+$T_1$ está dado por la suma de $T_\text{ser}$ y $T_\text{par}$, los tiempos de procesamiento de las porciones de trabajo serializado y paralelizable, respectivamente. Dado que $T_\text{ser}\ll T_\text{par}$, pues, para los algoritmos que se presentan, el trabajo serializado consiste en compartir el dataset y la metadata del modelo entre los nodos, y que además $T_{ser}$ no cambia entre los algoritmos, porque en todos ellos necesita compartirse esa información; podemos despreciar $T_\text{ser}$ y hablar de $T_\text{par}$ como $T_1$ en el contexto de la comparativa.  
 En un mundo perfecto, donde el costo de sincronización de los nodos es despreciable, el tiempo de entrenamiento es inversamente proporcional a la cantidad de nodos $P$:
 $$
 T_P = \frac{T_1}{P}.
 $$
-Ahora bien, el mundo no es perfecto y el costo de sincronización no es despreciable; más aún, veremos a continuación que en algunos casos puede incluso crecer con la cantidad de máquinas que deben sincronizarse.
+Ahora bien, el mundo no es perfecto y el costo de sincronización no es despreciable; más aún, veremos más adelante que en algunos casos puede incluso crecer con la cantidad de máquinas que deben sincronizarse.
 
-A continuación, se realiza un análisis de los tiempos de entrenamiento esperados para cada algoritmo y se los compara con los que fueron obtenidos con ONO.
+A continuación, se realiza un análisis de los tiempos de entrenamiento esperados para cada algoritmo y se los compara con los que fueron obtenidos con ONO.  
+El tiempo total de entrenamiento distribuido está dado por la combinación del tiempo de ejecución local y el delay de sincronización y de inicialización
+$$
+T_{total} = N_\text{epochs} * \left(\frac{T_{epoch}}{N_W} + d_\text{sync}\right) + d_\text{inicialización}.
+$$
+En un entorno de computación distribuida, una pasada por el dataset en cada epoch se divide entre la cantidad de workers que las computan.
 
 Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultados contra el dataset MNIST. Como veremos a continuación, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red.  
-Para poder simular un ambiente multi computadora en una sóla máquina, se usó Docker para limitar la cantidad de CPUs asignada a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, para tener una relación $S/R$ buena para evaluación, se configuró $R=10\text{Mbps}$ subrealistamente bajo, para evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
+Para poder simular un ambiente multi computadora en una sóla máquina, se usó Docker para limitar la cantidad de CPUs asignada a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
+Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, para tener una relación $S/R$ buena para evaluación, se configuró $R=10\text{Mbps}$ subrealistamente bajo, de manera tal de evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
+El modelo que se entrenó es LeNet5, que tiene 61706 parámetros. Como los parámetros y los gradientes se comparten en la red como números flotantes de 16 bits, el tamaño del modelo a los ojos de la red es de casi 1 Mb. El delay de transmisión es entonces aproximadamente $d_\text{trans}=1 \ \text{segundos}$.  
+Por último, el tiempo total de entrenamiento en una sóla máquina, sin hacer uso de ningún algoritmo distribuido, es $T_1=600 \ \text{segundos}$.
 
 ## Parameter server sincrónico con un sólo servidor
 En una configuración con un sólo server, el delay que introduce la sincronización del sistema está dado por el tiempo de comunicación de la ida de los parámetros del server hacia los workers, y de la vuelta de los gradientes de los workers hacia el server.  
@@ -58,7 +65,7 @@ Una forma de resolver este problema es incrementar la cantidad de servidores. Ca
 
 En parameter server, por tratarse de comunicación de uno a muchos, el cuello de botella de la sincronización está del lado del servidor. Con un sólo servidor ya vimos que el envío de parámetros y la recepción de gradientes ambos tardan $N_W \frac{S}{R}$, que es el máximo entre el delay desde el punto de vista de un worker y desde el del server: $\max{\left(\frac{S}{R}, N_W \frac{S}{R}\right)}$. Pero con $N_S$ servers, el delay del lado del servidor se transforma en $N_W \frac{S/N_S}{R}$. Por lo tanto
 $$
-d_\text{sync, Multi-PS} = 2 \frac{N_W}{N_S} \frac{S}{R} \qquad (N_W\leq N_S).
+d_\text{sync, Multi-PS} = 2 \frac{N_W}{N_S} \frac{S}{R} \qquad (N_S\leq N_W).
 $$
 
 Vale la misma aclaración que hicimos en el caso para un solo servidor con respecto a que los nodos que ejecutan un server normalmente van a estar también ejecutando un worker, por lo que los delays de transmisión se anulan en esos nodos
@@ -69,24 +76,40 @@ $$
 Notar que $\lim_{N_S\rightarrow \infty} d_\text{sync, Multi-PS} = 2 \frac{S}{R}$, que es el mismo resultado obtenido que para all-reduce.
 
 ## Parameter server asincrónico
-El delay de sincronización desarollado en los puntos anteriores se da luego de cada ronda de epochs de *todos* los workers. Esto es, cada worker computa una epoch (o más, si `offline_epochs` está configurado) para luego sincronizar sus parámetros con el resto.  
+El delay de sincronización desarollado en los puntos anteriores se da luego de cada ronda de epochs de *todos* los workers. Esto es, cada worker computa una epoch (o más, si `offline_epochs` está configurado) para luego sincronizar sus parámetros con el resto.
 
 Parameter server asincrónico libera al entrenamiento distribuido de esta restricción, dejando que el parameter server mueva los parámetros del modelo a medida que van llegando gradientes de los workers *sin necesidad de esperar al resto*. En este caso el costo de sincronización se elimina porque la sincronización simplemente desaparece, aunque aún se tiene que considerar el delay de transmición $2\frac{S}{R}$ de cada worker.  
 El problema con esta estrategia es que la convergencia empeora mucho cuando la desincronización es grande, es decir, cuando los workers mueven demasiado los pesos en la dirección sesgada que les dicta su partición de los datos.
 
 ## Strategy switch
 Strategy switch combina la convergencia de all-reduce y la velocidad de ejecución de parameter server asincrónico. La idea es encontrar un buen mínimo local con el primer algoritmo para luego seguir bajándolo por medio del segundo.  
+Si consideramos que $d_\text{sync}$ es el tiempo en el que los nodos permanecen sin realizar ningún cómputo, ni comunicarse directamente con otro nodo por esperar que termine la sincronización, podemos decir entonces que luego del switch no está acotado inferiormente. En el peor de los casos, cuando todos los nodos se comunican con el parameter server en simultáneo, el delay llega a $d_\text{sync, PS}$.  
 El delay de sincronización de strategy switch depende entonces de si se realizo el *switch*:
 $$
 d_\text{sync, SS} =
 \begin{cases}
 2(1-\frac{1}{N_W}) \frac{S}{R}, & \text{antes del switch (All-reduce)}\\
--, & \text{después (Parameter server asincrónico)}.
+d_\text{sync, Async PS}, & \text{después (Parameter server asincrónico)}.
 \end{cases}
 $$
-TODO: definir bien d_sync para poder poner 0 en vez de - ?
+con $0\leq d_\text{sync, Async PS}\leq d_\text{sync, PS}$.
 
 ## Resultados obtenidos
 Se muestra primero la comparativa de resultados de los algoritmos que operan de manera sincrónica.
 
-![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce (izquierda) y Parameter Server (derecha).](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
+![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce y Parameter Server.](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
+
+Podemos observar que el delay de sincronización hace que la performance de parameter server empiece a empeorar a partir de $N_W=6$. Por otro lado, la sincronización no empeora con la cantidad de workers para all reduce puesto que se mantiene constante con la cantidad de workers, pero sí agrega una cota inferior al tiempo de ejecución.
+
+A continuación se muestran los resultados obtenidos para parameter server asincrónico y para strategy switch.
+
+![Tiempo de entrenamiento de MNIST VS. cantidad de workers para Parameter Server asincrónico y Strategy Switch.](figures/execution_times_async_parameter_server_and_strategy_switch.png){width=78%}
+
+Los resultados son muy prometedores y muy similares para ambos algoritmos. Sin embargo, al examinar cómo evoluciona la accuracy obtenida sobre el set de test en parameter server asincrónico nos econtramos con que la acumulación de gradientes de manera descontrolada arruina por completo los resultados.
+
+![Evolución de la accuracy de MNIST VS. cantidad de workers para Parameter Server asincrónico.](figures/accuracies_async_parameter_server.png){width=78%}
+
+El hecho de que cada worker empuje para su lado pesa mayormente al principio del entrenamiento, cuando los workers no se encuentran en mínimos locales acordados en conjunto.  
+Strategy switch aprovecha la velocidad de la desincronización en el momento indicado para no perder la convergencia, cuando los mínimos locales si fueron consensuados de antemano. El resultado del híbrido es una convergencia similar a la de los algoritmos sincrónicos y, como ya vimos, una velocidad de ejecución similar a la del asincrónico.
+
+![Evolución de la accuracy de MNIST VS. cantidad de workers para Parameter Server asincrónico y Strategy Switch.](figures/accuracies.png){width=78%}
