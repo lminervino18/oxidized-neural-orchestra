@@ -3,11 +3,11 @@
 
 El desarrollo del trabajo se planteó como una responsabilidad compartida: las etapas de análisis, revisión de código y pruebas fueron llevadas adelante por los tres integrantes en todas las tareas. Sin perjuicio de ello, cada integrante concentró su foco principal en un conjunto de componentes, que se detalla a continuación y que se corresponde con lo previsto en la propuesta.
 
-**Alejo Ordoñez (Padrón 108397).** Núcleo de aprendizaje automático: el modelo, las capas, los optimizadores y las funciones de pérdida. Las capas convolucionales y de *max-pooling*, incluida la reformulación de la convolución como multiplicación de matrices que produjo la mejora final de rendimiento del motor. El manejo y la distribución de los conjuntos de datos. La monografía sobre *Strategy-Switch*, que constituye el tercer estudio experimental del informe.
+**Alejo Ordoñez (Padrón 108397).** Núcleo de aprendizaje automático: el modelo, las capas, los optimizadores y las funciones de pérdida. Las capas convolucionales y de *max-pooling*, incluida la reformulación de la convolución como multiplicación de matrices que produjo la mejora final de rendimiento del motor. El manejo y la distribución de los conjuntos de datos.
 
-**Lorenzo Minervino (Padrón 107863).** El módulo del Worker, con participación en la implementación en anillo de *All-Reduce*. La interfaz de funciones externas en Python y la interfaz interactiva de terminal. Las optimizaciones de sincronización de las copias del modelo. Los entornos de simulación multinodo, la suite de benchmarks y el análisis experimental de resultados. La monografía comparativa entre *Parameter Server* y *All-Reduce*, que constituye el primer estudio experimental del informe.
+**Lorenzo Minervino (Padrón 107863).** El módulo del Worker, con participación en la implementación en anillo de *All-Reduce*. La interfaz de funciones externas en Python y la interfaz interactiva de terminal. Las optimizaciones de sincronización de las copias del modelo. Los entornos de simulación multinodo, la suite de benchmarks y el análisis experimental de resultados.
 
-**Marcos Bianchi Fernández (Padrón 108921).** Los algoritmos de entrenamiento distribuido y su coordinación. El módulo de comunicaciones y el protocolo entre nodos, incluidas las técnicas de reducción de tráfico. El módulo del Servidor de parámetros. La monografía sobre el impacto de las épocas offline, que constituye el segundo estudio experimental del informe.
+**Marcos Bianchi Fernández (Padrón 108921).** Los algoritmos de entrenamiento distribuido y su coordinación. El módulo de comunicaciones y el protocolo entre nodos, incluidas las técnicas de reducción de tráfico. El módulo del Servidor de parámetros. La monografía sobre el impacto de las épocas offline, que constituye el estudio experimental derivado del informe.
 
 
 |                                                         | Alejo | Lorenzo | Marcos |

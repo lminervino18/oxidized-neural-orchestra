@@ -13,7 +13,7 @@ Esta sección describe la arquitectura resultante. El énfasis está puesto en l
 5. **Estrategias de Sincronización y Distribución:** Soporta tres esquemas de distribución integrados:
   * **Parameter Server:** Sincronización multi-servidor con particionado de capas.
   * **Ring All-Reduce:** Algoritmo descentralizado con comunicación lógica de anillo entre los nodos.
-  * **Strategy-Switch:** Conmutación dinámica de All-Reduce a Parameter Server según la curva de pérdida.
+  * **Strategy-Switch:** Conmutación dinámica de All-Reduce a Parameter Server asincrónico según la curva de pérdida.
 6. **Interfaces de Usuario:** Exposición del sistema mediante una interfaz gráfica de terminal interactiva (`orchestui`) y una librería de bindings para Python vía FFI (`orchestra-py`).
 
 ## Decisiones de diseño
@@ -24,7 +24,7 @@ Esta sección describe la arquitectura resultante. El énfasis está puesto en l
 
 **Separación del plano de control y el plano de datos.** Los comandos de coordinación viajan en JSON, legible y depurable; los tensores y gradientes viajan por reinterpretación de memoria sin copias. La división responde a que ambos planos tienen necesidades opuestas: el de control es poco frecuente y conviene poder inspeccionarlo; el de datos concentra el volumen y cada copia intermedia cuesta.
 
-**Particionado respetando límites de capa.** Cuando Parameter Server fragmenta el modelo entre varios servidores, el reparto se realiza por capas enteras. Así, cada gradiente producido por una capa viaja completo a un único servidor, sin partir tensores al enviar ni recomponerlos al recibir.
+**Particionado respetando límites de capa.** Cuando Parameter Server fragmenta el modelo entre varios servidores, el reparto se realiza por capas enteras. Así, cada gradiente producido por una capa viaja por completo a un único servidor, sin partir tensores al enviar ni recomponerlos al recibir.
 
 **Selección de topología por latencia medida.** El orquestador mide la latencia entre los nodos antes de entrenar y con esas mediciones decide el orden del anillo y la ubicación de los servidores. La topología resulta de la red real y no de la configuración, lo que evita que una asignación arbitraria introduzca diferencias de tiempo ajenas al algoritmo.
 
