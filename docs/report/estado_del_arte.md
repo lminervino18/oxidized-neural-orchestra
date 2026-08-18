@@ -1,4 +1,3 @@
-\newpage
 # Estado del arte
 
 El entrenamiento distribuido surge como una extensión de las técnicas de paralelización en *HPC* (High Performance Computing). Desde los primeros enfoques de paralelismo de datos en frameworks como TensorFlow [@2021zndo4758419D] y PyTorch [@paszke2019pytorchimperativestylehighperformance] hasta sus implementaciones más recientes optimizadas para arquitecturas heterogéneas, la evolución de estos métodos refleja la tensión constante entre escalabilidad y coherencia de los parámetros del modelo. Los relevamientos de Ben-Nun y Hoefler [@bennun2019demystifying] y de Dehghani y Yazdanparast [@dehghani2023survey] sistematizan esa tensión y sirvieron de mapa conceptual para este trabajo.

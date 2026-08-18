@@ -1,6 +1,6 @@
 \newpage
 
-# Herramientas externas utilizadas
+## Herramientas externas utilizadas
 
 **Rust** se eligió como lenguaje del sistema principal por varios motivos:
 
@@ -23,7 +23,7 @@
 
 La totalidad de las herramientas y bibliotecas utilizadas son de código abierto, con licencias permisivas (MIT o Apache 2.0 en su mayoría). El sistema desarrollado se publica bajo licencia abierta, de modo que pueda ser retomado y extendido por terceros, según el criterio establecido en la propuesta. No se incurrió en costos de licenciamiento.
 
-## Bibliotecas de Rust
+### Bibliotecas de Rust
 
 Estas son algunas de las bibliotecas más importantes del proyecto.
 
@@ -43,7 +43,7 @@ Estas son algunas de las bibliotecas más importantes del proyecto.
 | `anyhow`                     | Manejo de errores en la interfaz de terminal.                                                         |
 
 
-## Bibliotecas de Python
+### Bibliotecas de Python
 
 | Biblioteca    | Uso                                                                 |
 |---------------|---------------------------------------------------------------------|

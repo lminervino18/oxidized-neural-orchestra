@@ -1,10 +1,10 @@
-# Solución implementada
+## Solución implementada
 
 Se construyó Oxidized Neural Orchestra (O.N.O.), un sistema distribuido de entrenamiento de modelos de aprendizaje profundo. Comprende una biblioteca de redes neuronales, una capa de comunicación con protocolo propio, un plano de control que coordina la ejecución, tres algoritmos distribuidos de entrenamiento y dos interfaces de uso.
 
 Esta sección describe la arquitectura resultante. El énfasis está puesto en las decisiones de diseño y en las razones que las motivaron, por encima de los detalles de implementación: en un trabajo cuyo objetivo era construir una base de comparación, son esas decisiones las que determinan si la base sirve para lo que fue construida.
 
-## Componentes generales de la arquitectura
+### Componentes generales de la arquitectura
 
 1. **Capa de Comunicación (`comms`):** Abstrae la infraestructura de red mediante un protocolo propio optimizado. Separa el plano de control (comandos en formato JSON) del plano de datos (tensores y gradientes mediante reinterpretación de memoria sin copias).
 2. **Motor de Redes Neuronales (`machine_learning`):** Provee la biblioteca de aprendizaje profundo (capas, funciones de activación, pérdidas, entrenadores y modelos), con inicializaciones de Xavier-Glorot [@glorot2010understanding] y Kaiming-He [@he2015delving] y optimizadores que incluyen el descenso por gradiente con momento [@sutskever2013momentum] y Adam [@kingma2014adam]. Su diseño organiza el modelo como un buffer de memoria plano sobre el cual operan las capas, facilitando la partición y transmisión de parámetros sin serializaciones complejas.
@@ -16,7 +16,7 @@ Esta sección describe la arquitectura resultante. El énfasis está puesto en l
   * **Strategy-Switch:** Conmutación dinámica de All-Reduce a Parameter Server asincrónico según la curva de pérdida.
 6. **Interfaces de Usuario:** Exposición del sistema mediante una interfaz gráfica de terminal interactiva (`orchestui`) y una librería de bindings para Python vía FFI (`orchestra-py`).
 
-## Decisiones de diseño
+### Decisiones de diseño
 
 **Nodo agnóstico de rol.** Todos los nodos ejecutan el mismo binario y el rol de cada uno es una especificación que el orquestador asigna en tiempo de ejecución. La razón es Strategy-Switch: conmutar de All-Reduce a Parameter Server en medio de un entrenamiento exige promover trabajadores a servidores sin redesplegar el clúster, y eso solo es posible si el rol no queda fijado en el despliegue. La misma propiedad deja abierta, como extensión, la participación de un mismo proceso en más de un entrenamiento.
 

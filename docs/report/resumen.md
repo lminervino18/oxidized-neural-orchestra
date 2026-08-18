@@ -1,5 +1,5 @@
 \newpage
-# Resumen
+# Resumen {-}
 
 El entrenamiento de modelos de aprendizaje profundo requiere de grandes recursos computacionales y largos tiempos de ejecución; los algoritmos que se utilizan hacen uso intensivo de CPU y GPU, y requieren de grandes capacidades de memoria para almacenar tanto los datos de entrenamiento como el modelo en sí. Junto con la revolución de la aplicación de la inteligencia artificial, minimizar ese tiempo de entrenamiento se ha vuelto un tema central, y la estrategia más escalable para lograrlo es su ejecución distribuida.
 

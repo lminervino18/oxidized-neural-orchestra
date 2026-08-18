@@ -1,5 +1,5 @@
 \newpage
-# Problema detectado y/o faltante
+## Problema detectado y/o faltante
 
 El entrenamiento de un modelo de aprendizaje profundo es costoso en dos dimensiones distintas: el tiempo y la memoria. Sobre conjuntos de datos grandes, un entrenamiento completo puede extenderse durante días sobre una única máquina, y tanto el conjunto de datos como el modelo y sus estados intermedios pueden exceder la memoria disponible en un solo dispositivo [@bennun2019demystifying]. A eso se suma una restricción práctica que define el escenario habitual: quien necesita entrenar estos modelos rara vez dispone de un equipo de gran porte, pero es frecuente que tenga varias máquinas de capacidad modesta. Alcanzar una capacidad de cómputo dada sumando el hardware que ya se tiene resulta bastante más accesible que adquirir un solo equipo que la iguale, y esa es la razón por la que se adopta el entrenamiento distribuido: reducir el tiempo repartiendo el cómputo entre varios nodos, y superar la restricción de memoria repartiendo los datos o los parámetros.
 

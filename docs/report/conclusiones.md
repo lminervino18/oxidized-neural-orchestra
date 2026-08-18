@@ -1,5 +1,5 @@
 \newpage
-# Conclusiones
+## Conclusiones
 
 El trabajo se propuso estudiar las principales estrategias de entrenamiento distribuido de modelos de aprendizaje profundo y construir un sistema que permitiera compararlas de forma controlada. Ese objetivo se cumplió.
 

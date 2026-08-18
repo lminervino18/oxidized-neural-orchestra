@@ -1,9 +1,9 @@
 \newpage
-# Cronograma de las actividades realizadas
+## Cronograma de las actividades realizadas
 
 El plan de actividades de la propuesta fijó dieciséis tareas repartidas en cuatro hitos sobre dos cuatrimestres, con una carga estimada de 1500 horas de equipo. Esta sección contrasta ese plan con la ejecución real, que se extendió entre agosto de 2025 y julio de 2026.
 
-## Fases efectivamente recorridas
+### Fases efectivamente recorridas
 
 El desarrollo puede reconstruirse en doce fases, numeradas de 0 a 11. Las fechas son aproximadas y corresponden a rangos de actividad, ya que varias fases se solaparon.
 
@@ -24,7 +24,7 @@ El desarrollo puede reconstruirse en doce fases, numeradas de 0 a 11. Las fechas
 
 : Fases del desarrollo efectivamente recorridas.
 
-## Contraste entre lo planificado y lo ejecutado
+### Contraste entre lo planificado y lo ejecutado
 
 **Lo que se cumplió según lo previsto.** El núcleo del plan se completó: el sistema base parametrizable en Rust con su biblioteca de redes neuronales propia (tarea 4), los tres algoritmos (tareas 5 a 7), las optimizaciones de comunicación y sincronización (tareas 8 y 9), las dos interfaces (tarea 10), las pruebas (tarea 11), la simulación sobre distintas configuraciones de nodos (tarea 12) y el análisis de resultados con sus gráficos (tarea 14). El desvío global fue de noventa horas sobre las mil quinientas estimadas, apenas un seis por ciento, pero ese saldo casi neutro esconde compensaciones grandes entre tareas: 550 horas de exceso en unas se cancelaron contra 460 de defecto en otras.
 
@@ -38,7 +38,7 @@ El desarrollo puede reconstruirse en doce fases, numeradas de 0 a 11. Las fechas
 
 **Una observación sobre la estimación.** La distribución de horas de la propuesta asignaba 200 horas a investigar las implementaciones distribuidas de TensorFlow y PyTorch (tareas 2 y 3). En la práctica ese estudio se realizó de forma mucho más acotada y en modalidad de consulta puntual, y el esfuerzo se redistribuyó hacia la implementación y la depuración del motor de aprendizaje profundo. La lección de estimación es la habitual y no por conocida menos real: el esfuerzo se subestima sistemáticamente en aquello que no se conoce de antemano, que en este trabajo fue todo lo relativo a la corrección numérica del entrenamiento y a la coordinación distribuida.
 
-## Carga horaria efectiva
+### Carga horaria efectiva
 
 | Nro. | Tarea                                                           | Horas estimadas | Horas reales     |
 |------|-----------------------------------------------------------------|-----------------|------------------|
