@@ -33,4 +33,5 @@ pandoc \
     --top-level-division=chapter \
     -V documentclass=book \
     -V classoption=oneside \
+    -V classoption=notitlepage \
     -o informe.pdf
