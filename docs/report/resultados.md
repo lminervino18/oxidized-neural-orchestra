@@ -1,4 +1,3 @@
-\newpage
 <!-- # NOTAS -->
 <!-- - TODO, algo como: La penalización por no sincronizar frecuentemente se incrementa con la varianza del dataset. Cada nodo va a recibir una partición del dataset cuya superficie de error va a ser muy distinta a la de los demás. -->
 <!-- - TODO: gráficos efficiency o speedup, time spent, después otro copado podría ser parameter server y gráfico de tiempo vs. cantidad de workers, con una curva base q es la cantidad con bandwidth infinita y la otra con bandwidth limitada y comparando con ambos resultados teóricos. -->
