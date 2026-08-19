@@ -1,3 +1,9 @@
+% babel-spanish traduce "table" como "Cuadro" por default; el uso estándar
+% en la carrera es "Tabla". babel resetea los nombres de captions recién en
+% \begin{document}, así que el renewcommand tiene que ir en AtBeginDocument
+% para que corra después y no quede pisado.
+\AtBeginDocument{\renewcommand{\tablename}{Tabla}}
+
 % Parámetros de ubicación de floats.
 % Los valores por omisión de LaTeX difieren las figuras con demasiada facilidad
 % y dejan páginas a medio llenar. Estos permiten empaquetar más figuras por
