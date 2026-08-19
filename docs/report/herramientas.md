@@ -9,6 +9,8 @@
 - Relevancia y crecimiento en la industria.
 - Familiaridad y preferencia de los integrantes.
 
+El primer diseño de arquitectura, basado en actores sobre TCP bloqueante, se descartó tempranamente por la complejidad que agregaba la concurrencia embebida en el protocolo; migrar a un modelo async con la concurrencia resuelta a nivel de nodo simplificó el diseño desde ahí en adelante.
+
 **Python** Se utilizó para tres propósitos:
 
 - Interfaz de funciones externas del sistema.
