@@ -8,23 +8,30 @@ pandoc \
     keywords.md \
     introduccion.md \
     estado_del_arte.md \
+    ono.md \
     problema.md \
     solucion.md \
+    simulaciones_resultados.md \
     resultados.md \
     metodologia.md \
     herramientas.md \
     experimentacion.md \
-    cronograma.md \
-    riesgos.md \
+    conclusiones_trabajo_futuro.md \
     impacto.md \
     trabajos_futuros.md \
     conclusiones.md \
     aportes_individuales.md \
     referencias.md \
     anexos.md \
+    cronograma.md \
+    riesgos.md \
     --include-in-header=preamble.tex \
     --citeproc \
     --bibliography=references.bib \
     --number-sections \
     --csl=apa-6th-edition.csl \
+    --top-level-division=chapter \
+    -V documentclass=book \
+    -V classoption=oneside \
+    -V classoption=notitlepage \
     -o informe.pdf

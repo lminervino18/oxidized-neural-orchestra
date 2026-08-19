@@ -1,5 +1,5 @@
 \newpage
-# Trabajos futuros
+## Trabajos futuros
 
 El sistema quedó en un estado que admite ser retomado, y varias de las líneas que siguen tienen su diseño ya especificado en el repositorio. Se ordenan por relevancia.
 

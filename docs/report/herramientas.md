@@ -1,6 +1,6 @@
 \newpage
 
-# Herramientas externas utilizadas
+## Herramientas externas utilizadas
 
 **Rust** se eligió como lenguaje del sistema principal por varios motivos:
 
@@ -8,6 +8,8 @@
 - Buen modelo de concurrencia.
 - Relevancia y crecimiento en la industria.
 - Familiaridad y preferencia de los integrantes.
+
+El primer diseño de arquitectura resolvía la concurrencia con un hilo del sistema operativo dedicado por conexión, bloqueado en un *mailbox* (un canal `mpsc`) y en cada escritura TCP; se descartó tempranamente por la complejidad que agregaba esa concurrencia embebida en el protocolo de comunicación. Migrar a un modelo async, donde la concurrencia entre conexiones se resuelve con tareas cooperativas sobre un runtime compartido en lugar de un hilo por conexión, simplificó el diseño desde ahí en adelante.
 
 **Python** Se utilizó para tres propósitos:
 
@@ -23,7 +25,7 @@
 
 La totalidad de las herramientas y bibliotecas utilizadas son de código abierto, con licencias permisivas (MIT o Apache 2.0 en su mayoría). El sistema desarrollado se publica bajo licencia abierta, de modo que pueda ser retomado y extendido por terceros, según el criterio establecido en la propuesta. No se incurrió en costos de licenciamiento.
 
-## Bibliotecas de Rust
+### Bibliotecas de Rust
 
 Estas son algunas de las bibliotecas más importantes del proyecto.
 
@@ -43,7 +45,7 @@ Estas son algunas de las bibliotecas más importantes del proyecto.
 | `anyhow`                     | Manejo de errores en la interfaz de terminal.                                                         |
 
 
-## Bibliotecas de Python
+### Bibliotecas de Python
 
 | Biblioteca    | Uso                                                                 |
 |---------------|---------------------------------------------------------------------|

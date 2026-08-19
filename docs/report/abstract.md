@@ -1,5 +1,5 @@
 \newpage
-# Abstract
+# Abstract {-}
 
 Training deep learning models requires large computational resources and long execution times; the algorithms involved make intensive use of the CPU and the GPU, and demand large memory capacities in order to store both the training data and the model itself. Together with the revolution in the application of artificial intelligence, minimizing that training time has become a central topic, and the most scalable strategy to achieve it is distributed execution.
 

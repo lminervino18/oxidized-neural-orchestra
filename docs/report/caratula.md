@@ -13,7 +13,7 @@ graphics: true
 
 \author{
              \textbf{Tutor:}  Ing. Ricardo Alfredo Veiga \\ \texttt{ rveiga@fi.uba.ar } \\[1.8ex]
-             \textbf{Co-Tutor y Orientador:} Dr. Ing. José Ignacio Álvarez-Hamelin \\ \texttt{ ihameli@fi.uba.ar } \\[1.8ex]
+             \textbf{Co-Tutor y Orientador:} Dr. Ing. José Ignacio Alvarez-Hamelin \\ \texttt{ ihameli@fi.uba.ar } \\[1.8ex]
              \textbf{Estudiantes} \\[1.8ex]  
              Alejo Ordoñez \textit{(Padrón 108397)}\\ \texttt{ alordonez@fi.uba.ar } \\[1.8ex]
              Lorenzo Minervino \textit{(Padrón 107863)}\\ \texttt{ lminervino@fi.uba.ar }\\[1.8ex]
