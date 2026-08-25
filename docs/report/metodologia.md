@@ -39,7 +39,7 @@ El criterio funcionó para las fallas visibles, pero resultó insuficiente para 
 
 Como herramienta de gestión se utilizó GitHub Projects. Cada ticket nació en el `Backlog`, pasó `En Progreso` y eventualmente, cuando el feature alcanzó un estado estable pasó a `En Revisión`, para finalmente quedar archivado en `Listo` luego de su efectiva revisión.
 
-Algunos de los artefactos de gestión que se utilizaron durante el proceso fueron minutas de reunión para una mejor organización previa a los encuentros con los tutores y diagramas de los temas que se abarcaron, si lo ameritaban; como por ejemplo diagramas de robustez para los distintos algoritmos distribuidos que se implementaron, y diagramas de ejecución del flujo de entrenamiento agnóstico del tipo de entrenamiento mostrando la comunicación entre orquestador y nodos trabajadores.
+Algunos de los artefactos de gestión que se utilizaron durante el proceso fueron minutas de reunión para una mejor organización previa a los encuentros con los tutores y diagramas de los temas que se abarcaron, si lo ameritaban; como por ejemplo diagramas de robustez para los distintos algoritmos distribuidos que se implementaron, y diagramas de ejecución del flujo de entrenamiento agnóstico del tipo de entrenamiento mostrando la comunicación entre orchestrator y workers.
 
 Sobre la calidad del producto se definieron los siguientes indicadores: la proporción de cambios requeridos luego de publicar un **pull request** como listo para revisión, y el desvío entre horas planificadas y efectivamente dedicadas. Este último funcionó también como indicador de costos.
 
