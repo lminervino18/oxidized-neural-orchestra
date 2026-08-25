@@ -4,6 +4,18 @@
 % para que corra después y no quede pisado.
 \AtBeginDocument{\renewcommand{\tablename}{Tabla}}
 
+% babel-spanish nombra los apéndices "Apéndice" por default; la convención de
+% la carrera usa "Anexo". Mismo mecanismo de AtBeginDocument que \tablename.
+\AtBeginDocument{\renewcommand{\appendixname}{Anexo}}
+
+% Fuerza a las figuras a aparecer exactamente donde están en el texto fuente,
+% en vez de que LaTeX las mueva a otra página para "acomodar mejor" el
+% contenido. Necesario en capítulos con varias figuras seguidas (cap. 3),
+% donde el algoritmo de floats por defecto las alejaba de la oración que las
+% menciona.
+\usepackage{float}
+\floatplacement{figure}{H}
+
 % Parámetros de ubicación de floats.
 % Los valores por omisión de LaTeX difieren las figuras con demasiada facilidad
 % y dejan páginas a medio llenar. Estos permiten empaquetar más figuras por
