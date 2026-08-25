@@ -1,4 +1,3 @@
-\newpage
 ## Impactos económico, sociales y ambientales del proyecto
 
 La propuesta incluyó una evaluación preliminar de impacto. Se la revisa aquí a la luz de lo efectivamente construido y medido.
