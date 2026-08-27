@@ -2,11 +2,11 @@
 El objetivo principal de los algoritmos que se implementan en este trabajo es el de reducir el tiempo de entrenamiento de un modelo de deep learning, $T_1$, que está dado por la suma de $T_\text{ser}$ y $T_\text{par}$, los tiempos de procesamiento de las porciones de trabajo serializado y paralelizable, respectivamente.  
 Dado que $T_\text{ser}\ll T_\text{par}$, pues, para los algoritmos que se presentan, el trabajo serializado consiste en compartir el dataset y la metadata del modelo entre los nodos, y que además $T_{ser}$ no cambia entre los algoritmos, porque en todos ellos necesita compartirse esa información; se desprecia $T_\text{ser}$ y se habla de $T_\text{par}$ como $T_1$ en el contexto de la comparativa.
 
-En un mundo perfecto, donde el costo de sincronización de los nodos es despreciable, el tiempo de entrenamiento es inversamente proporcional a la cantidad de nodos $P$:
+Si el costo de sincronización entre nodos fuera despreciable, el tiempo de entrenamiento sería inversamente proporcional a la cantidad de nodos $P$:
 $$
 T_P = \frac{T_1}{P}.
 $$
-Ahora bien, el mundo no es perfecto y el costo de sincronización no es despreciable; más aún, se verá más adelante que en algunos casos puede incluso crecer con la cantidad de máquinas que deben sincronizarse.
+En la práctica, el costo de sincronización no es despreciable; más aún, se verá más adelante que en algunos casos puede incluso crecer con la cantidad de máquinas que deben sincronizarse.
 
 A continuación, se realiza un análisis de los tiempos de entrenamiento esperados para cada algoritmo y se los compara con los que fueron obtenidos con O.N.O.
 

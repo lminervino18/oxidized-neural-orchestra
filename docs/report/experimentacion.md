@@ -15,7 +15,7 @@ El despliegue se realiza con una única imagen de Docker, coherente con el agnos
 
 Todas las mediciones se realizaron sobre clústeres simulados en una única máquina física: un contenedor por nodo, red *bridge* y puertos publicados.
 
-La suite de experimentación está escrita en Python haciendo uso de la interfaz que provee el sistema para el lenguage, y está organizada de forma declarativa en cuatro conjuntos de ensayos que miden convergencia, velocidad de ejecución, velocidad de convergencia y escalabilidad. Los resultados se persisten de forma incremental, con repeticiones en media y desvío, y la documentación se regenera automáticamente en cada corrida. Documenta además de forma explícita sus criterios de equidad y sus fuentes de ruido: justifica el presupuesto fijo de nodos, aclara qué significa un epoch en cada ensayo, y explica por qué ciertas variantes se comparan por exactitud y no por velocidad.
+La suite de experimentación está escrita en Python haciendo uso de la interfaz que provee el sistema para el lenguaje, y está organizada de forma declarativa en cuatro conjuntos de ensayos que miden convergencia, velocidad de ejecución, velocidad de convergencia y escalabilidad. Los resultados se persisten de forma incremental, con repeticiones en media y desvío, y la documentación se regenera automáticamente en cada corrida. Documenta además de forma explícita sus criterios de equidad y sus fuentes de ruido: justifica el presupuesto fijo de nodos, aclara qué significa un epoch en cada ensayo, y explica por qué ciertas variantes se comparan por exactitud y no por velocidad.
 
 ### Estudio derivado: impacto de los epochs offline
 
