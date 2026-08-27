@@ -1,6 +1,6 @@
 # Estado del arte
 
-Este capítulo aborda los enfoques de entrenamiento distribuido relevantes para este trabajo: cómo se clasifican según qué particionan entre nodos, las dos estrategias de sincronización que sirven de base a todo lo implementado, sus combinaciones, y las técnicas de reducción de tráfico y de sincronización diferida que también se incorporaron. Este relevamiento sienta las bases del problema que se plantea en el capítulo siguiente.
+Este capítulo aborda los enfoques de entrenamiento distribuido pertinentes para este trabajo: cómo se clasifican según qué particionan entre nodos, las dos estrategias de sincronización que sirven de base a todo lo implementado, sus combinaciones, y las técnicas de reducción de tráfico y de sincronización diferida que también se incorporaron. Este panorama sienta las bases del problema que se plantea en el capítulo siguiente.
 
 ## Paralelismo de datos, de modelo y de pipeline
 
