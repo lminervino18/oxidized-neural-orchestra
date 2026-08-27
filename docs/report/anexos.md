@@ -1,4 +1,6 @@
-# Repositorio del proyecto
+# Repositorio y documentación del proyecto
+
+## Repositorio del proyecto
 
 El código fuente, su documentación técnica y el historial completo del desarrollo están alojados en el siguiente repositorio público:
 
@@ -20,7 +22,7 @@ Está organizado como un *workspace* de Cargo, la herramienta de construcción d
 - `docker`: los scripts que levantan los entornos de simulación multinodo.
 - `docs`: la propuesta, el presente informe y la documentación de diseño del sistema.
 
-# Documentación técnica
+## Documentación técnica
 
 Dentro del repositorio se encuentran los siguientes documentos, referenciados a lo largo de este informe:
 
@@ -30,7 +32,7 @@ Dentro del repositorio se encuentran los siguientes documentos, referenciados a 
 - `benchmarks/README.md`: la documentación de la suite de experimentación, con las configuraciones de cada campaña y las instrucciones para reproducirlas.
 - Los `README.md` de cada crate, con la documentación de sus abstracciones principales.
 
-# Reproducibilidad de los experimentos
+## Reproducibilidad de los experimentos
 
 La campaña de benchmarks del sistema es reproducible a partir del material versionado en el repositorio. Se ejecuta mediante `benchmarks/run_issue_benchmarks.py`, cubre 38 configuraciones con tres repeticiones en las suites de throughput y de escalabilidad, que se reportan en media y desvío, y conserva las configuraciones que generaron cada corrida junto con los resultados crudos, los procesados y los generadores de figuras.
 
