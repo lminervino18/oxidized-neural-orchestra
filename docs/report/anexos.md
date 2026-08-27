@@ -1,7 +1,3 @@
-```{=latex}
-\appendix
-```
-
 # Repositorio del proyecto
 
 El código fuente, su documentación técnica y el historial completo del desarrollo están alojados en el siguiente repositorio público:

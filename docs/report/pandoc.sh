@@ -20,11 +20,11 @@ pandoc \
     impacto.md \
     trabajos_futuros.md \
     conclusiones.md \
-    aportes_individuales.md \
     referencias.md \
-    anexos.md \
+    aportes_individuales.md \
     cronograma.md \
     riesgos.md \
+    anexos.md \
     --include-in-header=preamble.tex \
     --citeproc \
     --bibliography=references.bib \

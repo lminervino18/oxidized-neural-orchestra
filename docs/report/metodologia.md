@@ -44,13 +44,3 @@ Algunos de los artefactos de gestión que se utilizaron durante el proceso fuero
 Sobre la calidad del producto se definieron los siguientes indicadores: la proporción de cambios requeridos luego de publicar un **pull request** como listo para revisión, y el desvío entre horas planificadas y efectivamente dedicadas. Este último funcionó también como indicador de costos.
 
 También se consideraron la proporción de pruebas exitosas sobre el total, la cantidad de advertencias del análisis estático y los resultados obtenidos de la ejecución de los benchmarks. En cuanto al análisis estático, se buscó sostenerlo sin warnings durante toda la evolución del proyecto.
-
-### Riesgos Iniciales
-
-- **Complejidad de la implementación distribuida en Rust.** La coordinación entre nodos y el manejo de la concurrencia son intrínsecamente complejos y propensos a errores sutiles, como bloqueos o condiciones de carrera. Como mitigación, el desarrollo fue incremental y se apoyó en las garantías de *fearless-concurrency* del lenguaje y en una cobertura de pruebas unitarias y de integración que acompañó cada avance.
-
-- **Disponibilidad de hardware para simulaciones representativas.** Reproducir un entorno distribuido realista requiere de múltiples máquinas, algo no siempre disponible. Para mitigarlo, las simulaciones se ejecutaron sobre contenedores Docker con límites de recursos por nodo, lo que permitió emular entornos multi computadora de forma controlada.
-
-- **Dependencia de trabajos previos.** Parte del trabajo se apoya en algoritmos y resultados publicados, como *Strategy-Switch*, cuya interpretación e implementación pueden diferir de lo documentado. La mitigación consistió en implementar versiones de referencia de los algoritmos base y validarlas antes de construir mejoras sobre ellas.
-
-- **Amplitud del alcance y estimación de tiempos.** El trabajo abarcó tanto el sistema base como varias líneas de optimización (comunicación, sincronización y carga en configuraciones heterogéneas), lo que dificultó la estimación del esfuerzo. Para mitigarlo, se priorizó  un sistema base funcional junto con las implementaciones de referencia, y las optimizaciones se abordaron de forma incremental según el avance.
