@@ -44,6 +44,7 @@ Estas son algunas de las bibliotecas más importantes del proyecto.
 | `pyo3`                       | Interfaz de funciones externas con Python.                                                            |
 | `anyhow`                     | Manejo de errores en la interfaz de terminal.                                                         |
 
+: Principales bibliotecas de Rust utilizadas en el proyecto.
 
 ### Bibliotecas de Python
 
@@ -55,4 +56,6 @@ Estas son algunas de las bibliotecas más importantes del proyecto.
 | `safetensors` | Carga de los pesos entrenados por el sistema para su evaluación.    |
 | `torch`       | Línea de base de referencia.                                        |
 
-El uso de Pytorch se restringió a benchmarks para comparar la implementación del motor de redes neuronales de O.N.O. contra una base conocida.
+: Bibliotecas de Python utilizadas en la evaluación del sistema.
+
+El uso de PyTorch se restringió a benchmarks para comparar la implementación del motor de redes neuronales de O.N.O. contra una base conocida.
