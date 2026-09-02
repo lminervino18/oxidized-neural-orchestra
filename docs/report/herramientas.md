@@ -2,6 +2,8 @@
 
 ## Herramientas externas utilizadas
 
+El sistema y su experimentación se apoyan en un conjunto acotado de herramientas externas. Esta sección las presenta agrupadas por rol —lenguajes, contenerización, control de versiones y emulación de red— y justifica cada elección; las bibliotecas concretas de Rust y de Python se detallan en las subsecciones finales.
+
 **Rust** se eligió como lenguaje del sistema principal por varios motivos:
 
 - Control de bajo nivel sin renunciar a garantías de seguridad.

@@ -1,3 +1,4 @@
+\newpage
 ## Resultados
 El objetivo principal de los algoritmos que se implementan en este trabajo es el de reducir el tiempo de entrenamiento de un modelo de deep learning, $T_1$, que está dado por la suma de $T_\text{ser}$ y $T_\text{par}$, los tiempos de procesamiento de las porciones de trabajo serializado y paralelizable, respectivamente.  
 Dado que $T_\text{ser}\ll T_\text{par}$, pues, para los algoritmos que se presentan, el trabajo serializado consiste en compartir el dataset y la metadata del modelo entre los nodos, y que además $T_{ser}$ no cambia entre los algoritmos, porque en todos ellos necesita compartirse esa información; se desprecia $T_\text{ser}$ y se habla de $T_\text{par}$ como $T_1$ en el contexto de la comparativa.
@@ -35,6 +36,8 @@ Por último, el tiempo total de entrenamiento en una sola máquina, sin hacer us
 | $N_W$                | 2, 4, 6, 8, 12, 16                                                             |
 
 : Configuración de los benchmarks. Parameter Server siempre se ejecuta con un único servidor.
+
+Las subsecciones que siguen derivan el delay de sincronización $d_\text{sync}$ para cada estrategia bajo estos supuestos, una por una y en orden de complejidad creciente. El contraste entre esos valores esperados y los medidos sobre O.N.O. se retoma al final, en *Resultados obtenidos*.
 
 ### Parameter Server sincrónico con un solo servidor
 En Parameter Server [@10.5555/2685048.2685095] con un solo server, el delay que introduce la sincronización del sistema está dado por el tiempo de comunicación de la ida de los parámetros del server hacia los workers, y de la vuelta de los gradientes de los workers hacia el server.  

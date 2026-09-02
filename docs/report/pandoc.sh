@@ -12,16 +12,18 @@ pandoc \
     problema.md \
     solucion.md \
     simulaciones_resultados.md \
-    resultados.md \
-    metodologia.md \
-    herramientas.md \
     experimentacion.md \
+    herramientas.md \
+    resultados.md \
+    estudio_derivado.md \
+    conclusiones_capitulo4.md \
     conclusiones_trabajo_futuro.md \
     impacto.md \
     trabajos_futuros.md \
     conclusiones.md \
     referencias.md \
     aportes_individuales.md \
+    metodologia.md \
     cronograma.md \
     riesgos.md \
     anexos.md \
