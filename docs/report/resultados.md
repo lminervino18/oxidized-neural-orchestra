@@ -13,9 +13,9 @@ A continuación, se realiza un análisis de los tiempos de entrenamiento esperad
 
 El tiempo total de entrenamiento distribuido está dado por la combinación del tiempo de ejecución local y el delay de sincronización y de inicialización
 $$
-T_{total} = N_\text{epochs} * \left(\frac{T_{epoch}}{N_W} + d_\text{sync}\right) + d_\text{inicialización}.
+T_\text{total} = N_\text{epochs} * \left(\frac{T_\text{epoch}}{N_W} + d_\text{sync}\right) + d_\text{inicialización},
 $$
-En un entorno de computación distribuida, una pasada por el dataset en cada epoch se divide entre la cantidad de workers que las computan.
+donde $T_\text{total}$ es el tiempo total de ejecución del entrenamiento distribuido, $N_\text{epochs}$ es la cantidad de épocas de entrenamiento, $T_\text{epoch}$ es el tiempo de ejecución promedio de cada época, $N_W$ es la cantidad de workers en el sistema distribuido, $d_\text{sync}$ es el delay de sincronización en cada iteración y $d_\text{inicialización}$ es el delay de inicialización del entrenamiento distribuido. En un entorno de computación distribuida, una pasada por el dataset en cada epoch se divide entre la cantidad de workers que las computan.
 
 Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultados contra el dataset MNIST [@lecun1998gradient]. Como se muestra a continuación, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red.  
 Para poder simular un ambiente multi computadora en una sola máquina con 16 cores, se usó Docker para limitar la cantidad de CPUs asignados a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
