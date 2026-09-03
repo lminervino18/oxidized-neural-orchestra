@@ -110,8 +110,8 @@ Se muestra primero la comparativa de resultados de los algoritmos que operan de 
 
 ![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce y Parameter Server.](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
 
-Tal como predice el análisis teórico, la performance de Parameter Server empeora a paritr de $N_W=6$. Esto se debe a que el servidor único actúa como cuello de botella y el delay de sincronización crece linealmente con los workers. En contraste, Ring All-Reduce demuestra ser una topología mucho más eficiente a medida que el sistema escala, puesto a el tiempo de ejecución no se degrada porque su delay está acotado.  
-Sin embargo, esta sincronización estricta impone una cota inferior a la mejora en performance que proveen estos algoritmos por sobre la ejecución en una sóla computadora, lo que impide que el tiempo de entrenamiento siga disminuyendo al agregar más workers.
+Tal como predice el análisis teórico, la performance de Parameter Server empeora a partir de $N_W=6$. Esto se debe a que el servidor único actúa como cuello de botella y el delay de sincronización crece linealmente con los workers. En contraste, Ring All-Reduce demuestra ser una topología mucho más eficiente a medida que el sistema escala, puesto que el tiempo de ejecución no se degrada porque su delay está acotado.  
+Sin embargo, esta sincronización estricta impone una cota inferior a la mejora en performance que proveen estos algoritmos por sobre la ejecución en una sola computadora, lo que impide que el tiempo de entrenamiento siga disminuyendo al agregar más workers.
 
 A continuación se muestran los resultados obtenidos para las estrategias asincrónicas: Parameter Server asincrónico con un solo server y Strategy-Switch.
 
