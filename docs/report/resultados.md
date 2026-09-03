@@ -103,21 +103,28 @@ Por último, el tiempo total de entrenamiento en una sola máquina, sin hacer us
 
 : Configuración de los benchmarks. Parameter Server siempre se ejecuta con un único servidor.
 
+El objetivo de un algoritmo de entrenamiento distribuido es lograr una ganancia en performance que justifique el costo de ejecución en un ambiente multi máquina, garantizando al mismo tiempo que el modelo converja; de lo contrario, el entrenamiento en sí pierde todo sentido.
+<!-- TODO: refrasear? -->
+
 Se muestra primero la comparativa de resultados de los algoritmos que operan de manera sincrónica.
 
 ![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce y Parameter Server.](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
 
-Se observa que el delay de sincronización hace que la performance de Parameter Server empiece a empeorar a partir de $N_W=6$. Por otro lado, la sincronización no empeora con la cantidad de workers para All-Reduce puesto que el delay está acotado, pero sí agrega una cota inferior al tiempo de ejecución.
+Tal como predice el análisis teórico, la performance de Parameter Server empeora a paritr de $N_W=6$. Esto se debe a que el servidor único actúa como cuello de botella y el delay de sincronización crece linealmente con los workers. En contraste, Ring All-Reduce demuestra ser una topología mucho más eficiente a medida que el sistema escala, puesto a el tiempo de ejecución no se degrada porque su delay está acotado.  
+Sin embargo, esta sincronización estricta impone una cota inferior a la mejora en performance que proveen estos algoritmos por sobre la ejecución en una sóla computadora, lo que impide que el tiempo de entrenamiento siga disminuyendo al agregar más workers.
 
-A continuación se muestran los resultados obtenidos para Parameter Server asincrónico con un solo server y para Strategy-Switch.
+A continuación se muestran los resultados obtenidos para las estrategias asincrónicas: Parameter Server asincrónico con un solo server y Strategy-Switch.
 
 ![Tiempo de entrenamiento de MNIST VS. cantidad de workers para Parameter Server asincrónico y Strategy-Switch.](figures/execution_times_async_parameter_server_and_strategy_switch.png){width=78%}
 
-Los resultados son muy prometedores y muy similares para ambos algoritmos. Sin embargo, al examinar cómo evoluciona la accuracy obtenida sobre el set de test en Parameter Server asincrónico, se observa que la acumulación de gradientes de manera descontrolada arruina por completo los resultados de convergencia.
+En términos exclusivos de velocidad, ambos algoritmos logran resultados excelentes. Al romper la barrera de sincronización estricta, evitan el cuello de botella de Ring All-Reduce y logran que el tiempo de ejecución siga bajando a medida que se suman workers.  
+No obstante, el tiempo de ejecución carece de valor si el modelo no aprende. Al examinar cómo evoluciona la accuracy obtenida sobre el set de test en Parameter Server asincrónico, se observa que la acumulación de gradientes de manera descontrolada arruina por completo los resultados de convergencia:
 
 ![Evolución de la accuracy de MNIST VS. cantidad de workers para Parameter Server asincrónico.](figures/accuracies_async_parameter_server.png){width=78%}
 
 El hecho de que cada worker empuje para su lado pesa mayormente al principio del entrenamiento, cuando los workers no se encuentran en mínimos locales acordados en conjunto.  
-Strategy-Switch aprovecha la velocidad de la desincronización en el momento indicado para no perder la convergencia, cuando los mínimos locales sí fueron consensuados de antemano. El resultado del híbrido es una convergencia similar a la de los algoritmos sincrónicos y, como ya se vio, una velocidad de ejecución similar a la del asincrónico.
+Strategy-Switch aprovecha la velocidad de la desincronización en el momento indicado para no perder la convergencia, cuando los mínimos locales sí fueron consensuados de antemano.
 
 ![Evolución de la accuracy de MNIST VS. cantidad de workers para Parameter Server asincrónico y Strategy-Switch.](figures/accuracies.png){width=78%}
+
+El resultado del híbrido es óptimo: logra una convergencia similar a la de los algoritmos sincrónicos y una velocidad de ejecución similar a la del asincrónico.
