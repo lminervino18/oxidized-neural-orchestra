@@ -9,10 +9,26 @@ El sistema se verificó con tres tipos de pruebas. Las pruebas unitarias ejercit
 
 Las dos primeras se escribieron con el arnés de pruebas nativo de Rust y se ejecutan mediante `cargo test`; las de aceptación se levantan sobre los entornos contenerizados descritos más abajo. Las tres son automatizadas y de ejecución desatendida, y se versionan junto con el código, de modo que cada cambio pueda validarse antes de integrarse.
 
+La suite completa se ejecuta con éxito en cada integración y su aprobación es condición obligatoria para incorporar cambios a la rama principal; en particular, las pruebas de aceptación confirman que la convergencia de las estrategias distribuidas coincide con la del entrenamiento secuencial equivalente. Esta verificación no alcanza, sin embargo, a los errores de corrección distribuida silenciosos, aquellos que no rompen ninguna prueba pero degradan la calidad del modelo; su detección motivó la incorporación de los benchmarks cuyos resultados se analizan más adelante.
+
 ### Entorno de experimentación y reproducibilidad
 
 El despliegue se realiza con una única imagen de Docker, coherente con el agnosticismo de rol del sistema: no hay imagen de worker ni imagen de servidor. Un conjunto de scripts genera la configuración del clúster, ajusta la resolución de nombres y levanta el entorno a partir de un único parámetro con la cantidad de nodos.
 
-Todas las mediciones se realizaron sobre clústeres simulados en una única máquina física: un contenedor por nodo, red *bridge* y puertos publicados.
+Todas las mediciones se realizaron sobre clústeres simulados en una única máquina física de 16 núcleos: un contenedor por nodo, red *bridge* y puertos publicados. Cada contenedor se restringe a una porción fija de CPU, para emular nodos independientes, y el ancho de banda entre nodos se limita con Pumba. Para la campaña de comparación de estrategias ese ancho de banda se fijó en $R = 10$ Mbps, deliberadamente bajo, de modo que la relación entre el tamaño del modelo y la velocidad de la red produzca diferencias observables entre estrategias sin recurrir a un modelo artificialmente grande.
+
+Esa campaña se corrió sobre MNIST completo [@lecun1998gradient] con la arquitectura LeNet-5, de 61706 parámetros; como los parámetros y los gradientes viajan por la red como flotantes de 16 bits, el modelo ocupa $S \approx 1$ Mbit ($\approx 0{,}12$ MB) a los efectos de la comunicación. El entrenamiento de referencia en una sola máquina, sin distribución, tarda $T_1 = 600$ segundos. El resto de la configuración se resume en la Tabla siguiente.
+
+| Parámetro            | Valores                                                                        |
+|----------------------|--------------------------------------------------------------------------------|
+| Dataset              | MNIST completo [@lecun1998gradient]                                            |
+| Modelo               | LeNet-5                                                                        |
+| Función de pérdida   | Entropía cruzada                                                               |
+| Optimizador          | Adam [@kingma2014adam] ($\alpha=0{,}01$; $\beta_1=0{,}9$; $\beta_2=0{,}999$; $\epsilon=10^{-8}$) |
+| Tamaño de mini-batch | 64                                                                             |
+| Epochs               | 48                                                                             |
+| $N_W$                | 2, 4, 6, 8, 12, 16                                                             |
+
+: Configuración de la campaña de comparación de estrategias. Parameter Server se ejecuta siempre con un único servidor.
 
 La suite de experimentación está escrita en Python haciendo uso de la interfaz que provee el sistema para el lenguaje, y está organizada de forma declarativa en cuatro conjuntos de ensayos que miden convergencia, velocidad de ejecución, velocidad de convergencia y escalabilidad. Los resultados se persisten de forma incremental, con repeticiones en media y desvío, y la documentación se regenera automáticamente en cada corrida. Documenta además de forma explícita sus criterios de equidad y sus fuentes de ruido: justifica el presupuesto fijo de nodos, aclara qué significa un epoch en cada ensayo, y explica por qué ciertas variantes se comparan por exactitud y no por velocidad.

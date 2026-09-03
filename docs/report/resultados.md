@@ -16,7 +16,7 @@ $$
 donde $T_\text{total}$ es el tiempo total de ejecución del entrenamiento distribuido, $N_\text{epochs}$ es la cantidad de épocas de entrenamiento, $T_\text{epoch}$ es el tiempo de ejecución promedio de cada época, $N_W$ es la cantidad de workers en el sistema distribuido, $d_\text{sync}$ es el delay de sincronización en cada iteración y $d_\text{inicialización}$ es el delay de inicialización del entrenamiento distribuido.  
 En un entorno de computación distribuida, una pasada por el dataset en cada epoch se divide entre la cantidad de workers que las computan.
 
-Las subsecciones que siguen derivan el delay de sincronización $d_\text{sync}$ para cada estrategia. El contraste entre esos valores esperados y los medidos sobre O.N.O. se retoma al final, en *Resultados obtenidos*.
+Las subsecciones que siguen derivan el delay de sincronización $d_\text{sync}$ para cada estrategia. Las expresiones son de elaboración propia: se obtienen a partir de los supuestos enunciados y de la descripción de cada algoritmo en la literatura citada, y no se toman de ninguna fuente. El contraste entre esos valores esperados y los medidos sobre O.N.O. se retoma al final, en *Resultados obtenidos*.
 
 ### Parameter Server sincrónico con un solo servidor
 En Parameter Server [@10.5555/2685048.2685095] con un solo server, el delay que introduce la sincronización del sistema está dado por el tiempo de comunicación de la ida de los parámetros del server hacia los workers, y de la vuelta de los gradientes de los workers hacia el server.  
@@ -83,28 +83,11 @@ $$
 con $0\leq d_\text{sync}^\text{Async PS}\leq d_\text{sync}^\text{PS}$.
 
 ### Resultados obtenidos
-Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultados contra el dataset MNIST [@lecun1998gradient].  
-Para poder simular un ambiente multi computadora en una sola máquina con 16 cores, se usó Docker para limitar la cantidad de CPUs asignados a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
+Los resultados se obtuvieron sobre MNIST [@lecun1998gradient], con la arquitectura, los hiperparámetros y el barrido de workers detallados en la *Metodología de experimentación y validación*, y sobre el entorno simulado descrito en esa misma sección.
 
-Como ya se dijo, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red. Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, con el objetivo de tener una relación $S/R$ buena para evaluación, se configuró $R=10 \ \text{Mbps}$ subrealistamente bajo, de manera tal de evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
-El modelo que se entrenó es LeNet-5, que tiene 61706 parámetros. Como los parámetros y los gradientes se comparten en la red como números flotantes de 16 bits, el tamaño del modelo que pasa por la red es de casi 1 Mb. El delay de transmisión es entonces de aproximadamente $d_\text{trans}=0,1 \ \text{segundos}$.  
-Se utilizó el optimizador Adam [@kingma2014adam] con learning rate 0,01 y batch size 64; por 48 epochs.  
-Por último, el tiempo total de entrenamiento en una sola máquina, sin hacer uso de ningún algoritmo distribuido, es $T_1=600 \ \text{segundos}$.
-
-| Parámetro            | Valores                                                                        |
-|----------------------|--------------------------------------------------------------------------------|
-| Dataset              | MNIST completo [@lecun1998gradient]                                            |
-| Modelo               | LeNet-5                                                                        |
-| Función de pérdida   | Entropía cruzada                                                               |
-| Optimizador          | Adam ($\alpha=0{,}01$; $\beta_1=0{,}9$; $\beta_2=0{,}999$; $\epsilon=10^{-8}$) |
-| Tamaño de mini-batch | 64                                                                             |
-| Epochs               | 48                                                                             |
-| $N_W$                | 2, 4, 6, 8, 12, 16                                                             |
-
-: Configuración de los benchmarks. Parameter Server siempre se ejecuta con un único servidor.
+Un factor clave en el delay de sincronización es el tamaño del modelo $S$ frente al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$. Como el tamaño de los modelos que resultan útiles para aprender MNIST no basta para que ese cociente produzca diferencias observables entre estrategias, se fijó $R=10 \ \text{Mbps}$, subrealistamente bajo, en lugar de recurrir a un modelo innecesariamente grande o de cambiar el problema por uno que así lo requiera. Con un modelo de $S\approx 1$ Mbit ($\approx 0{,}12$ MB) y ese bandwidth, el delay de transmisión es $d_\text{trans}\approx 0{,}1 \ \text{segundos}$.
 
 El objetivo de un algoritmo de entrenamiento distribuido es lograr una ganancia en performance que justifique el costo de ejecución en un ambiente multi máquina, garantizando al mismo tiempo que el modelo converja; de lo contrario, el entrenamiento en sí pierde todo sentido.
-<!-- TODO: refrasear? -->
 
 Se muestra primero la comparativa de resultados de los algoritmos que operan de manera sincrónica.
 
