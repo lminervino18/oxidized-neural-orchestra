@@ -17,7 +17,7 @@ y con la conclusión del estudio derivado de los epochs offline.
 
 El análisis teórico y empírico de las distintas estrategias de entrenamiento distribuido permite extraer tres conclusiones principales sobre la gestión de tiempo y convergencia:
 
-**El cuello de botella es la sincronización centralizada.** En escenarios con ancho de banda restringuido, centralizar la comunicación en Parameter Server sincrónico escala de forma deficiente y aumenta el tiempo total de entrenamiento al agregar nodos luego de pasar un umbral. La topología descentralizada de Ring All-Reduce soluciona el escalado, pero mantiene la imposición del límite estricto de la mejora en performance alcanzable.
+**El cuello de botella es la sincronización centralizada.** En escenarios con ancho de banda restringido, centralizar la comunicación en Parameter Server sincrónico escala de forma deficiente y aumenta el tiempo total de entrenamiento al agregar nodos luego de pasar un umbral. La topología descentralizada de Ring All-Reduce soluciona el escalado, pero mantiene la imposición del límite estricto de la mejora en performance alcanzable.
 
 **Existe un *trade-off* directo entre asincronismo y convergencia en Parameter Server asincrónico.** Eliminar los bloqueos de sincronización en Parameter Server asincrónico reduce radicalmente los tiempos de ejecución, pero a costa de destruir por completo la convergencia del modelo debido al fuerte *client drift* en las primeras etapas del entrenamiento.
 
