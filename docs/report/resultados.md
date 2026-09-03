@@ -48,11 +48,11 @@ Suponiendo un ambiente homogéneo, en el que el tiempo de procesamiento de los w
 
 El delay de sincronización de Parameter Server sincrónico con un solo servidor es entonces
 $$
-d_\text{sync, PS} = 2 N_W \frac{S}{R}.
+d_\text{sync}^\text{PS} = 2 N_W \frac{S}{R}.
 $$
 Nótese que el delay crece con la cantidad de workers.
 
-Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando su CPU siendo que la entidad del server es I/O bounded. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula, y por tanto $d_\text{sync, PS} = 2 (N_W-1) \frac{S}{R}$.
+Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando su CPU siendo que la entidad del server es I/O bounded. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula, y por tanto $d_\text{sync}^\text{PS} = 2 (N_W-1) \frac{S}{R}$.
 
 ### Ring All-Reduce
 El delay de sincronización de Ring All-Reduce [@patarasuk2009bandwidth] está dado por el delay del *scatter* y por el delay del *gather*. Ambas etapas del algoritmo son de $N_W-1$ iteraciones. En ambas, la sincronización en una iteración consiste en enviar una $N_W$-ésima parte del gradiente del $i$-ésimo al $i+1$-ésimo nodo. Dado que se desprecian los delays de encolado, propagación y procesamiento, y dado que las tarjetas de red son *full-duplex* (tienen canales dedicados para leer y escribir), puede pensarse que la comunicación en anillo se realiza en paralelo.
@@ -60,14 +60,14 @@ El delay de sincronización de Ring All-Reduce [@patarasuk2009bandwidth] está d
 Considerando los mismos supuestos de delays de comunicación por red que se usaron para el desarrollo anterior, el delay de sincronización de All-Reduce, está dado por hacer dar vuelta una $N_W$-ésima parte del gradiente dos veces. Esto es
 $$
 \begin{aligned}
-d_\text{sync, AR} &= 2(N_W - 1) \frac{S/N_W}{R}\\
+d_\text{sync}^\text{AR} &= 2(N_W - 1) \frac{S/N_W}{R}\\
 &=2(1-\frac{1}{N_W}) \frac{S}{R}.
 \end{aligned}
 $$
 
 A diferencia de Parameter Server, el factor afectado por la cantidad de workers $\frac{1}{N_W}\rightarrow 0$ cuando $N_W\rightarrow \infty$,
 $$
-\lim_{N_W\rightarrow \infty} d_\text{sync, AR} = 2 \frac{S}{R}.
+\lim_{N_W\rightarrow \infty} d_\text{sync}^\text{AR} = 2 \frac{S}{R}.
 $$
 El delay de sincronización está acotado por el doble del delay de transmisión del tamaño de los parámetros del modelo.
 
@@ -77,11 +77,11 @@ Una forma de resolver este problema es incrementar la cantidad de servidores. Ca
 
 En Parameter Server, por tratarse de comunicación de uno a muchos, el cuello de botella de la sincronización está del lado del servidor. Con un solo servidor ya se vio que el envío de parámetros y la recepción de gradientes ambos tardan $N_W \frac{S}{R}$, que es el máximo entre el delay desde el punto de vista de un worker y desde el del server: $\max{\left(\frac{S}{R}, N_W \frac{S}{R}\right)}$. Pero con $N_S$ servers, el delay del lado del servidor se transforma en $N_W \frac{S/N_S}{R}$. Por lo tanto
 $$
-d_\text{sync, Multi-PS} = 2 \frac{N_W}{N_S} \frac{S}{R} \qquad (N_S\leq N_W).
+d_\text{sync}^\text{Multi-PS} = 2 \frac{N_W}{N_S} \frac{S}{R} \qquad (N_S\leq N_W).
 $$
-Nótese que cuando $N_S=N_W$, $d_\text{sync, Multi-PS} = 2 \frac{S}{R}$, que es el mismo resultado obtenido que para All-Reduce cuando $N_W$ crece indefinidamente.
+Nótese que cuando $N_S=N_W$, $d_\text{sync}^\text{Multi-PS} = 2 \frac{S}{R}$, que es el mismo resultado obtenido que para All-Reduce cuando $N_W$ crece indefinidamente.
 
-Vale la misma aclaración que se hizo en el caso para un solo servidor con respecto a que los nodos que ejecutan un server normalmente van a estar también ejecutando un worker, por lo que los delays de transmisión se anulan en esos nodos: $d_\text{sync, Multi-PS} = 2 \frac{N_W-1}{N_S} \frac{S}{R}$.
+Vale la misma aclaración que se hizo en el caso para un solo servidor con respecto a que los nodos que ejecutan un server normalmente van a estar también ejecutando un worker, por lo que los delays de transmisión se anulan en esos nodos: $d_\text{sync}^\text{Multi-PS} = 2 \frac{N_W-1}{N_S} \frac{S}{R}$.
 
 ### Parameter Server asincrónico
 El delay de sincronización desarollado en los puntos anteriores se da luego de cada ronda de epochs de *todos* los workers. Esto es, cada worker computa una epoch (o más, si `offline_epochs` está configurado) para luego sincronizar sus parámetros con el resto.
@@ -91,17 +91,17 @@ El problema con esta estrategia es que la convergencia empeora mucho cuando la d
 
 ### Strategy-Switch
 Strategy-Switch [@provatas2025strategyswitch] combina la convergencia de All-Reduce y la velocidad de ejecución de Parameter Server asincrónico. La idea es encontrar un buen mínimo local con el primer algoritmo para luego seguir bajándolo por medio del segundo.  
-Considerando que $d_\text{sync}$ es el tiempo en el que los nodos permanecen sin realizar ningún cómputo, ni comunicarse directamente con otro nodo, por esperar que termine la sincronización, puede decirse entonces que luego del switch no está acotado inferiormente. En el peor de los casos, cuando todos los nodos se comunican con el parameter server en simultáneo, el delay llega a $d_\text{sync, PS}$.
+Considerando que $d_\text{sync}$ es el tiempo en el que los nodos permanecen sin realizar ningún cómputo, ni comunicarse directamente con otro nodo, por esperar que termine la sincronización, puede decirse entonces que luego del switch no está acotado inferiormente. En el peor de los casos, cuando todos los nodos se comunican con el parameter server en simultáneo, el delay llega a $d_\text{sync}^\text{PS}$.
 
 El delay de sincronización de Strategy-Switch depende entonces de si se realizó el *switch*:
 $$
-d_\text{sync, SS} =
+d_\text{sync}^\text{SS} =
 \begin{cases}
 2(1-\frac{1}{N_W}) \frac{S}{R}, & \text{antes del switch (All-Reduce)}\\
-d_\text{sync, Async PS}, & \text{después (Parameter Server asincrónico)}.
+d_\text{sync}^\text{Async PS}, & \text{después (Parameter Server asincrónico)}.
 \end{cases}
 $$
-con $0\leq d_\text{sync, Async PS}\leq d_\text{sync, PS}$.
+con $0\leq d_\text{sync}^\text{Async PS}\leq d_\text{sync}^\text{PS}$.
 
 ### Resultados obtenidos
 Se muestra primero la comparativa de resultados de los algoritmos que operan de manera sincrónica.
