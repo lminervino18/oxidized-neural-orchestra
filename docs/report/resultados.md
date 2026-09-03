@@ -9,44 +9,22 @@ T_P = \frac{T_1}{P}.
 $$
 En la práctica, el costo de sincronización no es despreciable; más aún, se verá más adelante que en algunos casos puede incluso crecer con la cantidad de máquinas que deben sincronizarse.
 
-A continuación, se realiza un análisis de los tiempos de entrenamiento esperados para cada algoritmo y se los compara con los que fueron obtenidos con O.N.O.
-
-El tiempo total de entrenamiento distribuido está dado por la combinación del tiempo de ejecución local y el delay de sincronización y de inicialización
+El tiempo total de entrenamiento distribuido está dado por la combinación del tiempo de ejecución local y el delay de sincronización y de inicialización:
 $$
-T_\text{total} = N_\text{epochs} * \left(\frac{T_\text{epoch}}{N_W} + d_\text{sync}\right) + d_\text{inicialización},
+T_\text{total} = N_\text{epochs} \cdot \left(\frac{T_\text{epoch}}{N_W} + d_\text{sync}\right) + d_\text{inicialización},
 $$
 donde $T_\text{total}$ es el tiempo total de ejecución del entrenamiento distribuido, $N_\text{epochs}$ es la cantidad de épocas de entrenamiento, $T_\text{epoch}$ es el tiempo de ejecución promedio de cada época, $N_W$ es la cantidad de workers en el sistema distribuido, $d_\text{sync}$ es el delay de sincronización en cada iteración y $d_\text{inicialización}$ es el delay de inicialización del entrenamiento distribuido.  
 En un entorno de computación distribuida, una pasada por el dataset en cada epoch se divide entre la cantidad de workers que las computan.
 
-Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultados contra el dataset MNIST [@lecun1998gradient]. Como se muestra a continuación, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red.  
-Para poder simular un ambiente multi computadora en una sola máquina con 16 cores, se usó Docker para limitar la cantidad de CPUs asignados a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
-
-Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, para tener una relación $S/R$ buena para evaluación, se configuró $R=10 \ \text{Mbps}$ subrealistamente bajo, de manera tal de evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
-El modelo que se entrenó es LeNet-5, que tiene 61706 parámetros. Como los parámetros y los gradientes se comparten en la red como números flotantes de 16 bits, el tamaño del modelo que pasa por la red es de casi 1 Mb. El delay de transmisión es entonces aproximadamente $d_\text{trans}=1 \ \text{segundo}$.  
-Se utilizó el optimizador Adam [@kingma2014adam] con learning rate 0.01 y batch size 64; por 48 epochs.  
-Por último, el tiempo total de entrenamiento en una sola máquina, sin hacer uso de ningún algoritmo distribuido, es $T_1=600 \ \text{segundos}$.
-
-| Parámetro            | Valores                                                                        |
-|----------------------|--------------------------------------------------------------------------------|
-| Dataset              | MNIST completo [@lecun1998gradient]                                            |
-| Modelo               | LeNet-5                                                                        |
-| Función de pérdida   | Entropía cruzada                                                               |
-| Optimizador          | Adam ($\alpha=0{,}01$; $\beta_1=0{,}9$; $\beta_2=0{,}999$; $\epsilon=10^{-8}$) |
-| Tamaño de mini-batch | 64                                                                             |
-| Epochs               | 48                                                                             |
-| $N_W$                | 2, 4, 6, 8, 12, 16                                                             |
-
-: Configuración de los benchmarks. Parameter Server siempre se ejecuta con un único servidor.
-
-Las subsecciones que siguen derivan el delay de sincronización $d_\text{sync}$ para cada estrategia bajo estos supuestos, una por una y en orden de complejidad creciente. El contraste entre esos valores esperados y los medidos sobre O.N.O. se retoma al final, en *Resultados obtenidos*.
+Las subsecciones que siguen derivan el delay de sincronización $d_\text{sync}$ para cada estrategia. El contraste entre esos valores esperados y los medidos sobre O.N.O. se retoma al final, en *Resultados obtenidos*.
 
 ### Parameter Server sincrónico con un solo servidor
 En Parameter Server [@10.5555/2685048.2685095] con un solo server, el delay que introduce la sincronización del sistema está dado por el tiempo de comunicación de la ida de los parámetros del server hacia los workers, y de la vuelta de los gradientes de los workers hacia el server.  
 
 Suponiendo un mismo bandwidth $R$ para todos los nodos, delays de encolado, propagación y procesamiento despreciables; y un modelo de tamaño $S$ ($S=N_\text{params} \times 2 \ \text{bytes}$, dado que los parámetros se serializan como flotantes de 16 bits); el tiempo que tarda la ida de los parámetros es el de su envío en $N_W$ mensajes unicast $N_W \frac{S}{R}$.  
-Suponiendo un ambiente homogéneo, en el que el tiempo de procesamiento de los workers es similar, todos comienzan a contestar con los respectivos gradientes en simultáneo. Sin embargo, el server solo tiene una tarjeta de red con la cuál recibir estos gradientes, por lo que el tiempo que tarda la vuelta de los gradientes es también $N_W \frac{S}{R}$.  
+Suponiendo un ambiente homogéneo, en el que el tiempo de procesamiento de los workers es similar, todos comienzan a contestar con los respectivos gradientes en simultáneo. Sin embargo, el server solo tiene una tarjeta de red con la cual recibir estos gradientes, por lo que el tiempo que tarda la vuelta de los gradientes es también $N_W \frac{S}{R}$.  
 
-El delay de sincronización de Parameter Server sincrónico con un solo servidor es entonces
+El delay de sincronización $d_\text{sync}^\text{PS}$ de Parameter Server sincrónico con un solo servidor es entonces
 $$
 d_\text{sync}^\text{PS} = 2 N_W \frac{S}{R}.
 $$
@@ -55,7 +33,7 @@ Nótese que el delay crece con la cantidad de workers.
 Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando su CPU siendo que la entidad del server está limitada por I/O. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula, y por tanto $d_\text{sync}^\text{PS} = 2 (N_W-1) \frac{S}{R}$.
 
 ### Ring All-Reduce
-El delay de sincronización de Ring All-Reduce [@patarasuk2009bandwidth] está dado por el delay del *scatter* y por el delay del *gather*. Ambas etapas del algoritmo son de $N_W-1$ iteraciones. En ambas, la sincronización en una iteración consiste en enviar una $N_W$-ésima parte del gradiente del $i$-ésimo al $i+1$-ésimo nodo. Dado que se desprecian los delays de encolado, propagación y procesamiento, y dado que las tarjetas de red son *full-duplex* (tienen canales dedicados para leer y escribir), puede pensarse que la comunicación en anillo se realiza en paralelo.
+El delay de sincronización de Ring All-Reduce [@patarasuk2009bandwidth] está dado por el delay del *scatter* y por el delay del *gather*. Ambas etapas del algoritmo son de $N_W-1$ iteraciones. En ambas, la sincronización en una iteración consiste en enviar una $N_W$-ésima parte del gradiente del $i$-ésimo al $i+1$-ésimo nodo. Dado que se desprecian los delays de encolado, propagación y procesamiento; y que las tarjetas de red son *full-duplex* (tienen canales dedicados para leer y escribir); puede pensarse que la comunicación en anillo se realiza en paralelo.
 
 Considerando los mismos supuestos de delays de comunicación por red que se usaron para el desarrollo anterior, el delay de sincronización de All-Reduce, está dado por hacer dar vuelta una $N_W$-ésima parte del gradiente dos veces. Esto es
 $$
@@ -84,9 +62,10 @@ Nótese que cuando $N_S=N_W$, $d_\text{sync}^\text{Multi-PS} = 2 \frac{S}{R}$, q
 Vale la misma aclaración que se hizo en el caso para un solo servidor con respecto a que los nodos que ejecutan un server normalmente van a estar también ejecutando un worker, por lo que los delays de transmisión se anulan en esos nodos: $d_\text{sync}^\text{Multi-PS} = 2 \frac{N_W-1}{N_S} \frac{S}{R}$.
 
 ### Parameter Server asincrónico
-El delay de sincronización desarollado en los puntos anteriores se da luego de cada ronda de epochs de *todos* los workers. Esto es, cada worker computa una epoch (o más, si `offline_epochs` está configurado) para luego sincronizar sus parámetros con el resto.
+El delay de sincronización desarrollado en los puntos anteriores se da luego de cada ronda de epochs de *todos* los workers. Esto es, cada worker computa una epoch (o más, si `offline_epochs` está configurado) para luego sincronizar sus parámetros con el resto.
 
 Parameter Server asincrónico libera al entrenamiento distribuido de esta restricción, dejando que el parameter server mueva los parámetros del modelo a medida que van llegando gradientes de los workers *sin necesidad de esperar al resto*. En este caso el costo de sincronización se elimina porque la sincronización simplemente desaparece, aunque aún se tiene que considerar el delay de transmisión $2\frac{S}{R}$ de cada worker.  
+
 El problema con esta estrategia es que la convergencia empeora mucho cuando la desincronización es grande, es decir, cuando los workers mueven demasiado los pesos en la dirección sesgada que les dicta su partición de los datos; fenómeno conocido como *client drift* [@mcmahan2017federated].
 
 ### Strategy-Switch
@@ -104,6 +83,26 @@ $$
 con $0\leq d_\text{sync}^\text{Async PS}\leq d_\text{sync}^\text{PS}$.
 
 ### Resultados obtenidos
+Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultados contra el dataset MNIST [@lecun1998gradient].  
+Para poder simular un ambiente multi computadora en una sola máquina con 16 cores, se usó Docker para limitar la cantidad de CPUs asignados a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
+
+Como ya se dijo, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red. Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, con el objetivo de tener una relación $S/R$ buena para evaluación, se configuró $R=10 \ \text{Mbps}$ subrealistamente bajo, de manera tal de evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
+El modelo que se entrenó es LeNet-5, que tiene 61706 parámetros. Como los parámetros y los gradientes se comparten en la red como números flotantes de 16 bits, el tamaño del modelo que pasa por la red es de casi 1 Mb. El delay de transmisión es entonces de aproximadamente $d_\text{trans}=0.1 \ \text{segundos}$.  
+Se utilizó el optimizador Adam [@kingma2014adam] con learning rate 0.01 y batch size 64; por 48 epochs.  
+Por último, el tiempo total de entrenamiento en una sola máquina, sin hacer uso de ningún algoritmo distribuido, es $T_1=600 \ \text{segundos}$.
+
+| Parámetro            | Valores                                                                        |
+|----------------------|--------------------------------------------------------------------------------|
+| Dataset              | MNIST completo [@lecun1998gradient]                                            |
+| Modelo               | LeNet-5                                                                        |
+| Función de pérdida   | Entropía cruzada                                                               |
+| Optimizador          | Adam ($\alpha=0{,}01$; $\beta_1=0{,}9$; $\beta_2=0{,}999$; $\epsilon=10^{-8}$) |
+| Tamaño de mini-batch | 64                                                                             |
+| Epochs               | 48                                                                             |
+| $N_W$                | 2, 4, 6, 8, 12, 16                                                             |
+
+: Configuración de los benchmarks. Parameter Server siempre se ejecuta con un único servidor.
+
 Se muestra primero la comparativa de resultados de los algoritmos que operan de manera sincrónica.
 
 ![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce y Parameter Server.](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
