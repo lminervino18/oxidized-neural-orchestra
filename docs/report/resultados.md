@@ -29,7 +29,7 @@ $$
 d_\text{sync}^\text{PS} = 2 N_W \frac{S}{R}.
 $$
 Nótese que el delay crece con la cantidad de workers, por lo que la ganancia en performance eventualmente se convierte en una pérdida a partir de un umbral.  
-Con $d_\text{sync}=d_\text{sync}^\text{PS}$ en \eqref{eq:total_execution_time} y anulando la derivada parcial a $T_\text{total}$ con respecto de $N_W$, obtenemos que el $N_W$ que minimiza el tiempo total de ejecución de Parameter Server sincrónico es
+Con $d_\text{sync}=d_\text{sync}^\text{PS}$ en \eqref{eq:total_execution_time} y anulando la derivada parcial de $T_\text{total}$ con respecto a $N_W$, obtenemos que el $N_W$ que minimiza el tiempo total de ejecución de Parameter Server sincrónico es
 \begin{equation}\label{eq:optimimal_nw_for_ps}
 N_W=\sqrt{\frac{R \ T_\text{epoch}}{2S-D/N_\text{epochs}}},
 \end{equation}
