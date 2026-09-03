@@ -52,7 +52,7 @@ d_\text{sync}^\text{PS} = 2 N_W \frac{S}{R}.
 $$
 Nótese que el delay crece con la cantidad de workers.
 
-Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando su CPU siendo que la entidad del server es I/O bounded. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula, y por tanto $d_\text{sync}^\text{PS} = 2 (N_W-1) \frac{S}{R}$.
+Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando su CPU siendo que la entidad del server está limitada por I/O. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula, y por tanto $d_\text{sync}^\text{PS} = 2 (N_W-1) \frac{S}{R}$.
 
 ### Ring All-Reduce
 El delay de sincronización de Ring All-Reduce [@patarasuk2009bandwidth] está dado por el delay del *scatter* y por el delay del *gather*. Ambas etapas del algoritmo son de $N_W-1$ iteraciones. En ambas, la sincronización en una iteración consiste en enviar una $N_W$-ésima parte del gradiente del $i$-ésimo al $i+1$-ésimo nodo. Dado que se desprecian los delays de encolado, propagación y procesamiento, y dado que las tarjetas de red son *full-duplex* (tienen canales dedicados para leer y escribir), puede pensarse que la comunicación en anillo se realiza en paralelo.
