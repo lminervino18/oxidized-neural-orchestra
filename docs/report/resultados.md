@@ -10,9 +10,9 @@ $$
 En la práctica, el costo de sincronización no es despreciable; más aún, se verá más adelante que en algunos casos puede incluso crecer con la cantidad de máquinas que deben sincronizarse.
 
 El tiempo total de entrenamiento distribuido está dado por la combinación del tiempo de ejecución local y el delay de sincronización y de inicialización:
-\begin{equation}\label{eq:total_execution_time}
+$$
 T_\text{total} = N_\text{epochs} \cdot \left(\frac{T_\text{epoch}}{N_W} + d_\text{sync}\right) + d_\text{inicialización},
-\end{equation}
+$$
 donde $T_\text{total}$ es el tiempo total de ejecución del entrenamiento distribuido, $N_\text{epochs}$ es la cantidad de épocas de entrenamiento, $T_\text{epoch}$ es el tiempo de ejecución promedio de cada época, $N_W$ es la cantidad de workers en el sistema distribuido, $d_\text{sync}$ es el delay de sincronización en cada iteración y $d_\text{inicialización}$ es el delay de inicialización del entrenamiento distribuido.  
 En un entorno de computación distribuida, una pasada por el dataset en cada epoch se divide entre la cantidad de workers que las computan.
 
@@ -28,12 +28,7 @@ El delay de sincronización $d_\text{sync}^\text{PS}$ de Parameter Server sincr�
 $$
 d_\text{sync}^\text{PS} = 2 N_W \frac{S}{R}.
 $$
-Nótese que el delay crece con la cantidad de workers, por lo que la ganancia en performance eventualmente se convierte en una pérdida a partir de un umbral.  
-Con $d_\text{sync}=d_\text{sync}^\text{PS}$ en \eqref{eq:total_execution_time} y anulando la derivada parcial de $T_\text{total}$ con respecto a $N_W$, obtenemos que el $N_W$ que minimiza el tiempo total de ejecución de Parameter Server sincrónico es
-\begin{equation}\label{eq:optimimal_nw_for_ps}
-N_W=\sqrt{\frac{R \ T_\text{epoch}}{2S-D/N_\text{epochs}}},
-\end{equation}
-donde $D$ es el tamaño del dataset que se transmite por la red en la inicialización del algoritmo.
+Nótese que el delay crece con la cantidad de workers.
 
 Cabe destacar que generalmente uno querría que el nodo que ejecuta el parameter server ejecute también un worker, dado que de otra forma se estaría desperdiciando su CPU siendo que la entidad del server está limitada por I/O. En cuyo caso el delay de comunicación entre el parameter server y el worker que residen en el mismo nodo se anula, y por tanto $d_\text{sync}^\text{PS} = 2 (N_W-1) \frac{S}{R}$.
 
@@ -115,7 +110,7 @@ Se muestra primero la comparativa de resultados de los algoritmos que operan de 
 
 ![Tiempo de entrenamiento de MNIST VS. cantidad de workers para All-Reduce y Parameter Server.](figures/execution_time_per_nodes_ar_vs_ps.png){width=78%}
 
-Tal como predice el análisis teórico en la ecuación \eqref{eq:optimimal_nw_for_ps}, la performance de Parameter Server empeora a partir de $N_W=6$. Esto se debe a que el servidor único actúa como cuello de botella y el delay de sincronización crece linealmente con los workers. En contraste, Ring All-Reduce demuestra ser una topología mucho más eficiente a medida que el sistema escala, puesto que el tiempo de ejecución no se degrada porque su delay está acotado.  
+Tal como predice el análisis teórico, la performance de Parameter Server empeora a partir de $N_W=6$. Esto se debe a que el servidor único actúa como cuello de botella y el delay de sincronización crece linealmente con los workers. En contraste, Ring All-Reduce demuestra ser una topología mucho más eficiente a medida que el sistema escala, puesto que el tiempo de ejecución no se degrada porque su delay está acotado.  
 Sin embargo, esta sincronización estricta impone una cota inferior a la mejora en performance que proveen estos algoritmos por sobre la ejecución en una sola computadora, lo que impide que el tiempo de entrenamiento siga disminuyendo al agregar más workers.
 
 A continuación se muestran los resultados obtenidos para las estrategias asincrónicas: Parameter Server asincrónico con un solo server y Strategy-Switch.
