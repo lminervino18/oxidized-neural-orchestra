@@ -87,8 +87,8 @@ Sin perder generalidad y conservando dinamismo, se opta por mostrar los resultad
 Para poder simular un ambiente multi computadora en una sola máquina con 16 cores, se usó Docker para limitar la cantidad de CPUs asignados a cada nodo y la herramienta Pumba para simular bandwidth limitado en la comunicación de red.  
 
 Como ya se dijo, un factor clave en el delay de sincronización que introducen los algoritmos de entrenamiento distribuido es el tamaño del modelo $S$ con respecto al bandwidth $R$ de la red, es decir, el delay de transmisión $d_\text{trans}$ de la red. Dado que el tamaño de los modelos que resultan útiles para aprender MNIST no es lo suficientemente grande para obtener diferencias observables entre los algoritmos, con el objetivo de tener una relación $S/R$ buena para evaluación, se configuró $R=10 \ \text{Mbps}$ subrealistamente bajo, de manera tal de evitar usar modelos innecesariamente grandes para MNIST o cambiar el problema a uno que así los requiera.  
-El modelo que se entrenó es LeNet-5, que tiene 61706 parámetros. Como los parámetros y los gradientes se comparten en la red como números flotantes de 16 bits, el tamaño del modelo que pasa por la red es de casi 1 Mb. El delay de transmisión es entonces de aproximadamente $d_\text{trans}=0.1 \ \text{segundos}$.  
-Se utilizó el optimizador Adam [@kingma2014adam] con learning rate 0.01 y batch size 64; por 48 epochs.  
+El modelo que se entrenó es LeNet-5, que tiene 61706 parámetros. Como los parámetros y los gradientes se comparten en la red como números flotantes de 16 bits, el tamaño del modelo que pasa por la red es de casi 1 Mb. El delay de transmisión es entonces de aproximadamente $d_\text{trans}=0,1 \ \text{segundos}$.  
+Se utilizó el optimizador Adam [@kingma2014adam] con learning rate 0,01 y batch size 64; por 48 epochs.  
 Por último, el tiempo total de entrenamiento en una sola máquina, sin hacer uso de ningún algoritmo distribuido, es $T_1=600 \ \text{segundos}$.
 
 | Parámetro            | Valores                                                                        |
