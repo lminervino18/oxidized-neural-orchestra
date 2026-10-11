@@ -1,4 +1,4 @@
-## Riesgos materializados y lecciones aprendidas
+## Riesgos materializados y lecciones aprendidas {#sec:riesgos}
 
 La propuesta identificó cuatro riesgos iniciales. Esta sección los enuncia, recorre con la evidencia del historial del proyecto los que se materializaron, suma los que no estaban contemplados y cierra con las lecciones que dejaron.
 
@@ -24,7 +24,7 @@ De los cuatro, la disponibilidad de hardware se controló según lo previsto y n
 
 ### Riesgos no previstos
 
-**Aplicar un algoritmo sin verificar la validez de sus supuestos.** El sistema implementa la actualización de parámetros libre de bloqueos siguiendo a Niu et al. [@recht2011hogwild], y una auditoría tardía mostró que la variante no era utilizable. Rust no permite obtener dos múltiples referencias mutables a la misma memoria por defecto, de modo que implementar la técnica del paper exigió utilizar estrategias para sortear esa limitación. En particular, se usó el patrón de *interior mutability* para alojar los parámetros y compartir su mutabilidad. El síntoma fue un cuelgue silencioso que solo aparecía con varios workers, y las pruebas existentes no lo detectaron porque ejercitaban únicamente la variante con bloqueo.
+**Aplicar un algoritmo sin verificar la validez de sus supuestos.** El sistema implementa la actualización de parámetros libre de bloqueos siguiendo a Niu et al. [-@recht2011hogwild], y una auditoría tardía mostró que la variante no era utilizable. Rust no permite obtener dos múltiples referencias mutables a la misma memoria por defecto, de modo que implementar la técnica del paper exigió utilizar estrategias para sortear esa limitación. En particular, se usó el patrón de *interior mutability* para alojar los parámetros y compartir su mutabilidad. El síntoma fue un cuelgue silencioso que solo aparecía con varios workers, y las pruebas existentes no lo detectaron porque ejercitaban únicamente la variante con bloqueo.
 
 ### Desvíos de alcance
 
