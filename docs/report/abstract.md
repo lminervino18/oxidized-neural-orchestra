@@ -1,7 +1,7 @@
 \newpage
 # Abstract {-}
 
-Training deep learning models requires large computational resources and long execution times; the algorithms involved make intensive use of the CPU and the GPU, and demand large memory capacities in order to store both the training data and the model itself. Together with the revolution in the application of artificial intelligence, minimizing that training time has become a central topic, and the most scalable strategy to achieve it is distributed execution.
+Training deep learning models requires large computational resources and long execution times; the algorithms involved make intensive use of the CPU and the GPU, and demand large memory capacities in order to store both the training data and the model itself. Together with the revolution in the application of artificial intelligence, minimizing that training time has become a central topic, and distributing the execution across several machines is the most scalable way to achieve it.
 
 Distributing the training, however, is not trivial: the chosen distribution strategy conditions both the total execution time and the convergence of the optimization. This work presents *Oxidized Neural Orchestra* (O.N.O.), a distributed training system written in Rust that includes a purpose-built neural network library, developed directly on top of the numerical array library *ndarray* and without relying on any existing deep learning framework. On that foundation, the three algorithms that serve as a reference in the area were implemented, *Parameter Server*, ring *All-Reduce* and *Strategy-Switch*, together with two user interfaces: an interactive terminal user interface and a Python library built on a foreign function interface.
 
