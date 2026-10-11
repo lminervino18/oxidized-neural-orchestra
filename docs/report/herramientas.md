@@ -1,6 +1,8 @@
 \newpage
 
-# Herramientas externas utilizadas
+## Herramientas externas utilizadas
+
+El sistema y su experimentación se apoyan en un conjunto acotado de herramientas externas. Esta sección las presenta agrupadas por rol —lenguajes, contenerización, control de versiones y emulación de red— y justifica cada elección; las bibliotecas concretas de Rust y de Python se detallan en las subsecciones finales.
 
 **Rust** se eligió como lenguaje del sistema principal por varios motivos:
 
@@ -8,6 +10,8 @@
 - Buen modelo de concurrencia.
 - Relevancia y crecimiento en la industria.
 - Familiaridad y preferencia de los integrantes.
+
+El primer diseño de arquitectura resolvía la concurrencia con un hilo del sistema operativo dedicado por conexión, bloqueado en una cola en memoria (un canal `mpsc`) y en cada escritura TCP; se descartó tempranamente por la complejidad que agregaba esa concurrencia embebida en el protocolo de comunicación. Migrar a un modelo async, donde la concurrencia entre conexiones se resuelve con tareas cooperativas sobre un runtime compartido en lugar de un hilo por conexión, simplificó el diseño desde ahí en adelante.
 
 **Python** Se utilizó para tres propósitos:
 
@@ -23,7 +27,7 @@
 
 La totalidad de las herramientas y bibliotecas utilizadas son de código abierto, con licencias permisivas (MIT o Apache 2.0 en su mayoría). El sistema desarrollado se publica bajo licencia abierta, de modo que pueda ser retomado y extendido por terceros, según el criterio establecido en la propuesta. No se incurrió en costos de licenciamiento.
 
-## Bibliotecas de Rust
+### Bibliotecas de Rust
 
 Estas son algunas de las bibliotecas más importantes del proyecto.
 
@@ -42,8 +46,9 @@ Estas son algunas de las bibliotecas más importantes del proyecto.
 | `pyo3`                       | Interfaz de funciones externas con Python.                                                            |
 | `anyhow`                     | Manejo de errores en la interfaz de terminal.                                                         |
 
+: Principales bibliotecas de Rust utilizadas en el proyecto.
 
-## Bibliotecas de Python
+### Bibliotecas de Python
 
 | Biblioteca    | Uso                                                                 |
 |---------------|---------------------------------------------------------------------|
@@ -53,4 +58,6 @@ Estas son algunas de las bibliotecas más importantes del proyecto.
 | `safetensors` | Carga de los pesos entrenados por el sistema para su evaluación.    |
 | `torch`       | Línea de base de referencia.                                        |
 
-El uso de Pytorch se restringió a benchmarks para comparar la implementación del motor de redes neuronales de O.N.O. contra una base conocida.
+: Bibliotecas de Python utilizadas en la evaluación del sistema.
+
+El uso de PyTorch se restringió a benchmarks para comparar la implementación del motor de redes neuronales de O.N.O. contra una base conocida.
