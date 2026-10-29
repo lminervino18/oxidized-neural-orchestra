@@ -1,0 +1,17 @@
+{
+  "addrs": ["127.0.0.1:40000", "127.0.0.1:40001", "127.0.0.1:40002", "127.0.0.1:40003"],
+  "algorithm": { "parameter_server": { "nservers": 1, "synchronizer": "barrier", "store": "blocking" } },
+  "dataset": {
+    "src": { "local": {
+      "samples_path": "datasets/mnist/mnist_train_10000_samples.bin",
+      "labels_path": "datasets/mnist/mnist_train_10000_labels.bin"
+    } },
+    "x_size": 784, "y_size": 10
+  },
+  "optimizer": { "gradient_descent": { "lr": 0.05 } },
+  "loss_fn": "cross_entropy",
+  "batch_size": 8,
+  "max_epochs": 60,
+  "offline_epochs": 0,
+  "seed": 42
+}
