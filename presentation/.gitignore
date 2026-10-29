@@ -1,0 +1,4 @@
+# Files the presentation needs that the root rules ignore
+!data/
+!dist/
+!captures/configs/model.json
