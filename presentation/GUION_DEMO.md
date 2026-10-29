@@ -1,6 +1,6 @@
 # Guion de la demo
 
-Pendiente de definir por el equipo. En la agenda hay **10 minutos** reservados entre la diapositiva 25 («Ahora, la demo») y la 26 (cierre). Al definirlo, actualizar también la lista *[a completar]* de la diapositiva 25 y sus notas en `index.html`.
+Pendiente de definir por el equipo. En la agenda hay **10 minutos** reservados entre la diapositiva 23 («Ahora, la demo») y la 24 (cierre). Al definirlo, actualizar también las palabras clave *[a completar]* de la diapositiva 23 y sus notas en `index.html`, y regenerar `GUION.md`.
 
 ## Qué mostrar y en qué orden
 

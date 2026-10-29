@@ -11,15 +11,15 @@
 
 <div class="stage" id="stage">
 
-<!-- ═════════════════════════ BLOQUE 1 ═════════════════════════ -->
+<!-- ═════════════════════════ ALEJO · por qué distribuir ═════════════════════════ -->
 
-<section class="slide cover" data-title="Portada" data-section="inicio" data-speaker="Alejo Ordoñez" data-time="0:45" data-scene="cover">
+<section class="slide cover" data-title="Portada" data-section="inicio" data-speaker="Alejo Ordoñez" data-time="0:45" data-scene="cover" data-keywords="O.N.O. · entrenamiento distribuido · Rust">
   <div class="scene" data-three></div>
   <div class="logo-wrap"><img class="logo" src="assets/logo.jpg" alt="Logo de Oxidized Neural Orchestra: un director de orquesta dentro de un semicírculo con tres nodos sobre su cabeza" data-float></div>
   <div class="titles">
     <div class="prompt" data-anim>~/oxidized-neural-orchestra $ defensa<span class="cursor"></span></div>
     <h1 data-anim>Oxidized<br>Neural<br><span class="o">Orchestra</span></h1>
-    <p class="subtitle" data-anim>Sistema distribuido de entrenamiento de modelos de aprendizaje profundo en Rust para implementar y comparar estrategias de distribución.</p>
+    <p class="subtitle" data-anim>Entrenamiento distribuido de redes neuronales, escrito en Rust.</p>
     <dl class="meta" data-anim>
       <dt>autores</dt><dd>Alejo Ordoñez · Lorenzo Minervino · Marcos Bianchi Fernández</dd>
       <dt>tutor</dt><dd>Ing. Ricardo Alfredo Veiga</dd>
@@ -28,353 +28,374 @@
   </div>
   <div class="inst" data-anim>Trabajo Profesional · Ingeniería en Informática · FIUBA</div>
   <aside class="notes">
-    <p class="n-idea">Presentarnos y anticipar en una frase qué construimos: una base común para comparar estrategias de entrenamiento distribuido.</p>
-    <div class="n-oral"><p>Saludo al jurado. Nombres del equipo, tutor y co-tutor.</p><p>Frase de apertura sugerida: «Construimos O.N.O., un sistema distribuido de entrenamiento escrito íntegramente en Rust, con su propia biblioteca de redes neuronales, para comparar estrategias de distribución sin que la implementación sesgue la comparación».</p><p>Anticipar la estructura: tres bloques de exposición (problema y fundamentos, estrategias y diseño, evidencia y conclusiones) y una demo al final.</p></div>
-    <p class="n-trans">«Empecemos por el problema: por qué distribuir y por qué compararlo es difícil.»</p>
+    <p class="n-idea">Presentarnos y decir en una frase qué hicimos.</p>
+    <ul class="n-oral">
+      <li>Saludo al jurado. Somos Alejo, Lorenzo y Marcos; nuestro tutor es Ricardo Veiga y el co-tutor, José Ignacio Alvarez-Hamelin.</li>
+      <li>En una frase: construimos O.N.O., un sistema para entrenar redes neuronales entre varias máquinas, escrito en Rust, con el que implementamos y comparamos cuatro formas de sincronizar ese entrenamiento.</li>
+      <li>El recorrido: por qué distribuir, cómo se sincroniza, cómo lo construimos, qué medimos y una demo.</li>
+    </ul>
+    <p class="n-trans">«Arranquemos por el principio: ¿por qué hace falta distribuir?»</p>
     <p class="n-src">docs/report/caratula.md · resumen.md</p>
   </aside>
 </section>
 
-<section class="slide" data-title="El costo de entrenar" data-section="problema" data-speaker="Alejo Ordoñez" data-time="1:15">
-  <div class="kicker"><span class="path">01 · problema</span></div>
-  <h2 data-anim>Entrenar un modelo profundo cuesta <em>tiempo</em> y <em>memoria</em></h2>
-  <div class="body center">
-    <div class="col">
-      <div class="grid-2">
-        <div class="panel" data-anim><span class="panel-title">tiempo</span><p class="txt">Sobre conjuntos grandes, un entrenamiento puede llevar <strong>días</strong> en una sola máquina.</p></div>
-        <div class="panel" data-anim><span class="panel-title">memoria</span><p class="txt">Datos, modelo y estados intermedios pueden <strong>no entrar</strong> en un solo dispositivo.</p></div>
-      </div>
-      <div class="callout" data-step="1"><span class="label">escenario habitual</span>Pocas veces hay un equipo de gran porte; es frecuente tener <strong>varias máquinas modestas</strong>.</div>
-      <p class="big" data-step="2">→ Repartir el cómputo entre nodos: <span class="hl">entrenamiento distribuido</span>.</p>
-    </div>
-    <div class="col narrow"><div class="diagram" data-diagram="machines"></div></div>
-  </div>
-  <aside class="notes">
-    <p class="n-idea">Distribuir no es un lujo: es la forma accesible de sumar cómputo y memoria con el hardware que ya se tiene.</p>
-    <div class="n-oral"><p>El costo tiene dos dimensiones: el tiempo (días sobre una sola máquina) y la memoria (datos, modelo y estados intermedios pueden exceder un dispositivo).</p><p>Paso 1: el escenario real. Rara vez se tiene un equipo de gran porte; sí varias máquinas modestas. Sumar hardware existente es más accesible que comprar uno que lo iguale.</p><p>Paso 2: por eso se distribuye: reducir tiempo repartiendo cómputo y superar la restricción de memoria repartiendo datos o parámetros.</p></div>
-    <p class="n-trans">«Distribuir es la respuesta conocida. Lo que nos interesó es otra cosa: cómo elegir entre las distintas formas de distribuir.»</p>
-    <p class="n-src">docs/report/problema.md (párrafo 1) · introduccion.md</p>
-  </aside>
-</section>
-
-<section class="slide" data-title="El problema: comparar estrategias" data-section="problema" data-speaker="Alejo Ordoñez" data-time="2:00">
-  <div class="kicker"><span class="path">01 · problema</span></div>
-  <h2 data-anim>Comparar estrategias de distribución <em>de forma controlada</em> es difícil</h2>
+<section class="slide" data-title="Entrenar es caro" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:30">
+  <div class="kicker"><span class="path">01 · por qué distribuir</span></div>
+  <h2 data-anim>Entrenar es <em>caro</em></h2>
   <div class="body">
-    <div class="col">
-      <p class="txt" data-anim>TensorFlow (<code>tf.distribute.Strategy</code>) y PyTorch (<code>DistributedDataParallel</code>) envuelven el ciclo de sincronización en <strong>una sola llamada</strong>. Adentro quedan fijas cuatro decisiones:</p>
-      <div class="grid-2" style="gap:22px">
-        <div class="panel dim" data-step="1"><span class="panel-title">01 · régimen</span><p class="txt">¿Sincrónico o asincrónico?</p></div>
-        <div class="panel dim" data-step="1"><span class="panel-title">02 · optimizador</span><p class="txt">¿Su estado vive en cada worker o en un nodo central?</p></div>
-        <div class="panel dim" data-step="1"><span class="panel-title">03 · particionado</span><p class="txt">¿Cómo se reparten los parámetros entre nodos?</p></div>
-        <div class="panel dim" data-step="1"><span class="panel-title">04 · codificación</span><p class="txt">¿Cómo viajan tensores y gradientes por la red?</p></div>
-      </div>
-    </div>
-    <div class="col narrow" style="justify-content:center">
-      <div class="callout warn" data-step="2"><span class="label">el sesgo</span><span class="mono" style="font-size:26px">diferencia medida<br>= algoritmo<br>+ calidad de implementación</span><br><span class="small">y no hay forma de separar ambos efectos.</span></div>
+    <div class="col wide"><div class="diagram" data-diagram="cost"></div></div>
+    <div class="kws-col">
+      <span class="kw grad" data-step="1">más datos</span>
+      <span class="kw" data-step="1">más parámetros</span>
+      <span class="kw warn" data-step="2">días de cómputo</span>
+      <span class="kw bad" data-step="3">no entra en memoria</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">El problema concreto no es distribuir, sino comparar estrategias sin que la implementación contamine la medición.</p>
-    <div class="n-oral"><p>Las bibliotecas de referencia ofrecen paralelismo de datos, pero exponen una única llamada que envuelve toda la sincronización.</p><p>Paso 1: dentro de esa llamada quedan tomadas cuatro decisiones que nos interesa variar de forma independiente: el régimen de sincronización (atado a la estrategia), la ubicación del optimizador con estado, el particionado de parámetros y la codificación de los mensajes.</p><p>Paso 2: además, esas implementaciones están optimizadas para producción y no aplican el mismo trabajo de bajo nivel a cada estrategia (solapamiento cómputo/comunicación, kernels especializados). Al comparar dos estrategias sobre dos implementaciones, la diferencia mezcla algoritmo y calidad de implementación. Ese sesgo no se puede cuantificar.</p></div>
-    <p class="n-trans">«De ahí sale el objetivo del trabajo.»</p>
-    <p class="n-src">docs/report/problema.md · estado_del_arte.md (Dehghani y Yazdanparast, 2023)</p>
+    <p class="n-idea">Entrenar un modelo profundo cuesta en dos dimensiones: tiempo y memoria.</p>
+    <ul class="n-oral">
+      <li>Un modelo chico con pocos datos entrena rápido: la barra se llena enseguida.</li>
+      <li><b>→</b> Pero los modelos útiles crecen: más datos y más parámetros. Cada época recorre todo el dataset y actualiza todos los parámetros.</li>
+      <li><b>→</b> Sobre conjuntos grandes, un entrenamiento completo puede tardar días en una sola máquina.</li>
+      <li><b>→</b> La otra dimensión es la memoria: el dataset, el modelo y sus estados intermedios pueden no entrar en un solo dispositivo.</li>
+    </ul>
+    <p class="n-trans">«¿La solución obvia? Comprar una máquina más grande.»</p>
+    <p class="n-src">docs/report/problema.md (párrafo 1) · Ben-Nun y Hoefler (2019)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Objetivo y alcance" data-section="objetivo" data-speaker="Alejo Ordoñez" data-time="1:15">
-  <div class="kicker"><span class="path">02 · objetivo</span></div>
-  <h2 data-anim>Una base común donde la única variable sea <em>la estrategia</em></h2>
+<section class="slide" data-title="Una máquina buena es cara" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:15">
+  <div class="kicker"><span class="path">01 · por qué distribuir</span></div>
+  <h2 data-anim>Una sola máquina buena es <em>cara</em></h2>
   <div class="body">
-    <div class="col wide">
-      <div class="diagram" data-diagram="stack"></div>
-    </div>
-    <div class="col">
-      <div class="panel" data-step="1"><span class="panel-title">alcance</span>
-        <ul class="list check tight">
-          <li>Paralelismo de datos</li>
-          <li>Parameter Server, Ring All-Reduce y Strategy-Switch</li>
-          <li>Biblioteca de redes neuronales propia sobre <code>ndarray</code></li>
-          <li>Interfaz de terminal y biblioteca de Python</li>
-          <li>Suite de experimentación reproducible</li>
-        </ul>
-      </div>
-      <div class="panel dim" data-step="1"><span class="panel-title">fuera de alcance</span>
-        <ul class="list cross tight">
-          <li>Tolerancia a fallos</li>
-          <li>Paralelismo de modelo y de pipeline</li>
-        </ul>
-      </div>
+    <div class="col wide"><div class="diagram" data-diagram="scaleup"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>escalar hacia arriba</span>
+      <span class="kw grad" data-step="1">$$$ · pocos la tienen</span>
+      <span class="kw bad" data-step="2">tiene un techo</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">El producto es un sistema de experimentación: su valor está en la evidencia que permite producir.</p>
-    <div class="n-oral"><p>Objetivo: construir una base común, parametrizable y de código abierto en la que las tres estrategias compartan capa de comunicación, motor de redes neuronales y plano de control.</p><p>Paso 1, alcance: paralelismo de datos; los tres algoritmos de referencia; motor propio sin frameworks de deep learning; dos interfaces; suite reproducible. Fuera: tolerancia a fallos (se asumió entorno local) y otros esquemas de paralelismo.</p><p>Si preguntan por la optimización de carga en configuraciones heterogéneas: estaba en la propuesta y no llegó a abordarse (desvío de alcance documentado en Riesgos).</p></div>
-    <p class="n-trans">«Para entender las estrategias hace falta fijar dos conceptos: paralelismo de datos y sincronización.»</p>
-    <p class="n-src">docs/report/introduccion.md · problema.md (último párrafo) · riesgos.md (Desvíos de alcance)</p>
+    <p class="n-idea">Escalar con un solo equipo es caro y además tiene un límite.</p>
+    <ul class="n-oral">
+      <li>La primera reacción es comprar una máquina más potente. Eso es escalar hacia arriba, o verticalmente.</li>
+      <li><b>→</b> Un equipo de gran porte es caro, y en la práctica quien necesita entrenar rara vez tiene uno.</li>
+      <li><b>→</b> Y aun pagándolo, un solo equipo tiene un techo: su memoria y su cómputo son finitos.</li>
+    </ul>
+    <p class="n-trans">«Lo que sí suele haber son varias máquinas comunes.»</p>
+    <p class="n-src">docs/report/problema.md (párrafo 1)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Fundamentos: paralelismo de datos" data-section="fundamentos" data-speaker="Alejo Ordoñez" data-time="2:00">
-  <div class="kicker"><span class="path">03 · fundamentos</span></div>
-  <h2 data-anim>Paralelismo de datos: <em>réplicas del modelo</em>, particiones del dataset</h2>
+<section class="slide" data-title="Podemos usar muchas" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:15">
+  <div class="kicker"><span class="path">01 · por qué distribuir</span></div>
+  <h2 data-anim>Mejor: <em>muchas</em> máquinas</h2>
   <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="dataparallel"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="step-label" data-step-caption="0">cada nodo tiene <b>el modelo completo</b></p>
-      <p class="step-label" data-step-caption="1"><b>1</b> · el dataset se particiona</p>
-      <p class="step-label" data-step-caption="2"><b>2</b> · cada worker calcula su gradiente local</p>
-      <p class="step-label" data-step-caption="3"><b>3</b> · los gradientes se agregan (promedio)</p>
-      <p class="step-label" data-step-caption="4"><b>4</b> · todas las réplicas aplican la misma actualización</p>
-      <div class="chips" data-anim style="margin-top:30px"><span class="chip on">datos</span><span class="chip off">modelo</span><span class="chip off">pipeline</span><span class="chip off">híbrido</span></div>
-      <p class="small" data-anim>O.N.O. se ubica en el primero.</p>
+    <div class="col wide"><div class="diagram" data-diagram="scaleout"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-step="1">hardware común</span>
+      <span class="kw" data-step="1">escalar hacia los costados</span>
+      <span class="kw on" data-step="2">unidas por la red</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Toda estrategia que comparamos resuelve el mismo paso: cómo agregar los gradientes de N workers.</p>
-    <div class="n-oral"><p>La literatura clasifica la concurrencia según qué se particiona: datos, modelo, pipeline o híbrido (Ben-Nun y Hoefler 2019; Dehghani y Yazdanparast 2023). O.N.O. trabaja solo con paralelismo de datos.</p><p>Recorrer los pasos: (1) cada worker recibe una partición distinta; (2) calcula el gradiente sobre ella con su réplica; (3) los gradientes se agregan, en O.N.O. siempre por promedio; (4) todas las réplicas aplican la misma actualización θ ← θ − η·ḡ.</p><p>Remarcar: el paso 3 es exactamente donde difieren Parameter Server y All-Reduce. La diapositiva es conceptual; los detalles reales vienen en el bloque 2.</p></div>
-    <p class="n-trans">«La otra pregunta es cuándo se agrega: si todos esperan a todos o no.»</p>
-    <p class="n-src">docs/report/estado_del_arte.md (Paralelismo de datos, de modelo y de pipeline)</p>
+    <p class="n-idea">Sumar máquinas modestas es más accesible que comprar una que las iguale: eso es el entrenamiento distribuido.</p>
+    <ul class="n-oral">
+      <li>Una máquina común sola no alcanza.</li>
+      <li><b>→</b> Pero es frecuente tener varias. Sumarlas es escalar hacia los costados, u horizontalmente, con hardware que ya existe.</li>
+      <li><b>→</b> Conectadas por red suman cómputo y memoria. El precio es que ahora hay que coordinarlas, y la red pasa a ser parte del problema.</li>
+    </ul>
+    <p class="n-trans">«¿Y cómo se reparte el trabajo entre ellas? Hay dos grandes formas.»</p>
+    <p class="n-src">docs/report/problema.md · introduccion.md</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Sincrónico vs. asincrónico" data-section="fundamentos" data-speaker="Alejo Ordoñez" data-time="1:15">
-  <div class="kicker"><span class="path">03 · fundamentos</span></div>
-  <h2 data-anim>¿Esperar a todos o no? <em>Coherencia</em> contra <em>velocidad</em></h2>
+<section class="slide" data-title="Paralelismo de modelo y de datos" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="2:15">
+  <div class="kicker"><span class="path">02 · cómo repartir</span></div>
+  <h2 data-anim>¿Repartimos <em>el modelo</em> o <em>los datos</em>?</h2>
   <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="syncasync"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <div class="panel" data-anim><span class="panel-title">sincrónico</span><p class="txt">Todos operan sobre la misma versión de θ. <strong>El más lento</strong> marca el ritmo.</p></div>
-      <div class="panel" data-step="1"><span class="panel-title">asincrónico</span><p class="txt">Sin espera, pero un gradiente puede calcularse sobre <strong>θ desactualizado</strong>: <em class="hl">client drift</em>.</p></div>
+    <div class="col wide"><div class="diagram" data-diagram="parallelism"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-step="1">modelo → se parte la red</span>
+      <span class="kw grad" data-step="2">datos → se parte el dataset</span>
+      <span class="kw on" data-step="3">O.N.O. → datos</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">El régimen de sincronización es un trade-off entre coherencia de réplicas y tiempo ocioso.</p>
-    <div class="n-oral"><p>Sincrónico: hay una barrera por ronda; el nodo más lento fija el ritmo del clúster (zonas rayadas = espera).</p><p>Paso 1: asincrónico: cada gradiente se aplica apenas llega; desaparece la espera, pero un worker puede empujar un gradiente calculado sobre parámetros viejos. Cuando las réplicas divergen por particiones sesgadas se habla de client drift (McMahan et al., 2017).</p><p>Hogwild! (Niu et al., 2011) lleva esto al extremo: acepta condiciones de carrera y prueba convergencia bajo actualizaciones dispersas. Vuelve en resultados.</p></div>
-    <p class="n-trans">«Con estos conceptos, veamos cómo está construido O.N.O.»</p>
-    <p class="n-src">docs/report/estado_del_arte.md (Parameter Server y All-Reduce) · problema.md (régimen de sincronización)</p>
+    <p class="n-idea">Se puede partir el modelo o partir los datos; O.N.O. trabaja con paralelismo de datos.</p>
+    <ul class="n-oral">
+      <li>Tenemos una red y un dataset. Hay dos formas clásicas de repartirlos (Ben-Nun y Hoefler, 2019).</li>
+      <li><b>→</b> Paralelismo de modelo: cada máquina tiene un pedazo de la red, por ejemplo una capa. La activación pasa de una máquina a la siguiente, así que cada una espera a la anterior. Sirve cuando el modelo no entra en una sola máquina.</li>
+      <li><b>→</b> Paralelismo de datos: cada máquina tiene el modelo completo y una porción distinta del dataset, y todas entrenan a la vez.</li>
+      <li><b>→</b> O.N.O. trabaja con paralelismo de datos, que también es el esquema principal de TensorFlow y PyTorch. El paralelismo de modelo y el de pipeline quedaron fuera de alcance.</li>
+    </ul>
+    <p class="n-trans">«Pero el paralelismo de datos tiene una trampa.»</p>
+    <p class="n-src">docs/report/estado_del_arte.md (Paralelismo de datos, de modelo y de pipeline) · introduccion.md</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Arquitectura general" data-section="arquitectura" data-speaker="Alejo Ordoñez" data-time="1:30">
-  <div class="kicker"><span class="path">04 · arquitectura</span></div>
-  <h2 data-anim>Nodos idénticos; el rol llega <em>en tiempo de ejecución</em></h2>
+<section class="slide" data-title="Client drift" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="2:15">
+  <div class="kicker"><span class="path">02 · cómo repartir</span></div>
+  <h2 data-anim>Cada uno aprende <em>su</em> partición</h2>
   <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="arch"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="step-label" data-step-caption="0"><b>node</b> · el mismo binario en cada máquina</p>
-      <p class="step-label" data-step-caption="1"><b>1</b> · el orchestrator se conecta (Connect / Accept)</p>
-      <p class="step-label" data-step-caption="2"><b>2</b> · cada nodo recibe su especificación y su rol</p>
-      <p class="step-label" data-step-caption="3"><b>3</b> · el plano de datos queda entre los nodos</p>
-      <div class="callout" data-step="3" style="margin-top:24px"><span class="label">¿por qué?</span>Strategy-Switch exige <strong>promover workers a servidores</strong> sin redesplegar.</div>
+    <div class="col wide"><div class="diagram" data-diagram="drift"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>misma réplica, distintos datos</span>
+      <span class="kw warn" data-step="1">client drift</span>
+      <span class="kw" data-step="2">sincronizar = promediar</span>
+      <span class="kw on" data-step="3">¿cómo sincronizar?</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">La arquitectura agnóstica de rol es lo que hace posible cambiar de estrategia en medio de un entrenamiento.</p>
-    <div class="n-oral"><p>Todos los nodos ejecutan el mismo binario, <code>node</code>. No hay imagen de worker ni de servidor.</p><p>Paso 1: el orchestrator (plano de control, embebido en la TUI y en la biblioteca de Python) conecta con cada nodo mediante un handshake Connect/Accept en el que cada extremo declara identificador y rol; el receptor construye un handle tipado (WorkerHandle, ParamServerHandle…) que solo expone los mensajes válidos para ese rol, y el compilador rechaza los demás.</p><p>Paso 2: la especificación que recibe cada nodo define si es worker o servidor. Paso 3: los gradientes y parámetros viajan entre nodos; el orchestrator queda fuera del plano de datos.</p><p>Crates: comms, machine_learning, parameter_server, worker, orchestrator, node, orchestui, orchestra-py.</p></div>
-    <p class="n-trans">«Adentro de cada nodo corre el motor de redes neuronales, y una decisión suya condiciona todo lo demás.»</p>
-    <p class="n-src">docs/report/solucion.md (Componentes generales · Nodo agnóstico de rol) · README.md (Architecture)</p>
+    <p class="n-idea">Con paralelismo de datos cada réplica tira hacia el mínimo de su partición; por eso hay que sincronizarlas.</p>
+    <ul class="n-oral">
+      <li>Los tres workers arrancan con la misma réplica del modelo. Las curvas de nivel son la pérdida sobre todo el dataset y la estrella es su mínimo. El dibujo es ilustrativo.</li>
+      <li><b>→</b> Cada worker entrena con su partición, así que su gradiente apunta al mínimo de sus datos y no al global. En O.N.O. cada worker recorre al menos una época completa sobre su partición antes de sincronizar, y en ese tiempo las réplicas se separan. Eso se llama <em>client drift</em> (McMahan et al., 2017).</li>
+      <li><b>→</b> La solución es sincronizar: se combinan los aportes de todos (en O.N.O., promediando gradientes) y todos siguen desde el mismo punto.</li>
+      <li><b>→</b> Alternando entrenar y sincronizar, el conjunto converge al mínimo global. Cuanto más se demora la sincronización, más drift hay; lo medimos al final.</li>
+    </ul>
+    <p class="n-trans">«La pregunta, entonces, es cómo sincronizar. Hay varias respuestas.»</p>
+    <p class="n-src">docs/report/resultados.md (PS asincrónico, client drift) · estado_del_arte.md (aprendizaje federado) · código: machine_learning/src/training/backprop_trainer.rs</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Motor: modelo como buffer plano" data-section="arquitectura" data-speaker="Alejo Ordoñez" data-time="1:00">
-  <div class="kicker"><span class="path">04 · arquitectura</span></div>
-  <h2 data-anim>El modelo es <em>un único buffer</em> de memoria</h2>
+<section class="slide" data-title="Cuatro formas de sincronizar" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:15" data-keywords="Parameter Server · All-Reduce · PS asincrónico · Strategy-Switch · misma base">
+  <div class="kicker"><span class="path">03 · alternativas</span></div>
+  <h2 data-anim>¿Cómo <em>sincronizamos</em>?</h2>
   <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="flatbuffer"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="txt" data-anim>Cada capa guarda solo <strong>metadata</strong>: qué tramo del buffer le corresponde.</p>
-      <p class="txt" data-step="1">Particionar entre servidores = <strong>delimitar rangos</strong>.</p>
-      <p class="txt" data-step="2">Transmitir = <strong>reinterpretar memoria</strong>, sin serializar ni copiar.</p>
-    </div>
+    <div class="col"><div class="diagram" data-diagram="alternatives"></div></div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Una decisión del motor de redes neuronales habilita la comunicación sin copias de todo el sistema.</p>
-    <div class="n-oral"><p>La biblioteca está construida sobre ndarray: capas densas, convolucionales, max pooling, reshape y activaciones; inicializaciones Xavier-Glorot y Kaiming-He; optimizadores detrás de un mismo trait.</p><p>La decisión clave: el modelo es un buffer contiguo; las capas son vistas sobre tramos. La alternativa (un árbol de objetos con sus pesos) obligaba a serializar cada capa y, en Rust, a acoplar el motor con comms para prestar referencias mutables.</p><p>Paso 1: particionar entre servidores es delimitar rangos. Paso 2: enviar es reinterpretar memoria (bytemuck).</p><p>Limitación honesta: los modelos son secuencias de capas; arquitecturas con conexiones de salto como U-Net no se pueden expresar hoy.</p></div>
-    <p class="n-trans">Traspaso: «Marcos va a contar cómo se sincronizan esas réplicas en cada estrategia.»</p>
-    <p class="n-src">docs/report/solucion.md (Motor de Redes Neuronales · Modelo como buffer plano)</p>
+    <p class="n-idea">Vamos a ver cuatro formas de sincronizar, y O.N.O. las implementa todas sobre la misma base.</p>
+    <ul class="n-oral">
+      <li>Parameter Server: un servidor central junta los gradientes y reparte los parámetros.</li>
+      <li><b>→</b> All-Reduce: no hay centro; los workers se pasan los gradientes en anillo.</li>
+      <li><b>→</b> Parameter Server asincrónico: como el primero, pero nadie espera a nadie.</li>
+      <li><b>→</b> Strategy-Switch: arranca con All-Reduce y, en un momento, cambia a Parameter Server asincrónico.</li>
+      <li><b>→</b> Nuestro trabajo fue implementar las cuatro sobre la misma capa de comunicación, el mismo motor de redes neuronales y el mismo plano de control. Así, al compararlas, la diferencia viene del algoritmo y no de la implementación. Con TensorFlow o PyTorch eso no se puede separar (apéndice A10).</li>
+    </ul>
+    <p class="n-trans">Traspaso: «Marcos les va a contar cómo funciona cada una.»</p>
+    <p class="n-src">docs/report/problema.md · introduccion.md · estado_del_arte.md</p>
   </aside>
 </section>
 
-<!-- ═════════════════════════ BLOQUE 2 ═════════════════════════ -->
+<!-- ═════════════════════════ MARCOS · las estrategias ═════════════════════════ -->
 
-<section class="slide" data-title="Parameter Server" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="2:00">
-  <div class="kicker"><span class="path">05 · estrategias</span></div>
-  <h2 data-anim><em>Parameter Server</em>: el intercambio pasa por servidores</h2>
+<section class="slide" data-title="Parameter Server" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="2:15">
+  <div class="kicker"><span class="path">04 · estrategias</span></div>
+  <h2 data-anim><em>Parameter Server</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="ps"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="step-label" data-step-caption="0">workers y un servidor con los parámetros</p>
-      <p class="step-label" data-step-caption="1"><b>1</b> · el worker obtiene θ del servidor</p>
-      <p class="step-label" data-step-caption="2"><b>2</b> · calcula su gradiente local</p>
-      <p class="step-label" data-step-caption="3"><b>3</b> · empuja el gradiente</p>
-      <p class="step-label" data-step-caption="4"><b>4</b> · el servidor promedia y aplica el optimizador</p>
-      <p class="step-label" data-step-caption="5"><b>5</b> · con varios servidores: <b>una capa, un servidor</b></p>
-      <div class="panel dim" data-anim style="margin-top:18px"><span class="panel-title">synchronizer</span><p class="txt" style="font-size:25px"><code>barrier</code>: espera a los N<sub>W</sub> gradientes<br><code>non_blocking</code>: aplica apenas llega</p></div>
+    <div class="kws-col">
+      <span class="kw ps" data-anim>servidor central</span>
+      <span class="kw" data-step="1">pull θ</span>
+      <span class="kw grad" data-step="3">push gradiente</span>
+      <span class="kw" data-step="4">promedio + optimizador</span>
+      <span class="kw ps" data-step="5">varios servidores: por capa</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">En PS, el estado del optimizador vive en el servidor y el cuello de botella es su enlace de red.</p>
-    <div class="n-oral"><p>Ciclo implementado (worker/src/workers/parameter_server.rs y parameter_server/src/synchronization): (1) el worker hace pull de los parámetros; (2) entrena sobre su partición; (3) empuja el gradiente; (4) el servidor acumula; con <code>barrier</code> espera a los N_W y el líder aplica la actualización, con <code>non_blocking</code> aplica en cuanto llega. El servidor promedia (suma / N_W) y aplica su propia instancia del optimizador con estado.</p><p>Paso 5: con más de un servidor, el particionado es por capa completa. El orchestrator asigna capas de mayor a menor tamaño al servidor menos cargado. Ningún servidor necesita información de otro porque los optimizadores operan elemento a elemento.</p><p>Almacenamiento: BlockingStore (lock por fragmento y doble buffer de gradientes) o WildStore (estilo Hogwild!, sin protección).</p></div>
-    <p class="n-trans">«La alternativa sin servidor central es All-Reduce.»</p>
-    <p class="n-src">docs/report/solucion.md (Parameter Server · Particionado respetando límites de capa · Actualización sin bloqueos)</p>
+    <p class="n-idea">En Parameter Server un servidor concentra los parámetros y el estado del optimizador.</p>
+    <ul class="n-oral">
+      <li>A la izquierda, los workers, cada uno con su partición. A la derecha, el servidor, que guarda los parámetros y el optimizador con estado.</li>
+      <li><b>→</b> Cada worker pide los parámetros actuales (pull).</li>
+      <li><b>→</b> Entrena sobre su partición y acumula su gradiente.</li>
+      <li><b>→</b> Envía el gradiente al servidor (push). Con el sincronizador <code>barrier</code>, el servidor espera a los N gradientes.</li>
+      <li><b>→</b> El servidor promedia y aplica el optimizador, por ejemplo Adam, una sola vez: hay un único estado del optimizador.</li>
+      <li><b>→</b> Con varios servidores, el modelo se parte por capas completas y cada capa vive en un servidor. El orchestrator asigna las capas, de mayor a menor, al servidor menos cargado.</li>
+    </ul>
+    <p class="n-trans">«Si todo pasa por el servidor, ¿qué pasa si no hay servidor? Eso es All-Reduce.»</p>
+    <p class="n-src">docs/report/solucion.md (Parameter Server) · código: worker/src/workers/parameter_server.rs, parameter_server/src/synchronization</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Ring All-Reduce" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="2:15">
-  <div class="kicker"><span class="path">05 · estrategias</span></div>
-  <h2 data-anim><em>Ring All-Reduce</em>: reduce-scatter y all-gather</h2>
+<section class="slide" data-title="Ring All-Reduce" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="2:30">
+  <div class="kicker"><span class="path">04 · estrategias</span></div>
+  <h2 data-anim><em>All-Reduce</em> en anillo</h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="ring"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="step-label" data-step-caption="0">anillo lógico: se recibe del anterior, se envía al siguiente</p>
-      <p class="step-label" data-step-caption="1"><b>1</b> · cada gradiente se divide en N<sub>W</sub> fragmentos</p>
-      <p class="step-label" data-step-caption="2"><b>2</b> · reduce-scatter: N<sub>W</sub>−1 iteraciones sumando</p>
-      <p class="step-label" data-step-caption="3"><b>3</b> · all-gather: N<sub>W</sub>−1 iteraciones copiando</p>
-      <p class="step-label" data-step-caption="4"><b>4</b> · cada worker divide por N<sub>W</sub> y aplica el optimizador</p>
-      <p class="small" data-anim style="margin-top:20px">Por iteración, cada worker envía 1/N<sub>W</sub> de su gradiente.</p>
+    <div class="kws-col">
+      <span class="kw ar" data-anim>sin centro</span>
+      <span class="kw" data-step="1">N fragmentos</span>
+      <span class="kw" data-step="2">reduce-scatter: sumar</span>
+      <span class="kw" data-step="3">all-gather: copiar</span>
+      <span class="kw on" data-step="4">÷ N en cada worker</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">All-Reduce reparte la comunicación en un anillo sin centro: cada worker termina con el mismo gradiente promediado.</p>
-    <div class="n-oral"><p>Variante implementada: Ring All-Reduce de Patarasuk y Yuan (2009), en worker/src/middlewares/worker_ring.rs. El diagrama replica el orden del código con N_W = 4.</p><p>Paso 1: cada worker parte su gradiente en N_W fragmentos. Paso 2, reduce-scatter: en cada iteración el worker p envía un fragmento al siguiente y suma el que recibe del anterior; tras N_W−1 iteraciones, cada worker tiene la suma completa de un fragmento distinto (el p+1). Paso 3, all-gather: esos fragmentos reducidos recorren el anillo copiándose, sin sumar. Paso 4: cada worker divide por N_W y aplica localmente el optimizador. El promedio importa: un error real del proyecto fue sumar sin promediar (ver apéndice A5).</p><p>El orden del anillo no es arbitrario: lo decide el orchestrator a partir de la latencia medida (diapositiva de coordinación).</p></div>
-    <p class="n-trans">«¿Cuánto cuesta sincronizar en cada caso? Lo derivamos analíticamente.»</p>
+    <p class="n-idea">En All-Reduce no hay servidor: los gradientes circulan por un anillo y todos terminan con el mismo promedio.</p>
+    <ul class="n-oral">
+      <li>Cuatro workers en un anillo lógico: cada uno recibe del anterior y envía al siguiente. Es la variante de Patarasuk y Yuan (2009).</li>
+      <li><b>→</b> Cada worker parte su gradiente en N fragmentos, acá cuatro. Los colores indican de qué worker viene cada aporte.</li>
+      <li><b>→</b> Reduce-scatter: N−1 rondas. En cada una, cada worker envía un fragmento y suma el que le llega. Al final, cada uno tiene un fragmento con la suma de todos.</li>
+      <li><b>→</b> All-gather: otras N−1 rondas, ahora copiando, para que los fragmentos completos den la vuelta.</li>
+      <li><b>→</b> Cada worker divide por N y aplica el optimizador localmente. Todos llegan al mismo resultado sin que nadie centralice.</li>
+    </ul>
+    <p class="n-trans">«¿Cuál conviene? Depende de cuánto cuesta sincronizar.»</p>
     <p class="n-src">docs/report/solucion.md (Ring All-Reduce) · código: worker/src/middlewares/worker_ring.rs</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Costo de sincronización" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:30">
-  <div class="kicker"><span class="path">05 · estrategias</span></div>
-  <h2 data-anim>Costo de sincronizar: <em>crece</em> en PS, <em>se acota</em> en All-Reduce</h2>
+<section class="slide" data-title="Costo de sincronizar" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:30">
+  <div class="kicker"><span class="path">04 · estrategias</span></div>
+  <h2 data-anim>Sincronizar <em>cuesta</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="dsync"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <div class="formula" data-step="1" style="font-size:27px">d<span class="sub">sync</span><span class="sup">PS</span> = 2 · N<span class="sub">W</span> · S/R</div>
-      <div class="formula" data-step="2" style="font-size:27px">d<span class="sub">sync</span><span class="sup">AR</span> = 2(1 − 1/N<span class="sub">W</span>) · S/R <span class="dim">≤ 2S/R</span></div>
-      <p class="small" data-anim>S: tamaño del modelo · R: ancho de banda.<br>PS con un servidor; delays de encolado, propagación y procesamiento despreciables.</p>
+    <div class="kws-col">
+      <span class="kw ps" data-step="1">PS: crece con N</span>
+      <span class="kw warn" data-step="1">cuello de botella: el servidor</span>
+      <span class="kw ar" data-step="2">AR: nunca supera 2S/R</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">El modelo analítico predice qué esperar antes de medir: PS con un servidor escala linealmente; AR queda acotado.</p>
-    <div class="n-oral"><p>Expresiones de elaboración propia (Resultados): T_total = N_epochs · (T_epoch/N_W + d_sync) + d_init.</p><p>Paso 1: PS con un servidor: ida de parámetros y vuelta de gradientes por una sola placa de red: 2·N_W·S/R. Crece con los workers.</p><p>Paso 2: Ring AR: se hace dar la vuelta a 1/N_W del gradiente dos veces: 2(1 − 1/N_W)·S/R, acotado por 2S/R.</p><p>Curvas con S/R ≈ 0,1 s, el valor de la campaña (LeNet-5 en f16 a 10 Mbps). Con N_S servidores: 2·(N_W/N_S)·S/R (apéndice A3).</p><p>Consecuencia: aun en AR la aceleración queda acotada, porque al sumar workers el cómputo tiende a cero pero d_sync tiende a 2S/R.</p></div>
-    <p class="n-trans">«¿Y si se pudiera combinar lo mejor de los dos regímenes? Esa es la idea de Strategy-Switch.»</p>
-    <p class="n-src">docs/report/resultados.md (secciones PS sincrónico, Ring All-Reduce, Multi-PS) · simulaciones/experimentacion.md (S, R)</p>
+    <p class="n-idea">El modelo analítico predice que, con un servidor, PS empeora al sumar workers, mientras que All-Reduce queda acotado.</p>
+    <ul class="n-oral">
+      <li>En el eje X, la cantidad de workers; en el eje Y, el tiempo de sincronización por ronda. S es el tamaño del modelo y R, el ancho de banda.</li>
+      <li><b>→</b> PS con un servidor: todo pasa por la placa de red del servidor, así que d<sub>sync</sub> = 2·N·S/R. Crece linealmente, y el servidor es el cuello de botella.</li>
+      <li><b>→</b> Ring All-Reduce: cada worker envía 1/N del gradiente por paso, así que d<sub>sync</sub> = 2(1 − 1/N)·S/R, que nunca supera 2S/R.</li>
+      <li>Las curvas usan S/R ≈ 0,1 s, el valor de la campaña (LeNet-5 en f16 a 10 Mbps). La derivación completa está en el apéndice A3.</li>
+    </ul>
+    <p class="n-trans">«¿Y si directamente no esperamos a nadie?»</p>
+    <p class="n-src">docs/report/resultados.md (derivación de d_sync) · experimentacion.md (S, R)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Strategy-Switch: la idea" data-section="strategy-switch" data-speaker="Marcos Bianchi Fernández" data-time="1:00">
-  <div class="kicker"><span class="path">06 · strategy-switch</span></div>
-  <h2 data-anim>Arrancar <em>sincrónico</em>, seguir <em>asincrónico</em></h2>
+<section class="slide" data-title="Parameter Server asincrónico" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:45">
+  <div class="kicker"><span class="path">04 · estrategias</span></div>
+  <h2 data-anim>PS <em>asincrónico</em>: nadie espera</h2>
+  <div class="body">
+    <div class="col wide"><div class="diagram" data-diagram="syncasync"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>sincrónico: espera al más lento</span>
+      <span class="kw on" data-step="1">asincrónico: sin barrera</span>
+      <span class="kw warn" data-step="1">θ viejo → más drift</span>
+    </div>
+  </div>
+  <aside class="notes">
+    <p class="n-idea">Sacar la barrera elimina la espera, pero los gradientes se calculan sobre parámetros desactualizados y el drift crece.</p>
+    <ul class="n-oral">
+      <li>Arriba, el régimen sincrónico: en cada ronda hay una barrera, el worker más lento marca el ritmo y los demás esperan (zonas rayadas).</li>
+      <li><b>→</b> Abajo, el asincrónico: el servidor aplica cada gradiente apenas llega, y la espera desaparece. El costo es que un worker puede enviar un gradiente calculado sobre parámetros viejos. Con particiones distintas, las réplicas tiran cada una para su lado y el client drift empeora (McMahan et al., 2017).</li>
+      <li>Si preguntan: si llega un gradiente mientras el servidor aplica otro, se acumula en un segundo buffer y entra en la actualización siguiente; no se pierde.</li>
+    </ul>
+    <p class="n-trans">«¿Se puede tener lo mejor de los dos? Esa es la idea de Strategy-Switch.»</p>
+    <p class="n-src">docs/report/resultados.md (Parameter Server asincrónico) · estado_del_arte.md</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="Strategy-Switch: la idea" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:30">
+  <div class="kicker"><span class="path">05 · strategy-switch</span></div>
+  <h2 data-anim><em>Strategy-Switch</em>: lo mejor de los dos</h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="sswindow"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <div class="formula" data-anim style="font-size:25px">s = 1/(w−1) · Σ |L<span class="sub">i</span> − L<span class="sub">i−1</span>| / L<span class="sub">i−1</span></div>
-      <p class="txt" data-step="1">Cambio cuando <strong>s ≤ 0,01</strong> sobre una ventana de <strong>w = 6</strong> pérdidas.</p>
-      <p class="small" data-step="2">Valores del paper (elegidos empíricamente). O.N.O. usa la <strong>pérdida de entrenamiento máxima</strong> entre workers; el paper, la de validación.</p>
+    <div class="kws-col">
+      <span class="kw ar" data-anim>arranca con All-Reduce</span>
+      <span class="kw" data-step="1">¿se estancó la pérdida?</span>
+      <span class="kw" data-step="1">ventana de 6 · umbral 1 %</span>
+      <span class="kw ps" data-step="2">pasa a PS asincrónico</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Strategy-Switch busca un buen mínimo con All-Reduce y lo sigue bajando con PS asincrónico.</p>
-    <div class="n-oral"><p>Propuesto por Provatas et al. (2025). Fase 1: All-Reduce sincrónico, que preserva la coherencia mientras los workers todavía no acordaron un mínimo. Fase 2: Parameter Server asincrónico, que elimina la espera.</p><p>Paso 1: el disparador es la variación relativa media de la pérdida en las últimas w = 6 rondas: cuando varió menos de 1 % por ronda, se cambia. Ventanas más grandes demoraban el cambio; más chicas lo adelantaban por ruido.</p><p>Paso 2: diferencia con el paper: calculamos s sobre la pérdida de entrenamiento máxima entre workers (evita una pasada de validación cuyo costo se sumaría al tiempo medido, y es conservador).</p><p>La curva de la figura es ilustrativa: muestra el mecanismo de la ventana, no un resultado.</p></div>
-    <p class="n-trans">«Lo interesante es cómo se implementa ese cambio en un sistema distribuido que ya está corriendo.»</p>
-    <p class="n-src">docs/report/estado_del_arte.md (Strategy-Switch) · solucion.md (Strategy-Switch) · código: orchestrator/src/sessions/switch_tracker.rs</p>
+    <p class="n-idea">Strategy-Switch usa All-Reduce mientras los workers buscan el mínimo y pasa a PS asincrónico cuando la pérdida se estabiliza.</p>
+    <ul class="n-oral">
+      <li>Lo propusieron Provatas et al. (2025). Al principio el drift es más peligroso y conviene sincronizar fuerte, por eso arranca con All-Reduce. La curva es ilustrativa.</li>
+      <li><b>→</b> En cada ronda se mira la variación relativa de la pérdida en una ventana de 6 rondas. Cuando el promedio baja de 1 %, la pérdida se estancó.</li>
+      <li><b>→</b> En ese momento se cambia a Parameter Server asincrónico para seguir bajando sin esperas.</li>
+      <li>Diferencia con el paper: usamos la pérdida de entrenamiento máxima entre workers, no la de validación. Así no pagamos una pasada de validación por ronda y el criterio es conservador.</li>
+    </ul>
+    <p class="n-trans">«Lo interesante es cómo se hace ese cambio con el sistema corriendo.»</p>
+    <p class="n-src">docs/report/estado_del_arte.md (Strategy-Switch) · solucion.md · código: orchestrator/src/sessions/switch_tracker.rs</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Strategy-Switch en O.N.O." data-section="strategy-switch" data-speaker="Marcos Bianchi Fernández" data-time="2:00">
-  <div class="kicker"><span class="path">06 · strategy-switch</span></div>
-  <h2 data-anim>El cambio, <em>sin reiniciar el clúster</em></h2>
+<section class="slide" data-title="Strategy-Switch en O.N.O." data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:45">
+  <div class="kicker"><span class="path">05 · strategy-switch</span></div>
+  <h2 data-anim>El cambio, <em>sin reiniciar</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="ssflow"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="step-label" data-step-caption="0"><b>fase 1</b> · anillo de All-Reduce</p>
-      <p class="step-label" data-step-caption="1"><b>1</b> · el orchestrator registra la pérdida máxima por ronda</p>
-      <p class="step-label" data-step-caption="2"><b>2</b> · s ≤ 1 %: envía <b>Upgrade</b> y <b>Switch</b></p>
-      <p class="step-label" data-step-caption="3"><b>3</b> · un nodo pasa a servidor con su tramo de θ</p>
-      <p class="step-label" data-step-caption="4"><b>fase 2</b> · Parameter Server</p>
-      <div class="panel dim" data-step="4" style="margin-top:18px"><span class="panel-title">quién decide qué</span><p class="txt" style="font-size:24px">El <strong>usuario</strong> elige la estrategia y <code>nservers</code> en <code>training.json</code>.<br>El <strong>orchestrator</strong> decide el momento del cambio.</p></div>
+    <div class="kws-col">
+      <span class="kw" data-step="1">el orchestrator mide</span>
+      <span class="kw ss" data-step="2">Upgrade · Switch</span>
+      <span class="kw ps" data-step="3">un worker pasa a servidor</span>
+      <span class="kw on" data-step="4">mismo proceso, otro rol</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Qué cambia, qué lo dispara, quién decide y cómo se transiciona, tal como está implementado.</p>
-    <div class="n-oral"><p>Fase 1: los workers entrenan en anillo y reportan su pérdida al orchestrator en cada ronda.</p><p>Paso 1: el EventListener del orchestrator toma la pérdida máxima de la ronda y la registra en el SwitchTracker (ventana de 6, umbral 0,01).</p><p>Paso 2: cuando s ≤ 0,01, el orchestrator difunde las acciones precalculadas: Upgrade a los nservers nodos que serán servidores (elegidos al inicio por latencia) y Switch al resto, con las direcciones y el orden de los servidores.</p><p>Paso 3: el nodo promovido toma de sus parámetros actuales los rangos de su fragmento y arranca como servidor; el resto deja el anillo y se conecta como worker de PS. No se reinicia nada: es posible por la arquitectura agnóstica de rol.</p><p>Paso 4: continúa como Parameter Server con el synchronizer y el store configurados (asincrónico en el paper y en la campaña del informe). No hay selección automática de estrategia: el sistema solo decide el momento del cambio.</p></div>
-    <p class="n-trans">«Para que esto funcione con buen rendimiento hubo decisiones en la capa de comunicación.»</p>
-    <p class="n-src">docs/report/solucion.md (Strategy-Switch · Nodo agnóstico de rol) · código: orchestrator/src/sessions/event_listener.rs, orchestrator/src/configs/adapter.rs, worker/src/workers/all_reduce.rs</p>
+    <p class="n-idea">Qué dispara el cambio, quién lo decide y cómo se transiciona, tal como está implementado.</p>
+    <ul class="n-oral">
+      <li>Fase 1: los workers entrenan en anillo y en cada ronda le reportan su pérdida al orchestrator.</li>
+      <li><b>→</b> El orchestrator registra la pérdida máxima de cada ronda en el SwitchTracker (ventana de 6, umbral 0,01).</li>
+      <li><b>→</b> Cuando se cumple el umbral, envía dos órdenes precalculadas: Upgrade a los nodos que van a ser servidores, elegidos al inicio por latencia, y Switch al resto.</li>
+      <li><b>→</b> El nodo promovido toma su tramo de parámetros y arranca como servidor. Los demás dejan el anillo y se conectan como workers de PS.</li>
+      <li><b>→</b> No se reinicia nada: es el mismo proceso con otro rol. Lo hace posible la arquitectura que les va a contar Lorenzo.</li>
+      <li>Si preguntan: el usuario elige la estrategia, la cantidad de servidores, el sincronizador y el store en <code>training.json</code>; el sistema solo decide el momento del cambio.</li>
+    </ul>
+    <p class="n-trans">Traspaso: «Lorenzo les va a contar cómo está construido y qué medimos.»</p>
+    <p class="n-src">docs/report/solucion.md (Strategy-Switch) · código: orchestrator/src/sessions/event_listener.rs, orchestrator/src/configs/adapter.rs</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Comunicación: dos planos y compresión" data-section="diseño" data-speaker="Marcos Bianchi Fernández" data-time="1:15">
-  <div class="kicker"><span class="path">07 · decisiones de diseño</span></div>
-  <h2 data-anim>Dos planos de comunicación y <em>compresión con memoria</em></h2>
+<!-- ═════════════════════════ LORENZO · construcción y resultados ═════════════════════════ -->
+
+<section class="slide" data-title="¿Por qué Rust?" data-section="construcción" data-speaker="Lorenzo Minervino" data-time="1:00" data-keywords="sin recolector de basura · seguridad de memoria · sin data races · async con tokio · el protocolo no lo verifica">
+  <div class="kicker"><span class="path">06 · construcción</span></div>
+  <h2 data-anim>¿Por qué <em>Rust</em>?</h2>
+  <div class="body center">
+    <div class="col">
+      <div class="term" data-anim>
+        <div class="term-bar">~/oxidized-neural-orchestra</div>
+        <p class="term-line cmd" data-type>cargo build --release</p>
+        <p class="term-line ok" data-step="1" data-type>rendimiento sin recolector de basura</p>
+        <p class="term-line ok" data-step="1" data-type>seguridad de memoria al compilar</p>
+        <p class="term-line ok" data-step="2" data-type>concurrencia sin data races</p>
+        <p class="term-line ok" data-step="2" data-type>async con tokio</p>
+        <p class="term-line no" data-step="3" data-type>el protocolo distribuido no lo verifica</p>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p class="n-idea">Elegimos Rust por el control de bajo nivel con garantías de seguridad; la dificultad se movió al protocolo.</p>
+    <ul class="n-oral">
+      <li>Todo O.N.O. está escrito en Rust, incluida la biblioteca de redes neuronales.</li>
+      <li><b>→</b> Da control de bajo nivel, como C o C++, pero sin recolector de basura y con la seguridad de memoria verificada al compilar.</li>
+      <li><b>→</b> En concurrencia, el compilador rechaza las condiciones de carrera sobre memoria compartida (<em>fearless concurrency</em>): ninguna llegó a la rama principal. Las comunicaciones son async, sobre tokio.</li>
+      <li><b>→</b> Para ser honestos, el compilador no verifica la coordinación distribuida. Esa fue la dificultad real, sobre todo en All-Reduce.</li>
+      <li>Si preguntan por <code>unsafe</code>: está acotado y marcado, por ejemplo en WildStore (Hogwild!) y en la codificación de mensajes.</li>
+    </ul>
+    <p class="n-trans">«Veamos cómo está armada la orquesta por dentro.»</p>
+    <p class="n-src">docs/report/herramientas.md (Rust) · riesgos.md (complejidad de la implementación distribuida en Rust)</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="La orquesta por dentro" data-section="construcción" data-speaker="Lorenzo Minervino" data-time="2:00">
+  <div class="kicker"><span class="path">06 · construcción</span></div>
+  <h2 data-anim>La orquesta <em>por dentro</em></h2>
   <div class="body">
-    <div class="col narrow">
-      <div class="panel" data-anim><span class="panel-title">plano de control</span><p class="txt">JSON: poco frecuente, <strong>legible y depurable</strong>.</p></div>
-      <div class="panel" data-anim><span class="panel-title">plano de datos</span><p class="txt">Tensores por <strong>reinterpretación de memoria</strong>, en f16, sin copias.</p></div>
-    </div>
-    <div class="col wide">
-      <div class="diagram" data-diagram="compress"></div>
-    </div>
-  </div>
-  <aside class="notes">
-    <p class="n-idea">Separar control de datos y comprimir sin perder información acumulada.</p>
-    <div class="n-oral"><p>Control: comandos poco frecuentes en JSON, inspeccionables. Datos: concentran el volumen; cada copia cuesta, así que viajan por reinterpretación de memoria y en media precisión.</p><p>Compresión (diagrama, pasos): (1) solo viajan los componentes por encima de un umbral, elegido para que pase una fracción r; el umbral se estima muestreando hasta 16384 componentes y quickselect (Aji y Heafield 2017), en tiempo esperado lineal. (2) Lo que no se envía queda en un residual persistente. (3) En la ronda siguiente el residual se suma al gradiente nuevo: un componente chico pero constante termina cruzando el umbral (error feedback, Lin et al. 2018).</p><p>Si la codificación dispersa pesa más que el gradiente denso en f16, el sistema cae a la versión densa: comprimir nunca resulta más caro.</p><p>Limitación: no se midió de forma aislada el compromiso entre tasa de compresión y convergencia (trabajo futuro).</p></div>
-    <p class="n-trans">«Queda la coordinación: dónde ubicar a cada nodo y dónde aplicar el optimizador.»</p>
-    <p class="n-src">docs/report/solucion.md (Separación de planos · Compresión de gradientes con error feedback) · trabajos_futuros.md</p>
-  </aside>
-</section>
-
-<section class="slide" data-title="Coordinación: topología y optimizador" data-section="diseño" data-speaker="Marcos Bianchi Fernández" data-time="1:00">
-  <div class="kicker"><span class="path">07 · decisiones de diseño</span></div>
-  <h2 data-anim>La topología sale de <em>la red medida</em>, no del archivo</h2>
-  <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="topo"></div></div>
-    <div class="col narrow" style="justify-content:center">
-      <div class="panel" data-step="2"><span class="panel-title">optimizador</span><p class="txt">Gradiente plano en los workers; <strong>Adam o momentum después de agregar</strong>. Todas las réplicas mantienen el mismo estado sin intercambiarlo.</p></div>
+    <div class="col wide"><div class="diagram" data-diagram="arch"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>mismo binario en cada nodo</span>
+      <span class="kw" data-step="1">orchestrator: control</span>
+      <span class="kw on" data-step="2">el rol llega al conectarse</span>
+      <span class="kw grad" data-step="3">datos: de nodo a nodo</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Ninguna diferencia de tiempo debería venir del orden en que el usuario escribió las direcciones.</p>
-    <div class="n-oral"><p>Antes de entrenar, cada par de nodos intercambia diez pings y se toma el mayor RTT. Se mide una sola vez (limitación en redes con carga variable).</p><p>Paso 1: All-Reduce: el orden del anillo que minimiza la latencia total es un circuito hamiltoniano de costo mínimo (viajante), resuelto en forma exacta con programación dinámica sobre subconjuntos (Held y Karp, 1962), hasta usize::BITS nodos. Parameter Server: se eligen los k servidores que minimizan la mayor latencia worker–servidor, por backtracking.</p><p>Paso 2: ubicación del optimizador: los workers acumulan un gradiente plano; el optimizador con estado se aplica después de agregar (en el servidor en PS; en cada worker sobre el promedio en AR). Si cada worker aplicara Adam sobre su gradiente local, acumularían momentos distintos y las réplicas divergirían.</p></div>
-    <p class="n-trans">Traspaso: «Lorenzo va a mostrar cómo se usa el sistema y qué evidencia produjo.»</p>
-    <p class="n-src">docs/report/solucion.md (Selección de topología por latencia medida · Ubicación del optimizador) · código: orchestrator/src/calculator/</p>
+    <p class="n-idea">Todos los nodos ejecutan el mismo binario y reciben su rol al conectarse; eso es lo que habilita Strategy-Switch.</p>
+    <ul class="n-oral">
+      <li>Cada máquina corre el mismo binario, <code>node</code>. No hay una imagen de worker y otra de servidor.</li>
+      <li><b>→</b> El orchestrator es el plano de control y vive dentro de la interfaz de terminal o de la biblioteca de Python. Se conecta con cada nodo mediante un handshake Connect/Accept.</li>
+      <li><b>→</b> Le manda a cada nodo su especificación y su rol, worker o servidor. Cada extremo recibe un handle tipado que solo permite los mensajes de ese rol, y el compilador rechaza el resto.</li>
+      <li><b>→</b> Los gradientes y los parámetros viajan entre nodos, en f16 y sin copias; el orchestrator queda fuera del plano de datos.</li>
+      <li>Si preguntan por el motor: el modelo es un único buffer contiguo, y particionarlo es delimitar rangos (apéndice A6).</li>
+    </ul>
+    <p class="n-trans">«Y todo esto se ve en vivo desde la terminal.»</p>
+    <p class="n-src">docs/report/solucion.md (Nodo agnóstico de rol · Separación de planos) · README.md (Architecture)</p>
   </aside>
 </section>
 
-<!-- ═════════════════════════ BLOQUE 3 ═════════════════════════ -->
-
-<section class="slide" data-title="Interfaces: TUI y Python" data-section="interfaces" data-speaker="Lorenzo Minervino" data-time="1:15">
-  <div class="kicker"><span class="path">08 · interfaces</span></div>
-  <h2 data-anim>El mismo sistema, <em>desde la terminal</em> o <em>desde Python</em></h2>
-  <div class="body">
-    <div class="col wide">
-      <div class="tui" data-tui="ar_dash_mid" data-anim><canvas></canvas><div class="tui-cap"><span class="badge-real">captura real</span>orchestui · All-Reduce, 4 workers, en curso · tmux capture-pane, 28/10/2026</div></div>
-    </div>
-    <div class="col narrow">
-      <pre class="code-block" data-step="1" style="font-size:19px"><span class="c"># orchestra-py · basado en local.py</span>
-<span class="k">training</span> = <span class="f">strategy_switch</span>(
-    addrs=ADDRS, nservers=<span class="s">1</span>,
-    dataset=LocalDataset(...),
-    optimizer=GradientDescent(lr=<span class="s">0.01</span>),
-    loss_fn=Mse(),
-    sync=NonBlockingSync(),
-    store=BlockingStore(),
-    max_epochs=<span class="s">50</span>, batch_size=<span class="s">256</span>,
-)
-<span class="k">trained</span> = <span class="f">orchestrate</span>(model, training).wait()</pre>
-      <p class="small" data-step="1">Libera el GIL durante las llamadas bloqueantes.</p>
-    </div>
-  </div>
-  <aside class="notes">
-    <p class="n-idea">Dos interfaces sobre el mismo orchestrator: una para ver el entrenamiento en vivo y otra para experimentar programáticamente.</p>
-    <div class="n-oral"><p>orchestui (ratatui + crossterm) embebe el orchestrator: se le indican model.json y training.json, se conecta a los nodos, asigna roles y muestra en vivo la pérdida promedio y por worker, la tabla de workers, el progreso y un log de eventos.</p><p>Paso 1: orchestra-py expone el mismo sistema como módulo nativo de Python vía PyO3 y maturin. El fragmento muestra la API real (funciones strategy_switch y orchestrate). Se construyó como crate separado: anotar los tipos existentes con #[pyclass] chocaba con genéricos, variantes de enum y Clone.</p><p>La suite de benchmarks del repositorio está escrita sobre esta interfaz.</p></div>
-    <p class="n-trans">«La TUI no solo monitorea: permite ver la topología que eligió el sistema.»</p>
-    <p class="n-src">docs/report/solucion.md (Interfaces de Usuario · Interfaz de Python como crate separado) · orchestui/README.md · orchestra-py/local.py</p>
-  </aside>
-</section>
-
-<section class="slide" data-title="La TUI muestra la topología" data-section="interfaces" data-speaker="Lorenzo Minervino" data-time="1:00">
-  <div class="kicker"><span class="path">08 · interfaces</span></div>
-  <h2 data-anim>La vista de topología <em>en vivo</em></h2>
+<section class="slide" data-title="La TUI, en vivo" data-section="construcción" data-speaker="Lorenzo Minervino" data-time="1:00">
+  <div class="kicker"><span class="path">06 · construcción</span></div>
+  <h2 data-anim>Todo, <em>en vivo</em></h2>
   <div class="body">
     <div class="col wide">
       <div class="tui-stack" data-anim>
@@ -382,238 +403,230 @@
         <div class="tui" data-tui="ps_topo_mid" data-crop="24,4,140,38" data-step="1"><canvas></canvas></div>
         <div class="tui" data-tui="ss_topo_after" data-crop="24,4,140,38" data-step="2"><canvas></canvas></div>
       </div>
-      <p class="fig-cap"><span class="badge-real">capturas reales</span>tmux capture-pane · ejecución local con 4 nodos · 28/10/2026</p>
+      <p class="fig-cap"><span class="badge-real">capturas reales</span>orchestui · 4 nodos locales · 28/10/2026</p>
     </div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="step-label" data-step-caption="0"><b>All-Reduce</b> · el anillo que eligió el orchestrator</p>
-      <p class="step-label" data-step-caption="1"><b>Parameter Server</b> · 3 workers, 1 servidor; «→ grads, ← params»</p>
-      <p class="step-label" data-step-caption="2"><b>Strategy-Switch</b> · durante el cambio (la TUI indica «switching W3 → PS»): la topología cambia en vivo</p>
-      <p class="small" data-anim style="margin-top:22px">Partículas: mensajes en tránsito.<br>Subconjunto de MNIST (10.000 muestras), fuera de la campaña experimental.</p>
+    <div class="kws-col">
+      <span class="kw ar" data-anim>anillo de All-Reduce</span>
+      <span class="kw ps" data-step="1">Parameter Server</span>
+      <span class="kw ss" data-step="2">el switch, en vivo</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">La topología que dibuja la TUI es la que construyó el orchestrator, y se actualiza cuando Strategy-Switch promueve un nodo.</p>
-    <div class="n-oral"><p>Capturas reales tomadas con tmux sobre una ejecución local (4 procesos node en la misma máquina, configs en presentation/captures/configs/). No forman parte de la campaña experimental.</p><p>Izquierda: el anillo de All-Reduce con la pérdida y la época de cada worker. Paso 1: Parameter Server, con workers a la izquierda y el servidor a la derecha («→ grads, ← params»). Paso 2: Strategy-Switch en el instante del cambio: el encabezado indica «switching W3 → PS» y la topología pasó a bipartita.</p></div>
-    <p class="n-trans">«Pasemos a la evidencia: cómo medimos.»</p>
+    <p class="n-idea">La topología que dibuja la TUI es la que construyó el orchestrator, y cambia en vivo cuando Strategy-Switch promueve un nodo.</p>
+    <ul class="n-oral">
+      <li>orchestui es la interfaz de terminal que embebe al orchestrator. Son capturas reales de una ejecución local con 4 nodos, fuera de la campaña experimental. Acá, el anillo de All-Reduce con la pérdida y la época de cada worker.</li>
+      <li><b>→</b> La misma vista con Parameter Server: los workers a la izquierda y el servidor a la derecha.</li>
+      <li><b>→</b> Strategy-Switch en el instante del cambio: el encabezado dice «switching W3 → PS» y la topología pasa de anillo a estrella.</li>
+      <li>También está orchestra-py, una biblioteca de Python con la misma funcionalidad. La suite de benchmarks está escrita sobre ella (apéndice A9).</li>
+    </ul>
+    <p class="n-trans">«Con esto armamos los experimentos.»</p>
     <p class="n-src">orchestui/src/ui/components/topology.rs · presentation/captures/raw/</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Cómo medimos" data-section="evaluación" data-speaker="Lorenzo Minervino" data-time="1:30">
-  <div class="kicker"><span class="path">09 · evaluación</span></div>
-  <h2 data-anim>Cómo medimos: <em>misma base</em>, red deliberadamente lenta</h2>
+<section class="slide" data-title="Cómo medimos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:15">
+  <div class="kicker"><span class="path">07 · resultados</span></div>
+  <h2 data-anim>Cómo <em>medimos</em></h2>
   <div class="body">
-    <div class="col">
-      <div class="panel" data-anim><span class="panel-title">entorno simulado</span>
-        <ul class="list tight">
-          <li>Una máquina física · <strong>un contenedor por nodo</strong> · 1 núcleo por contenedor</li>
-          <li>Salida limitada a <strong>10 Mbps</strong> por contenedor (Pumba)</li>
-          <li>Una imagen de Docker para todos los nodos</li>
-        </ul>
-      </div>
-      <div class="panel" data-anim><span class="panel-title">campaña</span>
-        <ul class="list tight">
-          <li>MNIST completo · <strong>LeNet-5</strong> (61.706 parámetros)</li>
-          <li>Adam (α = 0,01) · mini-batch 64 · hasta 48 epochs</li>
-          <li>N<sub>W</sub> ∈ {2, 4, 6, 8, 12, 16} · PS con un servidor</li>
-        </ul>
-      </div>
-    </div>
-    <div class="col narrow" style="justify-content:center">
-      <div class="grid-2" style="gap:30px" data-step="1">
-        <div><div class="num">0,1 s</div><div class="num-label">d<sub>trans</sub> = S/R con S ≈ 1 Mbit (f16)</div></div>
-        <div><div class="num">600 s</div><div class="num-label">T<sub>1</sub>: entrenamiento en una sola máquina</div></div>
-      </div>
-      <div class="callout" data-step="2"><span class="label">validación previa</span>Pruebas unitarias, de integración y de aceptación: la convergencia distribuida coincide con la secuencial.</div>
+    <div class="col wide"><div class="diagram" data-diagram="testbed"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>MNIST · LeNet-5</span>
+      <span class="kw ar" data-anim>1 contenedor = 1 nodo</span>
+      <span class="kw" data-step="1">de 2 a 16 workers</span>
+      <span class="kw warn" data-step="2">red lenta, a propósito</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Fijamos todo salvo la estrategia, y forzamos una relación modelo/red que haga visibles las diferencias.</p>
-    <div class="n-oral"><p>Entorno: clúster simulado en una máquina de 16 núcleos; cada contenedor restringido a un núcleo; Pumba limita la salida a 10 Mbps.</p><p>Paso 1: ¿por qué 10 Mbps? Con modelos útiles para MNIST, S/R real es demasiado chico para distinguir estrategias. En vez de inflar el modelo, se bajó R: S ≈ 1 Mbit en f16, d_trans ≈ 0,1 s. Referencia: T_1 = 600 s sin distribución.</p><p>Paso 2: antes de comparar tiempos hay que validar corrección: pruebas unitarias (la retropropagación se contrasta con valores calculados aparte), de integración (protocolos) y de aceptación (convergencia igual a la secuencial), todas en CI. Aun así, tres errores silenciosos aparecieron recién con los benchmarks (apéndice A5).</p></div>
-    <p class="n-trans">«Primero, los algoritmos sincrónicos.»</p>
-    <p class="n-src">docs/report/experimentacion.md (Pruebas automatizadas · Entorno de experimentación y reproducibilidad)</p>
+    <p class="n-idea">Fijamos todo salvo la estrategia, y forzamos una red lenta para que las diferencias se vean.</p>
+    <ul class="n-oral">
+      <li>Un clúster simulado en una sola máquina física: un contenedor de Docker por nodo, con un núcleo cada uno. Entrenamos LeNet-5 (61.706 parámetros) sobre MNIST completo, con Adam, hasta 48 épocas.</li>
+      <li><b>→</b> Variamos la cantidad de workers: 2, 4, 6, 8, 12 y 16. PS con un solo servidor.</li>
+      <li><b>→</b> Limitamos la salida de cada contenedor a 10 Mbps con Pumba. ¿Por qué? Con un modelo chico, la red real es tan rápida que no se distinguen las estrategias. Bajando R, la transmisión queda en ≈ 0,1 s por ronda. Como referencia, en una sola máquina tarda 600 s.</li>
+      <li>Antes de medir tiempos validamos la corrección con pruebas unitarias, de integración y de aceptación en CI: la convergencia distribuida coincide con la secuencial.</li>
+    </ul>
+    <p class="n-trans">«Primero, los tiempos de los algoritmos sincrónicos.»</p>
+    <p class="n-src">docs/report/experimentacion.md (Pruebas automatizadas · Entorno de experimentación)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Resultados: sincrónicos" data-section="evaluación" data-speaker="Lorenzo Minervino" data-time="1:15">
-  <div class="kicker"><span class="path">09 · evaluación</span></div>
-  <h2 data-anim>Sincrónicos: PS con un servidor <em>empeora desde 6 workers</em></h2>
+<section class="slide" data-title="Resultados: sincrónicos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:15">
+  <div class="kicker"><span class="path">07 · resultados</span></div>
+  <h2 data-anim>Sincrónicos: <em>tiempo</em></h2>
   <div class="body">
     <div class="col wide">
-      <figure class="figure" data-anim style="margin:0"><img src="assets/figures/execution_time_per_nodes_ar_vs_ps.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para All-Reduce y Parameter Server">
-        <figcaption>Figura del informe (colores invertidos para proyección). Eje Y: tiempo de ejecución en segundos · eje X: workers.<br>MNIST · LeNet-5 · 10 Mbps por contenedor · PS con un servidor.</figcaption></figure>
+      <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/execution_time_per_nodes_ar_vs_ps.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para All-Reduce y Parameter Server">
+        <figcaption>Figura del informe · eje Y: tiempo en segundos · eje X: workers</figcaption></figure>
     </div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="txt" data-step="1"><strong>Parameter Server</strong>: el servidor único es el cuello de botella; su costo crece linealmente con N<sub>W</sub>.</p>
-      <p class="txt" data-step="2"><strong>All-Reduce</strong> no se degrada, pero <strong>deja de mejorar</strong>: d<sub>sync</sub> → 2S/R acota la aceleración.</p>
+    <div class="kws-col">
+      <span class="kw ps" data-step="1">PS empeora desde 6 workers</span>
+      <span class="kw ar" data-step="2">AR deja de mejorar</span>
+      <span class="kw on" data-step="2">como predijo el modelo</span>
     </div>
   </div>
   <aside class="notes">
     <p class="n-idea">Lo medido coincide con lo que predice el modelo analítico.</p>
-    <div class="n-oral"><p>Paso 1: Parameter Server tiene su mínimo en N_W = 6 y desde ahí crece: el servidor único concentra el tráfico (d_sync = 2·N_W·S/R).</p><p>Paso 2: All-Reduce no se degrada porque su delay está acotado; pero el tiempo deja de bajar, porque el término de cómputo tiende a cero y la sincronización no.</p><p>Lectura aproximada de la figura, por si preguntan: AR cerca de 290 s desde 6 workers; PS cerca de 340 s en 6 y algo más de 400 s en 16. Los valores exactos están en la figura del informe.</p><p>Aclarar: el eje Y de la figura no indica unidad; el informe trabaja en segundos (T_1 = 600 s).</p></div>
-    <p class="n-trans">«¿Qué pasa si se rompe la barrera de sincronización?»</p>
+    <ul class="n-oral">
+      <li>El tiempo total de entrenamiento según la cantidad de workers. Es la figura del informe, con los colores invertidos para el proyector, y el eje Y está en segundos.</li>
+      <li><b>→</b> Parameter Server con un servidor tiene su mínimo en 6 workers y desde ahí empeora: el servidor concentra todo el tráfico.</li>
+      <li><b>→</b> All-Reduce no se degrada, pero deja de mejorar: el cómputo por worker baja y la sincronización se queda en 2S/R. Es lo que predecía el modelo analítico.</li>
+      <li>Lectura aproximada, por si preguntan: AR cerca de 290 s desde 6 workers; PS cerca de 340 s en 6 y algo más de 400 s en 16.</li>
+    </ul>
+    <p class="n-trans">«¿Y si sacamos la barrera?»</p>
     <p class="n-src">docs/report/resultados.md (Resultados obtenidos) · figura execution_time_per_nodes_ar_vs_ps.png</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Resultados: asincrónicos" data-section="evaluación" data-speaker="Lorenzo Minervino" data-time="0:45">
-  <div class="kicker"><span class="path">09 · evaluación</span></div>
-  <h2 data-anim>Sin barrera, el tiempo <em>sigue bajando</em> al sumar workers</h2>
+<section class="slide" data-title="Resultados: asincrónicos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="0:45">
+  <div class="kicker"><span class="path">07 · resultados</span></div>
+  <h2 data-anim>Sin barrera: <em>más rápido</em></h2>
   <div class="body">
     <div class="col wide">
-      <figure class="figure" data-anim style="margin:0"><img src="assets/figures/execution_times_async_parameter_server_and_strategy_switch.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para Parameter Server asincrónico y Strategy-Switch">
-        <figcaption>Figura del informe (colores invertidos). Eje Y: tiempo de ejecución en segundos.<br>PS asincrónico con WildStore · Strategy-Switch · mismas condiciones de campaña.</figcaption></figure>
+      <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/execution_times_async_parameter_server_and_strategy_switch.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para Parameter Server asincrónico y Strategy-Switch">
+        <figcaption>Figura del informe · PS asincrónico y Strategy-Switch · eje Y: tiempo en segundos</figcaption></figure>
     </div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="txt" data-anim>PS asincrónico y Strategy-Switch evitan el estancamiento del régimen sincrónico.</p>
-      <p class="big" data-step="1">Pero el tiempo <span class="hl">no vale nada</span> si el modelo no aprende.</p>
+    <div class="kws-col">
+      <span class="kw on" data-anim>el tiempo sigue bajando</span>
+      <span class="kw warn" data-step="1">¿pero aprende?</span>
     </div>
   </div>
   <aside class="notes">
     <p class="n-idea">En velocidad pura, los dos asincrónicos ganan.</p>
-    <div class="n-oral"><p>Ambos rompen la barrera estricta y el tiempo sigue bajando a medida que se suman workers, a diferencia de All-Reduce.</p><p>Paso 1: el objetivo de un algoritmo distribuido es acelerar garantizando convergencia; si no, el entrenamiento pierde sentido. Por eso miramos exactitud.</p></div>
-    <p class="n-trans">«Veamos la exactitud final sobre el conjunto de prueba.»</p>
+    <ul class="n-oral">
+      <li>Con PS asincrónico y Strategy-Switch, el tiempo sigue bajando al sumar workers, a diferencia de los sincrónicos.</li>
+      <li><b>→</b> Pero acelerar no sirve de nada si el modelo no aprende. Hay que mirar la exactitud.</li>
+    </ul>
+    <p class="n-trans">«Veamos la exactitud final.»</p>
     <p class="n-src">docs/report/resultados.md (Resultados obtenidos) · figura execution_times_async_parameter_server_and_strategy_switch.png</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Resultados: exactitud" data-section="evaluación" data-speaker="Lorenzo Minervino" data-time="1:30">
-  <div class="kicker"><span class="path">09 · evaluación</span></div>
-  <h2 data-anim>Strategy-Switch <em>conserva la exactitud</em>; PS asincrónico colapsa</h2>
+<section class="slide" data-title="Resultados: exactitud" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:30">
+  <div class="kicker"><span class="path">07 · resultados</span></div>
+  <h2 data-anim>Exactitud: <em>¿quién aprende?</em></h2>
   <div class="body">
     <div class="col wide">
-      <figure class="figure" data-anim style="margin:0"><img src="assets/figures/accuracies.png" alt="Exactitud final sobre el conjunto de prueba de MNIST en función de la cantidad de workers para las cuatro estrategias">
-        <figcaption>Figura del informe (colores invertidos). Exactitud final sobre el conjunto de prueba de MNIST vs. workers.<br>Las curvas de All-Reduce, PS sincrónico y Strategy-Switch se superponen.</figcaption></figure>
+      <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/accuracies.png" alt="Exactitud final sobre el conjunto de prueba de MNIST en función de la cantidad de workers para las cuatro estrategias">
+        <figcaption>Figura del informe · exactitud sobre el conjunto de prueba de MNIST vs. workers</figcaption></figure>
     </div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="txt" data-step="1">Strategy-Switch: <strong>exactitud similar a la de los sincrónicos</strong>, con tiempos similares a los del asincrónico.</p>
-      <div class="callout warn" data-step="2"><span class="label">salvedad</span>PS asincrónico corrió con <code>WildStore</code>: no se puede descartar que las escrituras sin protección contribuyan al colapso.</div>
+    <div class="kws-col">
+      <span class="kw ss" data-step="1">Strategy-Switch ≈ sincrónicos</span>
+      <span class="kw bad" data-step="1">PS asincrónico colapsa</span>
+      <span class="kw warn" data-step="2">salvedad: WildStore</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Strategy-Switch fue el mejor balance de los evaluados en esta campaña; la salvedad sobre WildStore es parte del resultado.</p>
-    <div class="n-oral"><p>PS asincrónico cae fuertemente al aumentar workers (en la figura, a valores cercanos al azar desde 8 workers). Es consistente con client drift: al principio del entrenamiento cada worker empuja en la dirección que le dicta su partición.</p><p>Paso 1: Strategy-Switch usa la desincronización solo cuando los mínimos ya se consensuaron: exactitud similar a la de los sincrónicos y velocidad similar a la del asincrónico.</p><p>Paso 2: decirlo antes de que lo pregunten: la variante asincrónica se ejecutó con WildStore (estilo Hogwild!, escrituras sin protección). Estos datos no permiten separar el client drift del efecto de esas escrituras. Repetir con BlockingStore es trabajo futuro.</p><p>Alcance: estas conclusiones valen para MNIST, LeNet-5 y este entorno simulado.</p></div>
-    <p class="n-trans">«La misma base permitió también un estudio sobre una sola variable: los epochs offline.»</p>
-    <p class="n-src">docs/report/resultados.md (Resultados obtenidos, salvedad final) · conclusiones_capitulo4.md · riesgos.md</p>
+    <p class="n-idea">Strategy-Switch fue el mejor balance de esta campaña; la salvedad sobre WildStore es parte del resultado.</p>
+    <ul class="n-oral">
+      <li>La exactitud final sobre el conjunto de prueba de MNIST. All-Reduce, PS sincrónico y Strategy-Switch se superponen arriba.</li>
+      <li><b>→</b> PS asincrónico cae al sumar workers, hasta valores cercanos al azar desde 8 workers: es el client drift en acción. Strategy-Switch, en cambio, conserva la exactitud de los sincrónicos con tiempos cercanos a los del asincrónico.</li>
+      <li><b>→</b> La salvedad, dicha por nosotros antes de que pregunten: PS asincrónico corrió con WildStore, que hace escrituras sin protección al estilo Hogwild!. Con estos datos no podemos separar el drift del efecto de esas escrituras. Repetirlo con BlockingStore es trabajo futuro.</li>
+      <li>Alcance: estas conclusiones valen para MNIST, LeNet-5 y este entorno.</li>
+    </ul>
+    <p class="n-trans">«El drift también lo medimos de forma directa.»</p>
+    <p class="n-src">docs/report/resultados.md (salvedad final) · conclusiones_capitulo4.md · riesgos.md</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Estudio derivado: epochs offline" data-section="evaluación" data-speaker="Lorenzo Minervino" data-time="1:15">
-  <div class="kicker"><span class="path">09 · evaluación</span></div>
-  <h2 data-anim>Postergar la sincronización <em>degrada la exactitud</em> de forma monótona</h2>
+<section class="slide" data-title="El drift, medido" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:00">
+  <div class="kicker"><span class="path">07 · resultados</span></div>
+  <h2 data-anim>El drift, <em>medido</em></h2>
   <div class="body">
     <div class="col wide">
-      <figure class="figure" data-anim style="margin:0"><img src="assets/figures/oe_ar_acc.png" alt="Exactitud final con distintas cantidades de epochs offline en All-Reduce">
-        <figcaption>Figura del informe (colores invertidos). All-Reduce, exactitud vs. nodos para E = 0…4.<br>1 máquina de 4 núcleos · red hogareña emulada (Pumba) · compresión r = 0,5.</figcaption></figure>
+      <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/oe_ar_acc.png" alt="Exactitud final con distintas cantidades de epochs offline en All-Reduce">
+        <figcaption>Figura del informe · All-Reduce · exactitud vs. nodos para E = 0 a 4</figcaption></figure>
     </div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="txt" data-anim>E epochs locales extra antes de cada sincronización.</p>
-      <p class="txt" data-step="1">Con <strong>E = 1</strong>, la exactitud cae <strong>≈ 1 punto porcentual</strong>; empeora con más nodos.</p>
-      <p class="txt" data-step="2">En ese entorno, <strong>sin ganancia de tiempo</strong> que lo compense.</p>
+    <div class="kws-col">
+      <span class="kw" data-anim>E épocas sin sincronizar</span>
+      <span class="kw warn" data-step="1">E = 1 → cerca de −1 punto</span>
+      <span class="kw warn" data-step="1">más nodos, más caída</span>
+      <span class="kw bad" data-step="2">sin ganancia de tiempo</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">La base sirve también para aislar el efecto de una decisión de configuración.</p>
-    <div class="n-oral"><p>Estudio derivado de una monografía de Aprendizaje Profundo: AR y PS sincrónico, 2 a 10 nodos, E de 0 a 4; 11 h 15 min de ejecución en una máquina de 4 núcleos con red hogareña emulada.</p><p>Paso 1: la exactitud decrece monótonamente con E; un solo epoch offline (la mitad de sincronizaciones) ya cuesta cerca de un punto. La degradación crece con la cantidad de nodos (particiones más chicas y sesgadas).</p><p>Paso 2: las curvas de tiempo se solapan: en una sola máquina, ahorrar comunicación no compensa la contención de CPU. La tercera hipótesis (más inestabilidad en AR) no se confirmó.</p><p>Línea abierta: activar epochs offline recién cuando la pérdida se estabiliza, con un criterio análogo al de Strategy-Switch.</p></div>
-    <p class="n-trans">«Con todo esto, qué aporta el trabajo y dónde están sus límites.»</p>
+    <p class="n-idea">Demorar la sincronización es pagar drift.</p>
+    <ul class="n-oral">
+      <li>Es un estudio derivado, de la monografía de Marcos: All-Reduce con E épocas offline, es decir, E épocas extra sin sincronizar. Se corrió en una máquina de 4 núcleos con red hogareña emulada.</li>
+      <li><b>→</b> Con una sola época offline (la mitad de sincronizaciones) la exactitud cae cerca de un punto porcentual, y la caída crece con la cantidad de nodos: las particiones son más chicas y más sesgadas.</li>
+      <li><b>→</b> Y en ese entorno no hubo ganancia de tiempo que lo compense.</li>
+    </ul>
+    <p class="n-trans">«¿Qué queda por hacer?»</p>
     <p class="n-src">docs/report/estudio_derivado.md</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Aportes y limitaciones" data-section="cierre" data-speaker="Lorenzo Minervino" data-time="1:15">
-  <div class="kicker"><span class="path">10 · aportes</span></div>
-  <h2 data-anim>La contribución es <em>el instrumento</em>, no un algoritmo nuevo</h2>
-  <div class="body">
-    <div class="col">
-      <div class="panel" data-anim><span class="panel-title">aportes</span>
-        <ul class="list check tight">
-          <li>Base abierta y parametrizable: tres estrategias sobre <strong>la misma infraestructura</strong></li>
-          <li>Motor de redes neuronales y protocolo propios</li>
-          <li>Reducción de tráfico: f16 y gradientes dispersos con residual</li>
-          <li>TUI y biblioteca de Python · suite reproducible</li>
-        </ul>
-      </div>
-    </div>
-    <div class="col">
-      <div class="panel dim" data-step="1"><span class="panel-title">limitaciones</span>
-        <ul class="list cross tight">
-          <li>Conclusiones acotadas a MNIST, LeNet-5 y red simulada</li>
-          <li>PS asincrónico medido solo con <code>WildStore</code></li>
-          <li>Sin tolerancia a fallos · latencia medida una sola vez</li>
-          <li>Solo modelos secuenciales · dataset en memoria</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-  <aside class="notes">
-    <p class="n-idea">Ser explícitos con el alcance fortalece las conclusiones.</p>
-    <div class="n-oral"><p>Aportes: los tres algoritmos publicados implementados sobre la misma capa de comunicación, el mismo motor y el mismo plano de control, con instrumentación para producir mediciones; ese es el problema que planteamos.</p><p>Paso 1, limitaciones: las conclusiones valen para el problema, el modelo y el entorno medidos; para generalizar hacen falta otros datasets, modelos de otros tamaños y una red física. Otras: WildStore, sin tolerancia a fallos, topología fija tras la medición inicial, solo secuencias de capas, datasets en memoria, heterogeneidad de hardware no abordada, consumo energético y costo económico no medidos.</p></div>
-    <p class="n-trans">«Para cerrar la exposición, las tres conclusiones.»</p>
-    <p class="n-src">docs/report/conclusiones.md · trabajos_futuros.md · impacto.md</p>
-  </aside>
-</section>
-
-<section class="slide" data-title="Conclusiones" data-section="cierre" data-speaker="Lorenzo Minervino" data-time="0:45">
-  <div class="kicker"><span class="path">10 · conclusiones</span></div>
-  <h2 data-anim>Tres conclusiones, <em>bajo las condiciones medidas</em></h2>
+<section class="slide" data-title="Trabajos futuros" data-section="cierre" data-speaker="Lorenzo Minervino" data-time="1:00" data-keywords="tolerancia a fallos · Hogwild! · convolución en paralelo · datasets por flujo · más arquitecturas · compresión">
+  <div class="kicker"><span class="path">08 · lo que sigue</span></div>
+  <h2 data-anim>Trabajos <em>futuros</em></h2>
   <div class="body center">
-    <div class="grid-3" style="width:100%">
-      <div class="panel" data-anim><span class="panel-title">01</span><p class="big" style="font-size:34px">La sincronización <strong>centralizada</strong> es el cuello de botella.</p></div>
-      <div class="panel" data-step="1"><span class="panel-title">02</span><p class="big" style="font-size:34px">Asincronismo y convergencia están en <strong>tensión directa</strong>.</p></div>
-      <div class="panel" data-step="2"><span class="panel-title">03</span><p class="big" style="font-size:34px">Strategy-Switch logró el <strong>mejor balance</strong> evaluado.</p></div>
+    <div class="col">
+      <div class="term" data-anim>
+        <div class="term-bar">~/oxidized-neural-orchestra</div>
+        <p class="term-line cmd" data-type>cat TODO.md</p>
+        <p class="term-line todo" data-step="1" data-type>tolerancia a fallos</p>
+        <p class="term-line todo" data-step="1" data-type>Hogwild!: resolverlo o retirarlo</p>
+        <p class="term-line todo" data-step="2" data-type>convolución en paralelo</p>
+        <p class="term-line todo" data-step="2" data-type>datasets por flujo desde disco</p>
+        <p class="term-line todo" data-step="3" data-type>más arquitecturas: U-Net, recurrentes</p>
+        <p class="term-line todo" data-step="3" data-type>medir la compresión por separado</p>
+      </div>
     </div>
   </div>
-  <p class="small" data-step="2" style="margin-bottom:36px">Validada la corrección por convergencia, las diferencias de tiempo pueden atribuirse al algoritmo, salvo la excepción señalada para PS asincrónico.</p>
   <aside class="notes">
-    <p class="n-idea">El sistema cumplió su propósito: atribuir diferencias al algoritmo y no a la implementación.</p>
-    <div class="n-oral"><p>(1) Con ancho de banda restringido, PS sincrónico con un servidor escala mal; Ring AR resuelve el escalado pero su aceleración queda acotada.</p><p>Paso 1: (2) eliminar la barrera reduce radicalmente el tiempo, pero en este experimento destruyó la convergencia (con la salvedad de WildStore).</p><p>Paso 2: (3) Strategy-Switch se comporta sincrónicamente en la fase crítica y conmuta después del consenso: exactitud de los sincrónicos en una fracción del tiempo. Empíricamente, la mejor alternativa de esta comparativa.</p></div>
-    <p class="n-trans">«Ahora vamos a mostrarlo funcionando.»</p>
-    <p class="n-src">docs/report/conclusiones_capitulo4.md · conclusiones.md</p>
+    <p class="n-idea">El sistema quedó listo para retomarse, y varias líneas ya tienen el diseño especificado.</p>
+    <ul class="n-oral">
+      <li>Las líneas abiertas, ordenadas por relevancia. Varias ya tienen el diseño especificado en el repositorio.</li>
+      <li><b>→</b> Tolerancia a fallos: es imprescindible para escalar, y el comportamiento por entidad ya está especificado. También hay que resolver o retirar la variante Hogwild! y repetir PS asincrónico con BlockingStore.</li>
+      <li><b>→</b> Paralelizar el cálculo de la convolución y leer los datasets por flujo desde disco, para los que no entran en memoria.</li>
+      <li><b>→</b> Ampliar el motor a otras arquitecturas y medir de forma aislada la compresión de gradientes.</li>
+    </ul>
+    <p class="n-trans">«Y ahora, vamos a verlo funcionando.»</p>
+    <p class="n-src">docs/report/trabajos_futuros.md</p>
   </aside>
 </section>
 
-<section class="slide" data-title="Ahora, la demo" data-section="demo" data-speaker="[a completar]" data-time="0:30">
-  <div class="kicker"><span class="path">11 · demo</span></div>
+<section class="slide" data-title="Ahora, la demo" data-section="demo" data-speaker="[a completar]" data-time="0:30" data-after="10:00">
+  <div class="kicker"><span class="path">09 · demo</span></div>
   <h2 data-anim>Ahora, <em>la demo</em></h2>
   <div class="body center">
-    <div class="col">
-      <div class="panel" data-anim><span class="panel-title">qué vamos a mostrar</span>
-        <ul class="list" data-demo-plan>
-          <li><span class="todo">[a completar]</span></li>
-          <li><span class="todo">[a completar]</span></li>
-          <li><span class="todo">[a completar]</span></li>
-        </ul>
-      </div>
-    </div>
-    <div class="col narrow">
-      <div class="panel dim" data-anim><span class="panel-title">tiempo</span><p class="num">10 min</p><p class="num-label">reservados en la agenda</p></div>
+    <div class="kws-col" style="flex:1;align-items:center">
+      <span class="kw warn" data-anim>[a completar]</span>
+      <span class="kw warn" data-anim>[a completar]</span>
+      <span class="kw warn" data-anim>[a completar]</span>
+      <span class="kw" data-anim>10 min</span>
     </div>
   </div>
   <aside class="notes">
     <p class="n-idea">[a completar por el equipo]</p>
-    <div class="n-oral"><p>[a completar: qué se muestra, en qué orden, qué ejecutar y qué resultado observar]</p><p>Guion en blanco: presentation/GUION_DEMO.md. Material de respaldo opcional: apéndice A1 (grabación real de Strategy-Switch en la TUI) y A2 (capturas reales).</p></div>
+    <ul class="n-oral">
+      <li>[a completar: qué se muestra, en qué orden, qué se ejecuta y qué resultado hay que observar]</li>
+      <li>El guion en blanco está en presentation/GUION_DEMO.md. Material de respaldo opcional: apéndice A1 (grabación real de Strategy-Switch en la TUI) y A2 (capturas reales).</li>
+    </ul>
     <p class="n-trans">[a completar]</p>
     <p class="n-src">[a completar]</p>
   </aside>
 </section>
 
-<section class="slide cover closing" data-title="Cierre" data-section="cierre" data-speaker="Los tres" data-time="2:00" data-scene="cover">
+<section class="slide cover closing" data-title="Gracias por venir" data-section="cierre" data-speaker="Los tres" data-time="2:00" data-scene="cover">
   <div class="scene" data-three></div>
   <div class="logo-wrap"><img class="logo" src="assets/logo.jpg" alt="Logo de Oxidized Neural Orchestra" data-float></div>
   <div class="titles">
     <div class="prompt" data-anim>~/oxidized-neural-orchestra $ exit</div>
-    <h1 data-anim style="font-size:62px">Una base común para <span class="o">comparar</span> estrategias de entrenamiento distribuido</h1>
-    <ul class="list check" data-anim style="margin-top:44px">
-      <li>Tres estrategias, una infraestructura</li>
-      <li>Diferencias atribuibles al algoritmo</li>
-      <li>Strategy-Switch: mejor balance en esta campaña</li>
-    </ul>
-    <p class="big" data-anim style="margin-top:50px">Gracias. <span class="hl">¿Preguntas?</span></p>
+    <h1 class="thanks" data-anim>¡Gracias<br>por <span class="o">venir</span>!</h1>
+    <div class="kws-col" style="margin-top:56px">
+      <span class="kw" data-anim>4 estrategias, 1 base</span>
+      <span class="kw ss" data-anim>Strategy-Switch: mejor balance</span>
+      <span class="kw on" data-anim>¿Preguntas?</span>
+    </div>
   </div>
   <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   <aside class="notes">
-    <p class="n-idea">Volver al mensaje central después de la demo y abrir preguntas.</p>
-    <div class="n-oral"><p>Retomar en una frase lo que se vio en la demo y conectarlo con la contribución: la misma base ejecuta las tres estrategias y permite compararlas.</p><p>Recordar las tres ideas de la diapositiva. El repositorio es público y se mantiene al menos un año después de la defensa.</p><p>Preparar respuestas: WildStore vs. BlockingStore; por qué 10 Mbps; por qué la pérdida de entrenamiento y no la de validación; tolerancia a fallos; heterogeneidad no abordada; uso de herramientas de IA declarado en el informe. Para volver a una diapositiva: tecla G (índice) o número + Enter.</p></div>
+    <p class="n-idea">Volver al mensaje central después de la demo y abrir las preguntas.</p>
+    <ul class="n-oral">
+      <li>Retomar en una frase lo que se vio en la demo: la misma base ejecuta las cuatro estrategias y permite compararlas.</li>
+      <li>Las tres ideas que queremos que se lleven: la sincronización centralizada es el cuello de botella; asincronismo y convergencia están en tensión directa; y Strategy-Switch fue el mejor balance que evaluamos.</li>
+      <li>Agradecer al jurado, al tutor y al co-tutor. El repositorio es público.</li>
+      <li>Preguntas probables: WildStore o BlockingStore; por qué 10 Mbps; por qué la pérdida de entrenamiento y no la de validación; tolerancia a fallos; uso de herramientas de IA, declarado en el informe. Para volver a una diapositiva: tecla G (índice) o número + Enter; el apéndice empieza en la 25.</li>
+    </ul>
     <p class="n-trans">—</p>
     <p class="n-src">docs/report/conclusiones.md · anexos.md (repositorio)</p>
   </aside>
@@ -636,7 +649,7 @@
   </div>
   <aside class="notes">
     <p class="n-idea">Material de respaldo opcional, por si se quiere mostrar el cambio de estrategia sin ejecutar en vivo.</p>
-    <div class="n-oral"><p>Secuencia real de pantallas (4 nodos locales, subconjunto de 10.000 muestras de MNIST, configs en presentation/captures/configs/). Mostrar el anillo, el instante «switching → PS» y la topología bipartita posterior. Si se usa, aclarar que es una grabación.</p></div>
+    <ul class="n-oral"><li>Secuencia real de pantallas (4 nodos locales, subconjunto de 10.000 muestras de MNIST, configs en presentation/captures/configs/). Mostrar el anillo, el instante «switching → PS» y la topología en estrella posterior. Si se usa, aclarar que es una grabación.</li></ul>
     <p class="n-trans">—</p>
     <p class="n-src">presentation/captures/rec/ · presentation/captures/configs/training_strategy_switch.json</p>
   </aside>
@@ -652,7 +665,7 @@
   </div>
   <aside class="notes">
     <p class="n-idea">Capturas de respaldo de las pantallas principales.</p>
-    <div class="n-oral"><p>Menú, ayuda de configuración y dashboard al finalizar una ejecución de Strategy-Switch (pérdida promedio, pérdida por worker, tabla de workers, parámetros finales y eventos).</p><p>Ojo: en esa ejecución la tabla muestra 99–100 epochs con max_epochs = 60; ver README, sección «Diferencias detectadas».</p></div>
+    <ul class="n-oral"><li>Menú, ayuda de configuración y dashboard al finalizar una ejecución de Strategy-Switch (pérdida promedio, pérdida por worker, tabla de workers, parámetros finales y eventos).</li><li>Ojo: en esa ejecución la tabla muestra 99–100 epochs con max_epochs = 60; ver README, sección «Diferencias detectadas».</li></ul>
     <p class="n-trans">—</p>
     <p class="n-src">presentation/captures/raw/</p>
   </aside>
@@ -676,7 +689,7 @@
   </div>
   <aside class="notes">
     <p class="n-idea">Respaldo para preguntas sobre el modelo analítico.</p>
-    <div class="n-oral"><p>Con N_S = N_W, Multi-PS alcanza 2S/R, el mismo límite que AR cuando N_W crece.</p></div>
+    <ul class="n-oral"><li>Con N_S = N_W, Multi-PS alcanza 2S/R, el mismo límite que AR cuando N_W crece.</li></ul>
     <p class="n-trans">—</p>
     <p class="n-src">docs/report/resultados.md</p>
   </aside>
@@ -695,7 +708,7 @@
   </div>
   <aside class="notes">
     <p class="n-idea">Respaldo: dos criterios distintos sobre la misma señal.</p>
-    <div class="n-oral"><p>Ambos usan la pérdida de entrenamiento máxima para evitar una pasada de evaluación por ronda y para ser conservadores.</p></div>
+    <ul class="n-oral"><li>Ambos usan la pérdida de entrenamiento máxima para evitar una pasada de evaluación por ronda y para ser conservadores.</li></ul>
     <p class="n-trans">—</p>
     <p class="n-src">docs/report/solucion.md (Plano de Control y Orquestación) · código: orchestrator/src/sessions/</p>
   </aside>
@@ -716,32 +729,140 @@
   </div>
   <aside class="notes">
     <p class="n-idea">Respaldo: la lección central de ingeniería del trabajo.</p>
-    <div class="n-oral"><p>Conviene tener una medición end-to-end desde temprano. Otra lección: «make it work, make it right, make it fast».</p></div>
+    <ul class="n-oral"><li>Conviene tener una medición end-to-end desde temprano. Otra lección: «make it work, make it right, make it fast».</li></ul>
     <p class="n-trans">—</p>
     <p class="n-src">docs/report/riesgos.md (Lecciones aprendidas)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="A6 · Trabajo futuro" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
-  <div class="kicker"><span class="path">A6 · trabajo futuro</span></div>
-  <h2 data-anim>Líneas abiertas, <em>ordenadas por relevancia</em></h2>
+<section class="slide" data-title="A6 · Modelo como buffer plano" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A6 · motor de redes neuronales</span></div>
+  <h2 data-anim>El modelo es <em>un único buffer</em> de memoria</h2>
   <div class="body">
-    <div class="col">
-      <ul class="list tight">
-        <li><strong>Tolerancia a fallos</strong>: capa de reconexión en el transporte; comportamiento por entidad ya especificado</li>
-        <li><strong>Hogwild!</strong>: resolverlo o retirarlo; repetir PS asincrónico con BlockingStore</li>
-        <li><strong>Convolución</strong>: elegir la estrategia de cómputo según la dimensionalidad</li>
-        <li><strong>Datasets por flujo</strong> desde disco</li>
-        <li><strong>Motor</strong>: más activaciones; grafos de capas (U-Net), recurrentes, generativas</li>
-        <li><strong>Compresión</strong>: medir tasa de compresión vs. convergencia de forma aislada</li>
-      </ul>
+    <div class="col wide"><div class="diagram" data-diagram="flatbuffer"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>capas = vistas</span>
+      <span class="kw ps" data-step="1">particionar = delimitar rangos</span>
+      <span class="kw on" data-step="2">enviar sin copiar</span>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">Respaldo para preguntas sobre cómo seguir.</p>
-    <div class="n-oral"><p>Varias líneas tienen el diseño especificado en el repositorio. También quedan medir costo económico y consumo energético.</p></div>
+    <p class="n-idea">Una decisión del motor de redes neuronales habilita la comunicación sin copias de todo el sistema.</p>
+    <ul class="n-oral">
+      <li>La biblioteca está construida sobre ndarray: capas densas, convolucionales, max pooling, reshape y activaciones; inicializaciones Xavier-Glorot y Kaiming-He; optimizadores detrás de un mismo trait.</li>
+      <li>La decisión clave es que el modelo sea un buffer contiguo y las capas, vistas sobre tramos. La alternativa, un árbol de objetos con sus pesos, obligaba a serializar cada capa y, en Rust, a acoplar el motor con comms para prestar referencias mutables.</li>
+      <li><b>→</b> Particionar entre servidores es delimitar rangos. <b>→</b> Enviar es reinterpretar memoria (bytemuck).</li>
+      <li>Limitación: los modelos son secuencias de capas; arquitecturas con conexiones de salto, como U-Net, no se pueden expresar hoy.</li>
+    </ul>
     <p class="n-trans">—</p>
-    <p class="n-src">docs/report/trabajos_futuros.md · impacto.md</p>
+    <p class="n-src">docs/report/solucion.md (Motor de Redes Neuronales · Modelo como buffer plano)</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="A7 · Compresión con error feedback" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A7 · comunicación</span></div>
+  <h2 data-anim>Dos planos y <em>compresión con memoria</em></h2>
+  <div class="body">
+    <div class="col wide"><div class="diagram" data-diagram="compress"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>control: JSON</span>
+      <span class="kw" data-anim>datos: f16, sin copias</span>
+      <span class="kw grad" data-step="1">solo lo que supera el umbral</span>
+      <span class="kw" data-step="2">el resto, al residual</span>
+      <span class="kw on" data-step="3">error feedback</span>
+    </div>
+  </div>
+  <aside class="notes">
+    <p class="n-idea">Separar control de datos y comprimir sin perder la información acumulada.</p>
+    <ul class="n-oral">
+      <li>Control: comandos poco frecuentes en JSON, inspeccionables. Datos: concentran el volumen y viajan por reinterpretación de memoria, en media precisión.</li>
+      <li><b>→</b> Solo viajan los componentes por encima de un umbral, elegido para que pase una fracción r; el umbral se estima muestreando hasta 16384 componentes con quickselect (Aji y Heafield, 2017).</li>
+      <li><b>→</b> Lo que no se envía queda en un residual persistente.</li>
+      <li><b>→</b> En la ronda siguiente el residual se suma al gradiente nuevo: un componente chico pero constante termina cruzando el umbral (error feedback, Lin et al., 2018). Si la codificación dispersa pesa más que la densa en f16, se envía la densa.</li>
+      <li>Limitación: no se midió de forma aislada el compromiso entre tasa de compresión y convergencia.</li>
+    </ul>
+    <p class="n-trans">—</p>
+    <p class="n-src">docs/report/solucion.md (Separación de planos · Compresión de gradientes con error feedback)</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="A8 · Topología por latencia" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A8 · coordinación</span></div>
+  <h2 data-anim>La topología sale de <em>la red medida</em></h2>
+  <div class="body">
+    <div class="col wide"><div class="diagram" data-diagram="topo"></div></div>
+    <div class="kws-col">
+      <span class="kw" data-anim>10 pings por par</span>
+      <span class="kw ar" data-step="1">anillo: viajante exacto</span>
+      <span class="kw ps" data-step="2">servidor: menor latencia máxima</span>
+      <span class="kw" data-step="2">optimizador después de agregar</span>
+    </div>
+  </div>
+  <aside class="notes">
+    <p class="n-idea">Ninguna diferencia de tiempo debería venir del orden en que el usuario escribió las direcciones.</p>
+    <ul class="n-oral">
+      <li>Antes de entrenar, cada par de nodos intercambia diez pings y se toma el mayor RTT. Se mide una sola vez (limitación en redes con carga variable).</li>
+      <li><b>→</b> All-Reduce: el orden del anillo que minimiza la latencia total es un circuito hamiltoniano de costo mínimo, resuelto en forma exacta con programación dinámica sobre subconjuntos (Held y Karp, 1962).</li>
+      <li><b>→</b> Parameter Server: se eligen los k servidores que minimizan la mayor latencia worker–servidor, por backtracking. Y el optimizador con estado se aplica después de agregar: si cada worker aplicara Adam sobre su gradiente local, acumularían momentos distintos y las réplicas divergirían.</li>
+    </ul>
+    <p class="n-trans">—</p>
+    <p class="n-src">docs/report/solucion.md (Selección de topología · Ubicación del optimizador) · código: orchestrator/src/calculator/</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="A9 · Interfaz de Python" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A9 · interfaces</span></div>
+  <h2 data-anim>El mismo sistema, <em>desde Python</em></h2>
+  <div class="body center">
+    <div class="col wide">
+      <pre class="code-block" data-anim style="font-size:24px"><span class="c"># orchestra-py · basado en local.py</span>
+<span class="k">training</span> = <span class="f">strategy_switch</span>(
+    addrs=ADDRS, nservers=<span class="s">1</span>,
+    dataset=LocalDataset(...),
+    optimizer=GradientDescent(lr=<span class="s">0.01</span>),
+    loss_fn=Mse(),
+    sync=NonBlockingSync(),
+    store=BlockingStore(),
+    max_epochs=<span class="s">50</span>, batch_size=<span class="s">256</span>,
+)
+<span class="k">trained</span> = <span class="f">orchestrate</span>(model, training).wait()</pre>
+    </div>
+    <div class="kws-col">
+      <span class="kw" data-anim>PyO3 + maturin</span>
+      <span class="kw" data-anim>libera el GIL</span>
+      <span class="kw on" data-anim>benchmarks en Python</span>
+    </div>
+  </div>
+  <aside class="notes">
+    <p class="n-idea">orchestra-py expone el mismo orchestrator para experimentar programáticamente.</p>
+    <ul class="n-oral"><li>Módulo nativo vía PyO3 y maturin. El fragmento muestra la API real (funciones strategy_switch y orchestrate). Se construyó como crate separado porque anotar los tipos existentes con #[pyclass] chocaba con genéricos, variantes de enum y Clone. La suite de benchmarks está escrita sobre esta interfaz.</li></ul>
+    <p class="n-trans">—</p>
+    <p class="n-src">docs/report/solucion.md (Interfaz de Python como crate separado) · orchestra-py/local.py</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="A10 · Por qué una base común" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A10 · el problema de comparar</span></div>
+  <h2 data-anim>Comparar sobre frameworks distintos <em>mezcla efectos</em></h2>
+  <div class="body">
+    <div class="col">
+      <p class="txt" data-anim>TensorFlow (<code>tf.distribute.Strategy</code>) y PyTorch (<code>DistributedDataParallel</code>) envuelven la sincronización en <strong>una sola llamada</strong>, que fija cuatro decisiones:</p>
+      <div class="grid-2" style="gap:22px">
+        <div class="panel dim" data-anim><span class="panel-title">01 · régimen</span><p class="txt">¿Sincrónico o asincrónico?</p></div>
+        <div class="panel dim" data-anim><span class="panel-title">02 · optimizador</span><p class="txt">¿Su estado vive en cada worker o en un nodo central?</p></div>
+        <div class="panel dim" data-anim><span class="panel-title">03 · particionado</span><p class="txt">¿Cómo se reparten los parámetros?</p></div>
+        <div class="panel dim" data-anim><span class="panel-title">04 · codificación</span><p class="txt">¿Cómo viajan los tensores?</p></div>
+      </div>
+    </div>
+    <div class="col narrow" style="justify-content:center">
+      <div class="callout warn" data-anim><span class="label">el sesgo</span><span class="mono" style="font-size:26px">diferencia medida<br>= algoritmo<br>+ calidad de implementación</span></div>
+    </div>
+  </div>
+  <aside class="notes">
+    <p class="n-idea">Respaldo: por qué hizo falta construir una base común en lugar de comparar sobre TensorFlow o PyTorch.</p>
+    <ul class="n-oral"><li>Esas implementaciones están optimizadas para producción y no aplican el mismo trabajo de bajo nivel a cada estrategia (solapamiento de cómputo y comunicación, kernels especializados). Al comparar dos estrategias sobre dos implementaciones, la diferencia mezcla algoritmo y calidad de implementación, y ese sesgo no se puede cuantificar.</li></ul>
+    <p class="n-trans">—</p>
+    <p class="n-src">docs/report/problema.md · estado_del_arte.md</p>
   </aside>
 </section>
 
@@ -750,7 +871,7 @@
   <div class="section" id="section-label"></div>
   <span class="flags" id="flags"></span>
   <button class="btn" id="btn-prev" aria-label="Anterior">[←]</button>
-  <span class="counter" id="counter">01 / 26</span>
+  <span class="counter" id="counter">01 / 24</span>
   <button class="btn" id="btn-next" aria-label="Siguiente">[→]</button>
   <button class="btn" id="btn-pause" aria-label="Pausar animaciones" aria-pressed="false">[p] pausa</button>
   <button class="btn" id="btn-full" aria-label="Pantalla completa">[f] pantalla</button>
@@ -771,10 +892,10 @@
       <kbd>F</kbd><span>pantalla completa</span>
       <kbd>N</kbd><span>abrir notas del expositor (ventana aparte)</span>
       <kbd>G</kbd><span>índice de diapositivas</span>
-      <kbd>número + ↵</kbd><span>ir a una diapositiva (apéndice: 27 en adelante)</span>
+      <kbd>número + ↵</kbd><span>ir a una diapositiva (apéndice: 25 en adelante)</span>
       <kbd>? · H · Esc</kbd><span>mostrar / ocultar esta ayuda</span>
     </div>
-    <p class="note">Las diapositivas con diagramas avanzan por etapas. Volver atrás restaura el estado completo de la etapa, sin animación.</p>
+    <p class="note">Las diapositivas avanzan por etapas. Volver atrás restaura el estado completo de la etapa, sin animación.</p>
   </div>
 </div>
 
