@@ -29,6 +29,9 @@
 
   window.ONO_MOTION = state.reduced ? "reduced" : "full";
 
+  const GLYPHS = "01<>/\\|=+*#%$";
+  const fullText = new WeakMap();
+
 
   function view(slide) {
     if (views.has(slide)) return views.get(slide);
@@ -44,6 +47,7 @@
       player: null,
       floatTl: null,
       tuisDrawn: false,
+      texts: new Map(),
     };
     const stepAttr = v.steppers.map((el) => Number(el.dataset.step));
     const capAttr = v.captions.map((el) => Number(el.dataset.stepCaption));
@@ -75,15 +79,84 @@
   }
 
 
+  function textNodes(el) {
+    const out = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      if (fullText.has(n) || n.nodeValue.trim()) out.push(n);
+    }
+    return out;
+  }
+
+  function textTargets(el) {
+    const own = el.matches("h2, .kw, [data-type]") ? [el] : [];
+    return own.concat(Array.from(el.querySelectorAll("[data-type]")));
+  }
+
+  function runText(v, el, delay) {
+    const nodes = textNodes(el);
+    nodes.forEach((n) => { if (!fullText.has(n)) fullText.set(n, n.nodeValue); });
+    const total = nodes.reduce((acc, n) => acc + fullText.get(n).length, 0);
+    if (!total) return;
+    const typing = el.hasAttribute("data-type");
+    const proxy = { p: 0 };
+    const render = () => {
+      let budget = Math.floor(proxy.p * total);
+      nodes.forEach((n) => {
+        const full = fullText.get(n);
+        const shown = Math.max(0, Math.min(full.length, budget));
+        budget -= full.length;
+        let tail = "";
+        if (!typing) for (let i = shown; i < full.length; i++) tail += /\s/.test(full[i]) ? full[i] : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+        n.nodeValue = full.slice(0, shown) + tail;
+      });
+    };
+    render();
+    el.classList.toggle("typing", typing);
+    v.texts.set(el, gsap.to(proxy, {
+      p: 1,
+      delay,
+      ease: "none",
+      duration: typing ? Math.min(1.4, 0.2 + total * 0.03) : Math.min(0.9, 0.3 + total * 0.015),
+      onUpdate: render,
+      onComplete: () => finishText(v, el),
+    }));
+  }
+
+  function finishText(v, el) {
+    const tween = v.texts.get(el);
+    if (tween) tween.kill();
+    v.texts.delete(el);
+    el.classList.remove("typing");
+    textNodes(el).forEach((n) => { n.nodeValue = fullText.get(n) ?? n.nodeValue; });
+  }
+
+  function appear(v, el, delay) {
+    gsap.killTweensOf(el);
+    textTargets(el).forEach((t) => { if (v.texts.has(t)) finishText(v, t); });
+    const kw = el.classList.contains("kw");
+    gsap.fromTo(el, kw ? { autoAlpha: 0, x: -18, scale: 0.94 } : { autoAlpha: 0, y: 16 }, {
+      autoAlpha: 1, x: 0, y: 0, scale: 1, delay, duration: kw ? 0.5 : 0.55, ease: kw ? "back.out(2.2)" : "power2.out",
+    });
+    if (el.hasAttribute("data-wipe")) gsap.fromTo(el, { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", delay: delay + 0.1, duration: 1.4, ease: "power2.inOut" });
+    textTargets(el).forEach((t) => runText(v, t, delay + 0.05));
+  }
+
+  function settle(v, el, visible) {
+    gsap.killTweensOf(el);
+    textTargets(el).forEach((t) => { if (v.texts.has(t)) finishText(v, t); });
+    gsap.set(el, { autoAlpha: visible ? 1 : 0, x: 0, y: 0, scale: 1 });
+    if (el.hasAttribute("data-wipe")) gsap.set(el, { clipPath: "inset(0 0% 0 0)" });
+  }
+
   function applyStep(slide, step, animate) {
     const v = view(slide);
     const fx = animate && !instant();
     v.steppers.forEach((el) => {
       const s = Number(el.dataset.step);
-      if (s <= step) {
-        if (fx && s === step) gsap.fromTo(el, { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.45, ease: "power2.out", overwrite: true });
-        else gsap.set(el, { autoAlpha: 1, y: 0, overwrite: true });
-      } else gsap.set(el, { autoAlpha: 0, overwrite: true });
+      if (fx && s === step) appear(v, el, 0);
+      else settle(v, el, s <= step);
     });
     v.captions.forEach((el) => {
       const s = Number(el.dataset.stepCaption);
@@ -105,9 +178,8 @@
     if (instant()) gsap.set(slide, { autoAlpha: 1 });
     else gsap.fromTo(slide, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.35, ease: "power1.out" });
 
-    if (fresh && !instant()) {
-      gsap.fromTo(v.anims, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.55, ease: "power2.out", stagger: 0.07, delay: 0.08, overwrite: true });
-    } else gsap.set(v.anims, { autoAlpha: 1, y: 0, overwrite: true });
+    if (fresh && !instant()) v.anims.forEach((el, i) => appear(v, el, 0.08 + i * 0.07));
+    else v.anims.forEach((el) => settle(v, el, true));
 
     applyStep(slide, step, fresh);
     startAmbient(slide);
@@ -116,6 +188,7 @@
   function leave(slide) {
     const v = view(slide);
     v.diagrams.forEach((d) => d.leave());
+    Array.from(v.texts.keys()).forEach((el) => finishText(v, el));
     stopAmbient(slide);
     if (v.player) v.player.stop();
     gsap.killTweensOf(slide);
@@ -329,7 +402,7 @@
       .top b{color:#0af886;font-weight:500}.clock{font-size:34px;color:#e3eee6;margin-left:auto}
       h1{font:500 28px "JetBrains Mono",monospace;margin:18px 0 6px}
       .idea{font-size:22px;color:#0af886;margin:10px 0 16px}
-      .oral p{margin:0 0 10px}.label{font-family:"JetBrains Mono",monospace;font-size:13px;color:#6a8072;letter-spacing:.06em;text-transform:uppercase;margin-top:18px}
+      .oral{margin:0;padding-left:22px}.oral li{margin:0 0 10px}.kws{font-family:"JetBrains Mono",monospace;color:#39ff14;font-size:16px}.label{font-family:"JetBrains Mono",monospace;font-size:13px;color:#6a8072;letter-spacing:.06em;text-transform:uppercase;margin-top:18px}
       .trans{color:#ffd166}.src{color:#6a8072;font-family:"JetBrains Mono",monospace;font-size:14px}
       .next{margin-top:22px;padding-top:14px;border-top:1px solid #1f4d31;color:#a7bcae}
       code{color:#00be00}button{background:none;border:1px solid #1f4d31;color:#a7bcae;font:14px "JetBrains Mono",monospace;padding:4px 10px;cursor:pointer}
@@ -345,7 +418,8 @@
     const slide = slides[state.index];
     const v = view(slide);
     const n = notesFor(slide);
-    const planned = slides.slice(0, state.index).filter((s) => !s.hasAttribute("data-appendix")).reduce((acc, s) => acc + parseTime(s.dataset.time), 0);
+    const planned = slides.slice(0, state.index).filter((s) => !s.hasAttribute("data-appendix")).reduce((acc, s) => acc + parseTime(s.dataset.time) + parseTime(s.dataset.after), 0);
+    const onScreen = Array.from(slide.querySelectorAll(".kw")).map((k) => k.textContent.trim()).join("  ·  ");
     const elapsed = notesStart ? (Date.now() - notesStart) / 1000 : 0;
     const nextSlide = slides[state.index + 1];
     const root = notesWin.document.getElementById("root");
@@ -357,7 +431,8 @@
         <span class="clock">${fmt(elapsed)}</span><button id="reset">reiniciar reloj</button></div>
       <h1>${slide.dataset.title}</h1>
       <div class="idea">${n.idea}</div>
-      <div class="label">desarrollo oral</div><div class="oral">${n.oral}</div>
+      ${onScreen ? `<div class="label">en pantalla</div><div class="kws">${onScreen}</div>` : ""}
+      <div class="label">desarrollo oral</div><ul class="oral">${n.oral}</ul>
       <div class="label">transición</div><div class="trans">${n.trans}</div>
       <div class="label">respaldo</div><div class="src">${n.src}</div>
       <div class="next">siguiente: ${nextSlide ? `${nextSlide.dataset.title} · ${nextSlide.dataset.speaker || ""}` : "—"}</div>`;

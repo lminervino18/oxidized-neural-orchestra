@@ -12,7 +12,7 @@
     text: v("--text"), text2: v("--text-2"), muted: v("--muted"), line: v("--line"),
     lineStrong: v("--line-strong"), accent: v("--accent"), panel: v("--panel"),
     ar: v("--ar"), ps: v("--ps"), arHi: v("--ar-hi"), psHi: v("--ps-hi"), ss: v("--ss"),
-    grad: v("--grad"), param: v("--param"), ctrl: v("--ctrl"), warn: v("--warn"),
+    grad: v("--grad"), param: v("--param"), ctrl: v("--ctrl"), warn: v("--warn"), bad: v("--bad"),
   };
   const WORKER = ["#2fe38c", "#4fd8e8", "#d58cf0", "#f2e05a"];
   let svgCount = 0;
@@ -197,159 +197,6 @@
   }
 
 
-  function machines(container) {
-    const svg = svgRoot(container, 560, 640);
-    const tl = gsap.timeline();
-    const big = group(svg);
-    add(big, "rect", { x: 40, y: 70, width: 190, height: 330, rx: 6, fill: C.panel, stroke: C.muted, "stroke-width": 2, "stroke-dasharray": "8 7" });
-    for (let i = 0; i < 6; i++) add(big, "rect", { x: 66, y: 102 + i * 46, width: 138, height: 24, rx: 3, fill: "none", stroke: C.muted, "stroke-width": 1.5 });
-    label(big, 135, 440, "un equipo", { fill: C.muted });
-    label(big, 135, 470, "de gran porte", { fill: C.muted });
-
-    const small = group(svg);
-    const pos = [[340, 90], [460, 90], [340, 250], [460, 250]];
-    const net = group(small);
-    add(net, "line", { x1: 340, y1: 380, x2: 460, y2: 380, stroke: C.accent, "stroke-width": 2 });
-    const boxes = pos.map(([x, y]) => {
-      const g = group(small);
-      add(g, "rect", { x: x - 46, y, width: 92, height: 110, rx: 5, fill: C.panel, stroke: C.lineStrong, "stroke-width": 2 });
-      add(g, "rect", { x: x - 30, y: y + 22, width: 60, height: 14, rx: 2, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
-      add(g, "rect", { x: x - 30, y: y + 48, width: 60, height: 14, rx: 2, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
-      return g;
-    });
-    const links = pos.map(([x, y]) => add(net, "line", { x1: x, y1: y + 110, x2: x, y2: 380, stroke: C.accent, "stroke-width": 2 }));
-    label(small, 400, 440, "varias máquinas", { fill: C.text2 });
-    label(small, 400, 470, "modestas", { fill: C.text2 });
-    const sum = label(svg, 280, 570, "Σ cómputo · Σ memoria", { fill: C.accent, "font-size": 26 });
-
-    show(tl, big, 0.1, 0.5);
-    tl.addLabel("s0");
-    show(tl, [small, ...boxes], "s0", 0.5, { stagger: 0.08 });
-    gsap.set(net, { autoAlpha: 0 });
-    tl.addLabel("s1");
-    tl.to(net, { autoAlpha: 1, duration: 0.2 }, "s1");
-    links.forEach((l, i) => draw(tl, l, tl.duration() - 0.2 + i * 0.05, 0.5));
-    show(tl, sum, ">-0.1", 0.4);
-    tl.to(big, { opacity: 0.45, duration: 0.4 }, "<");
-    tl.addLabel("s2");
-    return controller(tl, 2);
-  }
-
-
-  function stack(container) {
-    const svg = svgRoot(container, 1000, 620);
-    const tl = gsap.timeline();
-    const algos = [["Parameter Server", C.ps], ["Ring All-Reduce", C.ar], ["Strategy-Switch", C.ss]];
-    const tops = algos.map(([name, color], i) => {
-      const g = group(svg);
-      const x = 120 + i * 290;
-      add(g, "rect", { x, y: 40, width: 260, height: 110, rx: 6, fill: C.panel, stroke: color, "stroke-width": 2.5 });
-      label(g, x + 130, 95, name, { fill: C.text, "font-size": 24 });
-      return g;
-    });
-    const layers = [
-      ["plano de control", "orchestrator"],
-      ["motor de redes neuronales", "machine_learning"],
-      ["capa de comunicación", "comms"],
-    ].map(([name, crate], i) => {
-      const g = group(svg);
-      const y = 230 + i * 120;
-      add(g, "rect", { x: 120, y, width: 840, height: 92, rx: 6, fill: "#07100b", stroke: C.lineStrong, "stroke-width": 2 });
-      label(g, 150, y + 46, name, { "text-anchor": "start", fill: C.text, "font-size": 25 });
-      label(g, 930, y + 46, crate, { "text-anchor": "end", fill: C.muted, "font-size": 21 });
-      return g;
-    });
-    const varies = label(svg, 60, 95, "varía", { fill: C.accent, "font-size": 21, transform: "rotate(-90 60 95)" });
-    const fixed = label(svg, 60, 400, "fijo", { fill: C.muted, "font-size": 21, transform: "rotate(-90 60 400)" });
-    const brace = add(svg, "path", { d: "M100,40 L88,40 L88,150 L100,150", fill: "none", stroke: C.accent, "stroke-width": 2 });
-    const brace2 = add(svg, "path", { d: "M100,230 L88,230 L88,552 L100,552", fill: "none", stroke: C.muted, "stroke-width": 2 });
-
-    show(tl, layers.slice().reverse(), 0.05, 0.4, { stagger: 0.12 });
-    show(tl, tops, 0.45, 0.4, { stagger: 0.1 });
-    show(tl, [brace2, fixed], 0.8, 0.3);
-    tl.addLabel("s0");
-    show(tl, [brace, varies], "s0", 0.4);
-    tl.addLabel("s1");
-    return controller(tl, 1);
-  }
-
-
-  function dataparallel(container) {
-    const svg = svgRoot(container, 1100, 720);
-    const tl = gsap.timeline();
-    const xs = [170, 423, 676, 929];
-
-    const ds = group(svg);
-    add(ds, "rect", { x: 70, y: 30, width: 960, height: 52, rx: 4, fill: "#0b1810", stroke: C.lineStrong, "stroke-width": 2 });
-    label(ds, 550, 56, "dataset", { fill: C.text2 });
-
-    const parts = xs.map((x, i) => {
-      const g = group(svg);
-      add(g, "rect", { x: -110, y: -18, width: 220, height: 36, rx: 3, fill: "#0b1810", stroke: WORKER[i], "stroke-width": 2 });
-      label(g, 0, 1, `partición ${i}`, { "font-size": 18, fill: C.text2 });
-      return g;
-    });
-
-    const workers = xs.map((x, i) => {
-      const g = group(svg);
-      add(g, "rect", { x: x - 105, y: 200, width: 210, height: 170, rx: 6, fill: C.panel, stroke: C.lineStrong, "stroke-width": 2 });
-      label(g, x, 228, `W${i}`, { fill: C.text, "font-size": 24 });
-      const model = group(g);
-      [0, 1, 2].forEach((k) => add(model, "rect", { x: x - 60, y: 258 + k * 26, width: 120, height: 16, rx: 2, fill: "none", stroke: C.accent, "stroke-width": 1.5 }));
-      label(g, x, 352, "θ (réplica)", { "font-size": 17, fill: C.muted });
-      return { g, model };
-    });
-
-    const grads = xs.map((x, i) => {
-      const g = group(svg, { transform: `translate(${x},420)` });
-      add(g, "circle", { r: 18, fill: C.grad, stroke: "#000", "stroke-width": 2 });
-      label(g, 0, 1, `g${i}`, { fill: "#000", "font-size": 17, "font-weight": 700 });
-      return g;
-    });
-
-    const agg = group(svg);
-    add(agg, "rect", { x: 380, y: 560, width: 340, height: 70, rx: 6, fill: "#0b1810", stroke: C.grad, "stroke-width": 2 });
-    label(agg, 550, 595, "ḡ = (1/N) Σ gᵢ", { fill: C.text, "font-size": 25 });
-    const aggNote = label(svg, 550, 660, "agregación: Parameter Server o All-Reduce", { fill: C.muted, "font-size": 18 });
-
-    const update = label(svg, 550, 470, "θ ← θ − η · ḡ   (la misma en todas las réplicas)", { fill: C.accent, "font-size": 23 });
-    const down = xs.map(() => {
-      const g = group(svg);
-      add(g, "circle", { r: 13, fill: C.grad, stroke: "#000", "stroke-width": 2 });
-      return g;
-    });
-
-    show(tl, ds, 0.05, 0.4);
-    show(tl, workers.map((w) => w.g), 0.2, 0.4, { stagger: 0.08 });
-    tl.addLabel("s0");
-
-    parts.forEach((p, i) => {
-      gsap.set(p, { autoAlpha: 0, x: 70 + 120 + i * 240, y: 56 });
-      tl.to(p, { autoAlpha: 1, duration: 0.3 }, "s0");
-      tl.to(p, { x: xs[i], y: 150 + 0, duration: 0.7, ease: "power2.inOut" }, "s0+=0.35");
-    });
-    tl.to(ds, { opacity: 0.25, duration: 0.4 }, "s0+=0.3");
-    tl.addLabel("s1");
-    gsap.set(update, { autoAlpha: 0 });
-
-    show(tl, grads, "s1", 0.35, { stagger: 0.1, scale: 1, transformOrigin: "50% 50%" });
-    tl.addLabel("s2");
-
-    grads.forEach((g, i) => {
-      tl.to(g, { x: 550 - xs[i], y: 140, scale: 0.6, duration: 0.7, ease: "power2.in" }, "s2+=" + i * 0.05);
-    });
-    show(tl, [agg, aggNote], "s2+=0.1", 0.4);
-    tl.to(grads, { autoAlpha: 0, duration: 0.2 }, "s2+=0.8");
-    tl.addLabel("s3");
-
-    down.forEach((d, i) => travel(tl, d, { x: 550, y: 560 }, { x: xs[i], y: 372 }, tl.duration() - 0.02 + i * 0.04, 0.6));
-    tl.to(workers.flatMap((w) => [...w.model.children]), { attr: { fill: "rgba(10,248,134,0.25)" }, duration: 0.35 }, ">-0.1");
-    show(tl, update, "<", 0.4);
-    tl.addLabel("s4");
-    return controller(tl, 4);
-  }
-
-
   function syncasync(container) {
     const svg = svgRoot(container, 1120, 660);
     const tl = gsap.timeline();
@@ -396,7 +243,7 @@
       barriers.push(b);
       t += 0.35;
     });
-    const idleNote = label(svg, x0 + 11.6 * unit, syncY + 1.5 * rowH, "espera", { fill: C.muted, "font-size": 19, "text-anchor": "start" });
+    const idleNote = label(svg, x0 + t * unit, syncY + 1.5 * rowH, "espera", { fill: C.muted, "font-size": 19, "text-anchor": "start" });
 
     const asyncBars = [];
     const pushes = [];
@@ -1210,7 +1057,617 @@
     return controller(tl, 2);
   }
 
-  const BUILDERS = { machines, stack, dataparallel, syncasync, arch, flatbuffer, ps, ring, dsync, sswindow, ssflow, compress, topo };
+  function starPath(cx, cy, R, r) {
+    let d = "";
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r : R;
+      d += `${i ? "L" : "M"}${(cx + rr * Math.cos(a)).toFixed(1)},${(cy + rr * Math.sin(a)).toFixed(1)}`;
+    }
+    return `${d}Z`;
+  }
+
+  function drawLinear(tl, el, at, dur) {
+    const len = lineLen(el);
+    gsap.set(el, { attr: { "stroke-dasharray": len, "stroke-dashoffset": len } });
+    tl.to(el, { attr: { "stroke-dashoffset": 0 }, duration: dur, ease: "none" }, at);
+  }
+
+  function pathOf(pts) {
+    return pts.map((p, k) => `${k ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("");
+  }
+
+  function alongPath(tl, el, pts, at, dur) {
+    const seg = pts.slice(1).map((p, k) => Math.hypot(p.x - pts[k].x, p.y - pts[k].y));
+    const total = seg.reduce((s, l) => s + l, 0) || 1;
+    tl.to(el, { keyframes: pts.slice(1).map((p, k) => ({ x: p.x, y: p.y, duration: (dur * seg[k]) / total, ease: "none" })) }, at);
+  }
+
+
+  function cost(container) {
+    const svg = svgRoot(container, 1100, 680);
+    const tl = gsap.timeline();
+
+    const cards = Array.from({ length: 12 }, (_, i) => add(svg, "rect", { x: 60, y: 548 - i * 36, width: 170, height: 26, rx: 3, fill: "#151105", stroke: C.grad, "stroke-width": 1.5 }));
+    label(svg, 145, 616, "datos", { fill: C.text2 });
+
+    function net(sizes, x0, x1, y0, y1) {
+      const g = group(svg);
+      const edges = group(g);
+      const cols = sizes.map((n, li) => {
+        const x = x0 + (li * (x1 - x0)) / (sizes.length - 1);
+        const gap = Math.min(64, (y1 - y0) / n);
+        return Array.from({ length: n }, (_, k) => ({ x, y: (y0 + y1) / 2 + (k - (n - 1) / 2) * gap }));
+      });
+      const lines = [];
+      cols.slice(0, -1).forEach((col, li) => col.forEach((a) => cols[li + 1].forEach((b) => {
+        lines.push(add(edges, "line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: C.lineStrong, "stroke-width": 1 }));
+      })));
+      const nodes = cols.flat().map((p) => add(g, "circle", { cx: p.x, cy: p.y, r: 11, fill: C.panel, stroke: C.accent, "stroke-width": 2 }));
+      return { g, lines, nodes };
+    }
+    const small = net([3, 4, 2], 420, 640, 220, 470);
+    const big = net([5, 8, 8, 8, 3], 320, 740, 110, 560);
+    label(svg, 530, 616, "parámetros", { fill: C.text2 });
+
+    const CX = 950;
+    const CY = 160;
+    const clock = group(svg);
+    add(clock, "circle", { cx: CX, cy: CY, r: 74, fill: C.panel, stroke: C.lineStrong, "stroke-width": 2 });
+    for (let k = 0; k < 12; k++) {
+      const a = (k * 30 * Math.PI) / 180;
+      add(clock, "line", { x1: CX + 62 * Math.cos(a), y1: CY + 62 * Math.sin(a), x2: CX + 70 * Math.cos(a), y2: CY + 70 * Math.sin(a), stroke: C.muted, "stroke-width": 2 });
+    }
+    const hand = add(clock, "line", { x1: CX, y1: CY, x2: CX, y2: CY - 54, stroke: C.accent, "stroke-width": 3.5, "stroke-linecap": "round" });
+    add(clock, "circle", { cx: CX, cy: CY, r: 5, fill: C.accent });
+    const days = ["día 1", "día 2", "día 3"].map((t) => label(svg, CX, CY + 104, t, { fill: C.warn, "font-size": 24 }));
+
+    const barG = group(svg);
+    label(barG, 840, 318, "entrenamiento", { "text-anchor": "start", fill: C.muted, "font-size": 18 });
+    add(barG, "rect", { x: 840, y: 334, width: 220, height: 24, rx: 3, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
+    const barFill = add(barG, "rect", { x: 843, y: 337, width: 214, height: 18, rx: 2, fill: C.accent });
+
+    const memG = group(svg);
+    label(memG, 840, 438, "memoria", { "text-anchor": "start", fill: C.muted, "font-size": 18 });
+    add(memG, "rect", { x: 840, y: 454, width: 220, height: 24, rx: 3, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
+    const memFill = add(memG, "rect", { x: 843, y: 457, width: 214, height: 18, rx: 2, fill: C.param });
+    const memOver = add(memG, "rect", { x: 1057, y: 457, width: 40, height: 18, rx: 2, fill: C.bad });
+    const memNo = label(memG, 950, 514, "no entra", { fill: C.bad, "font-size": 24 });
+
+    gsap.set(cards.slice(3), { autoAlpha: 0 });
+    gsap.set([big.g, ...days, memNo], { autoAlpha: 0 });
+    gsap.set(memOver, { autoAlpha: 0, scaleX: 0, transformOrigin: "0% 50%" });
+    gsap.set(barFill, { scaleX: 0, transformOrigin: "0% 50%" });
+    gsap.set(memFill, { scaleX: 0.25, transformOrigin: "0% 50%" });
+    gsap.set(hand, { svgOrigin: `${CX} ${CY}` });
+    gsap.set(big.nodes, { scale: 0, transformOrigin: "50% 50%" });
+    gsap.set(big.lines, { autoAlpha: 0 });
+
+    show(tl, cards.slice(0, 3), 0.05, 0.3, { stagger: 0.06 });
+    show(tl, small.g, 0.15, 0.4);
+    show(tl, [clock, barG, memG], 0.25, 0.4);
+    tl.to(barFill, { scaleX: 1, duration: 0.8, ease: "power1.inOut" }, 0.5);
+    tl.to(hand, { rotation: 60, duration: 0.8, ease: "power1.inOut" }, 0.5);
+    tl.addLabel("s0");
+
+    tl.to(cards.slice(3), { autoAlpha: 1, duration: 0.25, stagger: 0.06 }, "s0");
+    tl.to(small.g, { autoAlpha: 0, duration: 0.3 }, "s0");
+    tl.set(big.g, { autoAlpha: 1 }, "s0+=0.25");
+    tl.to(big.nodes, { scale: 1, duration: 0.3, stagger: 0.012, ease: "back.out(2)" }, "s0+=0.25");
+    tl.to(big.lines, { autoAlpha: 1, duration: 0.3, stagger: 0.003 }, "s0+=0.5");
+    tl.to(memFill, { scaleX: 0.7, duration: 0.6 }, "s0+=0.4");
+    tl.addLabel("s1");
+
+    tl.set(barFill, { scaleX: 0 }, "s1+=0.05");
+    tl.to(barFill, { scaleX: 0.16, duration: 2.6, ease: "none" }, "s1+=0.1");
+    tl.to(hand, { rotation: 60 + 360 * 3, duration: 2.6, ease: "none" }, "s1+=0.1");
+    days.forEach((d, i) => {
+      const at = `s1+=${0.1 + i * 0.87}`;
+      tl.set(d, { autoAlpha: 1 }, at);
+      if (i > 0) tl.set(days[i - 1], { autoAlpha: 0 }, at);
+    });
+    tl.addLabel("s2");
+
+    tl.to(memFill, { scaleX: 1, duration: 0.6, ease: "power2.in" }, "s2");
+    tl.to(memOver, { autoAlpha: 1, scaleX: 1, duration: 0.3 }, "s2+=0.6");
+    tl.to(memG, { x: 6, duration: 0.05, repeat: 5, yoyo: true }, "s2+=0.8");
+    tl.to(memNo, { autoAlpha: 1, duration: 0.3 }, "s2+=0.9");
+    tl.addLabel("s3");
+    return controller(tl, 3);
+  }
+
+
+  function scaleup(container) {
+    const svg = svgRoot(container, 1100, 680);
+    const tl = gsap.timeline();
+    const base = 600;
+    const cx = 420;
+    const w = 280;
+    const ceilY = 120;
+
+    const floor = add(svg, "line", { x1: 120, y1: base, x2: 980, y2: base, stroke: C.lineStrong, "stroke-width": 2 });
+    const ceil = group(svg);
+    const ceilLine = add(ceil, "line", { x1: 120, y1: ceilY, x2: 980, y2: ceilY, stroke: C.muted, "stroke-width": 2.5, "stroke-dasharray": "12 9" });
+    const ceilText = label(ceil, 980, ceilY - 26, "límite de un solo equipo", { "text-anchor": "end", fill: C.muted, "font-size": 20 });
+
+    const mach = group(svg);
+    const box = add(mach, "rect", { x: cx - w / 2, y: base - 170, width: w, height: 170, rx: 6, fill: C.panel, stroke: C.lineStrong, "stroke-width": 2.5 });
+    const slots = Array.from({ length: 9 }, (_, i) => add(mach, "rect", { x: cx - w / 2 + 28, y: base - 52 - i * 48, width: w - 56, height: 26, rx: 3, fill: "rgba(10,248,134,0.10)", stroke: C.accent, "stroke-width": 1.5 }));
+
+    const tag = group(svg);
+    gsap.set(tag, { x: 650, y: 360 });
+    add(tag, "path", { d: "M0,-44 L160,-44 L204,0 L160,44 L0,44 Z", fill: "#151105", stroke: C.grad, "stroke-width": 2.5 });
+    add(tag, "circle", { cx: 166, cy: 0, r: 8, fill: "none", stroke: C.grad, "stroke-width": 2 });
+    const prices = ["$", "$$", "$$$", "$$$$"].map((t) => label(tag, 76, 3, t, { fill: C.grad, "font-size": 38, "font-weight": 700 }));
+
+    gsap.set([...slots.slice(3), ceil, tag, ...prices], { autoAlpha: 0 });
+    show(tl, [floor, mach], 0.05, 0.4);
+    tl.to(slots.slice(0, 3), { autoAlpha: 1, duration: 0.3, stagger: 0.08 }, 0.15);
+    tl.to([tag, prices[0]], { autoAlpha: 1, duration: 0.35 }, 0.45);
+    tl.addLabel("s0");
+
+    tl.to(box, { attr: { y: base - 470, height: 470 }, duration: 1.8, ease: "power2.inOut" }, "s0");
+    slots.slice(3).forEach((s, i) => tl.to(s, { autoAlpha: 1, duration: 0.2 }, `s0+=${0.35 + i * 0.22}`));
+    prices.slice(1).forEach((p, i) => {
+      const at = `s0+=${0.45 + i * 0.5}`;
+      tl.set(prices[i], { autoAlpha: 0 }, at);
+      tl.set(p, { autoAlpha: 1 }, at);
+      tl.fromTo(tag, { scale: 1 }, { scale: 1.12 + i * 0.05, duration: 0.2, yoyo: true, repeat: 1, transformOrigin: "0% 50%" }, at);
+    });
+    tl.addLabel("s1");
+
+    tl.to(ceil, { autoAlpha: 1, duration: 0.3 }, "s1");
+    tl.to(box, { attr: { y: base - 492, height: 492 }, duration: 0.25, ease: "power2.in" }, "s1+=0.35");
+    tl.to(box, { attr: { y: base - 480, height: 480 }, duration: 0.35, ease: "bounce.out" }, ">");
+    tl.to(ceilLine, { attr: { stroke: C.bad }, duration: 0.15 }, "s1+=0.6");
+    tl.to(ceilText, { attr: { fill: C.bad }, duration: 0.15 }, "s1+=0.6");
+    tl.to(mach, { x: 5, duration: 0.05, repeat: 5, yoyo: true }, "s1+=0.6");
+    tl.addLabel("s2");
+    return controller(tl, 2);
+  }
+
+
+  function scaleout(container) {
+    const svg = svgRoot(container, 1100, 680);
+    const tl = gsap.timeline();
+    const SW = { x: 550, y: 345 };
+    const pos = [[190, 150], [420, 150], [680, 150], [910, 150], [190, 540], [420, 540], [680, 540], [910, 540]].map(([x, y]) => ({ x, y }));
+    const ends = pos.map((p) => {
+      const up = p.y < SW.y;
+      return { from: { x: p.x, y: p.y + (up ? 50 : -50) }, to: { x: SW.x + (p.x - SW.x) * 0.25, y: SW.y + (up ? -28 : 28) } };
+    });
+
+    const links = ends.map((e) => add(svg, "line", { x1: e.from.x, y1: e.from.y, x2: e.to.x, y2: e.to.y, stroke: C.accent, "stroke-width": 2 }));
+    const sw = group(svg);
+    add(sw, "rect", { x: SW.x - 110, y: SW.y - 28, width: 220, height: 56, rx: 5, fill: C.panel, stroke: C.accent, "stroke-width": 2 });
+    label(sw, SW.x, SW.y + 1, "red", { fill: C.accent, "font-size": 23 });
+
+    const machines = pos.map(() => {
+      const g = group(svg);
+      add(g, "rect", { x: -70, y: -50, width: 140, height: 100, rx: 5, fill: C.panel, stroke: C.lineStrong, "stroke-width": 2 });
+      add(g, "rect", { x: -48, y: -28, width: 96, height: 16, rx: 2, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
+      add(g, "rect", { x: -48, y: 0, width: 96, height: 16, rx: 2, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
+      gsap.set(g, { x: SW.x, y: SW.y, autoAlpha: 0 });
+      return g;
+    });
+    const one = label(svg, SW.x, SW.y + 92, "una máquina común", { fill: C.text2, "font-size": 23 });
+    const sum = label(svg, SW.x, 644, "Σ cómputo  ·  Σ memoria", { fill: C.accent, "font-size": 27 });
+
+    gsap.set([...links, sw, sum], { autoAlpha: 0 });
+    tl.to(machines[0], { autoAlpha: 1, duration: 0.4 }, 0.05);
+    show(tl, one, 0.2, 0.4);
+    tl.addLabel("s0");
+
+    tl.to(one, { autoAlpha: 0, duration: 0.2 }, "s0");
+    machines.forEach((m, i) => {
+      tl.to(m, { autoAlpha: 1, duration: 0.15 }, `s0+=${0.1 + i * 0.07}`);
+      tl.to(m, { x: pos[i].x, y: pos[i].y, duration: 0.7, ease: "back.out(1.3)" }, `s0+=${0.1 + i * 0.07}`);
+    });
+    tl.addLabel("s1");
+
+    tl.to(sw, { autoAlpha: 1, duration: 0.3 }, "s1");
+    links.forEach((l, i) => {
+      tl.set(l, { autoAlpha: 1 }, `s1+=${0.1 + i * 0.05}`);
+      draw(tl, l, tl.labels.s1 + 0.1 + i * 0.05, 0.4);
+    });
+    tl.to(sum, { autoAlpha: 1, duration: 0.4 }, "s1+=0.6");
+    tl.addLabel("s2");
+
+    const ambientFor = (step) => {
+      if (step !== 2) return null;
+      const a = gsap.timeline({ repeat: -1, repeatDelay: 0.4 });
+      a.data = [];
+      ends.forEach((e, i) => {
+        const g = gradPacket(svg, 7);
+        const p = paramPacket(svg, 12);
+        a.data.push(g, p);
+        travel(a, g, e.from, e.to, (i % 4) * 0.22 + (i >= 4 ? 0.1 : 0), 0.8);
+        travel(a, p, e.to, e.from, 1.4 + (i % 4) * 0.22, 0.8);
+      });
+      return a;
+    };
+    return controller(tl, 2, ambientFor);
+  }
+
+
+  function parallelism(container) {
+    const svg = svgRoot(container, 1100, 700);
+    const tl = gsap.timeline();
+    const MC = WORKER.slice(0, 3);
+    const lx = [120, 275, 430];
+    const rx = [705, 850, 995];
+    const MY = 460;
+
+    function panel(x, title) {
+      const g = group(svg);
+      const frame = add(g, "rect", { x, y: 10, width: 520, height: 680, rx: 8, fill: "none", stroke: C.line, "stroke-width": 2 });
+      label(g, x + 260, 52, title, { fill: C.text, "font-size": 26 });
+      return { g, frame };
+    }
+    const left = panel(15, "paralelismo de modelo");
+    const right = panel(565, "paralelismo de datos");
+
+    function machine(x, i) {
+      const g = group(svg);
+      add(g, "rect", { x: x - 60, y: MY, width: 120, height: 150, rx: 6, fill: C.panel, stroke: MC[i], "stroke-width": 2.2 });
+      label(g, x, MY + 172, `M${i}`, { fill: MC[i], "font-size": 20 });
+      return g;
+    }
+
+    const layerEdges = [0, 1].map((i) => add(svg, "line", { x1: lx[i] + 34, y1: 190, x2: lx[i + 1] - 34, y2: 190, stroke: C.accent, "stroke-width": 2, "marker-end": svg.ref("arrow-accent") }));
+    const layers = lx.map((x) => {
+      const g = group(svg);
+      add(g, "rect", { x: x - 32, y: 105, width: 64, height: 170, rx: 5, fill: "rgba(10,248,134,0.08)", stroke: C.accent, "stroke-width": 1.8 });
+      [0, 1, 2, 3].forEach((k) => add(g, "circle", { cx: x, cy: 130 + k * 40, r: 10, fill: C.panel, stroke: C.accent, "stroke-width": 1.8 }));
+      return g;
+    });
+    const netNote = label(svg, 275, 312, "una red de tres capas", { fill: C.muted, "font-size": 18 });
+    const leftMachines = lx.map((x, i) => machine(x, i));
+    const leftArrows = [0, 1].map((i) => add(svg, "line", { x1: lx[i] + 62, y1: MY + 75, x2: lx[i + 1] - 64, y2: MY + 75, stroke: C.lineStrong, "stroke-width": 2.5, "marker-end": svg.ref("arrow-line") }));
+    const leftCap = label(svg, 275, 330, "se parte la red", { fill: C.text, "font-size": 23 });
+
+    const shards = rx.map((x, i) => {
+      const g = group(svg);
+      const r = add(g, "rect", { x: 640 + i * 140, y: 120, width: 132, height: 46, rx: 3, fill: "#151105", stroke: C.grad, "stroke-width": 1.8 });
+      label(g, 640 + i * 140 + 66, 144, `datos ${i}`, { fill: C.text2, "font-size": 17 });
+      return { g, r, dx: x - (640 + i * 140 + 66) };
+    });
+    const dsNote = label(svg, 850, 200, "un dataset", { fill: C.muted, "font-size": 18 });
+    const rightMachines = rx.map((x, i) => machine(x, i));
+    const replicas = rx.map((x) => {
+      const g = group(svg);
+      [-30, 0, 30].forEach((dx) => add(g, "rect", { x: x + dx - 11, y: MY + 22, width: 22, height: 82, rx: 3, fill: "rgba(10,248,134,0.08)", stroke: C.accent, "stroke-width": 1.6 }));
+      label(g, x, MY + 128, "modelo", { fill: C.muted, "font-size": 14 });
+      return g;
+    });
+    const rightCap = label(svg, 850, 330, "se parte el dataset", { fill: C.text, "font-size": 23 });
+    const badge = group(svg);
+    add(badge, "rect", { x: 760, y: 150, width: 180, height: 64, rx: 6, fill: "rgba(10,248,134,0.14)", stroke: C.accent, "stroke-width": 2.5 });
+    label(badge, 850, 183, "O.N.O.", { fill: C.accent, "font-size": 30 });
+
+    show(tl, [left.g, right.g], 0.05, 0.35);
+    show(tl, [...layers, ...layerEdges, netNote], 0.2, 0.4, { stagger: 0.05 });
+    show(tl, [...shards.map((s) => s.g), dsNote], 0.3, 0.4, { stagger: 0.05 });
+    show(tl, [...leftMachines, ...rightMachines], 0.45, 0.4, { stagger: 0.04 });
+    gsap.set([...leftArrows, leftCap, ...replicas, rightCap, badge], { autoAlpha: 0 });
+    tl.addLabel("s0");
+
+    tl.to([...layerEdges, netNote], { autoAlpha: 0, duration: 0.25 }, "s0");
+    layers.forEach((l, i) => tl.to(l, { y: MY + 75 - 190, scale: 0.6, transformOrigin: "50% 50%", duration: 0.8, ease: "power2.inOut" }, `s0+=${0.15 + i * 0.12}`));
+    tl.to(leftArrows, { autoAlpha: 1, duration: 0.3, stagger: 0.1 }, "s0+=1");
+    tl.to(leftCap, { autoAlpha: 1, duration: 0.3 }, "s0+=1.1");
+    tl.addLabel("s1");
+
+    tl.to(dsNote, { autoAlpha: 0, duration: 0.2 }, "s1");
+    shards.forEach((s, i) => {
+      tl.to(s.r, { attr: { stroke: MC[i] }, duration: 0.25 }, `s1+=${i * 0.08}`);
+      tl.to(s.g, { x: s.dx, y: MY - 60 - 120, duration: 0.8, ease: "power2.inOut" }, `s1+=${0.2 + i * 0.1}`);
+    });
+    tl.to(replicas, { autoAlpha: 1, duration: 0.35, stagger: 0.1 }, "s1+=0.8");
+    tl.to(rightCap, { autoAlpha: 1, duration: 0.3 }, "s1+=1.1");
+    tl.addLabel("s2");
+
+    tl.to(right.frame, { attr: { stroke: C.accent }, duration: 0.35 }, "s2");
+    tl.to([left.g, ...layers, ...leftMachines, ...leftArrows, leftCap], { opacity: 0.35, duration: 0.4 }, "s2");
+    tl.fromTo(badge, { autoAlpha: 0, scale: 0.6, transformOrigin: "50% 50%" }, { autoAlpha: 1, scale: 1, duration: 0.4, ease: "back.out(2)" }, "s2+=0.2");
+    tl.addLabel("s3");
+
+    const ambientFor = (step) => {
+      if (step < 1) return null;
+      const a = gsap.timeline({ repeat: -1, repeatDelay: 0.6 });
+      a.data = [];
+      const glow = (x, i, at) => {
+        const r = add(svg, "rect", { x: x - 60, y: MY, width: 120, height: 150, rx: 6, fill: MC[i], opacity: 0 });
+        a.data.push(r);
+        a.to(r, { opacity: step === 3 && x < 550 ? 0.1 : 0.3, duration: 0.3, yoyo: true, repeat: 1 }, at);
+      };
+      lx.forEach((x, i) => {
+        glow(x, i, i * 0.95);
+        if (i < 2) {
+          const pk = gradPacket(svg, 8);
+          a.data.push(pk);
+          travel(a, pk, { x: x + 60, y: MY + 75 }, { x: lx[i + 1] - 60, y: MY + 75 }, i * 0.95 + 0.55, 0.4);
+        }
+      });
+      if (step >= 2) rx.forEach((x, i) => glow(x, i, 0));
+      return a;
+    };
+    return controller(tl, 3, ambientFor);
+  }
+
+
+  function drift(container) {
+    const svg = svgRoot(container, 1100, 700);
+    const tl = gsap.timeline();
+    const M = [{ x: 300, y: 500 }, { x: 800, y: 440 }, { x: 560, y: 200 }];
+    const G = { x: (M[0].x + M[1].x + M[2].x) / 3, y: (M[0].y + M[1].y + M[2].y) / 3 };
+    const start = { x: 120, y: 100 };
+    const ka = 0.2;
+    const kb = 0.32;
+    const K = 5;
+    const ROUNDS = 4;
+
+    const rounds = [];
+    let shared = { ...start };
+    for (let r = 0; r < ROUNDS; r++) {
+      const paths = M.map((m) => {
+        const pts = [{ ...shared }];
+        let p = { ...shared };
+        for (let k = 0; k < K; k++) {
+          p = { x: p.x - ka * (p.x - m.x), y: p.y - kb * (p.y - m.y) };
+          pts.push(p);
+        }
+        return pts;
+      });
+      const avg = { x: paths.reduce((s, p) => s + p[K].x, 0) / 3, y: paths.reduce((s, p) => s + p[K].y, 0) / 3 };
+      rounds.push({ paths, avg });
+      shared = avg;
+    }
+
+    const contours = group(svg);
+    const ratio = Math.sqrt(kb / ka);
+    [45, 90, 135, 180, 225, 270, 315].forEach((r, i) => add(contours, "ellipse", { cx: G.x, cy: G.y, rx: r * ratio, ry: r, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5, opacity: 1 - i * 0.12 }));
+    const badge = label(svg, 20, 30, "ilustrativo", { "text-anchor": "start", fill: C.warn, "font-size": 18 });
+    const star = group(svg);
+    add(star, "path", { d: starPath(G.x, G.y, 17, 7), fill: C.accent });
+    label(star, G.x + 28, G.y - 24, "mínimo global", { "text-anchor": "start", fill: C.accent, "font-size": 19 });
+
+    const minima = M.map((m, i) => {
+      const g = group(svg);
+      add(g, "path", { d: `M${m.x - 11},${m.y - 11} L${m.x + 11},${m.y + 11} M${m.x + 11},${m.y - 11} L${m.x - 11},${m.y + 11}`, stroke: WORKER[i], "stroke-width": 3.5 });
+      label(g, m.x, m.y + (i === 2 ? -30 : 32), `mínimo de los datos ${i}`, { fill: WORKER[i], "font-size": 17 });
+      return g;
+    });
+
+    const trails = rounds.map((rd, r) => rd.paths.map((pts, i) => add(svg, "path", { d: pathOf(pts), fill: "none", stroke: WORKER[i], "stroke-width": r === 0 ? 3 : 2, "stroke-linecap": "round", "stroke-linejoin": "round" })));
+    const syncs = rounds.map((rd) => rd.paths.map((pts) => add(svg, "line", { x1: pts[K].x, y1: pts[K].y, x2: rd.avg.x, y2: rd.avg.y, stroke: C.ctrl, "stroke-width": 1.8, "stroke-dasharray": "5 6" })));
+    const ends0 = rounds[0].paths.map((p) => p[K]);
+    const avg0 = rounds[0].avg;
+    const tri = add(svg, "path", { d: `${pathOf(ends0)}Z`, fill: "rgba(255,209,102,0.08)", stroke: C.warn, "stroke-width": 2, "stroke-dasharray": "8 6" });
+    const triLabel = label(svg, avg0.x, avg0.y + 6, "client drift", { fill: C.warn, "font-size": 30 });
+
+    const workers = WORKER.slice(0, 3).map((c) => {
+      const g = group(svg);
+      add(g, "circle", { r: 13, fill: c, stroke: "#000", "stroke-width": 2.5 });
+      gsap.set(g, { x: start.x, y: start.y });
+      return g;
+    });
+    const startLabel = label(svg, start.x + 34, start.y - 6, "misma réplica en los tres", { "text-anchor": "start", fill: C.text2, "font-size": 20 });
+    const avgLabel = label(svg, avg0.x, avg0.y - 34, "promedio", { fill: C.ctrl, "font-size": 21 });
+
+    function runLocal(r, at, dur) {
+      rounds[r].paths.forEach((pts, i) => {
+        tl.set(trails[r][i], { autoAlpha: 1 }, at);
+        drawLinear(tl, trails[r][i], at, dur);
+        alongPath(tl, workers[i], pts, at, dur);
+      });
+    }
+
+    show(tl, [contours, star, badge], 0.05, 0.4);
+    show(tl, [...workers, startLabel], 0.3, 0.4);
+    gsap.set([...minima, ...trails.flat(), ...syncs.flat(), tri, triLabel, avgLabel], { autoAlpha: 0 });
+    gsap.set(tri, { svgOrigin: `${avg0.x} ${avg0.y}` });
+    gsap.set(star, { svgOrigin: `${G.x} ${G.y}` });
+    tl.addLabel("s0");
+
+    tl.to(startLabel, { autoAlpha: 0, duration: 0.2 }, "s0");
+    tl.to(minima, { autoAlpha: 1, duration: 0.3, stagger: 0.12 }, "s0");
+    runLocal(0, tl.labels.s0 + 0.5, 1.8);
+    tl.to([tri, triLabel], { autoAlpha: 1, duration: 0.35 }, tl.labels.s0 + 2.3);
+    tl.addLabel("s1");
+
+    tl.to(triLabel, { autoAlpha: 0, duration: 0.2 }, "s1");
+    tl.to(syncs[0], { autoAlpha: 1, duration: 0.3 }, "s1");
+    tl.to(tri, { scale: 0, duration: 0.7, ease: "power2.in" }, "s1+=0.35");
+    workers.forEach((wk) => tl.to(wk, { x: avg0.x, y: avg0.y, duration: 0.7, ease: "power2.in" }, "s1+=0.35"));
+    tl.to(avgLabel, { autoAlpha: 1, duration: 0.3 }, "s1+=1");
+    tl.addLabel("s2");
+
+    tl.to([avgLabel, ...syncs[0]], { autoAlpha: 0, duration: 0.2 }, "s2");
+    tl.to(trails[0], { opacity: 0.25, duration: 0.3 }, "s2");
+    let at = tl.labels.s2 + 0.3;
+    for (let r = 1; r < ROUNDS; r++) {
+      runLocal(r, at, 0.75);
+      at += 0.8;
+      tl.to(syncs[r], { autoAlpha: 1, duration: 0.15 }, at);
+      workers.forEach((wk) => tl.to(wk, { x: rounds[r].avg.x, y: rounds[r].avg.y, duration: 0.35, ease: "power2.in" }, at + 0.1));
+      tl.to(syncs[r], { autoAlpha: 0, duration: 0.2 }, at + 0.5);
+      tl.to(trails[r], { opacity: 0.25, duration: 0.2 }, at + 0.5);
+      at += 0.6;
+    }
+    tl.fromTo(star, { scale: 1 }, { scale: 1.4, duration: 0.3, yoyo: true, repeat: 1 }, at);
+    tl.addLabel("s3");
+    return controller(tl, 3);
+  }
+
+
+  function alternatives(container) {
+    const svg = svgRoot(container, 1680, 620);
+    const tl = gsap.timeline();
+    const specs = [
+      { name: "Parameter Server", kw: "servidor central", color: C.ps },
+      { name: "All-Reduce", kw: "anillo, sin centro", color: C.ar },
+      { name: "PS asincrónico", kw: "nadie espera", color: C.psHi },
+      { name: "Strategy-Switch", kw: "AR → PS asincrónico", color: C.ss },
+    ];
+
+    function starTopo(g, cx, cy, color, s, dashed) {
+      const S = { x: cx, y: cy - 95 * s };
+      const W = [-115, 0, 115].map((dx) => ({ x: cx + dx * s, y: cy + 85 * s }));
+      const r = 26 * s;
+      W.forEach((w) => add(g, "line", { x1: w.x, y1: w.y - r, x2: S.x, y2: S.y + 28 * s, stroke: C.lineStrong, "stroke-width": 2, ...(dashed ? { "stroke-dasharray": "6 6" } : {}) }));
+      add(g, "rect", { x: S.x - 40 * s, y: S.y - 28 * s, width: 80 * s, height: 56 * s, rx: 4, fill: C.panel, stroke: color, "stroke-width": 2.5 });
+      if (s === 1) label(g, S.x, S.y + 1, "S", { fill: C.text, "font-size": 22 });
+      W.forEach((w, k) => {
+        add(g, "circle", { cx: w.x, cy: w.y, r, fill: C.panel, stroke: C.ar, "stroke-width": 2 });
+        if (s === 1) label(g, w.x, w.y + 1, `W${k}`, { fill: C.text2, "font-size": 17 });
+      });
+      return { s, S: { x: S.x, y: S.y + 28 * s }, W: W.map((w) => ({ x: w.x, y: w.y - r })) };
+    }
+
+    function ringTopo(g, cx, cy, R, r) {
+      const angs = [-90, 0, 90, 180];
+      angs.forEach((a) => add(g, "path", { d: arcPath(cx, cy, R, a + 18, a + 72), fill: "none", stroke: C.lineStrong, "stroke-width": 2, "marker-end": svg.ref("arrow-line") }));
+      angs.forEach((a, k) => {
+        const p = { x: cx + R * Math.cos((a * Math.PI) / 180), y: cy + R * Math.sin((a * Math.PI) / 180) };
+        add(g, "circle", { cx: p.x, cy: p.y, r, fill: C.panel, stroke: C.ar, "stroke-width": 2 });
+        if (r > 20) label(g, p.x, p.y + 1, `W${k}`, { fill: C.text2, "font-size": 17 });
+      });
+      return { cx, cy, R, angs, s: r / 26 };
+    }
+
+    const cards = specs.map((c, i) => {
+      const x0 = 10 + i * 420;
+      const cx = x0 + 200;
+      const cy = 270;
+      const g = group(svg);
+      add(g, "rect", { x: x0, y: 10, width: 400, height: 520, rx: 8, fill: C.panel, stroke: c.color, "stroke-width": 2.2 });
+      label(g, cx, 62, c.name, { fill: C.text, "font-size": 27 });
+      label(g, cx, 482, c.kw, { fill: c.color, "font-size": 23 });
+      return { g, cx, cy };
+    });
+    const topo = [
+      starTopo(cards[0].g, cards[0].cx, cards[0].cy, C.ps, 1, false),
+      ringTopo(cards[1].g, cards[1].cx, cards[1].cy, 105, 26),
+      starTopo(cards[2].g, cards[2].cx, cards[2].cy, C.psHi, 1, true),
+    ];
+    const ssRing = ringTopo(cards[3].g, cards[3].cx - 95, cards[3].cy, 60, 15);
+    add(cards[3].g, "line", { x1: cards[3].cx - 18, y1: cards[3].cy, x2: cards[3].cx + 22, y2: cards[3].cy, stroke: C.ss, "stroke-width": 2.5, "marker-end": svg.ref("arrow-line") });
+    const ssStar = starTopo(cards[3].g, cards[3].cx + 105, cards[3].cy, C.ps, 0.5, true);
+
+    const banner = group(svg);
+    add(banner, "rect", { x: 10, y: 556, width: 1660, height: 58, rx: 6, fill: "rgba(10,248,134,0.10)", stroke: C.accent, "stroke-width": 2 });
+    label(banner, 840, 586, "O.N.O.: las cuatro, sobre la misma base, para compararlas", { fill: C.accent, "font-size": 27 });
+
+    gsap.set(cards.map((c) => c.g), { autoAlpha: 0, y: 24 });
+    gsap.set(banner, { autoAlpha: 0 });
+    tl.to(cards[0].g, { autoAlpha: 1, y: 0, duration: 0.45, ease: "power2.out" }, 0.05);
+    tl.addLabel("s0");
+    for (let i = 1; i < 4; i++) {
+      tl.to(cards[i].g, { autoAlpha: 1, y: 0, duration: 0.45, ease: "power2.out" }, `s${i - 1}`);
+      tl.addLabel(`s${i}`);
+    }
+    tl.fromTo(banner, { autoAlpha: 0, scaleX: 0.9, transformOrigin: "50% 50%" }, { autoAlpha: 1, scaleX: 1, duration: 0.45, ease: "power2.out" }, "s3");
+    tl.addLabel("s4");
+
+    function starLoop(a, t, async, t0) {
+      t.W.forEach((w, k) => {
+        const g = gradPacket(svg, 7 * Math.max(t.s, 0.7));
+        const p = paramPacket(svg, 12 * Math.max(t.s, 0.7));
+        a.data.push(g, p);
+        const off = async ? [0, 0.75, 1.35][k] : 0;
+        travel(a, g, w, t.S, t0 + off, 0.65);
+        travel(a, p, t.S, w, t0 + (async ? off + 0.8 : 1.25), 0.65);
+      });
+    }
+
+    function ringLoop(a, t, hops, t0) {
+      for (let hop = 0; hop < hops; hop++) {
+        t.angs.forEach((_, k) => {
+          const pk = gradPacket(svg, 7 * Math.max(t.s, 0.7));
+          a.data.push(pk);
+          const a0 = t.angs[(k + hop) % 4];
+          travelPath(a, pk, arcPoints(t.cx, t.cy, t.R, a0 + 18, a0 + 72, 8), t0 + hop * 0.72, 0.62);
+        });
+      }
+    }
+
+    const ambientFor = (step) => {
+      const a = gsap.timeline({ repeat: -1, repeatDelay: 0.3 });
+      a.data = [];
+      starLoop(a, topo[0], false, 0);
+      if (step >= 1) ringLoop(a, topo[1], 3, 0);
+      if (step >= 2) starLoop(a, topo[2], true, 0);
+      if (step >= 3) {
+        ringLoop(a, ssRing, 2, 0);
+        starLoop(a, ssStar, true, 1.5);
+      }
+      return a;
+    };
+    return controller(tl, 4, ambientFor);
+  }
+
+
+  function testbed(container) {
+    const svg = svgRoot(container, 1100, 660);
+    const tl = gsap.timeline();
+    const busY = 480;
+    const host = group(svg);
+    add(host, "rect", { x: 30, y: 40, width: 1040, height: 520, rx: 10, fill: "none", stroke: C.lineStrong, "stroke-width": 2, "stroke-dasharray": "10 8" });
+    label(host, 60, 74, "una máquina física", { "text-anchor": "start", fill: C.muted, "font-size": 20 });
+    const bus = add(svg, "line", { x1: 70, y1: busY, x2: 1030, y2: busY, stroke: C.accent, "stroke-width": 3 });
+    const busLabel = label(svg, 1030, busY + 32, "red bridge entre contenedores", { "text-anchor": "end", fill: C.muted, "font-size": 18 });
+
+    const nodes = Array.from({ length: 16 }, (_, i) => {
+      const row = i < 8 ? 0 : 1;
+      const x = 105 + (i % 8) * 120 + row * 60;
+      const y = row ? 280 : 120;
+      const pipe = add(svg, "line", { x1: x, y1: y + 100, x2: x, y2: busY, stroke: C.lineStrong, "stroke-width": 7 });
+      const g = group(svg);
+      add(g, "rect", { x: x - 48, y, width: 96, height: 100, rx: 5, fill: C.panel, stroke: C.ar, "stroke-width": 2 });
+      label(g, x, y + 36, "node", { fill: C.text2, "font-size": 18 });
+      label(g, x, y + 68, "1 núcleo", { fill: C.muted, "font-size": 14 });
+      return { g, pipe, x, y };
+    });
+    const counts = [2, 4, 6, 8, 12, 16];
+    const ctr = counts.map((n) => label(svg, 1040, 74, `${n} workers`, { "text-anchor": "end", fill: C.accent, "font-size": 28 }));
+    const limit = label(svg, 550, 612, "salida limitada a 10 Mbps por contenedor (Pumba)", { fill: C.warn, "font-size": 22 });
+
+    show(tl, [host, bus, busLabel], 0.05, 0.4);
+    gsap.set([...nodes.flatMap((n) => [n.g, n.pipe]), ...ctr, limit], { autoAlpha: 0 });
+    tl.to(nodes.slice(0, 2).flatMap((n) => [n.pipe, n.g]), { autoAlpha: 1, duration: 0.35, stagger: 0.06 }, 0.3);
+    tl.to(ctr[0], { autoAlpha: 1, duration: 0.3 }, 0.3);
+    tl.addLabel("s0");
+
+    counts.slice(1).forEach((n, j) => {
+      const at = `s0+=${0.05 + j * 0.5}`;
+      const fresh = nodes.slice(counts[j], n);
+      tl.to(fresh.flatMap((nd) => [nd.pipe, nd.g]), { autoAlpha: 1, duration: 0.25, stagger: 0.03 }, at);
+      tl.set(ctr[j], { autoAlpha: 0 }, at);
+      tl.set(ctr[j + 1], { autoAlpha: 1 }, at);
+    });
+    tl.addLabel("s1");
+
+    tl.to(nodes.map((n) => n.pipe), { attr: { "stroke-width": 2, stroke: C.warn }, duration: 0.6, stagger: 0.02 }, "s1");
+    tl.to(limit, { autoAlpha: 1, duration: 0.35 }, "s1+=0.4");
+    tl.addLabel("s2");
+
+    const ambientFor = (step) => {
+      if (step !== 2) return null;
+      const a = gsap.timeline({ repeat: -1, repeatDelay: 0.2 });
+      a.data = [];
+      [0, 3, 5, 9, 12, 14].forEach((k, j) => {
+        const n = nodes[k];
+        const g = gradPacket(svg, 7);
+        a.data.push(g);
+        travel(a, g, { x: n.x, y: n.y + 100 }, { x: n.x, y: busY }, j * 0.35, 1.8);
+      });
+      return a;
+    };
+    return controller(tl, 2, ambientFor);
+  }
+
+  const BUILDERS = { syncasync, arch, flatbuffer, ps, ring, dsync, sswindow, ssflow, compress, topo, cost, scaleup, scaleout, parallelism, drift, alternatives, testbed };
 
   window.ONO_DIAGRAMS = {
     build(container) {
