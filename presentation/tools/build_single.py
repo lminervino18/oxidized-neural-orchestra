@@ -3,7 +3,7 @@
 Usage (from presentation/):
     python3 tools/build_single.py
 
-Inlines the stylesheet (fonts as data URIs), scripts and images, so the
+Inlines the stylesheet (fonts as data URIs), scripts, images and favicon, so the
 result is a single file that opens offline with a double click.
 """
 
@@ -35,15 +35,15 @@ def inline_script(match):
     return "<script>\n" + js.replace("</script", "<\\/script") + "\n</script>"
 
 
-def inline_img(match):
-    return f'src="{data_uri(ROOT / match.group(1))}"'
+def inline_asset(match):
+    return f'{match.group(1)}="{data_uri(ROOT / match.group(2))}"'
 
 
 def main():
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     html = re.sub(r'<link rel="stylesheet" href="([^"]+)">', inline_css, html)
     html = re.sub(r'<script src="([^"]+)"></script>', inline_script, html)
-    html = re.sub(r'src="(assets/[^"]+)"', inline_img, html)
+    html = re.sub(r'(src|href)="(assets/[^"]+)"', inline_asset, html)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text(html, encoding="utf-8")
     print(f"{OUT}: {OUT.stat().st_size / 1024 / 1024:.1f} MB")
