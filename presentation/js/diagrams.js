@@ -1667,7 +1667,305 @@
     return controller(tl, 2, ambientFor);
   }
 
-  const BUILDERS = { syncasync, arch, flatbuffer, ps, ring, dsync, sswindow, ssflow, compress, topo, cost, scaleup, scaleout, parallelism, drift, alternatives, testbed };
+  function tcost(container) {
+    const svg = svgRoot(container, 1100, 600);
+    const tl = gsap.timeline();
+    const X0 = 190, W = 170, SYNC = 80, INIT = 60, H = 44;
+    const lanes = [200, 270, 340, 410];
+    const dim = C.lineStrong;
+
+    const formula = add(svg, "text", { x: 550, y: 66, "text-anchor": "middle", "dominant-baseline": "middle", "font-size": 36, fill: C.text });
+    const term = (parts) => {
+      const t = add(formula, "tspan");
+      for (const [str, kind] of parts) {
+        const s = add(t, "tspan", kind === "sub" ? { "baseline-shift": "sub", "font-size": "0.62em" } : {});
+        s.textContent = str;
+      }
+      return t;
+    };
+    term([["T"], ["total", "sub"], [" = "]]);
+    const epochsT = term([["N"], ["epochs", "sub"], [" · ("]]);
+    const splitT = term([["T"], ["epoch", "sub"], ["/N"], ["W", "sub"]]);
+    const syncT = term([[" + d"], ["sync", "sub"]]);
+    const closeT = term([[")"]]);
+    const initT = term([[" + d"], ["init", "sub"]]);
+    gsap.set([epochsT, splitT, syncT, closeT, initT], { fill: dim });
+
+    const machine = label(svg, X0 - 24, 300, "1 máquina", { "text-anchor": "end", fill: C.text2, "font-size": 20 });
+    const laneLabels = lanes.map((y, k) => label(svg, X0 - 24, y, `W${k + 1}`, { "text-anchor": "end", fill: WORKER[k], "font-size": 20 }));
+
+    const round = group(svg);
+    const segs = lanes.map((_, k) => add(round, "rect", { x: X0 + k * W, y: 300 - H / 2, width: W, height: H, rx: 3, fill: C.accent, stroke: "#000", "stroke-width": 2 }));
+    const epochLabel = richLabel(svg, X0 + 2 * W, 300 - H, [["T"], ["epoch", "sub"]], { fill: C.accent, "font-size": 26 });
+    const splitLabel = richLabel(round, X0 + W / 2, 158, [["T"], ["epoch", "sub"], ["/N"], ["W", "sub"]], { fill: C.accent, "font-size": 22 });
+    const barrier = add(round, "line", { x1: X0 + W, y1: 170, x2: X0 + W, y2: 440, stroke: C.warn, "stroke-width": 2, "stroke-dasharray": "6 6" });
+    const syncs = lanes.map((y) => add(round, "rect", { x: X0 + W, y: y - H / 2, width: SYNC, height: H, rx: 3, fill: svg.ref("hatch"), stroke: C.warn, "stroke-width": 2 }));
+    const syncLabel = richLabel(round, X0 + W + SYNC / 2, 158, [["d"], ["sync", "sub"]], { fill: C.warn, "font-size": 22 });
+
+    const init = add(svg, "rect", { x: X0, y: lanes[0] - H / 2, width: INIT - 8, height: lanes[3] - lanes[0] + H, rx: 3, fill: C.panel, stroke: C.muted, "stroke-width": 2 });
+    const initLabel = richLabel(svg, X0 + (INIT - 8) / 2, 158, [["d"], ["init", "sub"]], { fill: C.text2, "font-size": 22 });
+    const ghosts = [1, 2].map((r) => {
+      const g = group(svg);
+      const x = X0 + INIT + r * (W + SYNC);
+      lanes.forEach((y) => {
+        add(g, "rect", { x, y: y - H / 2, width: W, height: H, rx: 3, fill: C.accent, opacity: 0.75 });
+        add(g, "rect", { x: x + W, y: y - H / 2, width: SYNC, height: H, rx: 3, fill: svg.ref("hatch"), stroke: C.warn, "stroke-width": 2 });
+      });
+      return g;
+    });
+    const epochs = [0, 1, 2].map((r) => label(svg, X0 + INIT + r * (W + SYNC) + (W + SYNC) / 2, 464, `época ${r + 1}`, { fill: C.muted, "font-size": 18 }));
+    const totalEnd = X0 + INIT + 3 * (W + SYNC);
+    const totalLine = add(svg, "line", { x1: X0, y1: 510, x2: totalEnd, y2: 510, stroke: C.text2, "stroke-width": 2, "marker-end": svg.ref("arrow-line") });
+    const totalLabel = richLabel(svg, (X0 + totalEnd) / 2, 548, [["T"], ["total", "sub"]], { fill: C.text, "font-size": 24 });
+
+    show(tl, formula, 0.05, 0.4);
+    gsap.set(segs, { scaleX: 0, transformOrigin: "0% 50%" });
+    gsap.set([...laneLabels, splitLabel, barrier, ...syncs, syncLabel, init, initLabel, ...ghosts, ...epochs, totalLine, totalLabel], { autoAlpha: 0 });
+    show(tl, [machine, epochLabel], 0.2, 0.35);
+    tl.to(segs, { scaleX: 1, duration: 0.22, stagger: 0.22, ease: "none" }, 0.3);
+    tl.addLabel("s0");
+
+    tl.to([machine, epochLabel], { autoAlpha: 0, duration: 0.25 }, "s0");
+    segs.forEach((s, k) => tl.to(s, { attr: { x: X0, y: lanes[k] - H / 2 }, duration: 0.7, ease: "power2.inOut" }, `s0+=${0.1 + k * 0.08}`));
+    tl.to(laneLabels, { autoAlpha: 1, duration: 0.3, stagger: 0.05 }, "s0+=0.5");
+    tl.to(splitLabel, { autoAlpha: 1, duration: 0.3 }, "s0+=0.8");
+    tl.to(splitT, { fill: C.accent, duration: 0.4 }, "s0+=0.8");
+    tl.addLabel("s1");
+
+    tl.set(barrier, { autoAlpha: 1 }, "s1");
+    draw(tl, barrier, "s1", 0.4);
+    gsap.set(syncs, { scaleX: 0, transformOrigin: "0% 50%" });
+    tl.set(syncs, { autoAlpha: 1 }, "s1+=0.3");
+    tl.to(syncs, { scaleX: 1, duration: 0.5, stagger: 0.05, ease: "power1.out" }, "s1+=0.3");
+    tl.to(syncLabel, { autoAlpha: 1, duration: 0.3 }, "s1+=0.6");
+    tl.to(syncT, { fill: C.warn, duration: 0.4 }, "s1+=0.6");
+    tl.addLabel("s2");
+
+    tl.to(round, { x: INIT, duration: 0.5, ease: "power2.inOut" }, "s2");
+    gsap.set(init, { scaleY: 0, transformOrigin: "50% 50%" });
+    tl.set(init, { autoAlpha: 1 }, "s2+=0.35");
+    tl.to(init, { scaleY: 1, duration: 0.35 }, "s2+=0.35");
+    tl.to(initLabel, { autoAlpha: 1, duration: 0.3 }, "s2+=0.5");
+    tl.to(initT, { fill: C.text2, duration: 0.4 }, "s2+=0.5");
+    ghosts.forEach((g, k) => tl.fromTo(g, { autoAlpha: 0, x: -30 }, { autoAlpha: 1, x: 0, duration: 0.4, immediateRender: false }, `s2+=${0.8 + k * 0.35}`));
+    tl.to(epochs, { autoAlpha: 1, duration: 0.3, stagger: 0.2 }, "s2+=0.8");
+    tl.to([epochsT, closeT], { fill: C.text, duration: 0.4 }, "s2+=1.3");
+    tl.set(totalLine, { autoAlpha: 1 }, "s2+=1.4");
+    draw(tl, totalLine, "s2+=1.4", 0.6);
+    tl.to(totalLabel, { autoAlpha: 1, duration: 0.3 }, "s2+=1.8");
+    tl.addLabel("s3");
+    return controller(tl, 3);
+  }
+
+
+  function dsyncwhy(container) {
+    const svg = svgRoot(container, 1100, 640);
+    const tl = gsap.timeline();
+    const N = 4;
+
+    add(svg, "line", { x1: 550, y1: 30, x2: 550, y2: 610, stroke: C.line, "stroke-width": 1.5 });
+    const psTitle = label(svg, 275, 34, "Parameter Server · 1 servidor", { fill: C.text2, "font-size": 21 });
+    const arTitle = label(svg, 825, 34, "Ring All-Reduce", { fill: C.text2, "font-size": 21 });
+
+    const psG = group(svg);
+    const nic = { x: 275, y: 176 };
+    const wk = [0, 1, 2, 3].map((k) => ({ x: 275 + (k - 1.5) * 116, y: 420 }));
+    wk.forEach((w) => add(psG, "line", { x1: w.x, y1: w.y - 28, x2: nic.x, y2: nic.y + 12, stroke: C.lineStrong, "stroke-width": 1.5 }));
+    add(psG, "rect", { x: 185, y: 86, width: 180, height: 64, rx: 6, fill: C.panel, stroke: C.ps, "stroke-width": 2.5 });
+    label(psG, 275, 118, "servidor", { fill: C.text, "font-size": 21 });
+    const nicBox = add(psG, "rect", { x: nic.x - 34, y: nic.y - 12, width: 68, height: 24, rx: 4, fill: "#1d1a08", stroke: C.warn, "stroke-width": 2 });
+    label(psG, nic.x + 46, nic.y, "una placa · R", { "text-anchor": "start", fill: C.muted, "font-size": 17 });
+    wk.forEach((w, k) => {
+      add(psG, "rect", { x: w.x - 40, y: w.y - 28, width: 80, height: 56, rx: 6, fill: C.panel, stroke: WORKER[k], "stroke-width": 2 });
+      label(psG, w.x, w.y, `W${k + 1}`, { fill: C.text, "font-size": 20 });
+    });
+
+    const arG = group(svg);
+    const RC = { x: 825, y: 270 }, RR = 140;
+    const ang = [-90, 0, 90, 180];
+    const pos = ang.map((a) => ({ x: RC.x + RR * Math.cos((a * Math.PI) / 180), y: RC.y + RR * Math.sin((a * Math.PI) / 180) }));
+    add(arG, "circle", { cx: RC.x, cy: RC.y, r: RR, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
+    pos.forEach((p, k) => {
+      add(arG, "circle", { cx: p.x, cy: p.y, r: 32, fill: C.panel, stroke: WORKER[k], "stroke-width": 2 });
+      label(arG, p.x, p.y, `W${k + 1}`, { fill: C.text, "font-size": 20 });
+    });
+
+    const psCount = Array.from({ length: 2 * N }, (_, k) => label(svg, 275, 510, `${k + 1} × S/R`, { fill: C.warn, "font-size": 26 }));
+    const psFormula = richLabel(svg, 275, 568, [["d"], ["sync", "sub"], [" = 2 · N"], ["W", "sub"], [" · S/R"]], { fill: C.text, "font-size": 28 });
+    const arCount = Array.from({ length: 2 * (N - 1) }, (_, k) => label(svg, 825, 510, `${k + 1} × S/(4R)`, { fill: C.ar, "font-size": 26 }));
+    const arFormula = richLabel(svg, 825, 568, [["d"], ["sync", "sub"], [" = 2(1 − 1/N"], ["W", "sub"], [") · S/R"]], { fill: C.text, "font-size": 28 });
+    const arBound = label(svg, 825, 610, "nunca supera 2S/R", { fill: C.accent, "font-size": 20 });
+
+    show(tl, [psTitle, psG, arTitle, arG], 0.05, 0.4, { stagger: 0.08 });
+    gsap.set([...psCount, psFormula, ...arCount, arFormula, arBound], { autoAlpha: 0 });
+    tl.addLabel("s0");
+
+    const T1 = tl.duration();
+    const slots = [0, 1, 2, 3].map((k) => ({ x: nic.x, y: nic.y + 42 + k * 30 }));
+    const ups = wk.map((w, k) => {
+      const g = gradPacket(svg, 11);
+      add(g, "circle", { r: 5, fill: WORKER[k] });
+      gsap.set(g, { autoAlpha: 0, x: w.x, y: w.y - 34 });
+      tl.set(g, { autoAlpha: 1, x: w.x, y: w.y - 34 }, T1 + 0.05);
+      tl.to(g, { x: slots[k].x, y: slots[k].y, duration: 0.6, ease: "power1.inOut" }, T1 + 0.05);
+      return g;
+    });
+    const tick = (labels, i, at) => {
+      tl.set(labels[i], { autoAlpha: 1 }, at);
+      if (i > 0) tl.set(labels[i - 1], { autoAlpha: 0 }, at);
+    };
+    ups.forEach((g, i) => {
+      const at = T1 + 0.85 + i * 0.4;
+      tl.to(g, { y: 118, duration: 0.3, ease: "power1.in" }, at);
+      tl.set(g, { autoAlpha: 0 }, at + 0.32);
+      ups.slice(i + 1).forEach((h, j) => tl.to(h, { y: slots[j].y, duration: 0.25 }, at + 0.05));
+      tick(psCount, i, at + 0.15);
+      tl.to(nicBox, { attr: { fill: C.warn }, duration: 0.1, yoyo: true, repeat: 1 }, at + 0.1);
+    });
+    const T2 = T1 + 0.85 + N * 0.4 + 0.1;
+    wk.forEach((w, i) => {
+      const at = T2 + i * 0.4;
+      const p = paramPacket(svg, 18);
+      travelPath(tl, p, [{ x: 275, y: 118 }, nic, { x: w.x, y: w.y - 34 }], at, 0.55);
+      tick(psCount, N + i, at + 0.15);
+      tl.to(nicBox, { attr: { fill: C.warn }, duration: 0.1, yoyo: true, repeat: 1 }, at + 0.1);
+    });
+    tl.to(psFormula, { autoAlpha: 1, duration: 0.4 }, T2 + N * 0.4 + 0.4);
+    tl.addLabel("s1");
+
+    const T3 = tl.duration();
+    for (let hop = 0; hop < 2 * (N - 1); hop++) {
+      const at = T3 + 0.1 + hop * 0.55;
+      ang.forEach((a) => {
+        const pkt = hop < N - 1 ? gradPacket(svg, 8) : paramPacket(svg, 14);
+        travelPath(tl, pkt, arcPoints(RC.x, RC.y, RR, a, a + 90, 8), at, 0.45);
+      });
+      tick(arCount, hop, at + 0.3);
+    }
+    const T4 = T3 + 0.1 + 2 * (N - 1) * 0.55;
+    tl.to(arFormula, { autoAlpha: 1, duration: 0.4 }, T4 + 0.2);
+    tl.to(arBound, { autoAlpha: 1, duration: 0.4 }, T4 + 0.5);
+    tl.addLabel("s2");
+    return controller(tl, 2);
+  }
+
+
+  function im2col(container) {
+    const svg = svgRoot(container, 1100, 660);
+    const tl = gsap.timeline();
+    const IN = 60, CELL = 44;
+    const IX = 60, IY = 150, KX = 60, KY = 440;
+    const BX = 720, BY = 120, AX = 304, RY = 556, OX = 950, OY = 534;
+
+    const cell = (parent, x, y, s, stroke, text, size) => {
+      add(parent, "rect", { x, y, width: s, height: s, fill: C.panel, stroke, "stroke-width": 1.5 });
+      return text ? label(parent, x + s / 2, y + s / 2, text, { fill: C.text2, "font-size": size }) : null;
+    };
+    const center = (x, y, s) => ({ x: x + s / 2, y: y + s / 2 });
+
+    const input = group(svg);
+    label(input, IX, IY - 26, "entrada 4×4", { "text-anchor": "start", fill: C.muted, "font-size": 19 });
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) cell(input, IX + c * IN, IY + r * IN, IN, C.lineStrong, String(r * 4 + c + 1), 24);
+
+    const kernel = group(svg);
+    label(kernel, KX, KY - 26, "kernel 3×3", { "text-anchor": "start", fill: C.muted, "font-size": 19 });
+    const kCells = [];
+    for (let i = 0; i < 9; i++) {
+      const x = KX + (i % 3) * IN, y = KY + Math.floor(i / 3) * IN;
+      add(kernel, "rect", { x, y, width: IN, height: IN, fill: C.panel, stroke: C.param, "stroke-width": 1.5 });
+      richLabel(kernel, x + IN / 2, y + IN / 2, [["w"], [String(i + 1), "sub"]], { fill: C.param, "font-size": 22 });
+      kCells.push(center(x, y, IN));
+    }
+
+    const fft = group(svg);
+    add(fft, "rect", { x: 390, y: 20, width: 240, height: 56, rx: 6, fill: C.panel, stroke: C.muted, "stroke-width": 1.5 });
+    label(fft, 510, 48, "1º intento: FFT", { fill: C.text2, "font-size": 21 });
+    const strike = add(svg, "line", { x1: 402, y1: 48, x2: 618, y2: 48, stroke: C.bad, "stroke-width": 4 });
+    const fftNo = label(svg, 510, 104, "más overhead que ganancia", { fill: C.bad, "font-size": 19 });
+
+    const colG = group(svg);
+    label(colG, BX + 2 * CELL, BY - 22, "im2col · 9 × 4", { fill: C.muted, "font-size": 19 });
+    const colVals = [];
+    for (let p = 0; p < 4; p++) {
+      const r0 = p >> 1, c0 = p & 1;
+      colVals.push(Array.from({ length: 9 }, (_, i) => {
+        const r = r0 + Math.floor(i / 3), c = c0 + (i % 3);
+        const text = String(r * 4 + c + 1);
+        add(colG, "rect", { x: BX + p * CELL, y: BY + i * CELL, width: CELL, height: CELL, fill: C.panel, stroke: C.line, "stroke-width": 1.5 });
+        const t = label(colG, BX + p * CELL + CELL / 2, BY + i * CELL + CELL / 2, text, { fill: C.text2, "font-size": 18 });
+        return { t, text, from: center(IX + c * IN, IY + r * IN, IN), to: { x: BX + p * CELL + CELL / 2, y: BY + i * CELL + CELL / 2 } };
+      }));
+    }
+    const win = add(svg, "rect", { x: IX, y: IY, width: 3 * IN, height: 3 * IN, rx: 4, fill: "none", stroke: C.accent, "stroke-width": 4 });
+
+    const rowG = group(svg);
+    for (let i = 0; i < 9; i++) cell(rowG, AX + i * CELL, RY, CELL, C.param);
+    const rowVals = Array.from({ length: 9 }, (_, i) => richLabel(svg, AX + i * CELL + CELL / 2, RY + CELL / 2, [["w"], [String(i + 1), "sub"]], { fill: C.param, "font-size": 18 }));
+    const rowCap = label(svg, AX + 4.5 * CELL, RY + CELL + 30, "kernel como fila 1×9", { fill: C.muted, "font-size": 18 });
+    const colHi = add(svg, "rect", { x: BX, y: BY, width: CELL, height: 9 * CELL, fill: "none", stroke: C.accent, "stroke-width": 3 });
+    const rowHi = add(svg, "rect", { x: AX, y: RY, width: 9 * CELL, height: CELL, fill: "none", stroke: C.accent, "stroke-width": 3 });
+    const res = [0, 1, 2, 3].map((j) => {
+      const g = group(svg);
+      add(g, "rect", { x: BX + j * CELL, y: RY, width: CELL, height: CELL, fill: "#0f2219", stroke: C.accent, "stroke-width": 1.5 });
+      richLabel(g, BX + j * CELL + CELL / 2, RY + CELL / 2, [["y"], [String(j + 1), "sub"]], { fill: C.accent, "font-size": 18 });
+      return g;
+    });
+    const out = group(svg);
+    label(out, OX + CELL, OY - 20, "salida 2×2", { fill: C.muted, "font-size": 18 });
+    [0, 1, 2, 3].forEach((j) => {
+      const x = OX + (j & 1) * CELL, y = OY + (j >> 1) * CELL;
+      add(out, "rect", { x, y, width: CELL, height: CELL, fill: "#0f2219", stroke: C.accent, "stroke-width": 1.5 });
+      richLabel(out, x + CELL / 2, y + CELL / 2, [["y"], [String(j + 1), "sub"]], { fill: C.accent, "font-size": 18 });
+    });
+
+    show(tl, [input, kernel], 0.05, 0.4, { stagger: 0.1 });
+    show(tl, fft, 0.3, 0.4);
+    gsap.set([strike, fftNo, colG, win, rowG, ...rowVals, rowCap, colHi, rowHi, ...res, out], { autoAlpha: 0 });
+    gsap.set(colVals.flat().map((cv) => cv.t), { autoAlpha: 0 });
+    tl.addLabel("s0");
+
+    tl.set(strike, { autoAlpha: 1 }, "s0");
+    draw(tl, strike, "s0", 0.4);
+    tl.to(fftNo, { autoAlpha: 1, duration: 0.3 }, "s0+=0.35");
+    tl.to(fft, { autoAlpha: 0.45, duration: 0.3 }, "s0+=0.35");
+    tl.addLabel("s1");
+
+    const T1 = tl.duration();
+    tl.to(colG, { autoAlpha: 1, duration: 0.3 }, T1);
+    colVals.forEach((col, p) => {
+      const at = T1 + 0.3 + p * 0.9;
+      if (p === 0) tl.set(win, { autoAlpha: 1 }, at);
+      tl.to(win, { attr: { x: IX + (p & 1) * IN, y: IY + (p >> 1) * IN }, duration: 0.25 }, at);
+      col.forEach((cv, i) => {
+        const ghost = label(svg, 0, 0, cv.text, { fill: C.accent, "font-size": 22 });
+        travel(tl, ghost, cv.from, cv.to, at + 0.25 + i * 0.04, 0.45);
+        tl.set(cv.t, { autoAlpha: 1 }, at + 0.72 + i * 0.04);
+      });
+    });
+    tl.to(win, { autoAlpha: 0, duration: 0.25 }, T1 + 0.3 + 4 * 0.9);
+    tl.addLabel("s2");
+
+    const T2 = tl.duration();
+    tl.to(rowG, { autoAlpha: 1, duration: 0.3 }, T2);
+    rowVals.forEach((rv, i) => {
+      const ghost = richLabel(svg, 0, 0, [["w"], [String(i + 1), "sub"]], { fill: C.param, "font-size": 20 });
+      travel(tl, ghost, kCells[i], { x: AX + i * CELL + CELL / 2, y: RY + CELL / 2 }, T2 + 0.1 + i * 0.05, 0.6);
+      tl.set(rv, { autoAlpha: 1 }, T2 + 0.72 + i * 0.05);
+    });
+    tl.to(rowCap, { autoAlpha: 1, duration: 0.3 }, T2 + 1.1);
+    tl.set(rowHi, { autoAlpha: 1 }, T2 + 1.3);
+    res.forEach((g, j) => {
+      const at = T2 + 1.3 + j * 0.4;
+      tl.set(colHi, { autoAlpha: 1, attr: { x: BX + j * CELL } }, at);
+      tl.fromTo(g, { autoAlpha: 0, scale: 0.6, transformOrigin: "50% 50%" }, { autoAlpha: 1, scale: 1, duration: 0.3, immediateRender: false }, at + 0.1);
+    });
+    tl.to([colHi, rowHi], { autoAlpha: 0, duration: 0.25 }, T2 + 1.3 + 4 * 0.4);
+    tl.fromTo(out, { autoAlpha: 0, x: -24 }, { autoAlpha: 1, x: 0, duration: 0.4, immediateRender: false }, T2 + 1.3 + 4 * 0.4 + 0.1);
+    tl.addLabel("s3");
+    return controller(tl, 3);
+  }
+
+  const BUILDERS = { syncasync, arch, flatbuffer, ps, ring, dsync, sswindow, ssflow, compress, topo, cost, scaleup, scaleout, parallelism, drift, alternatives, testbed, tcost, dsyncwhy, im2col };
 
   window.ONO_DIAGRAMS = {
     build(container) {
