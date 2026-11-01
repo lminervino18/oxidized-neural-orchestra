@@ -1,6 +1,6 @@
 /*
  * Slide engine: one slide per screen on a 1920×1080 stage scaled to fit,
- * keyboard/button navigation with intra-slide steps, presenter notes window,
+ * keyboard navigation with intra-slide steps, presenter notes window,
  * pause and reduced-motion modes.
  */
 (function () {
@@ -9,14 +9,11 @@
   const mainCount = slides.filter((s) => !s.hasAttribute("data-appendix")).length;
   const ui = {
     counter: document.getElementById("counter"),
-    section: document.getElementById("section-label"),
     flags: document.getElementById("flags"),
-    bar: document.getElementById("progress-bar"),
     help: document.getElementById("help"),
     goto: document.getElementById("goto"),
     gotoList: document.getElementById("goto-list"),
     jump: document.getElementById("jump"),
-    pause: document.getElementById("btn-pause"),
   };
 
   const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -267,18 +264,11 @@
   }
 
   function updateChrome() {
-    const slide = slides[state.index];
-    const v = view(slide);
     ui.counter.textContent = label(state.index);
-    const stepTxt = v.steps ? `  ·  etapa ${state.step}/${v.steps}` : "";
-    ui.section.innerHTML = `<b>${slide.dataset.section || ""}</b>  ·  ${slide.dataset.title || ""}${stepTxt}`;
-    const progress = Math.min(state.index + 1, mainCount) / mainCount;
-    ui.bar.style.width = `${progress * 100}%`;
     const flags = [];
     if (state.paused) flags.push("⏸ animaciones en pausa");
     if (state.reduced) flags.push("movimiento reducido");
     ui.flags.textContent = flags.join("  ·  ");
-    ui.pause.setAttribute("aria-pressed", String(state.paused));
     const hash = `#${state.index + 1}${state.step ? "." + state.step : ""}`;
     if (location.hash !== hash) history.replaceState(null, "", hash);
     updateNotes();
@@ -474,11 +464,6 @@
   }
 
   document.addEventListener("keydown", onKey);
-  document.getElementById("btn-prev").addEventListener("click", prev);
-  document.getElementById("btn-next").addEventListener("click", next);
-  document.getElementById("btn-pause").addEventListener("click", togglePause);
-  document.getElementById("btn-full").addEventListener("click", toggleFullscreen);
-  document.getElementById("btn-help").addEventListener("click", () => toggleOverlay(ui.help));
   [ui.help, ui.goto].forEach((o) => o.addEventListener("click", (e) => { if (e.target === o) toggleOverlay(o, false); }));
   reducedQuery.addEventListener("change", (e) => setReduced(e.matches));
   window.addEventListener("resize", onResize);

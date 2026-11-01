@@ -1673,15 +1673,7 @@
     build(container) {
       const fn = BUILDERS[container.dataset.diagram];
       if (!fn) return null;
-      const ctrl = fn(container);
-      const btn = document.createElement("button");
-      btn.className = "replay";
-      btn.type = "button";
-      btn.textContent = "↻ repetir";
-      btn.setAttribute("aria-label", "Repetir la animación de la etapa actual");
-      btn.addEventListener("click", (e) => { e.stopPropagation(); ctrl.replay(); });
-      container.appendChild(btn);
-      return ctrl;
+      return fn(container);
     },
   };
 })();
