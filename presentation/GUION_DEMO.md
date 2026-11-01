@@ -1,6 +1,6 @@
 # Guion de la demo
 
-Pendiente de definir por el equipo. En la agenda hay **10 minutos** reservados entre la diapositiva 23 («Ahora, la demo») y la 24 (cierre). Al definirlo, actualizar también las palabras clave *[a completar]* de la diapositiva 23 y sus notas en `index.html`, y regenerar `GUION.md`.
+Pendiente de definir por el equipo. En la agenda hay **10 minutos** reservados entre la diapositiva 26 («Ahora, la demo») y la 27 (cierre). Al definirlo, actualizar también las palabras clave *[a completar]* de la diapositiva 26 y sus notas en `index.html`, y regenerar `GUION.md`.
 
 ## Qué mostrar y en qué orden
 
@@ -28,7 +28,7 @@ Pendiente de definir por el equipo. En la agenda hay **10 minutos** reservados e
 
 - [a completar]
 
-Hay material opcional que ya existe: el apéndice A1 de la presentación (grabación real de una ejecución de Strategy-Switch en la TUI, identificada como grabación) y el A2 (capturas reales).
+Hay material opcional que ya existe: el apéndice A1 de la presentación (grabación real de una ejecución de Strategy-Switch en la TUI, identificada como grabación), el A2 (capturas reales) y el A11 (las tres topologías en la TUI).
 
 ## Referencia útil
 
