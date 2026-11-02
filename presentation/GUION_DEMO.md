@@ -1,41 +1,126 @@
 # Guion de la demo
 
-Pendiente de definir por el equipo. En la agenda hay **10 minutos** reservados entre la diapositiva 26 («Ahora, la demo») y la 27 (cierre). Al definirlo, actualizar también las palabras clave *[a completar]* de la diapositiva 26 y sus notas en `index.html`, y regenerar `GUION.md`.
+Tres computadoras entrenan en vivo LeNet-5 sobre MNIST con Strategy-Switch, durante unos diez minutos. Mientras entrena se cuenta el apéndice A1–A8. Al terminar, el modelo se guarda y se carga en una página web que mide su exactitud sobre las 10.000 imágenes de prueba de MNIST y permite dibujar números con el mouse para que el modelo los adivine.
 
-## Qué mostrar y en qué orden
+## Quién hace qué
 
-| Minuto | Qué se muestra | Quién |
-|---|---|---|
-| [a completar] | [a completar] | [a completar] |
+| Diapositiva | Tiempo | Qué pasa | Quién |
+|---|---|---|---|
+| 28 · Ahora, la demo | 0:30 | Lanza el entrenamiento en la TUI y muestra el anillo de All-Reduce | Lorenzo |
+| A1–A2 | 2:30 | Base común, buffer plano | Alejo |
+| A3–A5 | 3:30 | Compresión, topología, detención temprana | Marcos |
+| A6–A8 | 3:30 | Derivación de d_sync, lecciones, ¿por qué Rust? | Lorenzo |
+| — | 2:00 | Guarda el modelo y muestra la página | Lorenzo |
+| 29 · ¿Preguntas? | — | Abre las preguntas | Los tres |
 
-## Qué tiene que estar preparado
+Entre bloque y bloque, quien opera la TUI la muestra unos segundos con la tecla `v`: primero el anillo de All-Reduce, después el momento «switching → PS» y al final la estrella de Parameter Server.
 
-- [a completar]
+## Preparación, antes del día
 
-## Qué ejecutar
+### Las tres computadoras
 
-- [a completar]
+- Ponerlas en la misma red local, idealmente con un router o switch propio y cable. La red de la facultad puede bloquear las conexiones entre máquinas.
+- Anotar la IP de cada una: `ip -4 addr` en Linux, `ipconfig` en Windows.
+- Abrir el puerto 40000 en el firewall de las tres. Con ufw: `sudo ufw allow 40000/tcp`.
+- Usar el mismo commit del repositorio en las tres y compilar desde la raíz:
+  - en las tres: `cargo build --release -p node`;
+  - además, en la que va a correr la TUI: `cargo build --release -p orchestui`.
 
-## Qué resultado observar
+### El dataset, solo en la computadora de la TUI
 
-- [a completar]
+El orchestrator lee MNIST y les manda a los nodos su partición, así que el dataset hace falta solo en la computadora de la TUI. La carpeta `datasets/` no está en git. Hay dos formas de conseguirlo:
 
-## Relación con el aporte de la tesis
+- copiar `datasets/mnist/mnist_train_samples.bin` (179 MB) y `datasets/mnist/mnist_train_labels.bin` desde una computadora que ya los tenga;
+- o generarlos desde la raíz del repositorio, con conexión a internet:
+  ```bash
+  python3 -c "import sys; sys.path.insert(0, 'benchmarks'); from issue.runner import prepare_dataset; prepare_dataset()"
+  mkdir -p datasets/mnist && cp notebooks/mnist/data/mnist_*.bin datasets/mnist/
+  ```
 
-- [a completar]
+Después, una sola vez, generar las etiquetas suavizadas que usa la demo (ver «Por qué cambia siempre»):
 
-## Si la demo falla
+```bash
+python3 presentation/tools/smooth_labels.py datasets/mnist/mnist_train_labels.bin datasets/mnist/mnist_train_labels_smooth.bin 0.1
+```
 
-- [a completar]
+### Las configs
 
-Hay material opcional que ya existe: el apéndice A1 de la presentación (grabación real de una ejecución de Strategy-Switch en la TUI, identificada como grabación), el A2 (capturas reales) y el A11 (las tres topologías en la TUI).
+En `presentation/demo/configs/`:
 
-## Referencia útil
+- `model.json`: LeNet-5, 61.706 parámetros.
+- `training.json`: Strategy-Switch con los tres nodos, descenso por gradiente (lr 0,2), batch 64, 65 épocas y semilla 42. **Hay que reemplazar las tres IPs de `addrs`** por las de las computadoras; el puerto es 40000 en las tres.
+- `training.local.json`: la misma configuración con los tres nodos en una sola computadora (`127.0.0.1`), para ensayar.
 
-Datos del repositorio, para tener a mano:
+### Ensayo y ajuste del tiempo
 
-- Compilar: `cargo build --release -p node -p orchestui`.
-- Nodos locales: `bash scripts/demo_nodes.sh up|down|status` levanta 4 nodos en los puertos 40000–40003.
-- TUI: `cargo run -p orchestui --release`; pide las rutas de `model.json` y `training.json`.
-- Teclas de la TUI: `v` alterna dashboard y topología, `←/→` cambian de worker, `x` detiene, `s` guarda el modelo al terminar y `q` vuelve al menú (pide confirmación con `y`).
-- Configs usadas para las capturas: `presentation/captures/configs/`. Cada corrida dura entre 1 y 2,5 minutos en una notebook.
+La configuración está calibrada en una computadora de 8 núcleos, con cada nodo limitado a 2 núcleos para simular tres máquinas: el switch llega entre las épocas 14 y 16 (≈ 1:30) y el entrenamiento termina entre 9:15 y 10:30. En las computadoras de la defensa los tiempos van a cambiar, así que hay que hacer un ensayo completo con las tres y ajustar `max_epochs`:
+
+- El total de épocas es «épocas hasta el switch + `max_epochs`», porque después del switch los workers arrancan un trainer nuevo. Por eso el contador de la TUI pasa del 100 %; es un comportamiento conocido (README de la presentación, «Diferencias detectadas»).
+- Medir en la TUI cuánto tarda una época después del switch y despejar: `max_epochs ≈ (600 s − tiempo hasta el switch) / segundos por época`.
+- No bajar `max_epochs` de 30: el switch tiene que llegar antes de que termine la fase de All-Reduce, y llega entre las épocas 14 y 16.
+
+### Por qué cambia siempre
+
+Strategy-Switch pasa a Parameter Server cuando la pérdida se estabiliza: la variación relativa media en una ventana de 6 épocas baja del 1 % (criterio de Provatas et al.). Con un entrenamiento sano la pérdida sigue bajando y ese momento puede no llegar en diez minutos: en las calibraciones sin suavizado no cambió en ninguna de las tres corridas de 40 épocas.
+
+Por eso las etiquetas de entrenamiento de la demo están suavizadas (ε = 0,1; Szegedy et al., 2016): la clase correcta vale 0,91 y las demás 0,01. Así la pérdida tiene un piso mayor que cero y, cuando el modelo ya aprendió, se estabiliza entre las épocas 14 y 16. La fase de All-Reduce es sincrónica y usa la semilla de `training.json`, así que la época del switch prácticamente no depende de la velocidad de las computadoras. La exactitud de la página se mide contra las etiquetas originales. Un efecto visible: en la página, la probabilidad del dígito elegido ronda el 92 % y no llega al 100 %, porque el modelo aprendió que la clase correcta vale 0,91. Si el jurado pregunta, se explica así.
+
+### La página
+
+`presentation/demo/index.html` se abre con doble clic. No necesita servidor ni internet, y funciona en Chrome, Edge o Firefox actualizados. La arquitectura y las 10.000 imágenes de prueba están en `presentation/demo/data.js`. Si cambian `model.json`, hay que regenerarlo desde `presentation/`:
+
+```bash
+python3 tools/build_demo_data.py ../datasets/mnist
+```
+
+El argumento es la carpeta que tiene `mnist_test_samples.bin` y `mnist_test_labels.bin`. La página también acepta que se suelte un `model.json` junto con el `.safetensors`.
+
+## Paso a paso en la defensa
+
+1. **Antes de empezar la presentación**, en cada una de las tres computadoras, desde la raíz del repositorio, dejar corriendo:
+   ```bash
+   PORT=40000 RUST_LOG=warn ./target/release/node
+   ```
+2. **En la diapositiva 28**, en la computadora de la TUI, desde la raíz del repositorio:
+   ```bash
+   ./target/release/orchestui
+   ```
+   Elegir *Start Training*. Como modelo, `presentation/demo/configs/model.json`, y como entrenamiento, `presentation/demo/configs/training.json`.
+3. Mostrar el dashboard y, con `v`, la topología: el anillo de All-Reduce. Avisar que en unos minutos va a cambiar de estrategia.
+4. Volver a las diapositivas y contar A1 → A8. Entre bloques, mirar la TUI.
+5. Cuando el encabezado diga **FINISHED**, apretar `s`, escribir `demo.safetensors` y Enter. El log confirma con «model saved to demo.safetensors».
+6. Abrir la página y arrastrar `demo.safetensors`. Recorre las 10.000 imágenes de prueba y muestra la exactitud en grande.
+7. Dibujar dos o tres números con el mouse. Si un dibujo sale mal, usar «una imagen del test, al azar».
+8. Volver a la presentación y apretar `29` + Enter para ir a ¿Preguntas?
+
+## Qué decir
+
+- **Al lanzar:** «Son tres computadoras, cada una con un nodo, y el orchestrator en la TUI. Arranca en All-Reduce: los tres en anillo.»
+- **Al ver el switch, cerca del minuto 1:30:** «Acá la pérdida se estabilizó, el orchestrator mandó Upgrade a un nodo y Switch al resto, y siguió en Parameter Server sin reiniciar nada.»
+- **En la página:** «Este archivo es el que acaba de salir de las tres computadoras. Lo corremos en el navegador sobre las 10.000 imágenes de prueba de MNIST, que el modelo no vio al entrenar.»
+- **Al dibujar:** «El dibujo se achica a 28×28 y se centra como las imágenes de MNIST: esa es la imagen que ve el modelo.»
+
+## Si algo falla
+
+- **Un nodo no conecta:** revisar la IP en `training.json`, el puerto y el firewall, y reiniciar ese nodo. En la TUI, `q` vuelve al menú para relanzar.
+- **No da el tiempo o el entrenamiento se corta:** cargar en la página `presentation/demo/respaldo.safetensors`, un modelo entrenado con la misma configuración en un ensayo, y decir que es de un ensayo. Para mostrar la TUI quedan A9 (grabación), A10 (capturas) y A11 (topologías).
+- **La página no muestra nada:** `data.js` tiene que estar en la misma carpeta que `index.html`.
+
+## Calibración realizada
+
+Diez entrenamientos completos con `training.local.json`, uno por semilla, en una computadora de 8 núcleos con cada nodo limitado a 2. Cambió de estrategia en los diez. La exactitud se mide sobre las 10.000 imágenes de prueba, contra las etiquetas originales.
+
+| Semilla | Switch (época) | Switch (tiempo) | Épocas totales | Duración | Exactitud |
+|---|---|---|---|---|---|
+| 42 | 16 | 1:30 | 81 | 9:45 | 99,03 % |
+| 1 | 15 | 1:30 | 80 | 9:45 | 98,90 % |
+| 2 | 16 | 1:45 | 80 | 10:30 | 98,89 % |
+| 3 | 16 | 1:30 | 80 | 9:15 | 98,92 % |
+| 4 | 16 | 1:30 | 81 | 9:30 | 98,96 % |
+| 5 | 16 | 1:30 | 81 | 9:30 | 98,93 % |
+| 6 | 14 | 1:30 | 79 | 9:30 | 98,85 % |
+| 7 | 16 | 1:30 | 80 | 9:16 | 98,84 % |
+| 8 | 15 | 1:30 | 79 | 9:15 | 98,97 % |
+| 9 | 16 | 1:30 | 81 | 9:45 | 98,93 % |
+
+El tiempo del switch tiene una resolución de 15 segundos, que es cada cuánto se registró el progreso. `respaldo.safetensors` es el modelo de la semilla 42.

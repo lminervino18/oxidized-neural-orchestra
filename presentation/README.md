@@ -5,7 +5,7 @@ Presentación web de la defensa del Trabajo Profesional (O.N.O.). Está hecha en
 ## Abrir
 
 - `index.html`: versión editable. Se abre con doble clic en Chrome, Edge o Firefox.
-- `dist/ono-defensa.html`: la misma presentación en un único archivo de 2,8 MB, con estilos, scripts, fuentes e imágenes incluidos. Es la más cómoda para llevar en un pendrive.
+- `dist/ono-defensa.html`: la misma presentación en un único archivo de 2,9 MB, con estilos, scripts, fuentes e imágenes incluidos. Es la más cómoda para llevar en un pendrive.
 
 Ninguna de las dos versiones usa CDNs, fuentes remotas ni servicios externos. Está diseñada para 16:9: el escenario de 1920×1080 se escala a la ventana, así que se ve igual en 1920×1080 y en 1366×768.
 
@@ -22,27 +22,31 @@ Ninguna de las dos versiones usa CDNs, fuentes remotas ni servicios externos. Es
 | `F` | Pantalla completa |
 | `N` | Abre las notas del expositor en otra ventana (hay que permitir ventanas emergentes) |
 | `G` | Índice de diapositivas |
-| número + `↵` | Ir a una diapositiva; el apéndice empieza en la 28 |
+| número + `↵` | Ir a una diapositiva: 01–30 son las principales y 31–41 el apéndice (A1 = 31) |
 | `?` / `H` | Ayuda |
 
-En pantalla solo aparece el contador de diapositivas (`13 / 27`, o `A3 / A11` en el apéndice); no hay botones. Si se pausan las animaciones o se activa el movimiento reducido, al lado del contador aparece un aviso.
+En pantalla solo aparece el contador de diapositivas (`13 / 30`, o `A3 / A11` en el apéndice); no hay botones. Si se pausan las animaciones o se activa el movimiento reducido, al lado del contador aparece un aviso.
 
 La ventana de notas muestra el expositor sugerido, el tiempo de la diapositiva, el plan acumulado, un reloj, la idea principal, las palabras clave que están en pantalla, el desarrollo oral, la transición y el archivo del informe que respalda el contenido. Las teclas también funcionan desde esa ventana. La URL guarda la posición actual (`#12.3` es la diapositiva 12, etapa 3).
 
 ## Estructura y tiempos
 
-Son 27 diapositivas principales y 11 de apéndice para las preguntas. Siguen este hilo: entrenar es caro, una sola máquina buena es cara, mejor usar muchas, paralelismo de modelo o de datos, el *client drift*, las cuatro formas de sincronizar y cómo funciona cada una, cuánto cuesta sincronizar (el modelo analítico), cómo está construido (arquitectura, la librería de ML hecha a mano, la convolución y la API de Python), resultados, trabajos futuros, demo y cierre. El costo de sincronizar va justo después de los algoritmos y antes de los resultados, que confirman lo que predice. En pantalla solo hay palabras clave y animaciones; lo que se dice está en las notas. Los tiempos suman 45:00:
+Son 30 diapositivas principales y 11 de apéndice. Siguen este hilo: cronograma, qué es un modelo, entrenar es caro, una sola máquina buena es cara, mejor usar muchas, paralelismo de modelo o de datos, el *client drift*, las cuatro formas de sincronizar y cómo funciona cada una, cuánto cuesta sincronizar (el modelo analítico), cómo está construido (arquitectura, la librería de ML hecha a mano, la convolución y la API de Python), resultados, trabajos futuros y demo. La demo entrena un modelo en vivo durante unos diez minutos y, mientras tanto, se cuenta el apéndice A1–A8; A9–A11 quedan de respaldo por si falla. Al final van «¿Preguntas?» y «¡Gracias por venir!», después del apéndice. El costo de sincronizar va justo después de los algoritmos y antes de los resultados, que confirman lo que predice. En pantalla solo hay palabras clave y animaciones; lo que se dice está en las notas. Los tiempos suman 45:00:
 
 | Bloque | Diapositivas | Expositor sugerido | Tiempo |
 |---|---|---|---|
-| Por qué distribuir y *client drift* | 01–06 | Alejo Ordoñez | 8:30 |
-| Alternativas, Parameter Server, All-Reduce, PS asincrónico y Strategy-Switch | 07–12 | Marcos Bianchi Fernández | 10:30 |
-| Costo de sincronizar: tiempo total, de dónde sale d_sync y curvas | 13–15 | Alejo Ordoñez | 3:00 |
-| Arquitectura, librería de ML, convolución, Python, resultados y trabajos futuros | 16–25 | Lorenzo Minervino | 11:30 |
-| Demo | 26 y la demo en vivo | a definir | 0:30 + 10:00 |
-| Cierre | 27 | los tres | 1:00 |
+| Portada, cronograma, qué es un modelo, por qué distribuir, *client drift* y alternativas | 01–09 | Alejo Ordoñez | 9:15 |
+| Parameter Server, All-Reduce, PS asincrónico, Strategy-Switch, epochs offline (su monografía) y arquitectura | 10–16 | Marcos Bianchi Fernández | 11:45 |
+| La librería de ML y la convolución | 17–18 | Alejo Ordoñez | 2:45 |
+| Costo de sincronizar, Python, cómo medimos, resultados, trabajos futuros y lanzamiento de la demo | 19–28 | Lorenzo Minervino | 8:45 |
+| Apéndice mientras entrena: base común y buffer plano | A1–A2 | Alejo Ordoñez | 2:30 |
+| Apéndice mientras entrena: compresión, topología y detención temprana | A3–A5 | Marcos Bianchi Fernández | 3:30 |
+| Apéndice mientras entrena: derivación de d_sync, lecciones y por qué Rust; después, el modelo en la página | A6–A8 | Lorenzo Minervino | 3:30 + 2:00 |
+| ¿Preguntas? y ¡Gracias por venir! | 29–30 | los tres | 1:00 |
 
-La asignación es una sugerencia que sigue los aportes individuales del informe. Se cambia en el atributo `data-speaker` de cada diapositiva.
+En total, Alejo habla 14:30, Marcos 15:15 y Lorenzo 14:15.
+
+La asignación sigue los aportes individuales del informe (`docs/report/aportes_individuales.md`): Alejo, el núcleo de aprendizaje automático y los datos; Marcos, los algoritmos, la coordinación, el protocolo y su monografía; Lorenzo, el worker, Python y la TUI, las simulaciones, los benchmarks y el análisis de resultados. Se cambia en el atributo `data-speaker` de cada diapositiva.
 
 `GUION.md` es el guion completo: el reparto, la línea de tiempo minuto a minuto con quién habla y qué hay en pantalla, y qué tiene que decir cada uno en cada etapa. `GUION_DEMO.md` es la plantilla de la demo, que queda por completar.
 
@@ -63,9 +67,18 @@ python3 tools/export_notes.py    # regenera GUION.md y verifica que los tiempos 
 python3 tools/build_single.py    # regenera dist/ono-defensa.html
 ```
 
+## Demo
+
+La demo entrena LeNet-5 en vivo con Strategy-Switch en tres computadoras y después prueba el modelo en una página web. Todo el procedimiento, con comandos, tiempos y qué hacer si algo falla, está en `GUION_DEMO.md`.
+
+- `demo/configs/`: `model.json` y los `training.json` del entrenamiento en vivo.
+- `demo/index.html`: la página. Recibe el `.safetensors` que guarda la TUI, calcula la exactitud sobre las 10.000 imágenes de prueba de MNIST y clasifica números dibujados con el mouse. Corre en el navegador, sin servidor ni internet.
+- `demo/data.js`: la arquitectura y el conjunto de prueba comprimido. Se regenera con `python3 tools/build_demo_data.py <carpeta con mnist_test_*.bin>`.
+- `demo/respaldo.safetensors`: un modelo entrenado con la misma configuración en un ensayo, por si falla el entrenamiento en vivo.
+
 ## Capturas de la TUI
 
-Las capturas del apéndice (A1, A2 y A11) son **buffers reales de la terminal**. Se obtuvieron el 28/10/2026 ejecutando `orchestui` dentro de tmux (190×46) con 4 procesos `node` locales y las configs de `captures/configs/`, sobre un subconjunto de 10.000 muestras de MNIST. Ninguna ejecución forma parte de la campaña experimental del informe.
+Las capturas del apéndice (A9, A10 y A11) son **buffers reales de la terminal**. Se obtuvieron el 28/10/2026 ejecutando `orchestui` dentro de tmux (190×46) con 4 procesos `node` locales y las configs de `captures/configs/`, sobre un subconjunto de 10.000 muestras de MNIST. Ninguna ejecución forma parte de la campaña experimental del informe.
 
 - `captures/raw/*.ans`: salida de `tmux capture-pane -e -p`.
 - `captures/rec/`: una captura por segundo de una ejecución completa de Strategy-Switch, en la vista de topología.
@@ -84,11 +97,11 @@ python3 presentation/tools/ansi_to_capture.py
 
 ## Resultados y figuras
 
-Los resultados son las figuras originales del informe (`docs/report/figures/`), con los colores invertidos para proyectarlas sobre fondo negro, sin otros cambios. Los datos crudos de esas figuras no están en el repositorio, así que no se redibujaron. Los diagramas de las diapositivas 02 a 05 son conceptuales y no representan mediciones. Los gráficos que podrían confundirse con datos están identificados en pantalla:
-- El de costo de sincronización (15) usa las fórmulas del capítulo de Resultados con S/R ≈ 0,1 s.
-- El tiempo total (13), la derivación de d_sync (14, con N_W = 4) y la convolución (18, con una entrada de 4×4) son esquemas para explicar las fórmulas y el algoritmo, no mediciones.
-- El paisaje de pérdida del *client drift* (06), la curva de pérdida de Strategy-Switch (11) y la compresión (A7) están marcados como ilustrativos.
-- Las latencias de la topología (A8) están marcadas como ilustrativas.
+Los resultados son las figuras originales del informe (`docs/report/figures/`), con los colores invertidos para proyectarlas sobre fondo negro, sin otros cambios. Los datos crudos de esas figuras no están en el repositorio, así que no se redibujaron. Los diagramas de las diapositivas 03 a 07 son conceptuales y no representan mediciones. Los gráficos que podrían confundirse con datos están identificados en pantalla:
+- El de costo de sincronización (21) usa las fórmulas del capítulo de Resultados con S/R ≈ 0,1 s.
+- El tiempo total (19), la derivación de d_sync (20, con N_W = 4) y la convolución (18, con una entrada de 4×4) son esquemas para explicar las fórmulas y el algoritmo, no mediciones.
+- El paisaje de pérdida del *client drift* (08), la curva de pérdida de Strategy-Switch (13) y la compresión (A3) están marcados como ilustrativos.
+- Las latencias de la topología (A4) están marcadas como ilustrativas.
 
 ## Diferencias detectadas entre informe, README y código
 
@@ -96,15 +109,15 @@ Conviene revisarlas antes de la defensa:
 
 1. **Épocas después del switch.** Con `strategy_switch`, al conmutar el worker se reconstruye con un trainer nuevo y el `max_epochs` completo (`node/src/router.rs`, `Run::Switch`; `orchestrator/src/configs/adapter.rs`, `adapt_trainer`). En la ejecución local de las capturas, con `max_epochs = 60`, los workers terminaron con 99–100 épocas. El código es el mismo desde antes de la campaña (julio de 2026). Hay que verificar si las corridas de Strategy-Switch del informe tenían detención temprana, porque si no, hicieron más épocas que las otras estrategias.
 2. **Disparador del switch.** El `README.md` del repo dice que se conmuta cuando «gradients converge», y la TUI muestra «all-reduce → will switch to PS when gradients converge». El código (`orchestrator/src/sessions/switch_tracker.rs`) y el informe usan la variación relativa de la **pérdida** de entrenamiento máxima (ventana 6, umbral 0,01).
-3. **Régimen después del switch.** El informe habla de «Parameter Server asincrónico». En el código, el `synchronizer` y el `store` posteriores al cambio son configurables (`barrier` o `non_blocking`). Las notas de la diapositiva 12 lo dicen así.
+3. **Régimen después del switch.** El informe habla de «Parameter Server asincrónico». En el código, el `synchronizer` y el `store` posteriores al cambio son configurables (`barrier` o `non_blocking`). Las notas de la diapositiva 14 lo dicen así.
 4. **Unidades.** Las figuras de tiempo del informe no indican la unidad en el eje Y. La presentación usa segundos, en línea con T₁ = 600 s.
 
 ## Verificación realizada
 
 Probado con Chrome headless (puppeteer-core) sobre `index.html` y sobre `dist/ono-defensa.html`:
-- Las 38 diapositivas, etapa por etapa hacia adelante y entrando hacia atrás en su estado final, en 1920×1080 y 1366×768: sin errores de consola, sin pedidos de red externos y sin elementos fuera del escenario.
+- Las 41 diapositivas, etapa por etapa hacia adelante y entrando hacia atrás en su estado final, en 1920×1080 y 1366×768: sin errores de consola, sin pedidos de red externos y sin elementos fuera del escenario.
 - En pantalla no queda ningún botón: el pie muestra solo el contador.
-- Controles: flechas, ⇧+flechas, `?` y `Esc`, `G` e índice, número + Enter, `P`, `M`, `R`, ventana de notas `N` y restauración por URL.
+- Controles: flechas, ⇧+flechas, `Home` y `End`, `?` y `Esc`, `G` e índice, número + Enter, `P`, `M`, `R`, ventana de notas `N` y restauración por URL.
 - WebGL se probó con SwiftShader. Si no hay WebGL, la portada se muestra sin la escena y sin errores.
 
 No se pudo verificar en un proyector real ni con la GPU de la computadora de la defensa.
