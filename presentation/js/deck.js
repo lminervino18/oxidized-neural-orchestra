@@ -6,7 +6,9 @@
 (function () {
   const stage = document.getElementById("stage");
   const slides = Array.from(stage.querySelectorAll(".slide"));
-  const mainCount = slides.filter((s) => !s.hasAttribute("data-appendix")).length;
+  const mainSlides = slides.filter((s) => !s.hasAttribute("data-appendix"));
+  const appendixSlides = slides.filter((s) => s.hasAttribute("data-appendix"));
+  const numbered = mainSlides.concat(appendixSlides);
   const ui = {
     counter: document.getElementById("counter"),
     flags: document.getElementById("flags"),
@@ -256,11 +258,16 @@
 
   function label(i) {
     const s = slides[i];
-    if (s.hasAttribute("data-appendix")) {
-      const n = i - mainCount + 1;
-      return `A${n} / A${slides.length - mainCount}`;
-    }
-    return `${String(i + 1).padStart(2, "0")} / ${mainCount}`;
+    if (s.hasAttribute("data-appendix")) return `A${appendixSlides.indexOf(s) + 1} / A${appendixSlides.length}`;
+    return `${String(mainSlides.indexOf(s) + 1).padStart(2, "0")} / ${mainSlides.length}`;
+  }
+
+  function slideNumber(i) {
+    return numbered.indexOf(slides[i]) + 1;
+  }
+
+  function slideIndex(n) {
+    return n >= 1 && n <= numbered.length ? slides.indexOf(numbered[n - 1]) : -1;
   }
 
   function updateChrome() {
@@ -269,7 +276,7 @@
     if (state.paused) flags.push("⏸ animaciones en pausa");
     if (state.reduced) flags.push("movimiento reducido");
     ui.flags.textContent = flags.join("  ·  ");
-    const hash = `#${state.index + 1}${state.step ? "." + state.step : ""}`;
+    const hash = `#${slideNumber(state.index)}${state.step ? "." + state.step : ""}`;
     if (location.hash !== hash) history.replaceState(null, "", hash);
     updateNotes();
   }
@@ -334,7 +341,7 @@
     slides.forEach((s, i) => {
       const b = document.createElement("button");
       b.type = "button";
-      const num = s.hasAttribute("data-appendix") ? `A${i - mainCount + 1}` : String(i + 1).padStart(2, "0");
+      const num = label(i).split(" / ")[0];
       b.innerHTML = `<span>${num}</span>${s.dataset.title}`;
       if (i === state.index) b.classList.add("current");
       b.addEventListener("click", () => { toggleOverlay(ui.goto, false); show(i, 0, i >= state.index ? 1 : -1); });
@@ -359,9 +366,9 @@
   }
 
   function commitJump() {
-    const n = parseInt(jumpBuffer, 10);
+    const i = slideIndex(parseInt(jumpBuffer, 10));
     clearJump();
-    if (n >= 1 && n <= slides.length) show(n - 1, 0, n - 1 >= state.index ? 1 : -1);
+    if (i >= 0) show(i, 0, i >= state.index ? 1 : -1);
   }
 
 
@@ -408,7 +415,7 @@
     const slide = slides[state.index];
     const v = view(slide);
     const n = notesFor(slide);
-    const planned = slides.slice(0, state.index).filter((s) => !s.hasAttribute("data-appendix")).reduce((acc, s) => acc + parseTime(s.dataset.time) + parseTime(s.dataset.after), 0);
+    const planned = slides.slice(0, state.index).reduce((acc, s) => acc + parseTime(s.dataset.time) + parseTime(s.dataset.after), 0);
     const onScreen = Array.from(slide.querySelectorAll(".kw")).map((k) => k.textContent.trim()).join("  ·  ");
     const elapsed = notesStart ? (Date.now() - notesStart) / 1000 : 0;
     const nextSlide = slides[state.index + 1];
@@ -451,7 +458,7 @@
         if (e.shiftKey || k === "PageUp") show(state.index - 1, "last", -1); else prev();
         break;
       case "Home": show(0, 0, -1); break;
-      case "End": show(mainCount - 1, 0, 1); break;
+      case "End": show(slides.indexOf(mainSlides[mainSlides.length - 1]), 0, 1); break;
       case "f": case "F": toggleFullscreen(); break;
       case "p": case "P": togglePause(); break;
       case "m": case "M": setReduced(!state.reduced); break;
@@ -478,7 +485,7 @@
   function fromHash() {
     const m = location.hash.match(/^#(\d+)(?:\.(\d+))?$/);
     if (!m) return [0, 0];
-    return [Math.max(0, Number(m[1]) - 1), Number(m[2] || 0)];
+    return [Math.max(0, slideIndex(Number(m[1]))), Number(m[2] || 0)];
   }
 
   window.addEventListener("hashchange", () => {

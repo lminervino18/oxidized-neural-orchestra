@@ -1881,7 +1881,9 @@
     add(fft, "rect", { x: 390, y: 20, width: 240, height: 56, rx: 6, fill: C.panel, stroke: C.muted, "stroke-width": 1.5 });
     label(fft, 510, 48, "1º intento: FFT", { fill: C.text2, "font-size": 21 });
     const strike = add(svg, "line", { x1: 402, y1: 48, x2: 618, y2: 48, stroke: C.bad, "stroke-width": 4 });
-    const fftNo = label(svg, 510, 104, "más overhead que ganancia", { fill: C.bad, "font-size": 19 });
+    const fftNo = group(svg);
+    label(fftNo, 510, 102, "más overhead que ganancia", { fill: C.bad, "font-size": 19 });
+    label(fftNo, 510, 126, "para nuestros datasets", { fill: C.bad, "font-size": 19 });
 
     const colG = group(svg);
     label(colG, BX + 2 * CELL, BY - 22, "im2col · 9 × 4", { fill: C.muted, "font-size": 19 });
@@ -1965,7 +1967,126 @@
     return controller(tl, 3);
   }
 
-  const BUILDERS = { syncasync, arch, flatbuffer, ps, ring, dsync, sswindow, ssflow, compress, topo, cost, scaleup, scaleout, parallelism, drift, alternatives, testbed, tcost, dsyncwhy, im2col };
+  function agenda(container) {
+    const svg = svgRoot(container, 1640, 460);
+    const tl = gsap.timeline();
+    const Y = 230;
+    const items = [
+      ["por qué distribuir", "Alejo"],
+      ["cómo sincronizar", "Marcos"],
+      ["cómo está construido", "Marcos y Alejo"],
+      ["cuánto cuesta", "Lorenzo"],
+      ["resultados", "Lorenzo"],
+      ["demo en vivo", "los tres"],
+    ];
+    const xs = items.map((_, k) => 150 + k * 268);
+    const line = add(svg, "line", { x1: 80, y1: Y, x2: 1560, y2: Y, stroke: C.lineStrong, "stroke-width": 3 });
+    const stops = items.map(([topic, who], k) => {
+      const g = group(svg);
+      const up = k % 2 === 0;
+      add(g, "line", { x1: xs[k], y1: Y, x2: xs[k], y2: up ? Y - 46 : Y + 46, stroke: C.line, "stroke-width": 2 });
+      add(g, "circle", { cx: xs[k], cy: Y, r: 24, fill: C.panel, stroke: C.accent, "stroke-width": 3 });
+      label(g, xs[k], Y + 1, String(k + 1).padStart(2, "0"), { fill: C.accent, "font-size": 18 });
+      label(g, xs[k], up ? Y - 80 : Y + 80, topic, { fill: C.text, "font-size": 30 });
+      label(g, xs[k], up ? Y - 122 : Y + 122, who, { fill: C.muted, "font-size": 21 });
+      return g;
+    });
+    const dot = add(svg, "circle", { cx: 0, cy: 0, r: 9, fill: C.accent });
+
+    tl.set(line, { autoAlpha: 1 }, 0);
+    drawLinear(tl, line, 0.05, 1.6);
+    gsap.set(stops, { autoAlpha: 0, y: 12 });
+    gsap.set(dot, { autoAlpha: 0, x: 80, y: Y });
+    tl.set(dot, { autoAlpha: 1 }, 0.05);
+    tl.to(dot, { x: 1560, duration: 1.6, ease: "none" }, 0.05);
+    stops.forEach((g, k) => tl.to(g, { autoAlpha: 1, y: 0, duration: 0.35, ease: "back.out(2)" }, 0.05 + ((xs[k] - 80) / 1480) * 1.6));
+    tl.to(dot, { autoAlpha: 0, duration: 0.2 }, 1.7);
+    tl.addLabel("s0");
+    return controller(tl, 0);
+  }
+
+
+  function blackbox(container) {
+    const svg = svgRoot(container, 1100, 640);
+    const tl = gsap.timeline();
+    const BX = 380, BY = 120, BW = 340, BH = 240, MID = BY + BH / 2;
+
+    const input = group(svg);
+    add(input, "rect", { x: 60, y: MID - 90, width: 180, height: 180, rx: 8, fill: C.panel, stroke: C.lineStrong, "stroke-width": 2 });
+    add(input, "path", { d: `M100,${MID - 50} L200,${MID - 50} L138,${MID + 62}`, fill: "none", stroke: C.text, "stroke-width": 14, "stroke-linecap": "round", "stroke-linejoin": "round" });
+    label(input, 150, MID + 118, "entrada", { fill: C.muted, "font-size": 20 });
+    const arrows = [
+      add(svg, "line", { x1: 254, y1: MID, x2: BX - 14, y2: MID, stroke: C.lineStrong, "stroke-width": 3, "marker-end": svg.ref("arrow-line") }),
+      add(svg, "line", { x1: BX + BW + 14, y1: MID, x2: 860, y2: MID, stroke: C.lineStrong, "stroke-width": 3, "marker-end": svg.ref("arrow-line") }),
+    ];
+
+    const box = add(svg, "rect", { x: BX, y: BY, width: BW, height: BH, rx: 10, fill: "#030504", stroke: C.lineStrong, "stroke-width": 3 });
+    const boxLabel = label(svg, BX + BW / 2, BY - 26, "modelo", { fill: C.text2, "font-size": 24 });
+    const question = label(svg, BX + BW / 2, MID + 4, "?", { fill: C.muted, "font-size": 110 });
+
+    const knobs = [];
+    const knobG = group(svg);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 8; c++) {
+        const x = BX + 40 + c * 37, y0 = BY + 30 + r * 66, y1 = y0 + 48;
+        add(knobG, "line", { x1: x, y1: y0, x2: x, y2: y1, stroke: C.line, "stroke-width": 3, "stroke-linecap": "round" });
+        const k = add(knobG, "circle", { cx: x, cy: y0 + 24, r: 7, fill: C.accent });
+        knobs.push({ k, y0 });
+      }
+    }
+
+    const outRight = label(svg, 960, MID + 6, "7", { fill: C.accent, "font-size": 120 });
+    const outWrong = label(svg, 960, MID + 6, "3", { fill: C.bad, "font-size": 120 });
+    label(svg, 960, MID + 118, "salida", { fill: C.muted, "font-size": 20 });
+    const expected = label(svg, 960, BY - 26, "esperado: 7", { fill: C.text2, "font-size": 22 });
+    const error = add(svg, "path", { d: `M960,${BY - 50} C960,${BY - 120} ${BX + BW + 30},${BY - 120} ${BX + BW - 30},${BY - 6}`, fill: "none", stroke: C.warn, "stroke-width": 3, "stroke-dasharray": "8 7", "marker-end": svg.ref("arrow-muted") });
+    const errorLabel = label(svg, 848, BY - 70, "error", { fill: C.warn, "font-size": 21 });
+
+    const llm = group(svg);
+    const LY = 540;
+    add(llm, "rect", { x: 40, y: LY - 34, width: 300, height: 68, rx: 34, fill: C.panel, stroke: C.lineStrong, "stroke-width": 1.5 });
+    label(llm, 190, LY, "«¿qué es un modelo?»", { fill: C.text2, "font-size": 20 });
+    add(llm, "line", { x1: 350, y1: LY, x2: 420, y2: LY, stroke: C.lineStrong, "stroke-width": 2.5, "marker-end": svg.ref("arrow-line") });
+    add(llm, "rect", { x: 430, y: LY - 40, width: 240, height: 80, rx: 8, fill: "#030504", stroke: C.lineStrong, "stroke-width": 2.5 });
+    label(llm, 550, LY, "ChatGPT", { fill: C.text, "font-size": 24 });
+    add(llm, "line", { x1: 680, y1: LY, x2: 750, y2: LY, stroke: C.lineStrong, "stroke-width": 2.5, "marker-end": svg.ref("arrow-line") });
+    add(llm, "rect", { x: 760, y: LY - 34, width: 310, height: 68, rx: 34, fill: C.panel, stroke: C.lineStrong, "stroke-width": 1.5 });
+    label(llm, 915, LY, "«una función que…»", { fill: C.text2, "font-size": 20 });
+
+    show(tl, input, 0.05, 0.4);
+    show(tl, [box, boxLabel, question], 0.25, 0.4);
+    gsap.set(arrows, { autoAlpha: 0 });
+    tl.set(arrows[0], { autoAlpha: 1 }, 0.4);
+    draw(tl, arrows[0], 0.4, 0.4);
+    tl.set(arrows[1], { autoAlpha: 1 }, 0.8);
+    draw(tl, arrows[1], 0.8, 0.4);
+    show(tl, outRight, 1.1, 0.4);
+    gsap.set([knobG, outWrong, expected, error, errorLabel, llm], { autoAlpha: 0 });
+    tl.addLabel("s0");
+
+    tl.to(question, { autoAlpha: 0, duration: 0.3 }, "s0");
+    tl.to(box, { attr: { stroke: C.accent }, duration: 0.4 }, "s0");
+    tl.to(knobG, { autoAlpha: 1, duration: 0.4 }, "s0+=0.2");
+    tl.addLabel("s1");
+
+    tl.to(outRight, { autoAlpha: 0, duration: 0.2 }, "s1");
+    knobs.forEach(({ k, y0 }, i) => tl.to(k, { attr: { cy: y0 + ((i * 37) % 48) }, duration: 0.3 }, "s1"));
+    tl.to(outWrong, { autoAlpha: 1, duration: 0.3 }, "s1+=0.3");
+    tl.to(expected, { autoAlpha: 1, duration: 0.3 }, "s1+=0.6");
+    tl.set(error, { autoAlpha: 1 }, "s1+=0.9");
+    draw(tl, error, "s1+=0.9", 0.6);
+    tl.to(errorLabel, { autoAlpha: 1, duration: 0.3 }, "s1+=1.1");
+    knobs.forEach(({ k, y0 }, i) => tl.to(k, { attr: { cy: y0 + ((i * 53 + 11) % 48) }, duration: 0.5, ease: "power2.inOut" }, `s1+=${1.5 + (i % 8) * 0.04}`));
+    tl.to(outWrong, { autoAlpha: 0, duration: 0.2 }, "s1+=2.2");
+    tl.to(outRight, { autoAlpha: 1, duration: 0.3 }, "s1+=2.3");
+    tl.addLabel("s2");
+
+    tl.fromTo(llm, { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 0.5, immediateRender: false }, "s2");
+    tl.addLabel("s3");
+    return controller(tl, 3);
+  }
+
+  const BUILDERS = { syncasync, arch, flatbuffer, ps, ring, dsync, sswindow, ssflow, compress, topo, cost, scaleup, scaleout, parallelism, drift, alternatives, testbed, tcost, dsyncwhy, im2col, agenda, blackbox };
 
   window.ONO_DIAGRAMS = {
     build(container) {
