@@ -451,11 +451,11 @@
     switch (k) {
       case "ArrowRight": case "PageDown": case " ":
         e.preventDefault();
-        if (e.shiftKey || k === "PageDown") show(state.index + 1, 0, 1); else next();
+        if (e.shiftKey) show(state.index + 1, 0, 1); else next();
         break;
       case "ArrowLeft": case "PageUp":
         e.preventDefault();
-        if (e.shiftKey || k === "PageUp") show(state.index - 1, "last", -1); else prev();
+        if (e.shiftKey) show(state.index - 1, "last", -1); else prev();
         break;
       case "Home": show(0, 0, -1); break;
       case "End": show(slides.indexOf(mainSlides[mainSlides.length - 1]), 0, 1); break;
