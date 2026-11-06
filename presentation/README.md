@@ -22,27 +22,27 @@ Ninguna de las dos versiones usa CDNs, fuentes remotas ni servicios externos. Es
 | `F` | Pantalla completa |
 | `N` | Abre las notas del expositor en otra ventana (hay que permitir ventanas emergentes) |
 | `G` | Índice de diapositivas |
-| número + `↵` | Ir a una diapositiva: 01–30 son las principales y 31–41 el apéndice (A1 = 31) |
+| número + `↵` | Ir a una diapositiva: 01–31 son las principales y 32–42 el apéndice (A1 = 32) |
 | `?` / `H` | Ayuda |
 
-En pantalla solo aparece el contador de diapositivas (`13 / 30`, o `A3 / A11` en el apéndice); no hay botones. Si se pausan las animaciones o se activa el movimiento reducido, al lado del contador aparece un aviso.
+En pantalla solo aparece el contador de diapositivas (`13 / 31`, o `A3 / A11` en el apéndice); no hay botones. Si se pausan las animaciones o se activa el movimiento reducido, al lado del contador aparece un aviso.
 
 La ventana de notas muestra el expositor sugerido, el tiempo de la diapositiva, el plan acumulado, un reloj, la idea principal, las palabras clave que están en pantalla, el desarrollo oral, la transición y el archivo del informe que respalda el contenido. Las teclas también funcionan desde esa ventana. La URL guarda la posición actual (`#12.3` es la diapositiva 12, etapa 3).
 
 ## Estructura y tiempos
 
-Son 30 diapositivas principales y 11 de apéndice. Siguen este hilo: cronograma, qué es un modelo, entrenar es caro, una sola máquina buena es cara, mejor usar muchas, paralelismo de modelo o de datos, el *client drift*, las cuatro formas de sincronizar y cómo funciona cada una, cuánto cuesta sincronizar (el modelo analítico), cómo está construido (arquitectura, la librería de ML hecha a mano, la convolución y la API de Python), resultados, trabajos futuros y demo. La demo entrena un modelo en vivo durante unos diez minutos y, mientras tanto, se cuenta el apéndice A1–A8; A9–A11 quedan de respaldo por si falla. Al final van «¿Preguntas?» y «¡Gracias por venir!», después del apéndice. El costo de sincronizar va justo después de los algoritmos y antes de los resultados, que confirman lo que predice. En pantalla solo hay palabras clave y animaciones; lo que se dice está en las notas. Los tiempos suman 45:00:
+Son 31 diapositivas principales y 11 de apéndice. Siguen este hilo: cronograma, qué es un modelo, entrenar es caro, una sola máquina buena es cara, mejor usar muchas, paralelismo de modelo o de datos, el *client drift*, las cuatro formas de sincronizar y cómo funciona cada una, cuánto cuesta sincronizar (el modelo analítico), cómo está construido (arquitectura, la librería de ML hecha a mano, la convolución y la API de Python), resultados, trabajos futuros y demo. La demo entrena un modelo en vivo durante unos diez minutos y, mientras tanto, se cuenta el apéndice A1–A8; A9–A11 quedan de respaldo por si falla. Al final van «¿Preguntas?» y «¡Gracias por venir!», después del apéndice. El costo de sincronizar va justo después de los algoritmos y antes de los resultados, que confirman lo que predice. En pantalla solo hay palabras clave y animaciones; lo que se dice está en las notas. Los tiempos suman 45:00:
 
 | Bloque | Diapositivas | Expositor sugerido | Tiempo |
 |---|---|---|---|
 | Portada, cronograma, qué es un modelo, por qué distribuir, *client drift* y alternativas | 01–09 | Alejo Ordoñez | 9:15 |
 | Parameter Server, All-Reduce, PS asincrónico, Strategy-Switch, epochs offline (su monografía) y arquitectura | 10–16 | Marcos Bianchi Fernández | 11:45 |
-| La librería de ML y la convolución | 17–18 | Alejo Ordoñez | 2:45 |
-| Costo de sincronizar, Python, cómo medimos, resultados, trabajos futuros y lanzamiento de la demo | 19–28 | Lorenzo Minervino | 8:45 |
+| La librería de ML, la convolución y su teorema | 17–19 | Alejo Ordoñez | 2:45 |
+| Costo de sincronizar, Python, cómo medimos, resultados, trabajos futuros y lanzamiento de la demo | 20–29 | Lorenzo Minervino | 8:45 |
 | Apéndice mientras entrena: base común y buffer plano | A1–A2 | Alejo Ordoñez | 2:30 |
 | Apéndice mientras entrena: compresión, topología y detención temprana | A3–A5 | Marcos Bianchi Fernández | 3:30 |
 | Apéndice mientras entrena: derivación de d_sync, lecciones y por qué Rust; después, el modelo en la página | A6–A8 | Lorenzo Minervino | 3:30 + 2:00 |
-| ¿Preguntas? y ¡Gracias por venir! | 29–30 | los tres | 1:00 |
+| ¿Preguntas? y ¡Gracias por venir! | 30–31 | los tres | 1:00 |
 
 En total, Alejo habla 14:30, Marcos 15:15 y Lorenzo 14:15.
 
@@ -115,7 +115,7 @@ Conviene revisarlas antes de la defensa:
 ## Verificación realizada
 
 Probado con Chrome headless (puppeteer-core) sobre `index.html` y sobre `dist/ono-defensa.html`:
-- Las 41 diapositivas, etapa por etapa hacia adelante y entrando hacia atrás en su estado final, en 1920×1080 y 1366×768: sin errores de consola, sin pedidos de red externos y sin elementos fuera del escenario.
+- Las 42 diapositivas, etapa por etapa hacia adelante y entrando hacia atrás en su estado final, en 1920×1080 y 1366×768: sin errores de consola, sin pedidos de red externos y sin elementos fuera del escenario.
 - Con mouse o teclado no queda ningún botón en pantalla: el pie muestra solo el contador.
 - Controles: flechas, ⇧+flechas, `Home` y `End`, `?` y `Esc`, `G` e índice, número + Enter, `P`, `M`, `R`, ventana de notas `N` y restauración por URL.
 - En pantallas táctiles aparece una barra con `‹ ›` (animación) y `« »` (diapositiva). Tocar a la derecha o a la izquierda avanza o retrocede una animación, y deslizar el dedo cambia de diapositiva. La barra va abajo y, en un celular en horizontal, a los costados.

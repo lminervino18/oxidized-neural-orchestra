@@ -10,12 +10,12 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 |---|---|---|
 | Alejo Ordoñez | 01–09 | 09:15 |
 | Marcos Bianchi Fernández | 10–16 | 11:45 |
-| Alejo Ordoñez | 17–18 | 02:45 |
-| Lorenzo Minervino | 19–28 | 08:45 |
+| Alejo Ordoñez | 17–19 | 02:45 |
+| Lorenzo Minervino | 20–29 | 08:45 |
 | Alejo Ordoñez | A1–A2 | 02:30 |
 | Marcos Bianchi Fernández | A3–A5 | 03:30 |
 | Lorenzo Minervino | A6–A8 | 03:30 + demo 02:00 |
-| Los tres | 29–30 | 01:00 |
+| Los tres | 30–31 | 01:00 |
 | **Total** | | **45:00** |
 
 ## Línea de tiempo
@@ -38,18 +38,19 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 16:45 | 18:30 | 14 | Strategy-Switch en O.N.O. | Marcos Bianchi Fernández | «el orchestrator mide» «Upgrade · Switch» «un worker pasa a servidor» «mismo proceso, otro rol» |
 | 18:30 | 19:15 | 15 | El drift, medido | Marcos Bianchi Fernández | «E épocas sin sincronizar» «E = 1 → cerca de −1 punto» «más nodos, más caída» «sin ganancia de tiempo» |
 | 19:15 | 21:00 | 16 | La orquesta por dentro | Marcos Bianchi Fernández | «mismo binario en cada nodo» «orchestrator: control» «el rol llega al conectarse» «datos: de nodo a nodo» |
-| 21:00 | 22:15 | 17 | Una librería de ML desde cero | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
-| 22:15 | 23:45 | 18 | La convolución, a mano | Alejo Ordoñez | «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño» |
-| 23:45 | 24:45 | 19 | ¿Cuánto tarda entrenar? | Lorenzo Minervino | «repartimos el cómputo» «sincronizar: todos esperan» «una ronda por época» «d_sync decide cuánto escala» |
-| 24:45 | 26:00 | 20 | De dónde sale d_sync | Lorenzo Minervino | «S: el modelo · R: la red» «PS: todo por una placa» «crece con los workers» «AR: todos transmiten a la vez» «acotado» |
-| 26:00 | 26:45 | 21 | Sincronizar cuesta | Lorenzo Minervino | «PS: crece con N» «cuello de botella: el servidor» «AR: nunca supera 2S/R» |
-| 26:45 | 27:30 | 22 | También desde Python | Lorenzo Minervino | «PyO3 + maturin» «libera el GIL» «benchmarks en Python» |
-| 27:30 | 28:30 | 23 | Cómo medimos | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red lenta, a propósito» |
-| 28:30 | 29:30 | 24 | Resultados: sincrónicos | Lorenzo Minervino | «PS empeora desde 6 workers» «AR deja de mejorar» «como predijo el modelo» |
-| 29:30 | 30:00 | 25 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo sigue bajando» «¿pero aprende?» |
-| 30:00 | 31:15 | 26 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa» «salvedad: WildStore» |
-| 31:15 | 32:00 | 27 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · PS asincrónico con BlockingStore · convolución según el tamaño · más arquitecturas · compresión |
-| 32:00 | 32:30 | 28 | Ahora, la demo | Lorenzo Minervino | «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min entrenando» «después: el modelo, en el navegador» |
+| 21:00 | 22:00 | 17 | Una librería de ML desde cero | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
+| 22:00 | 23:15 | 18 | La convolución, a mano | Alejo Ordoñez | «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño» |
+| 23:15 | 23:45 | 19 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó» |
+| 23:45 | 24:45 | 20 | ¿Cuánto tarda entrenar? | Lorenzo Minervino | «repartimos el cómputo» «sincronizar: todos esperan» «una ronda por época» «d_sync decide cuánto escala» |
+| 24:45 | 26:00 | 21 | De dónde sale d_sync | Lorenzo Minervino | «S: el modelo · R: la red» «PS: todo por una placa» «crece con los workers» «AR: todos transmiten a la vez» «acotado» |
+| 26:00 | 26:45 | 22 | Sincronizar cuesta | Lorenzo Minervino | «PS: crece con N» «cuello de botella: el servidor» «AR: nunca supera 2S/R» |
+| 26:45 | 27:30 | 23 | También desde Python | Lorenzo Minervino | «PyO3 + maturin» «libera el GIL» «benchmarks en Python» |
+| 27:30 | 28:30 | 24 | Cómo medimos | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red lenta, a propósito» |
+| 28:30 | 29:30 | 25 | Resultados: sincrónicos | Lorenzo Minervino | «PS empeora desde 6 workers» «AR deja de mejorar» «como predijo el modelo» |
+| 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo sigue bajando» «¿pero aprende?» |
+| 30:00 | 31:15 | 27 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa» «salvedad: WildStore» |
+| 31:15 | 32:00 | 28 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · PS asincrónico con BlockingStore · convolución según el tamaño · más arquitecturas · compresión |
+| 32:00 | 32:30 | 29 | Ahora, la demo | Lorenzo Minervino | «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min entrenando» «después: el modelo, en el navegador» |
 | 32:30 | 33:45 | A1 | A1 · Por qué una base común | Alejo Ordoñez | — |
 | 33:45 | 35:00 | A2 | A2 · Modelo como buffer plano | Alejo Ordoñez | «capas = vistas» «particionar = delimitar rangos» «enviar sin copiar» |
 | 35:00 | 36:15 | A3 | A3 · Compresión con error feedback | Marcos Bianchi Fernández | «control: JSON» «datos: f16, sin copias» «solo lo que supera el umbral» «el resto, al residual» «error feedback» |
@@ -59,8 +60,8 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 39:30 | 41:00 | A7 | A7 · Lecciones: errores silenciosos | Lorenzo Minervino | — |
 | 41:00 | 42:00 | A8 | A8 · ¿Por qué Rust? | Lorenzo Minervino | — |
 | 42:00 | 44:00 | — | Fin del entrenamiento y página de la demo | Lorenzo Minervino | ver `GUION_DEMO.md` |
-| 44:00 | 44:30 | 29 | ¿Preguntas? | Los tres | — |
-| 44:30 | 45:00 | 30 | ¡Gracias por venir! | Los tres | — |
+| 44:00 | 44:30 | 30 | ¿Preguntas? | Los tres | — |
+| 44:30 | 45:00 | 31 | ¡Gracias por venir! | Los tres | — |
 
 ## Qué dice cada uno
 
@@ -304,9 +305,9 @@ Respaldo: docs/report/estudio_derivado.md
 
 Respaldo: docs/report/solucion.md (Nodo agnóstico de rol · Separación de planos) · README.md (Architecture)
 
-### 21:00 → 22:15 · 17 · Una librería de ML desde cero
+### 21:00 → 22:00 · 17 · Una librería de ML desde cero
 
-**Alejo Ordoñez** · 01:15 · en pantalla: «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD»
+**Alejo Ordoñez** · 01:00 · en pantalla: «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD»
 
 > El motor de redes neuronales también es nuestro, y eso nos dio control total sobre la memoria y la comunicación.
 
@@ -318,23 +319,38 @@ Respaldo: docs/report/solucion.md (Nodo agnóstico de rol · Separación de plan
 
 Respaldo: machine_learning/src/models.rs · docs/report/solucion.md (Motor de Redes Neuronales)
 
-### 22:15 → 23:45 · 18 · La convolución, a mano
+### 22:00 → 23:15 · 18 · La convolución, a mano
 
-**Alejo Ordoñez** · 01:30 · en pantalla: «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño»
+**Alejo Ordoñez** · 01:15 · en pantalla: «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño»
 
 > La convolución la implementamos a mano y probamos tres variantes; quedó la que la convierte en una multiplicación de matrices.
 
 - La convolución es la operación más cara de la red. A la izquierda, una entrada de 4×4 y un kernel de 3×3.
-- **→** Primero la implementamos con transformadas rápidas de Fourier: en el dominio de la frecuencia, la convolución es un producto. Con nuestros datasets y modelos chicos, como los de MNIST, el costo de transformar superaba la ganancia.
+- **→** Primero la implementamos con transformadas rápidas de Fourier. Con nuestros datasets y modelos chicos, como los de MNIST, el costo de transformar superaba la ganancia.
 - **→** Lo que quedó es im2col: cada ventana donde se apoya el kernel se copia como una columna de una matriz.
 - **→** Así, toda la convolución es una sola multiplicación de matrices, el kernel como fila por esa matriz, y la multiplicación de matrices está muy optimizada. Después reordenamos im2col y col2im para aprovechar mejor la caché.
 - **→** También probamos paralelizarla entre hilos y tampoco convino: más sobrecarga que beneficio, en MNIST y con modelos chicos. Con modelos, batches y kernels más grandes el balance podría invertirse, así que queda como trabajo futuro elegir el algoritmo según el tamaño de las matrices.
 
-**Pase:** Traspaso: «Ya vimos cómo está construido. ¿Cuánto esperamos que cueste sincronizar? Lorenzo.»
+**Pase:** «La variante de FFT se apoya en un resultado clásico.»
 
 Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajos_futuros.md · commits d880f65 (FFT), a60fa08 y 93ae0c8 (im2col)
 
-### 23:45 → 24:45 · 19 · ¿Cuánto tarda entrenar?
+### 23:15 → 23:45 · 19 · Teorema de la convolución
+
+**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó»
+
+> La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.
+
+- Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto punto a punto de las transformadas.
+- **→** Entonces se transforman la entrada y el kernel, se multiplican y se vuelve con la inversa.
+- **→** Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.
+- Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.
+
+**Pase:** Traspaso: «Ya vimos cómo está construido. ¿Cuánto esperamos que cueste sincronizar? Lorenzo.»
+
+Respaldo: docs/report/trabajos_futuros.md (variación del modelo de cómputo de la convolución) · Mathieu et al., 2013 · commit d880f65 (conv_fft de ndarray_conv)
+
+### 23:45 → 24:45 · 20 · ¿Cuánto tarda entrenar?
 
 **Lorenzo Minervino** · 01:00 · en pantalla: «repartimos el cómputo» «sincronizar: todos esperan» «una ronda por época» «d_sync decide cuánto escala»
 
@@ -349,7 +365,7 @@ Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajo
 
 Respaldo: docs/report/resultados.md (modelo del tiempo total de entrenamiento)
 
-### 24:45 → 26:00 · 20 · De dónde sale d_sync
+### 24:45 → 26:00 · 21 · De dónde sale d_sync
 
 **Lorenzo Minervino** · 01:15 · en pantalla: «S: el modelo · R: la red» «PS: todo por una placa» «crece con los workers» «AR: todos transmiten a la vez» «acotado»
 
@@ -364,7 +380,7 @@ Respaldo: docs/report/resultados.md (modelo del tiempo total de entrenamiento)
 
 Respaldo: docs/report/resultados.md (derivación de d_sync)
 
-### 26:00 → 26:45 · 21 · Sincronizar cuesta
+### 26:00 → 26:45 · 22 · Sincronizar cuesta
 
 **Lorenzo Minervino** · 00:45 · en pantalla: «PS: crece con N» «cuello de botella: el servidor» «AR: nunca supera 2S/R»
 
@@ -378,7 +394,7 @@ Respaldo: docs/report/resultados.md (derivación de d_sync)
 
 Respaldo: docs/report/resultados.md (derivación de d_sync) · experimentacion.md (S, R)
 
-### 26:45 → 27:30 · 22 · También desde Python
+### 26:45 → 27:30 · 23 · También desde Python
 
 **Lorenzo Minervino** · 00:45 · en pantalla: «PyO3 + maturin» «libera el GIL» «benchmarks en Python»
 
@@ -392,7 +408,7 @@ Respaldo: docs/report/resultados.md (derivación de d_sync) · experimentacion.m
 
 Respaldo: docs/report/solucion.md (Interfaz de Python como crate separado) · orchestra-py/local.py
 
-### 27:30 → 28:30 · 23 · Cómo medimos
+### 27:30 → 28:30 · 24 · Cómo medimos
 
 **Lorenzo Minervino** · 01:00 · en pantalla: «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red lenta, a propósito»
 
@@ -407,7 +423,7 @@ Respaldo: docs/report/solucion.md (Interfaz de Python como crate separado) · or
 
 Respaldo: docs/report/experimentacion.md (Pruebas automatizadas · Entorno de experimentación)
 
-### 28:30 → 29:30 · 24 · Resultados: sincrónicos
+### 28:30 → 29:30 · 25 · Resultados: sincrónicos
 
 **Lorenzo Minervino** · 01:00 · en pantalla: «PS empeora desde 6 workers» «AR deja de mejorar» «como predijo el modelo»
 
@@ -415,14 +431,14 @@ Respaldo: docs/report/experimentacion.md (Pruebas automatizadas · Entorno de ex
 
 - El tiempo total de entrenamiento según la cantidad de workers. Es la figura del informe, con los colores invertidos para el proyector, y el eje Y está en segundos.
 - **→** Parameter Server con un servidor tiene su mínimo en 6 workers y desde ahí empeora: el servidor concentra todo el tráfico.
-- **→** All-Reduce no se degrada, pero deja de mejorar: el cómputo por worker baja y la sincronización se queda en 2S/R. Es lo que predijo el modelo de la diapositiva 21.
+- **→** All-Reduce no se degrada, pero deja de mejorar: el cómputo por worker baja y la sincronización se queda en 2S/R. Es lo que predijo el modelo de la diapositiva 22.
 - Lectura aproximada, por si preguntan: AR cerca de 290 s desde 6 workers; PS cerca de 340 s en 6 y algo más de 400 s en 16.
 
 **Pase:** «¿Y si sacamos la barrera?»
 
 Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_time_per_nodes_ar_vs_ps.png
 
-### 29:30 → 30:00 · 25 · Resultados: asincrónicos
+### 29:30 → 30:00 · 26 · Resultados: asincrónicos
 
 **Lorenzo Minervino** · 00:30 · en pantalla: «el tiempo sigue bajando» «¿pero aprende?»
 
@@ -435,7 +451,7 @@ Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_t
 
 Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_times_async_parameter_server_and_strategy_switch.png
 
-### 30:00 → 31:15 · 26 · Resultados: exactitud
+### 30:00 → 31:15 · 27 · Resultados: exactitud
 
 **Lorenzo Minervino** · 01:15 · en pantalla: «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa» «salvedad: WildStore»
 
@@ -450,7 +466,7 @@ Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_t
 
 Respaldo: docs/report/resultados.md (salvedad final) · conclusiones_capitulo4.md · riesgos.md
 
-### 31:15 → 32:00 · 27 · Trabajos futuros
+### 31:15 → 32:00 · 28 · Trabajos futuros
 
 **Lorenzo Minervino** · 00:45 · en pantalla: tolerancia a fallos · PS asincrónico con BlockingStore · convolución según el tamaño · más arquitecturas · compresión
 
@@ -465,7 +481,7 @@ Respaldo: docs/report/resultados.md (salvedad final) · conclusiones_capitulo4.m
 
 Respaldo: docs/report/trabajos_futuros.md
 
-### 32:00 → 32:30 · 28 · Ahora, la demo
+### 32:00 → 32:30 · 29 · Ahora, la demo
 
 **Lorenzo Minervino** · 00:30 · en pantalla: «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min entrenando» «después: el modelo, en el navegador»
 
@@ -590,7 +606,7 @@ Respaldo: docs/report/riesgos.md (Lecciones aprendidas)
 
 Respaldo: docs/report/herramientas.md (Rust) · riesgos.md (complejidad de la implementación distribuida en Rust)
 
-### 44:00 → 44:30 · 29 · ¿Preguntas?
+### 44:00 → 44:30 · 30 · ¿Preguntas?
 
 **Los tres** · 00:30 · en pantalla: —
 
@@ -598,13 +614,13 @@ Respaldo: docs/report/herramientas.md (Rust) · riesgos.md (complejidad de la im
 
 - Volver de la página de la demo y abrir las preguntas.
 - Preguntas probables: WildStore o BlockingStore; por qué 10 Mbps; por qué la pérdida de entrenamiento y no la de validación; tolerancia a fallos; uso de herramientas de IA, declarado en el informe.
-- Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 31 (A1) al 41 (A11).
+- Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 32 (A1) al 42 (A11).
 
 **Pase:** «¡Gracias por venir!»
 
 Respaldo: docs/report/conclusiones.md
 
-### 44:30 → 45:00 · 30 · ¡Gracias por venir!
+### 44:30 → 45:00 · 31 · ¡Gracias por venir!
 
 **Los tres** · 00:30 · en pantalla: —
 

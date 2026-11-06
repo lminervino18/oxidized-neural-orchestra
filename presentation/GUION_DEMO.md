@@ -6,12 +6,12 @@ Tres computadoras entrenan en vivo LeNet-5 sobre MNIST con Strategy-Switch, dura
 
 | Diapositiva | Tiempo | Qué pasa | Quién |
 |---|---|---|---|
-| 28 · Ahora, la demo | 0:30 | Lanza el entrenamiento en la TUI y muestra el anillo de All-Reduce | Lorenzo |
+| 29 · Ahora, la demo | 0:30 | Lanza el entrenamiento en la TUI y muestra el anillo de All-Reduce | Lorenzo |
 | A1–A2 | 2:30 | Base común, buffer plano | Alejo |
 | A3–A5 | 3:30 | Compresión, topología, detención temprana | Marcos |
 | A6–A8 | 3:30 | Derivación de d_sync, lecciones, ¿por qué Rust? | Lorenzo |
 | — | 2:00 | Guarda el modelo y muestra la página | Lorenzo |
-| 29 · ¿Preguntas? | — | Abre las preguntas | Los tres |
+| 30 · ¿Preguntas? | — | Abre las preguntas | Los tres |
 
 Entre bloque y bloque, quien opera la TUI la muestra unos segundos con la tecla `v`: primero el anillo de All-Reduce, después el momento «switching → PS» y al final la estrella de Parameter Server.
 
@@ -81,7 +81,7 @@ El argumento es la carpeta que tiene `mnist_test_samples.bin` y `mnist_test_labe
    ```bash
    PORT=40000 RUST_LOG=warn ./target/release/node
    ```
-2. **En la diapositiva 28**, en la computadora de la TUI, desde la raíz del repositorio:
+2. **En la diapositiva 29**, en la computadora de la TUI, desde la raíz del repositorio:
    ```bash
    ./target/release/orchestui
    ```
@@ -91,7 +91,7 @@ El argumento es la carpeta que tiene `mnist_test_samples.bin` y `mnist_test_labe
 5. Cuando el encabezado diga **FINISHED**, apretar `s`, escribir `demo.safetensors` y Enter. El log confirma con «model saved to demo.safetensors».
 6. Abrir la página y arrastrar `demo.safetensors`. Recorre las 10.000 imágenes de prueba y muestra la exactitud en grande.
 7. Dibujar dos o tres números con el mouse. Si un dibujo sale mal, usar «una imagen del test, al azar».
-8. Volver a la presentación y apretar `29` + Enter para ir a ¿Preguntas?
+8. Volver a la presentación y apretar `30` + Enter para ir a ¿Preguntas?
 
 ## Qué decir
 
