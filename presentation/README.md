@@ -116,8 +116,9 @@ Conviene revisarlas antes de la defensa:
 
 Probado con Chrome headless (puppeteer-core) sobre `index.html` y sobre `dist/ono-defensa.html`:
 - Las 41 diapositivas, etapa por etapa hacia adelante y entrando hacia atrás en su estado final, en 1920×1080 y 1366×768: sin errores de consola, sin pedidos de red externos y sin elementos fuera del escenario.
-- En pantalla no queda ningún botón: el pie muestra solo el contador.
+- Con mouse o teclado no queda ningún botón en pantalla: el pie muestra solo el contador.
 - Controles: flechas, ⇧+flechas, `Home` y `End`, `?` y `Esc`, `G` e índice, número + Enter, `P`, `M`, `R`, ventana de notas `N` y restauración por URL.
+- En pantallas táctiles aparece una barra con `‹ ›` (animación) y `« »` (diapositiva). Tocar a la derecha o a la izquierda avanza o retrocede una animación, y deslizar el dedo cambia de diapositiva. La barra va abajo y, en un celular en horizontal, a los costados.
 - WebGL se probó con SwiftShader. Si no hay WebGL, la portada se muestra sin la escena y sin errores.
 
 No se pudo verificar en un proyector real ni con la GPU de la computadora de la defensa.

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
 <title>Defensa de O.N.O.</title>
 <link rel="icon" href="assets/logo.jpg">
 <link rel="stylesheet" href="css/deck.css">
@@ -1072,6 +1072,14 @@
 </div>
 
 </div>
+
+<nav class="touch-nav" id="touch-nav" aria-label="Navegación táctil">
+  <button type="button" data-nav="prev-slide" aria-label="Diapositiva anterior">«</button>
+  <button type="button" data-nav="prev-step" aria-label="Animación anterior">‹</button>
+  <span class="touch-pos" id="touch-pos"></span>
+  <button type="button" data-nav="next-step" aria-label="Animación siguiente">›</button>
+  <button type="button" data-nav="next-slide" aria-label="Diapositiva siguiente">»</button>
+</nav>
 
 <script src="vendor/gsap-3.12.5.min.js"></script>
 <script src="vendor/three-0.149.0.min.js"></script>

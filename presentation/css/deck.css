@@ -38,6 +38,8 @@
 
   --pad-x: 120px;
   --pad-top: 92px;
+  --nav-bottom: 0px;
+  --nav-side: 0px;
   color-scheme: dark;
 }
 
@@ -469,6 +471,69 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 .player { display: flex; align-items: center; gap: 18px; font-family: var(--mono); font-size: 20px; color: var(--text-2); margin-top: 44px; }
 .player input[type="range"] { flex: 1; accent-color: var(--accent); }
 .player .btn { border-color: var(--line-strong); color: var(--text-2); }
+
+
+.touch-nav { display: none; }
+
+@media (pointer: coarse) {
+  :root { --nav-bottom: 64px; }
+  html, body { touch-action: manipulation; overscroll-behavior: none; }
+
+  .touch-nav {
+    position: fixed;
+    inset: auto 0 0;
+    height: var(--nav-bottom);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    background: var(--bg);
+    border-top: 1px solid var(--line-strong);
+    font-family: var(--mono);
+    z-index: 50;
+  }
+
+  .touch-nav button {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 32px;
+    line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .touch-nav button:active { background: var(--panel); }
+  .touch-nav [data-nav$="-slide"] { color: var(--text-2); }
+  .touch-nav .touch-pos { flex: 1; text-align: center; font-size: 14px; color: var(--text-2); }
+}
+
+@media (pointer: coarse) and (min-aspect-ratio: 2/1) {
+  :root { --nav-bottom: 0px; --nav-side: 64px; }
+
+  .touch-nav {
+    inset: 0;
+    height: auto;
+    display: grid;
+    grid-template-columns: var(--nav-side) 1fr var(--nav-side);
+    grid-template-rows: repeat(3, 1fr);
+    place-items: center;
+    padding: 0;
+    background: none;
+    border: 0;
+    pointer-events: none;
+  }
+
+  .touch-nav button { pointer-events: auto; }
+  .touch-nav [data-nav="prev-slide"] { grid-area: 2 / 1; }
+  .touch-nav [data-nav="prev-step"] { grid-area: 3 / 1; }
+  .touch-nav [data-nav="next-slide"] { grid-area: 2 / 3; }
+  .touch-nav [data-nav="next-step"] { grid-area: 3 / 3; }
+  .touch-nav .touch-pos { grid-area: 1 / 3; font-size: 11px; line-height: 1.4; }
+}
 
 
 @media (prefers-reduced-motion: reduce) {
