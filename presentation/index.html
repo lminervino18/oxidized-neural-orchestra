@@ -429,7 +429,6 @@
       <span class="kw on" data-anim>sin PyTorch ni TensorFlow</span>
       <span class="kw" data-step="1">capas · pérdidas · optimizadores</span>
       <span class="kw" data-step="1">Adam · momentum · SGD</span>
-      <span class="kw ar" data-step="2">Rust: sin GC, sin data races</span>
     </div>
   </div>
   <aside class="notes">
@@ -437,7 +436,7 @@
     <ul class="n-oral">
       <li>No usamos PyTorch ni TensorFlow: la librería de redes neuronales la escribimos en Rust, sobre ndarray. Así se define un modelo para MNIST: una lista de capas, parecido al Sequential de Keras.</li>
       <li><b>→</b> Tiene capas densas, convolucionales, max pooling y activaciones; pérdidas MSE y entropía cruzada; y optimizadores de descenso por gradiente, con momentum y Adam, detrás de un mismo trait.</li>
-      <li><b>→</b> ¿Por qué no usar una existente? Porque necesitábamos que el modelo fuera un único buffer de memoria, para mandarlo por la red sin copias (apéndice A2), y que la comparación no dependiera de un framework ajeno. Rust nos dio rendimiento sin recolector de basura y concurrencia sin data races.</li>
+      <li>¿Por qué no usar una existente? Porque necesitábamos que el modelo fuera un único buffer de memoria, para mandarlo por la red sin copias (apéndice A2), y que la comparación no dependiera de un framework ajeno.</li>
     </ul>
     <p class="n-trans">«La pieza más artesanal fue la convolución.»</p>
     <p class="n-src">machine_learning/src/models.rs · docs/report/solucion.md (Motor de Redes Neuronales)</p>

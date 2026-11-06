@@ -38,7 +38,7 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 16:45 | 18:30 | 14 | Strategy-Switch en O.N.O. | Marcos Bianchi Fernández | «el orchestrator mide» «Upgrade · Switch» «un worker pasa a servidor» «mismo proceso, otro rol» |
 | 18:30 | 19:15 | 15 | El drift, medido | Marcos Bianchi Fernández | «E épocas sin sincronizar» «E = 1 → cerca de −1 punto» «más nodos, más caída» «sin ganancia de tiempo» |
 | 19:15 | 21:00 | 16 | La orquesta por dentro | Marcos Bianchi Fernández | «mismo binario en cada nodo» «orchestrator: control» «el rol llega al conectarse» «datos: de nodo a nodo» |
-| 21:00 | 22:15 | 17 | Una librería de ML desde cero | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» «Rust: sin GC, sin data races» |
+| 21:00 | 22:15 | 17 | Una librería de ML desde cero | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
 | 22:15 | 23:45 | 18 | La convolución, a mano | Alejo Ordoñez | «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño» |
 | 23:45 | 24:45 | 19 | ¿Cuánto tarda entrenar? | Lorenzo Minervino | «repartimos el cómputo» «sincronizar: todos esperan» «una ronda por época» «d_sync decide cuánto escala» |
 | 24:45 | 26:00 | 20 | De dónde sale d_sync | Lorenzo Minervino | «S: el modelo · R: la red» «PS: todo por una placa» «crece con los workers» «AR: todos transmiten a la vez» «acotado» |
@@ -306,13 +306,13 @@ Respaldo: docs/report/solucion.md (Nodo agnóstico de rol · Separación de plan
 
 ### 21:00 → 22:15 · 17 · Una librería de ML desde cero
 
-**Alejo Ordoñez** · 01:15 · en pantalla: «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» «Rust: sin GC, sin data races»
+**Alejo Ordoñez** · 01:15 · en pantalla: «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD»
 
 > El motor de redes neuronales también es nuestro, y eso nos dio control total sobre la memoria y la comunicación.
 
 - No usamos PyTorch ni TensorFlow: la librería de redes neuronales la escribimos en Rust, sobre ndarray. Así se define un modelo para MNIST: una lista de capas, parecido al Sequential de Keras.
 - **→** Tiene capas densas, convolucionales, max pooling y activaciones; pérdidas MSE y entropía cruzada; y optimizadores de descenso por gradiente, con momentum y Adam, detrás de un mismo trait.
-- **→** ¿Por qué no usar una existente? Porque necesitábamos que el modelo fuera un único buffer de memoria, para mandarlo por la red sin copias (apéndice A2), y que la comparación no dependiera de un framework ajeno. Rust nos dio rendimiento sin recolector de basura y concurrencia sin data races.
+- ¿Por qué no usar una existente? Porque necesitábamos que el modelo fuera un único buffer de memoria, para mandarlo por la red sin copias (apéndice A2), y que la comparación no dependiera de un framework ajeno.
 
 **Pase:** «La pieza más artesanal fue la convolución.»
 
