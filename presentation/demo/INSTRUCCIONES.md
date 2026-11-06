@@ -61,10 +61,15 @@ python3 presentation/tools/smooth_labels.py datasets/mnist/mnist_train_labels.bi
 
 Hay que repetirlo cada vez que cambie la red.
 
-**Los tres.** Conéctense a la misma red, anoten su IP y abran el puerto:
+**Los tres.** Conéctense a la misma red y anoten su IP:
 
 ```bash
 ip -4 route get 1.1.1.1 | grep -oP 'src \K\S+'
+```
+
+Revisen el firewall con `sudo ufw status`. Si dice `inactive`, no hay que hacer nada. Si dice `active`, abran el puerto:
+
+```bash
 sudo ufw allow 40000/tcp
 ```
 
