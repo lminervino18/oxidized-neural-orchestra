@@ -22,12 +22,12 @@ Todas las mediciones se realizaron sobre clústeres simulados en una única máq
 | Procesador           | 16 núcleos                                   | Intel Core i5-8350U (4 núcleos físicos, 8 hilos lógicos; 1,7 GHz base, 3,6 GHz turbo) |
 | Memoria              | No registrada                                | 8 GB DDR4                                                                         |
 | CPU por contenedor   | 1 núcleo                                     | No registrada                                                                     |
-| Red entre nodos      | 10 Mbit/s por contenedor (Pumba)             | Emulación de red hogareña: retardo, *jitter* y ancho de banda (Pumba)             |
+| Red entre nodos      | 10 Mbps por contenedor (Pumba)             | Emulación de red hogareña: retardo, *jitter* y ancho de banda (Pumba)             |
 | Software             | Docker, Pumba 1.1.7                          | Ubuntu 24.04 LTS, Docker 29.6.1, Rust 1.96.1, CPython 3.14.0, Pumba 1.1.7         |
 
 : Entornos de ejecución de los dos conjuntos de ensayos del capítulo.
 
-Para la campaña de comparación de estrategias, el ancho de banda se fijó en $R = 10$ Mbit/s, deliberadamente bajo, de modo que la relación entre el tamaño del modelo y la velocidad de la red produzca diferencias observables entre estrategias sin recurrir a un modelo artificialmente grande.
+Para la campaña de comparación de estrategias, el ancho de banda se fijó en $R = 10$ Mbps, deliberadamente bajo, de modo que la relación entre el tamaño del modelo y la velocidad de la red produzca diferencias observables entre estrategias sin recurrir a un modelo artificialmente grande.
 
 Esa campaña se corrió sobre el conjunto de datos MNIST completo, con la arquitectura convolucional LeNet-5, de 61706 parámetros; ambos fueron introducidos por LeCun et al. [-@lecun1998gradient], que es la referencia de los dos. Como los parámetros y los gradientes viajan por la red como flotantes de 16 bits, el modelo ocupa $S \approx 1$ Mbit ($\approx 0{,}12$ MB) a los efectos de la comunicación. El entrenamiento de referencia en una sola máquina, sin distribución, tarda $T_1 = 600$ segundos. El resto de la configuración se resume en la Tabla siguiente.
 
