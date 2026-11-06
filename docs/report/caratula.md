@@ -12,12 +12,12 @@ graphics: true
 \normalsize{\textit{Sistema distribuido de entrenamiento de modelos de aprendizaje profundo en Rust para implementar y comparar estrategias de distribución como Parameter Server y All-Reduce.}} }
 
 \author{
-             \textbf{Tutor:}  Ing. Ricardo Alfredo Veiga \\ \texttt{ rveiga@fi.uba.ar } \\[1.8ex]
-             \textbf{Co-Tutor y Orientador:} Dr. Ing. José Ignacio Álvarez-Hamelin \\ \texttt{ ihameli@fi.uba.ar } \\[1.8ex]
              \textbf{Estudiantes} \\[1.8ex]  
              Alejo Ordoñez \textit{(Padrón 108397)}\\ \texttt{ alordonez@fi.uba.ar } \\[1.8ex]
              Lorenzo Minervino \textit{(Padrón 107863)}\\ \texttt{ lminervino@fi.uba.ar }\\[1.8ex]
              Marcos Bianchi Fernández \textit{(Padrón 108921)}\\ \texttt{ mbianchif@fi.uba.ar }\\[3ex]
+             \textbf{Tutor:}  Ing. Ricardo Alfredo Veiga \\ \texttt{ rveiga@fi.uba.ar } \\[1.8ex]
+             \textbf{Co-Tutor y Orientador:} Dr. Ing. José Ignacio Alvarez-Hamelin \\ \texttt{ ihameli@fi.uba.ar } \\[3ex]
             \normalsize{Facultad de Ingeniería, Universidad de Buenos Aires}        \\
        }
 \date{}
