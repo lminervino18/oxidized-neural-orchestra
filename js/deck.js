@@ -1,7 +1,7 @@
 /*
  * Slide engine: one slide per screen on a 1920×1080 stage scaled to fit,
- * keyboard navigation with intra-slide steps, presenter notes window,
- * pause and reduced-motion modes.
+ * keyboard and touch navigation with intra-slide steps, presenter notes
+ * window, pause and reduced-motion modes.
  */
 (function () {
   const stage = document.getElementById("stage");
@@ -16,6 +16,8 @@
     goto: document.getElementById("goto"),
     gotoList: document.getElementById("goto-list"),
     jump: document.getElementById("jump"),
+    touchNav: document.getElementById("touch-nav"),
+    touchPos: document.getElementById("touch-pos"),
   };
 
   const reducedQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -251,6 +253,14 @@
     } else if (state.index > 0) show(state.index - 1, "last", -1);
   }
 
+  function nextSlide() {
+    if (state.index < slides.length - 1) show(state.index + 1, 0, 1);
+  }
+
+  function prevSlide() {
+    if (state.index > 0) show(state.index - 1, "last", -1);
+  }
+
   function replay() {
     view(slides[state.index]).diagrams.forEach((d) => d.replay());
   }
@@ -272,6 +282,8 @@
 
   function updateChrome() {
     ui.counter.textContent = label(state.index);
+    const steps = view(slides[state.index]).steps;
+    ui.touchPos.textContent = label(state.index) + (steps ? ` · ${state.step}/${steps}` : "");
     const flags = [];
     if (state.paused) flags.push("⏸ animaciones en pausa");
     if (state.reduced) flags.push("movimiento reducido");
@@ -282,12 +294,15 @@
   }
 
   function fit() {
+    const root = getComputedStyle(document.documentElement);
+    const side = parseFloat(root.getPropertyValue("--nav-side"));
+    const height = window.innerHeight - parseFloat(root.getPropertyValue("--nav-bottom"));
     const gutter = window.innerWidth < 700 ? 32 : 0;
-    const s = Math.min((window.innerWidth - gutter) / 1920, window.innerHeight / 1080);
+    const s = Math.min((window.innerWidth - gutter - 2 * side) / 1920, height / 1080);
     window.ONO_STAGE_SCALE = s;
     stage.style.transform = `scale(${s})`;
     stage.style.left = `${(window.innerWidth - 1920 * s) / 2}px`;
-    stage.style.top = `${(window.innerHeight - 1080 * s) / 2}px`;
+    stage.style.top = `${(height - 1080 * s) / 2}px`;
   }
 
   let resizeTimer = null;
@@ -451,11 +466,11 @@
     switch (k) {
       case "ArrowRight": case "PageDown": case " ":
         e.preventDefault();
-        if (e.shiftKey) show(state.index + 1, 0, 1); else next();
+        if (e.shiftKey) nextSlide(); else next();
         break;
       case "ArrowLeft": case "PageUp":
         e.preventDefault();
-        if (e.shiftKey) show(state.index - 1, "last", -1); else prev();
+        if (e.shiftKey) prevSlide(); else prev();
         break;
       case "Home": show(0, 0, -1); break;
       case "End": show(slides.indexOf(mainSlides[mainSlides.length - 1]), 0, 1); break;
@@ -470,6 +485,44 @@
     }
   }
 
+  const navActions = { "prev-slide": prevSlide, "prev-step": prev, "next-step": next, "next-slide": nextSlide };
+  ui.touchNav.addEventListener("click", (e) => {
+    const action = navActions[e.target.dataset.nav];
+    if (action) action();
+  });
+
+  const SWIPE_PX = 50;
+  const TAP_PX = 10;
+  const GESTURE_MS = 600;
+  let touchStart = null;
+
+  function isPinchZoomed() {
+    return window.visualViewport && window.visualViewport.scale > 1.01;
+  }
+
+  function onTouchStart(e) {
+    const t = e.touches[0];
+    const free = e.touches.length === 1 && !t.target.closest("button, input, .overlay") && !isPinchZoomed();
+    touchStart = free ? { x: t.clientX, y: t.clientY, at: e.timeStamp } : null;
+  }
+
+  function onTouchEnd(e) {
+    if (!touchStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    const quick = e.timeStamp - touchStart.at < GESTURE_MS;
+    touchStart = null;
+    if (!quick) return;
+    if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > 1.5 * Math.abs(dy)) {
+      if (dx < 0) nextSlide(); else prevSlide();
+    } else if (Math.abs(dx) < TAP_PX && Math.abs(dy) < TAP_PX) {
+      if (t.clientX > window.innerWidth / 2) next(); else prev();
+    }
+  }
+
+  document.addEventListener("touchstart", onTouchStart, { passive: true });
+  document.addEventListener("touchend", onTouchEnd);
   document.addEventListener("keydown", onKey);
   [ui.help, ui.goto].forEach((o) => o.addEventListener("click", (e) => { if (e.target === o) toggleOverlay(o, false); }));
   reducedQuery.addEventListener("change", (e) => setReduced(e.matches));
