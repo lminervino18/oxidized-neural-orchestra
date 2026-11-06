@@ -102,10 +102,10 @@ Tiene que responder `HTTP/1.0 200 OK`. Al terminar, cierren el servidor con `Ctr
 **Ale, Loren y Marcos**, cada uno en una terminal:
 
 ```bash
-PORT=40000 RUST_LOG=warn ./target/release/node
+make node
 ```
 
-No muestra nada y la terminal queda ocupada: eso significa que está funcionando. Déjenla abierta hasta el final.
+Tiene que mostrar `listening at 0.0.0.0:40000`, y `orchestrator connected` cuando Ale lance el entrenamiento. La terminal queda ocupada: déjenla abierta hasta el final.
 
 ## 4. Lanzar el entrenamiento
 
