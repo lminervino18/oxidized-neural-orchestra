@@ -260,8 +260,8 @@
       <span class="kw ar" data-anim>sin centro</span>
       <span class="kw" data-step="1">N fragmentos</span>
       <span class="kw" data-step="2">reduce-scatter: sumar</span>
-      <span class="kw" data-step="3">all-gather: copiar</span>
-      <span class="kw on" data-step="4">÷ N en cada worker</span>
+      <span class="kw" data-step="5">all-gather: copiar</span>
+      <span class="kw on" data-step="8">÷ N en cada worker</span>
     </div>
   </div>
   <aside class="notes">
@@ -269,8 +269,12 @@
     <ul class="n-oral">
       <li>Cuatro workers en un anillo lógico: cada uno recibe del anterior y envía al siguiente. Es la variante de Patarasuk y Yuan (2009).</li>
       <li><b>→</b> Cada worker parte su gradiente en N fragmentos, acá cuatro. Los colores indican de qué worker viene cada aporte.</li>
-      <li><b>→</b> Reduce-scatter: N−1 rondas. En cada una, cada worker envía un fragmento y suma el que le llega. Al final, cada uno tiene un fragmento con la suma de todos.</li>
-      <li><b>→</b> All-gather: otras N−1 rondas, ahora copiando, para que los fragmentos completos den la vuelta.</li>
+      <li><b>→</b> Reduce-scatter, iteración 1: cada worker envía un fragmento al siguiente, y el que lo recibe lo suma al suyo.</li>
+      <li><b>→</b> Iteración 2: cada uno reenvía el fragmento que acaba de sumar, que ya trae dos aportes.</li>
+      <li><b>→</b> Iteración 3: son N−1 iteraciones. Al final, cada worker tiene un fragmento con la suma de todos.</li>
+      <li><b>→</b> All-gather, iteración 1: ahora no se suma, se copia. Cada worker le pasa su fragmento completo al siguiente.</li>
+      <li><b>→</b> Iteración 2: los fragmentos completos siguen dando la vuelta.</li>
+      <li><b>→</b> Iteración 3: después de otras N−1 iteraciones, todos tienen los cuatro fragmentos completos.</li>
       <li><b>→</b> Cada worker divide por N y aplica el optimizador localmente. Todos llegan al mismo resultado sin que nadie centralice.</li>
     </ul>
     <p class="n-trans">«Las dos esperan, en cada ronda, a que todos terminen. ¿Y si no esperamos a nadie?»</p>
@@ -408,7 +412,7 @@
 
 <!-- ═════════════════════════ ALEJO · el motor de redes neuronales ═════════════════════════ -->
 
-<section class="slide" data-title="Una librería de ML desde cero" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:15">
+<section class="slide" data-title="Una librería de ML desde cero" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:00">
   <div class="kicker"><span class="path">08 · motor de ML</span></div>
   <h2 data-anim>Una librería de ML <em>desde cero</em></h2>
   <div class="body">
@@ -429,7 +433,6 @@
       <span class="kw on" data-anim>sin PyTorch ni TensorFlow</span>
       <span class="kw" data-step="1">capas · pérdidas · optimizadores</span>
       <span class="kw" data-step="1">Adam · momentum · SGD</span>
-      <span class="kw ar" data-step="2">Rust: sin GC, sin data races</span>
     </div>
   </div>
   <aside class="notes">
@@ -437,14 +440,14 @@
     <ul class="n-oral">
       <li>No usamos PyTorch ni TensorFlow: la librería de redes neuronales la escribimos en Rust, sobre ndarray. Así se define un modelo para MNIST: una lista de capas, parecido al Sequential de Keras.</li>
       <li><b>→</b> Tiene capas densas, convolucionales, max pooling y activaciones; pérdidas MSE y entropía cruzada; y optimizadores de descenso por gradiente, con momentum y Adam, detrás de un mismo trait.</li>
-      <li><b>→</b> ¿Por qué no usar una existente? Porque necesitábamos que el modelo fuera un único buffer de memoria, para mandarlo por la red sin copias (apéndice A2), y que la comparación no dependiera de un framework ajeno. Rust nos dio rendimiento sin recolector de basura y concurrencia sin data races.</li>
+      <li>¿Por qué no usar una existente? Porque necesitábamos que el modelo fuera un único buffer de memoria, para mandarlo por la red sin copias (apéndice A2), y que la comparación no dependiera de un framework ajeno.</li>
     </ul>
     <p class="n-trans">«La pieza más artesanal fue la convolución.»</p>
     <p class="n-src">machine_learning/src/models.rs · docs/report/solucion.md (Motor de Redes Neuronales)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="La convolución, a mano" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:30">
+<section class="slide" data-title="La convolución, a mano" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:15">
   <div class="kicker"><span class="path">08 · motor de ML</span></div>
   <h2 data-anim>La convolución, <em>a mano</em></h2>
   <div class="body">
@@ -461,13 +464,44 @@
     <p class="n-idea">La convolución la implementamos a mano y probamos tres variantes; quedó la que la convierte en una multiplicación de matrices.</p>
     <ul class="n-oral">
       <li>La convolución es la operación más cara de la red. A la izquierda, una entrada de 4×4 y un kernel de 3×3.</li>
-      <li><b>→</b> Primero la implementamos con transformadas rápidas de Fourier: en el dominio de la frecuencia, la convolución es un producto. Con nuestros datasets y modelos chicos, como los de MNIST, el costo de transformar superaba la ganancia.</li>
+      <li><b>→</b> Primero la implementamos con transformadas rápidas de Fourier. Con nuestros datasets y modelos chicos, como los de MNIST, el costo de transformar superaba la ganancia.</li>
       <li><b>→</b> Lo que quedó es im2col: cada ventana donde se apoya el kernel se copia como una columna de una matriz.</li>
       <li><b>→</b> Así, toda la convolución es una sola multiplicación de matrices, el kernel como fila por esa matriz, y la multiplicación de matrices está muy optimizada. Después reordenamos im2col y col2im para aprovechar mejor la caché.</li>
       <li><b>→</b> También probamos paralelizarla entre hilos y tampoco convino: más sobrecarga que beneficio, en MNIST y con modelos chicos. Con modelos, batches y kernels más grandes el balance podría invertirse, así que queda como trabajo futuro elegir el algoritmo según el tamaño de las matrices.</li>
     </ul>
-    <p class="n-trans">Traspaso: «Ya vimos cómo está construido. ¿Cuánto esperamos que cueste sincronizar? Lorenzo.»</p>
+    <p class="n-trans">«La variante de FFT se apoya en un resultado clásico.»</p>
     <p class="n-src">machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajos_futuros.md · commits d880f65 (FFT), a60fa08 y 93ae0c8 (im2col)</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="Teorema de la convolución" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="0:30">
+  <div class="kicker"><span class="path">08 · motor de ML</span></div>
+  <h2 data-anim>Teorema de <em>la convolución</em></h2>
+  <div class="body">
+    <div class="col wide" style="justify-content:center">
+      <p class="txt" data-anim>La transformada de Fourier de una convolución es el <strong>producto punto a punto</strong> de las transformadas:</p>
+      <div class="formula" data-anim style="font-size:44px">F{f * g} = F{f} · F{g}</div>
+      <div class="formula" data-step="1" style="font-size:44px">f * g = F<span class="sup">−1</span>{F{f} · F{g}}</div>
+      <p class="txt" data-step="1" style="font-size:24px">Con la transformada discreta, <code>*</code> es la convolución circular.</p>
+      <p class="txt" data-step="2" style="font-size:24px">Costo para una imagen de n×n y un kernel de k×k.</p>
+    </div>
+    <div class="kws-col">
+      <span class="kw" data-step="1">convolución → producto</span>
+      <span class="kw ps" data-step="2">directa: n² · k²</span>
+      <span class="kw ar" data-step="2">con FFT: n² · log n</span>
+      <span class="kw bad" data-step="2">kernel chico: no compensó</span>
+    </div>
+  </div>
+  <aside class="notes">
+    <p class="n-idea">La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.</p>
+    <ul class="n-oral">
+      <li>Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto punto a punto de las transformadas.</li>
+      <li><b>→</b> Entonces se transforman la entrada y el kernel, se multiplican y se vuelve con la inversa.</li>
+      <li><b>→</b> Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.</li>
+      <li>Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.</li>
+    </ul>
+    <p class="n-trans">Traspaso: «Ya vimos cómo está construido. ¿Cuánto esperamos que cueste sincronizar? Lorenzo.»</p>
+    <p class="n-src">docs/report/trabajos_futuros.md (variación del modelo de cómputo de la convolución) · Mathieu et al., 2013 · commit d880f65 (conv_fft de ndarray_conv)</p>
   </aside>
 </section>
 
@@ -626,7 +660,7 @@
     <ul class="n-oral">
       <li>El tiempo total de entrenamiento según la cantidad de workers. Es la figura del informe, con los colores invertidos para el proyector, y el eje Y está en segundos.</li>
       <li><b>→</b> Parameter Server con un servidor tiene su mínimo en 6 workers y desde ahí empeora: el servidor concentra todo el tráfico.</li>
-      <li><b>→</b> All-Reduce no se degrada, pero deja de mejorar: el cómputo por worker baja y la sincronización se queda en 2S/R. Es lo que predijo el modelo de la diapositiva 21.</li>
+      <li><b>→</b> All-Reduce no se degrada, pero deja de mejorar: el cómputo por worker baja y la sincronización se queda en 2S/R. Es lo que predijo el modelo de la diapositiva 22.</li>
       <li>Lectura aproximada, por si preguntan: AR cerca de 290 s desde 6 workers; PS cerca de 340 s en 6 y algo más de 400 s en 16.</li>
     </ul>
     <p class="n-trans">«¿Y si sacamos la barrera?»</p>
@@ -1017,7 +1051,7 @@
     <ul class="n-oral">
       <li>Volver de la página de la demo y abrir las preguntas.</li>
       <li>Preguntas probables: WildStore o BlockingStore; por qué 10 Mbps; por qué la pérdida de entrenamiento y no la de validación; tolerancia a fallos; uso de herramientas de IA, declarado en el informe.</li>
-      <li>Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 31 (A1) al 41 (A11).</li>
+      <li>Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 32 (A1) al 42 (A11).</li>
     </ul>
     <p class="n-trans">«¡Gracias por venir!»</p>
     <p class="n-src">docs/report/conclusiones.md</p>
@@ -1044,7 +1078,7 @@
 
 <div class="chrome" id="chrome">
   <span class="flags" id="flags"></span>
-  <span class="counter" id="counter">01 / 30</span>
+  <span class="counter" id="counter">01 / 31</span>
 </div>
 <div class="jump" id="jump"></div>
 
@@ -1060,7 +1094,7 @@
       <kbd>F</kbd><span>pantalla completa</span>
       <kbd>N</kbd><span>abrir notas del expositor (ventana aparte)</span>
       <kbd>G</kbd><span>índice de diapositivas</span>
-      <kbd>número + ↵</kbd><span>ir a una diapositiva (apéndice: A1 = 31)</span>
+      <kbd>número + ↵</kbd><span>ir a una diapositiva (apéndice: A1 = 32)</span>
       <kbd>? · H · Esc</kbd><span>mostrar / ocultar esta ayuda</span>
     </div>
     <p class="note">Las diapositivas avanzan por etapas. Volver atrás restaura el estado completo de la etapa, sin animación.</p>

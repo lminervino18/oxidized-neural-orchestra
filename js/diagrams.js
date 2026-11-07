@@ -618,7 +618,7 @@
     tl.addLabel("s1");
 
     const PK_DUR = 0.85;
-    const ITER_GAP = 1.25;
+    const ITER_GAP = 1.35;
     let currentPhase = phaseTexts.split;
 
     function runIteration(kind, k, at) {
@@ -645,32 +645,36 @@
       currentPhase = phaseTexts[key];
     }
 
+    let step = 2;
     let at = tl.duration() + 0.05;
     for (let k = 0; k < n - 1; k++) {
       switchPhase(`rs${k + 1}`, at);
       runIteration("rs", k, at + 0.25);
       at += ITER_GAP;
+      if (k < n - 2) tl.addLabel(`s${step++}`, at);
+      at += 0.05;
     }
     switchPhase("rsd", at);
     for (let p = 0; p < n; p++) {
       const c = (p + 1) % n;
       tl.to(cells[p][c].g.querySelector("rect"), { attr: { stroke: C.accent }, duration: 0.3 }, at + 0.1);
     }
-    tl.addLabel("s2", at + 0.5);
+    tl.addLabel(`s${step++}`, at + 0.5);
 
-    at = tl.labels.s2 + 0.05;
+    at += 0.55;
     for (let k = 0; k < n - 1; k++) {
       switchPhase(`ag${k + 1}`, at);
       runIteration("ag", k, at + 0.25);
       at += ITER_GAP;
+      tl.addLabel(`s${step++}`, at);
+      at += 0.05;
     }
-    tl.addLabel("s3", at);
 
-    switchPhase("done", tl.labels.s3 + 0.05);
-    cells.flat().forEach((cell) => tl.to(cell.g.querySelector("rect"), { attr: { stroke: C.accent }, duration: 0.3 }, tl.labels.s3 + 0.15));
-    tl.to(optim, { autoAlpha: 1, duration: 0.35, stagger: 0.06 }, tl.labels.s3 + 0.3);
-    tl.addLabel("s4");
-    return controller(tl, 4);
+    switchPhase("done", at);
+    cells.flat().forEach((cell) => tl.to(cell.g.querySelector("rect"), { attr: { stroke: C.accent }, duration: 0.3 }, at + 0.1));
+    tl.to(optim, { autoAlpha: 1, duration: 0.35, stagger: 0.06 }, at + 0.25);
+    tl.addLabel(`s${step}`);
+    return controller(tl, step);
   }
 
 
