@@ -399,7 +399,7 @@
   <aside class="notes">
     <p class="n-idea">Todos los nodos ejecutan el mismo binario y reciben su rol al conectarse; eso es lo que habilita Strategy-Switch.</p>
     <ul class="n-oral">
-      <li>Todo O.N.O. está escrito en Rust (si preguntan por qué, apéndice A8). Cada máquina corre el mismo binario, <code>node</code>. No hay una imagen de worker y otra de servidor.</li>
+      <li>Todo O.N.O. está escrito en Rust (si preguntan por qué, apéndice A5). Cada máquina corre el mismo binario, <code>node</code>. No hay una imagen de worker y otra de servidor.</li>
       <li><b>→</b> El orchestrator es el plano de control y vive dentro de la interfaz de terminal o de la biblioteca de Python. Se conecta con cada nodo mediante un handshake Connect/Accept.</li>
       <li><b>→</b> Le manda a cada nodo su especificación y su rol, worker o servidor. Cada extremo recibe un handle tipado que solo permite los mensajes de ese rol, y el compilador rechaza el resto.</li>
       <li><b>→</b> Los gradientes y los parámetros viajan entre nodos, en f16 y sin copias; el orchestrator queda fuera del plano de datos.</li>
@@ -551,7 +551,7 @@
       <li>S es el tamaño del modelo, lo que pesa un gradiente, y R es el ancho de banda de cada placa de red. Mandar S por una placa tarda S/R. A la izquierda, Parameter Server con un servidor; a la derecha, el anillo.</li>
       <li><b>→</b> En PS, los cuatro gradientes entran por la misma placa del servidor, uno detrás del otro, y después salen los cuatro modelos actualizados: 8 veces S/R. En general, 2·N<sub>W</sub>·S/R, que crece linealmente con los workers. El servidor es el cuello de botella.</li>
       <li><b>→</b> En el anillo, cada worker manda solo un fragmento de tamaño S/N<sub>W</sub> por paso, y todos transmiten a la vez. Son 2(N<sub>W</sub> − 1) pasos: con 4 workers, 6 pasos de S/4R, o sea 1,5·S/R. En general, 2(1 − 1/N<sub>W</sub>)·S/R, que nunca supera 2S/R por más workers que sumemos.</li>
-      <li>Supuestos, si preguntan: el mismo R en todos los nodos, placas full-duplex y latencias de cola despreciables. La derivación con varios servidores está en el apéndice A6.</li>
+      <li>Supuestos, si preguntan: el mismo R en todos los nodos, placas full-duplex y latencias de cola despreciables.</li>
     </ul>
     <p class="n-trans">«Si lo graficamos en función de los workers…»</p>
     <p class="n-src">docs/report/resultados.md (derivación de d_sync)</p>
@@ -703,7 +703,6 @@
     <div class="kws-col">
       <span class="kw ss" data-step="1">Strategy-Switch ≈ sincrónicos</span>
       <span class="kw bad" data-step="1">PS asincrónico colapsa</span>
-      <span class="kw warn" data-step="2">salvedad: WildStore</span>
     </div>
   </div>
   <aside class="notes">
@@ -711,7 +710,7 @@
     <ul class="n-oral">
       <li>La exactitud final sobre el conjunto de prueba de MNIST. All-Reduce, PS sincrónico y Strategy-Switch se superponen arriba.</li>
       <li><b>→</b> PS asincrónico cae al sumar workers, hasta valores cercanos al azar desde 8 workers: es el client drift en acción. Strategy-Switch, en cambio, conserva la exactitud de los sincrónicos con tiempos cercanos a los del asincrónico.</li>
-      <li><b>→</b> La salvedad, dicha por nosotros antes de que pregunten: PS asincrónico corrió con WildStore, que hace escrituras sin protección al estilo Hogwild!. Con estos datos no podemos separar el drift del efecto de esas escrituras. Repetirlo con BlockingStore es trabajo futuro.</li>
+      <li>La salvedad, dicha por nosotros antes de que pregunten: PS asincrónico corrió con WildStore, que hace escrituras sin protección al estilo Hogwild!. Con estos datos no podemos separar el drift del efecto de esas escrituras.</li>
       <li>Alcance: estas conclusiones valen para MNIST, LeNet-5 y este entorno.</li>
     </ul>
     <p class="n-trans">«¿Qué queda por hacer?»</p>
@@ -719,7 +718,7 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Trabajos futuros" data-section="cierre" data-speaker="Lorenzo Minervino" data-time="0:45" data-keywords="tolerancia a fallos · PS asincrónico con BlockingStore · convolución según el tamaño · más arquitecturas · compresión">
+<section class="slide" data-title="Trabajos futuros" data-section="cierre" data-speaker="Lorenzo Minervino" data-time="0:45" data-keywords="tolerancia a fallos · convolución según el tamaño · más arquitecturas">
   <div class="kicker"><span class="path">12 · lo que sigue</span></div>
   <h2 data-anim>Trabajos <em>futuros</em></h2>
   <div class="body center">
@@ -728,10 +727,8 @@
         <div class="term-bar">~/oxidized-neural-orchestra</div>
         <p class="term-line cmd" data-type>cat TODO.md</p>
         <p class="term-line todo" data-step="1" data-type>tolerancia a fallos</p>
-        <p class="term-line todo" data-step="1" data-type>repetir PS asincrónico con BlockingStore</p>
         <p class="term-line todo" data-step="2" data-type>convolución: elegir el algoritmo según el tamaño</p>
         <p class="term-line todo" data-step="3" data-type>más arquitecturas: U-Net, recurrentes</p>
-        <p class="term-line todo" data-step="3" data-type>medir la compresión por separado</p>
       </div>
     </div>
   </div>
@@ -739,9 +736,9 @@
     <p class="n-idea">El sistema quedó listo para retomarse, y varias líneas ya tienen el diseño especificado.</p>
     <ul class="n-oral">
       <li>Las líneas abiertas, ordenadas por relevancia. Varias ya tienen el diseño especificado en el repositorio.</li>
-      <li><b>→</b> Tolerancia a fallos: es imprescindible para escalar, y el comportamiento por entidad ya está especificado. También, repetir PS asincrónico con BlockingStore para separar el efecto del drift del de las escrituras concurrentes.</li>
+      <li><b>→</b> Tolerancia a fallos: es imprescindible para escalar, y el comportamiento por entidad ya está especificado.</li>
       <li><b>→</b> Elegir el algoritmo de convolución según el tamaño de las matrices, como contamos antes.</li>
-      <li><b>→</b> Ampliar el motor a otras arquitecturas y medir de forma aislada la compresión de gradientes.</li>
+      <li><b>→</b> Ampliar el motor a otras arquitecturas.</li>
     </ul>
     <p class="n-trans">«Y ahora, vamos a verlo funcionando.»</p>
     <p class="n-src">docs/report/trabajos_futuros.md</p>
@@ -775,7 +772,7 @@
   </aside>
 </section>
 
-<!-- ═════════════════════════ APÉNDICE · A1–A8 durante el entrenamiento, A9–A11 de respaldo ═════════════════════════ -->
+<!-- ═════════════════════════ APÉNDICE · A1–A6 durante el entrenamiento ═════════════════════════ -->
 
 <section class="slide" data-title="A1 · Por qué una base común" data-section="apéndice" data-appendix data-speaker="Alejo Ordoñez" data-time="1:15">
   <div class="kicker"><span class="path">A1 · el problema de comparar</span></div>
@@ -872,56 +869,43 @@
       <li><b>→</b> All-Reduce: el orden del anillo que minimiza la latencia total es un circuito hamiltoniano de costo mínimo, resuelto en forma exacta con programación dinámica sobre subconjuntos (Held y Karp, 1962).</li>
       <li><b>→</b> Parameter Server: se eligen los k servidores que minimizan la mayor latencia worker–servidor, por backtracking. Y el optimizador con estado se aplica después de agregar: si cada worker aplicara Adam sobre su gradiente local, acumularían momentos distintos y las réplicas divergirían.</li>
     </ul>
-    <p class="n-trans">«Y el criterio para detener el entrenamiento no es el mismo que dispara el switch.»</p>
+    <p class="n-trans">Traspaso: «Lorenzo cuenta por qué elegimos Rust.»</p>
     <p class="n-src">docs/report/solucion.md (Selección de topología · Ubicación del optimizador) · código: orchestrator/src/calculator/</p>
   </aside>
 </section>
 
-<section class="slide" data-title="A5 · Detención temprana y disparador" data-section="apéndice" data-appendix data-speaker="Marcos Bianchi Fernández" data-time="1:00">
-  <div class="kicker"><span class="path">A5 · criterios</span></div>
-  <h2 data-anim>Detención temprana ≠ disparador del switch</h2>
-  <div class="body">
-    <div class="col">
-      <div class="panel"><span class="panel-title">detención temprana</span><ul class="list tight"><li>Pérdida máxima entre workers, por ronda</li><li>Cuenta rondas consecutivas con |ΔL| ≤ tolerancia</li><li>Se detiene a las <strong>3 consecutivas</strong>; cualquier salto reinicia</li><li>Variante de meseta sobre entrenamiento (Prechelt usa validación)</li></ul></div>
-    </div>
-    <div class="col">
-      <div class="panel"><span class="panel-title">disparador de strategy-switch</span><ul class="list tight"><li>Misma pérdida máxima por ronda</li><li><strong>Promedio</strong> de variación relativa en ventana w = 6</li><li>Cambia cuando s ≤ 0,01</li><li>Se evalúa una sola vez: tras el cambio, el tracker se descarta</li></ul></div>
-    </div>
-  </div>
-  <aside class="notes">
-    <p class="n-idea">Dos criterios distintos sobre la misma señal.</p>
-    <ul class="n-oral"><li>Ambos usan la pérdida de entrenamiento máxima para evitar una pasada de evaluación por ronda y para ser conservadores.</li></ul>
-    <p class="n-trans">Traspaso: «Lorenzo cuenta la derivación completa de d<sub>sync</sub>.»</p>
-    <p class="n-src">docs/report/solucion.md (Plano de Control y Orquestación) · código: orchestrator/src/sessions/</p>
-  </aside>
-</section>
+<!-- ═════════════════════════ CIERRE ═════════════════════════ -->
 
-<section class="slide" data-title="A6 · Derivación de d_sync" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:00">
-  <div class="kicker"><span class="path">A6 · costo de sincronización</span></div>
-  <h2 data-anim>Derivación del <em>delay de sincronización</em></h2>
-  <div class="body">
+<section class="slide" data-title="A5 · ¿Por qué Rust?" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:00">
+  <div class="kicker"><span class="path">A5 · herramientas</span></div>
+  <h2 data-anim>¿Por qué <em>Rust</em>?</h2>
+  <div class="body center">
     <div class="col">
-      <div class="formula">T<span class="sub">total</span> = N<span class="sub">epochs</span> · (T<span class="sub">epoch</span>/N<span class="sub">W</span> + d<span class="sub">sync</span>) + d<span class="sub">init</span></div>
-      <div class="formula">PS, 1 servidor: 2 · N<span class="sub">W</span> · S/R <span class="dim">(co-ubicado: 2(N<span class="sub">W</span>−1) S/R)</span></div>
-      <div class="formula">PS, N<span class="sub">S</span> servidores: 2 · (N<span class="sub">W</span>/N<span class="sub">S</span>) · S/R <span class="dim">(N<span class="sub">S</span> ≤ N<span class="sub">W</span>)</span></div>
-      <div class="formula">Ring AR: 2(N<span class="sub">W</span>−1) · (S/N<span class="sub">W</span>)/R = 2(1 − 1/N<span class="sub">W</span>) · S/R</div>
-      <div class="formula">Strategy-Switch: d<span class="sub">sync</span><span class="sup">AR</span> antes · 0 ≤ d<span class="sub">sync</span><span class="sup">async PS</span> ≤ d<span class="sub">sync</span><span class="sup">PS</span> después</div>
-    </div>
-    <div class="col narrow" style="justify-content:center">
-      <p class="txt">Supuestos: mismo R en todos los nodos; encolado, propagación y procesamiento despreciables; placas full-duplex; S = N<sub>params</sub> × 2 bytes (f16).</p>
-      <p class="small">Expresiones de elaboración propia a partir de la literatura citada.</p>
+      <div class="term" data-anim>
+        <div class="term-bar">~/oxidized-neural-orchestra</div>
+        <p class="term-line cmd" data-type>cargo build --release</p>
+        <p class="term-line ok" data-step="1" data-type>rendimiento sin recolector de basura</p>
+        <p class="term-line ok" data-step="1" data-type>seguridad de memoria al compilar</p>
+        <p class="term-line ok" data-step="2" data-type>concurrencia sin data races</p>
+      </div>
     </div>
   </div>
   <aside class="notes">
-    <p class="n-idea">La derivación completa del modelo analítico, incluido Parameter Server con varios servidores.</p>
-    <ul class="n-oral"><li>Con N_S = N_W, Multi-PS alcanza 2S/R, el mismo límite que AR cuando N_W crece.</li></ul>
+    <p class="n-idea">Elegimos Rust por el control de bajo nivel con garantías de seguridad.</p>
+    <ul class="n-oral">
+      <li>Todo O.N.O. está escrito en Rust, incluida la biblioteca de redes neuronales.</li>
+      <li><b>→</b> Da control de bajo nivel, como C o C++, pero sin recolector de basura y con la seguridad de memoria verificada al compilar.</li>
+      <li><b>→</b> En concurrencia, el compilador rechaza las condiciones de carrera sobre memoria compartida (<em>fearless concurrency</em>): ninguna llegó a la rama principal.</li>
+      <li>Si preguntan por las dificultades: el compilador no verifica la coordinación distribuida. Esa fue la dificultad real, sobre todo en All-Reduce.</li>
+      <li>Si preguntan por <code>unsafe</code>: está acotado y marcado, por ejemplo en WildStore (Hogwild!) y en la codificación de mensajes.</li>
+    </ul>
     <p class="n-trans">«Lo que más aprendimos en el camino.»</p>
-    <p class="n-src">docs/report/resultados.md</p>
+    <p class="n-src">docs/report/herramientas.md (Rust) · riesgos.md (complejidad de la implementación distribuida en Rust)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="A7 · Lecciones: errores silenciosos" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:30">
-  <div class="kicker"><span class="path">A7 · lecciones aprendidas</span></div>
+<section class="slide" data-title="A6 · Lecciones: errores silenciosos" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:30">
+  <div class="kicker"><span class="path">A6 · lecciones aprendidas</span></div>
   <h2 data-anim>La instrumentación <em>detecta</em>: tres errores silenciosos</h2>
   <div class="body">
     <div class="col">
@@ -936,42 +920,69 @@
   <aside class="notes">
     <p class="n-idea">La lección central de ingeniería del trabajo.</p>
     <ul class="n-oral"><li>Conviene tener una medición end-to-end desde temprano. Otra lección: «make it work, make it right, make it fast».</li></ul>
-    <p class="n-trans">«¿Y por qué Rust?»</p>
+    <p class="n-trans">«Veamos cómo terminó el entrenamiento.»</p>
     <p class="n-src">docs/report/riesgos.md (Lecciones aprendidas)</p>
   </aside>
 </section>
 
-<section class="slide" data-title="A8 · ¿Por qué Rust?" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:00" data-after="2:00">
-  <div class="kicker"><span class="path">A8 · herramientas</span></div>
-  <h2 data-anim>¿Por qué <em>Rust</em>?</h2>
-  <div class="body center">
-    <div class="col">
-      <div class="term" data-anim>
-        <div class="term-bar">~/oxidized-neural-orchestra</div>
-        <p class="term-line cmd" data-type>cargo build --release</p>
-        <p class="term-line ok" data-step="1" data-type>rendimiento sin recolector de basura</p>
-        <p class="term-line ok" data-step="1" data-type>seguridad de memoria al compilar</p>
-        <p class="term-line ok" data-step="2" data-type>concurrencia sin data races</p>
-        <p class="term-line ok" data-step="2" data-type>async con tokio</p>
-      </div>
-    </div>
+<section class="slide cover closing" data-title="¿Y la demo?" data-section="demo" data-speaker="Lorenzo Minervino" data-time="0:15" data-after="2:00" data-scene="cover">
+  <div class="scene" data-three></div>
+  <div class="logo-wrap"><img class="logo" src="assets/logo.jpg" alt="Logo de Oxidized Neural Orchestra" data-float></div>
+  <div class="titles">
+    <div class="prompt" data-anim>~/oxidized-neural-orchestra $ demo<span class="cursor"></span></div>
+    <h1 class="thanks" data-anim>¿Y la <span class="o">demo</span>?</h1>
   </div>
   <aside class="notes">
-    <p class="n-idea">Elegimos Rust por el control de bajo nivel con garantías de seguridad.</p>
+    <p class="n-idea">Volver al entrenamiento que lanzamos y ver qué aprendió el modelo.</p>
     <ul class="n-oral">
-      <li>Todo O.N.O. está escrito en Rust, incluida la biblioteca de redes neuronales.</li>
-      <li><b>→</b> Da control de bajo nivel, como C o C++, pero sin recolector de basura y con la seguridad de memoria verificada al compilar.</li>
-      <li><b>→</b> En concurrencia, el compilador rechaza las condiciones de carrera sobre memoria compartida (<em>fearless concurrency</em>): ninguna llegó a la rama principal. Las comunicaciones son async, sobre tokio.</li>
-      <li>Si preguntan por las dificultades: el compilador no verifica la coordinación distribuida. Esa fue la dificultad real, sobre todo en All-Reduce.</li>
-      <li>Si preguntan por <code>unsafe</code>: está acotado y marcado, por ejemplo en WildStore (Hogwild!) y en la codificación de mensajes.</li>
+      <li>Volvemos al entrenamiento que lanzamos. Cuando la TUI diga FINISHED, guardamos el modelo y lo cargamos en la página, que mide su exactitud y permite dibujar números.</li>
+      <li>Los pasos exactos están en presentation/demo/INSTRUCCIONES.md.</li>
     </ul>
-    <p class="n-trans">«Veamos cómo terminó el entrenamiento.» Pasar a la página de la demo (ver GUION_DEMO.md).</p>
-    <p class="n-src">docs/report/herramientas.md (Rust) · riesgos.md (complejidad de la implementación distribuida en Rust)</p>
+    <p class="n-trans">«Con esto terminamos. ¿Preguntas?»</p>
+    <p class="n-src">presentation/demo/INSTRUCCIONES.md · presentation/GUION_DEMO.md</p>
   </aside>
 </section>
 
-<section class="slide" data-title="A9 · Grabación de Strategy-Switch" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
-  <div class="kicker"><span class="path">A9 · respaldo si falla la demo</span></div>
+<section class="slide cover closing" data-title="¿Preguntas?" data-section="cierre" data-speaker="Los tres" data-time="0:30" data-scene="cover">
+  <div class="scene" data-three></div>
+  <div class="logo-wrap"><img class="logo" src="assets/logo.jpg" alt="Logo de Oxidized Neural Orchestra" data-float></div>
+  <div class="titles">
+    <div class="prompt" data-anim>~/oxidized-neural-orchestra $ preguntas<span class="cursor"></span></div>
+    <h1 class="thanks" data-anim>¿<span class="o">Preguntas</span>?</h1>
+  </div>
+  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
+  <aside class="notes">
+    <p class="n-idea">Abrir la ronda de preguntas.</p>
+    <ul class="n-oral">
+      <li>Volver de la página de la demo y abrir las preguntas.</li>
+      <li>Preguntas probables: WildStore o BlockingStore; por qué 10 Mbps; por qué la pérdida de entrenamiento y no la de validación; tolerancia a fallos; uso de herramientas de IA, declarado en el informe.</li>
+      <li>Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 33 (A1) al 41 (A9).</li>
+    </ul>
+    <p class="n-trans">«¡Gracias por venir!»</p>
+    <p class="n-src">docs/report/conclusiones.md</p>
+  </aside>
+</section>
+
+<section class="slide cover closing" data-title="¡Gracias por venir!" data-section="cierre" data-speaker="Los tres" data-time="0:30" data-scene="cover">
+  <div class="scene" data-three></div>
+  <div class="logo-wrap"><img class="logo" src="assets/logo.jpg" alt="Logo de Oxidized Neural Orchestra" data-float></div>
+  <div class="titles">
+    <div class="prompt" data-anim>~/oxidized-neural-orchestra $ exit</div>
+    <h1 class="thanks" data-anim>¡Gracias<br>por <span class="o">venir</span>!</h1>
+  </div>
+  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
+  <aside class="notes">
+    <p class="n-idea">Cerrar.</p>
+    <ul class="n-oral">
+      <li>Agradecer al jurado, al tutor y al co-tutor. El repositorio es público.</li>
+    </ul>
+    <p class="n-trans">—</p>
+    <p class="n-src">docs/report/agradecimientos.md</p>
+  </aside>
+</section>
+
+<section class="slide" data-title="A7 · Grabación de Strategy-Switch" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A7 · respaldo si falla la demo</span></div>
   <h2 data-anim>Grabación de <em>Strategy-Switch</em> en la TUI</h2>
   <div class="body" style="flex-direction:column;gap:0">
     <div class="tui" data-tui-player data-crop="0,0,190,36" style="width:1380px"><canvas></canvas></div>
@@ -990,8 +1001,8 @@
   </aside>
 </section>
 
-<section class="slide" data-title="A10 · Capturas de la TUI" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
-  <div class="kicker"><span class="path">A10 · respaldo si falla la demo</span></div>
+<section class="slide" data-title="A8 · Capturas de la TUI" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A8 · respaldo si falla la demo</span></div>
   <h2 data-anim>La TUI: <em>configuración</em> y <em>dashboard</em></h2>
   <div class="body" style="gap:34px">
     <div class="col narrow"><div class="tui" data-tui="menu" data-crop="50,0,90,26"><canvas></canvas><div class="tui-cap">menú principal</div></div>
@@ -1006,8 +1017,8 @@
   </aside>
 </section>
 
-<section class="slide" data-title="A11 · Topologías en la TUI" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
-  <div class="kicker"><span class="path">A11 · respaldo si falla la demo</span></div>
+<section class="slide" data-title="A9 · Topologías en la TUI" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
+  <div class="kicker"><span class="path">A9 · respaldo si falla la demo</span></div>
   <h2 data-anim>Las tres topologías, <em>en la TUI</em></h2>
   <div class="body">
     <div class="col wide">
@@ -1036,49 +1047,9 @@
   </aside>
 </section>
 
-<!-- ═════════════════════════ CIERRE ═════════════════════════ -->
-
-<section class="slide cover closing" data-title="¿Preguntas?" data-section="cierre" data-speaker="Los tres" data-time="0:30" data-scene="cover">
-  <div class="scene" data-three></div>
-  <div class="logo-wrap"><img class="logo" src="assets/logo.jpg" alt="Logo de Oxidized Neural Orchestra" data-float></div>
-  <div class="titles">
-    <div class="prompt" data-anim>~/oxidized-neural-orchestra $ preguntas<span class="cursor"></span></div>
-    <h1 class="thanks" data-anim>¿<span class="o">Preguntas</span>?</h1>
-  </div>
-  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
-  <aside class="notes">
-    <p class="n-idea">Abrir la ronda de preguntas.</p>
-    <ul class="n-oral">
-      <li>Volver de la página de la demo y abrir las preguntas.</li>
-      <li>Preguntas probables: WildStore o BlockingStore; por qué 10 Mbps; por qué la pérdida de entrenamiento y no la de validación; tolerancia a fallos; uso de herramientas de IA, declarado en el informe.</li>
-      <li>Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 32 (A1) al 42 (A11).</li>
-    </ul>
-    <p class="n-trans">«¡Gracias por venir!»</p>
-    <p class="n-src">docs/report/conclusiones.md</p>
-  </aside>
-</section>
-
-<section class="slide cover closing" data-title="¡Gracias por venir!" data-section="cierre" data-speaker="Los tres" data-time="0:30" data-scene="cover">
-  <div class="scene" data-three></div>
-  <div class="logo-wrap"><img class="logo" src="assets/logo.jpg" alt="Logo de Oxidized Neural Orchestra" data-float></div>
-  <div class="titles">
-    <div class="prompt" data-anim>~/oxidized-neural-orchestra $ exit</div>
-    <h1 class="thanks" data-anim>¡Gracias<br>por <span class="o">venir</span>!</h1>
-  </div>
-  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
-  <aside class="notes">
-    <p class="n-idea">Cerrar.</p>
-    <ul class="n-oral">
-      <li>Agradecer al jurado, al tutor y al co-tutor. El repositorio es público.</li>
-    </ul>
-    <p class="n-trans">—</p>
-    <p class="n-src">docs/report/agradecimientos.md</p>
-  </aside>
-</section>
-
 <div class="chrome" id="chrome">
   <span class="flags" id="flags"></span>
-  <span class="counter" id="counter">01 / 31</span>
+  <span class="counter" id="counter">01 / 32</span>
 </div>
 <div class="jump" id="jump"></div>
 
@@ -1094,7 +1065,7 @@
       <kbd>F</kbd><span>pantalla completa</span>
       <kbd>N</kbd><span>abrir notas del expositor (ventana aparte)</span>
       <kbd>G</kbd><span>índice de diapositivas</span>
-      <kbd>número + ↵</kbd><span>ir a una diapositiva (apéndice: A1 = 32)</span>
+      <kbd>número + ↵</kbd><span>ir a una diapositiva (apéndice: A1 = 33)</span>
       <kbd>? · H · Esc</kbd><span>mostrar / ocultar esta ayuda</span>
     </div>
     <p class="note">Las diapositivas avanzan por etapas. Volver atrás restaura el estado completo de la etapa, sin animación.</p>
