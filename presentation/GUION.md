@@ -40,7 +40,7 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 19:15 | 21:00 | 16 | La orquesta por dentro | Marcos Bianchi Fernández | «mismo binario en cada nodo» «orchestrator: control» «el rol llega al conectarse» «datos: de nodo a nodo» |
 | 21:00 | 22:00 | 17 | Una librería de ML desde cero | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
 | 22:00 | 23:15 | 18 | La convolución, a mano | Alejo Ordoñez | «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño» |
-| 23:15 | 23:45 | 19 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó» |
+| 23:15 | 23:45 | 19 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó» |
 | 23:45 | 24:45 | 20 | ¿Cuánto tarda entrenar? | Lorenzo Minervino | «repartimos el cómputo» «sincronizar: todos esperan» «una ronda por época» «d_sync decide cuánto escala» |
 | 24:45 | 26:00 | 21 | De dónde sale d_sync | Lorenzo Minervino | «S: el modelo · R: la red» «PS: todo por una placa» «crece con los workers» «AR: todos transmiten a la vez» «acotado» |
 | 26:00 | 26:45 | 22 | Sincronizar cuesta | Lorenzo Minervino | «PS: crece con N» «cuello de botella: el servidor» «AR: nunca supera 2S/R» |
@@ -341,12 +341,12 @@ Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajo
 
 ### 23:15 → 23:45 · 19 · Teorema de la convolución
 
-**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó»
+**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó»
 
 > La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.
 
-- Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto punto a punto de las transformadas.
-- **→** Entonces se transforman la entrada y el kernel, se multiplican y se vuelve con la inversa.
+- Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto de Hadamard, es decir, punto a punto, de las transformadas.
+- **→** Entonces se transforman la entrada y el kernel, se multiplican punto a punto y se vuelve con la inversa.
 - **→** Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.
 - Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.
 

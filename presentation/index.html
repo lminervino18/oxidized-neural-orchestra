@@ -479,14 +479,14 @@
   <h2 data-anim>Teorema de <em>la convolución</em></h2>
   <div class="body">
     <div class="col wide" style="justify-content:center">
-      <p class="txt" data-anim>La transformada de Fourier de una convolución es el <strong>producto punto a punto</strong> de las transformadas:</p>
-      <div class="formula" data-anim style="font-size:44px">F{f * g} = F{f} · F{g}</div>
-      <div class="formula" data-step="1" style="font-size:44px">f * g = F<span class="sup">−1</span>{F{f} · F{g}}</div>
+      <p class="txt" data-anim>La transformada de Fourier de una convolución es el <strong>producto de Hadamard</strong> (<code>⊙</code>, punto a punto) de las transformadas:</p>
+      <div class="formula" data-anim style="font-size:44px">F{f * g} = F{f} ⊙ F{g}</div>
+      <div class="formula" data-step="1" style="font-size:44px">f * g = F<span class="sup">−1</span>{F{f} ⊙ F{g}}</div>
       <p class="txt" data-step="1" style="font-size:24px">Con la transformada discreta, <code>*</code> es la convolución circular.</p>
       <p class="txt" data-step="2" style="font-size:24px">Costo para una imagen de n×n y un kernel de k×k.</p>
     </div>
     <div class="kws-col">
-      <span class="kw" data-step="1">convolución → producto</span>
+      <span class="kw" data-step="1">convolución → producto ⊙</span>
       <span class="kw ps" data-step="2">directa: n² · k²</span>
       <span class="kw ar" data-step="2">con FFT: n² · log n</span>
       <span class="kw bad" data-step="2">kernel chico: no compensó</span>
@@ -495,8 +495,8 @@
   <aside class="notes">
     <p class="n-idea">La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.</p>
     <ul class="n-oral">
-      <li>Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto punto a punto de las transformadas.</li>
-      <li><b>→</b> Entonces se transforman la entrada y el kernel, se multiplican y se vuelve con la inversa.</li>
+      <li>Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto de Hadamard, es decir, punto a punto, de las transformadas.</li>
+      <li><b>→</b> Entonces se transforman la entrada y el kernel, se multiplican punto a punto y se vuelve con la inversa.</li>
       <li><b>→</b> Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.</li>
       <li>Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.</li>
     </ul>
