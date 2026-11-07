@@ -43,7 +43,7 @@ Si ya lo tienen:
 ```bash
 git fetch origin
 git checkout feat/defense-presentation
-git pull --rebase
+git pull --rebase --autostash
 cargo build --release -p node
 ```
 
@@ -126,7 +126,7 @@ El encabezado pasa de `CONNECTING` a `TRAINING`. `CONNECTING` tarda unos segundo
 - `v` alterna entre el panel y la topología: primero se ve el anillo de All-Reduce.
 - El cambio de estrategia llega cerca de la época 15. El encabezado muestra `⟳ switching W0 → PS` unos instantes y queda registrado en el panel `Events`.
 - Después del cambio, el encabezado dice `workers 2/2` y `servers 1`. Es lo esperado: un nodo pasó a ser el servidor. Con `v` se ve la estrella.
-- El contador de épocas pasa del total, por ejemplo `47/32`. También es lo esperado: después del cambio cuenta de nuevo.
+- El contador de épocas no pasa de `max_epochs`, ni siquiera después del cambio. Un worker puede terminar una época antes que el otro.
 
 ## 6. Guardar el modelo
 
@@ -169,13 +169,13 @@ Para cargar otro modelo, recargá la página.
 
 ## Ajustar la duración
 
-Midan en la práctica cuánto tarda, porque depende de las computadoras. El total de épocas es «épocas hasta el cambio + `max_epochs`».
+Midan en la práctica cuánto tarda, porque depende de las computadoras. `max_epochs` es el total de épocas del entrenamiento, antes y después del cambio.
 
 ```text
-max_epochs ≈ (600 − segundos hasta el cambio) / segundos por época después del cambio
+max_epochs ≈ épocas hasta el cambio + (600 − segundos hasta el cambio) / segundos por época después del cambio
 ```
 
-El resultado va en `max_epochs`, en `training.json`, para una demo de 10 minutos. No lo bajen de 30.
+El resultado va en `max_epochs`, en `training.json`, para una demo de 10 minutos. No lo bajen de 20: si no queda margen después del cambio, el entrenamiento termina sin cambiar de estrategia.
 
 ## Si alguna computadora no usa Linux
 

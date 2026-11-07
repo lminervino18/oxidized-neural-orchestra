@@ -48,16 +48,16 @@ python3 presentation/tools/smooth_labels.py datasets/mnist/mnist_train_labels.bi
 En `presentation/demo/configs/`:
 
 - `model.json`: LeNet-5, 61.706 parámetros.
-- `training.json`: Strategy-Switch con los tres nodos, descenso por gradiente (lr 0,2), batch 64, 65 épocas y semilla 42. **Hay que reemplazar las tres IPs de `addrs`** por las de las computadoras; el puerto es 40000 en las tres.
+- `training.json`: Strategy-Switch con los tres nodos, descenso por gradiente (lr 0,2), batch 64, 47 épocas en total y semilla 42. **Hay que reemplazar las tres IPs de `addrs`** por las de las computadoras; el puerto es 40000 en las tres.
 - `training.local.json`: la misma configuración con los tres nodos en una sola computadora (`127.0.0.1`), para ensayar.
 
 ### Ensayo y ajuste del tiempo
 
-La configuración está calibrada en una computadora de 8 núcleos, con cada nodo limitado a 2 núcleos para simular tres máquinas: el switch llega entre las épocas 14 y 16 (≈ 1:30) y el entrenamiento termina entre 9:15 y 10:30. En las computadoras de la defensa los tiempos van a cambiar, así que hay que hacer un ensayo completo con las tres y ajustar `max_epochs`:
+La calibración se hizo en una computadora de 8 núcleos, con cada nodo limitado a 2 núcleos para simular tres máquinas y unas 80 épocas en total: el switch llegó entre las épocas 14 y 16 (≈ 1:30) y el entrenamiento terminó entre 9:15 y 10:30. La configuración actual tiene 47 épocas en total y todavía no se midió completa. En las computadoras de la defensa los tiempos van a cambiar, así que hay que hacer un ensayo completo con las tres y ajustar `max_epochs`:
 
-- El total de épocas es «épocas hasta el switch + `max_epochs`», porque después del switch los workers arrancan un trainer nuevo. Por eso el contador de la TUI pasa del 100 %; es un comportamiento conocido (README de la presentación, «Diferencias detectadas»).
-- Medir en la TUI cuánto tarda una época después del switch y despejar: `max_epochs ≈ (600 s − tiempo hasta el switch) / segundos por época`.
-- No bajar `max_epochs` de 30: el switch tiene que llegar antes de que termine la fase de All-Reduce, y llega entre las épocas 14 y 16.
+- `max_epochs` es el total de épocas del entrenamiento: al llegar el switch, el orchestrator les manda a los workers solo las que quedan, así que el contador de la TUI no pasa del 100 %.
+- Medir en la TUI cuánto tarda una época después del switch y despejar: `max_epochs ≈ épocas hasta el switch + (600 s − tiempo hasta el switch) / segundos por época`.
+- No bajar `max_epochs` de 20: el switch llega entre las épocas 14 y 16, y si no queda margen después, el entrenamiento termina sin cambiar de estrategia.
 
 ### Por qué cambia siempre
 
@@ -103,12 +103,12 @@ El argumento es la carpeta que tiene `mnist_test_samples.bin` y `mnist_test_labe
 ## Si algo falla
 
 - **Un nodo no conecta:** revisar la IP en `training.json`, el puerto y el firewall, y reiniciar ese nodo. En la TUI, `q` vuelve al menú para relanzar.
-- **No da el tiempo o el entrenamiento se corta:** cargar en la página `presentation/demo/respaldo.safetensors`, un modelo entrenado con la misma configuración en un ensayo, y decir que es de un ensayo. Para mostrar la TUI quedan A9 (grabación), A10 (capturas) y A11 (topologías).
+- **No da el tiempo o el entrenamiento se corta:** cargar en la página `presentation/demo/respaldo.safetensors`, un modelo entrenado en un ensayo, y decir que es de un ensayo. Para mostrar la TUI quedan A9 (grabación), A10 (capturas) y A11 (topologías).
 - **La página no muestra nada:** `data.js` tiene que estar en la misma carpeta que `index.html`.
 
 ## Calibración realizada
 
-Diez entrenamientos completos con `training.local.json`, uno por semilla, en una computadora de 8 núcleos con cada nodo limitado a 2. Cambió de estrategia en los diez. La exactitud se mide sobre las 10.000 imágenes de prueba, contra las etiquetas originales.
+Diez entrenamientos completos con `training.local.json`, uno por semilla y con `max_epochs` en 65, que entonces se contaba después del switch, en una computadora de 8 núcleos con cada nodo limitado a 2. Cambió de estrategia en los diez. La exactitud se mide sobre las 10.000 imágenes de prueba, contra las etiquetas originales.
 
 | Semilla | Switch (época) | Switch (tiempo) | Épocas totales | Duración | Exactitud |
 |---|---|---|---|---|---|
