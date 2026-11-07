@@ -11,7 +11,7 @@
   "optimizer": { "gradient_descent": { "lr": 0.2 } },
   "loss_fn": "cross_entropy",
   "batch_size": 64,
-  "max_epochs": 47,
+  "max_epochs": 48,
   "offline_epochs": 0,
   "seed": 42
 }

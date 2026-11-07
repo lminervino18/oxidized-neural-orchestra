@@ -48,12 +48,12 @@ python3 presentation/tools/smooth_labels.py datasets/mnist/mnist_train_labels.bi
 En `presentation/demo/configs/`:
 
 - `model.json`: LeNet-5, 61.706 parámetros.
-- `training.json`: Strategy-Switch con los tres nodos, descenso por gradiente (lr 0,2), batch 64, 47 épocas en total y semilla 42. **Hay que reemplazar las tres IPs de `addrs`** por las de las computadoras; el puerto es 40000 en las tres.
+- `training.json`: Strategy-Switch con los tres nodos, descenso por gradiente (lr 0,2), batch 64, 48 épocas en total y semilla 42. **Hay que reemplazar las tres IPs de `addrs`** por las de las computadoras; el puerto es 40000 en las tres.
 - `training.local.json`: la misma configuración con los tres nodos en una sola computadora (`127.0.0.1`), para ensayar.
 
 ### Ensayo y ajuste del tiempo
 
-La calibración se hizo en una computadora de 8 núcleos, con cada nodo limitado a 2 núcleos para simular tres máquinas y unas 80 épocas en total: el switch llegó entre las épocas 14 y 16 (≈ 1:30) y el entrenamiento terminó entre 9:15 y 10:30. La configuración actual tiene 47 épocas en total y todavía no se midió completa. En las computadoras de la defensa los tiempos van a cambiar, así que hay que hacer un ensayo completo con las tres y ajustar `max_epochs`:
+La calibración se hizo en una computadora de 8 núcleos, con cada nodo limitado a 2 núcleos para simular tres máquinas y unas 80 épocas en total: el switch llegó entre las épocas 14 y 16 (≈ 1:30) y el entrenamiento terminó entre 9:15 y 10:30. La configuración actual tiene 48 épocas en total y todavía no se midió completa. En las computadoras de la defensa los tiempos van a cambiar, así que hay que hacer un ensayo completo con las tres y ajustar `max_epochs`:
 
 - `max_epochs` es el total de épocas del entrenamiento: al llegar el switch, el orchestrator les manda a los workers solo las que quedan, así que el contador de la TUI no pasa del 100 %.
 - Medir en la TUI cuánto tarda una época después del switch y despejar: `max_epochs ≈ épocas hasta el switch + (600 s − tiempo hasta el switch) / segundos por época`.
