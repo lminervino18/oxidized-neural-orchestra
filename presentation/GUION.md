@@ -221,8 +221,12 @@ Respaldo: docs/report/solucion.md (Parameter Server) · código: worker/src/work
 
 - Cuatro workers en un anillo lógico: cada uno recibe del anterior y envía al siguiente. Es la variante de Patarasuk y Yuan (2009).
 - **→** Cada worker parte su gradiente en N fragmentos, acá cuatro. Los colores indican de qué worker viene cada aporte.
-- **→** Reduce-scatter: N−1 rondas. En cada una, cada worker envía un fragmento y suma el que le llega. Al final, cada uno tiene un fragmento con la suma de todos.
-- **→** All-gather: otras N−1 rondas, ahora copiando, para que los fragmentos completos den la vuelta.
+- **→** Reduce-scatter, iteración 1: cada worker envía un fragmento al siguiente, y el que lo recibe lo suma al suyo.
+- **→** Iteración 2: cada uno reenvía el fragmento que acaba de sumar, que ya trae dos aportes.
+- **→** Iteración 3: son N−1 iteraciones. Al final, cada worker tiene un fragmento con la suma de todos.
+- **→** All-gather, iteración 1: ahora no se suma, se copia. Cada worker le pasa su fragmento completo al siguiente.
+- **→** Iteración 2: los fragmentos completos siguen dando la vuelta.
+- **→** Iteración 3: después de otras N−1 iteraciones, todos tienen los cuatro fragmentos completos.
 - **→** Cada worker divide por N y aplica el optimizador localmente. Todos llegan al mismo resultado sin que nadie centralice.
 
 **Pase:** «Las dos esperan, en cada ronda, a que todos terminen. ¿Y si no esperamos a nadie?»
