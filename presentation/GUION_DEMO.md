@@ -1,6 +1,6 @@
 # Guion de la demo
 
-Tres computadoras entrenan en vivo LeNet-5 sobre MNIST con Strategy-Switch, durante unos diez minutos. Mientras entrena se cuenta el apéndice A1–A8. Al terminar, el modelo se guarda y se carga en una página web que mide su exactitud sobre las 10.000 imágenes de prueba de MNIST y permite dibujar números con el mouse para que el modelo los adivine.
+Tres computadoras entrenan en vivo LeNet-5 sobre MNIST con Strategy-Switch, durante unos diez minutos. Mientras entrena se cuenta el apéndice A1–A6. Al terminar, el modelo se guarda y se carga en una página web que mide su exactitud sobre las 10.000 imágenes de prueba de MNIST y permite dibujar números con el mouse para que el modelo los adivine.
 
 ## Quién hace qué
 
@@ -8,10 +8,10 @@ Tres computadoras entrenan en vivo LeNet-5 sobre MNIST con Strategy-Switch, dura
 |---|---|---|---|
 | 29 · Ahora, la demo | 0:30 | Lanza el entrenamiento en la TUI y muestra el anillo de All-Reduce | Lorenzo |
 | A1–A2 | 2:30 | Base común, buffer plano | Alejo |
-| A3–A5 | 3:30 | Compresión, topología, detención temprana | Marcos |
-| A6–A8 | 3:30 | Derivación de d_sync, lecciones, ¿por qué Rust? | Lorenzo |
-| — | 2:00 | Guarda el modelo y muestra la página | Lorenzo |
-| 30 · ¿Preguntas? | — | Abre las preguntas | Los tres |
+| A3–A4 | 2:30 | Compresión y topología | Marcos |
+| A5–A6 | 2:30 | ¿Por qué Rust?, lecciones | Lorenzo |
+| 30 · ¿Y la demo? | 2:15 | Guarda el modelo y muestra la página | Lorenzo |
+| 31 · ¿Preguntas? | — | Abre las preguntas | Los tres |
 
 Entre bloque y bloque, quien opera la TUI la muestra unos segundos con la tecla `v`: primero el anillo de All-Reduce, después el momento «switching → PS» y al final la estrella de Parameter Server.
 
@@ -87,11 +87,11 @@ El argumento es la carpeta que tiene `mnist_test_samples.bin` y `mnist_test_labe
    ```
    Elegir *Start Training*. Como modelo, `presentation/demo/configs/model.json`, y como entrenamiento, `presentation/demo/configs/training.json`.
 3. Mostrar el dashboard y, con `v`, la topología: el anillo de All-Reduce. Avisar que en unos minutos va a cambiar de estrategia.
-4. Volver a las diapositivas y contar A1 → A8. Entre bloques, mirar la TUI.
+4. Volver a las diapositivas y contar A1 → A6. Entre bloques, mirar la TUI.
 5. Cuando el encabezado diga **FINISHED**, apretar `s`, escribir `demo.safetensors` y Enter. El log confirma con «model saved to demo.safetensors».
 6. Abrir la página y arrastrar `demo.safetensors`. Recorre las 10.000 imágenes de prueba y muestra la exactitud en grande.
 7. Dibujar dos o tres números con el mouse. Si un dibujo sale mal, usar «una imagen del test, al azar».
-8. Volver a la presentación y apretar `30` + Enter para ir a ¿Preguntas?
+8. Volver a la presentación, que quedó en ¿Y la demo?, y apretar → para ir a ¿Preguntas?
 
 ## Qué decir
 
@@ -103,7 +103,7 @@ El argumento es la carpeta que tiene `mnist_test_samples.bin` y `mnist_test_labe
 ## Si algo falla
 
 - **Un nodo no conecta:** revisar la IP en `training.json`, el puerto y el firewall, y reiniciar ese nodo. En la TUI, `q` vuelve al menú para relanzar.
-- **No da el tiempo o el entrenamiento se corta:** cargar en la página `presentation/demo/respaldo.safetensors`, un modelo entrenado en un ensayo, y decir que es de un ensayo. Para mostrar la TUI quedan A9 (grabación), A10 (capturas) y A11 (topologías).
+- **No da el tiempo o el entrenamiento se corta:** cargar en la página `presentation/demo/respaldo.safetensors`, un modelo entrenado en un ensayo, y decir que es de un ensayo. Para mostrar la TUI quedan A7 (grabación), A8 (capturas) y A9 (topologías).
 - **La página no muestra nada:** `data.js` tiene que estar en la misma carpeta que `index.html`.
 
 ## Calibración realizada

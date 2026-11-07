@@ -13,10 +13,10 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | Alejo Ordoñez | 17–19 | 02:45 |
 | Lorenzo Minervino | 20–29 | 08:45 |
 | Alejo Ordoñez | A1–A2 | 02:30 |
-| Marcos Bianchi Fernández | A3–A5 | 03:30 |
-| Lorenzo Minervino | A6–A8 | 03:30 + demo 02:00 |
-| Los tres | 30–31 | 01:00 |
-| **Total** | | **45:00** |
+| Marcos Bianchi Fernández | A3–A4 | 02:30 |
+| Lorenzo Minervino | A5–30 | 02:45 + demo 02:00 |
+| Los tres | 31–32 | 01:00 |
+| **Total** | | **43:15** |
 
 ## Línea de tiempo
 
@@ -48,20 +48,19 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 27:30 | 28:30 | 24 | Cómo medimos | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red lenta, a propósito» |
 | 28:30 | 29:30 | 25 | Resultados: sincrónicos | Lorenzo Minervino | «PS empeora desde 6 workers» «AR deja de mejorar» «como predijo el modelo» |
 | 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo sigue bajando» «¿pero aprende?» |
-| 30:00 | 31:15 | 27 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa» «salvedad: WildStore» |
-| 31:15 | 32:00 | 28 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · PS asincrónico con BlockingStore · convolución según el tamaño · más arquitecturas · compresión |
+| 30:00 | 31:15 | 27 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa» |
+| 31:15 | 32:00 | 28 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · convolución según el tamaño · más arquitecturas |
 | 32:00 | 32:30 | 29 | Ahora, la demo | Lorenzo Minervino | «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min entrenando» «después: el modelo, en el navegador» |
 | 32:30 | 33:45 | A1 | A1 · Por qué una base común | Alejo Ordoñez | — |
 | 33:45 | 35:00 | A2 | A2 · Modelo como buffer plano | Alejo Ordoñez | «capas = vistas» «particionar = delimitar rangos» «enviar sin copiar» |
 | 35:00 | 36:15 | A3 | A3 · Compresión con error feedback | Marcos Bianchi Fernández | «control: JSON» «datos: f16, sin copias» «solo lo que supera el umbral» «el resto, al residual» «error feedback» |
 | 36:15 | 37:30 | A4 | A4 · Topología por latencia | Marcos Bianchi Fernández | «10 pings por par» «anillo: viajante exacto» «servidor: menor latencia máxima» «optimizador después de agregar» |
-| 37:30 | 38:30 | A5 | A5 · Detención temprana y disparador | Marcos Bianchi Fernández | — |
-| 38:30 | 39:30 | A6 | A6 · Derivación de d_sync | Lorenzo Minervino | — |
-| 39:30 | 41:00 | A7 | A7 · Lecciones: errores silenciosos | Lorenzo Minervino | — |
-| 41:00 | 42:00 | A8 | A8 · ¿Por qué Rust? | Lorenzo Minervino | — |
-| 42:00 | 44:00 | — | Fin del entrenamiento y página de la demo | Lorenzo Minervino | ver `GUION_DEMO.md` |
-| 44:00 | 44:30 | 30 | ¿Preguntas? | Los tres | — |
-| 44:30 | 45:00 | 31 | ¡Gracias por venir! | Los tres | — |
+| 37:30 | 38:30 | A5 | A5 · ¿Por qué Rust? | Lorenzo Minervino | — |
+| 38:30 | 40:00 | A6 | A6 · Lecciones: errores silenciosos | Lorenzo Minervino | — |
+| 40:00 | 40:15 | 30 | ¿Y la demo? | Lorenzo Minervino | — |
+| 40:15 | 42:15 | — | Fin del entrenamiento y página de la demo | Lorenzo Minervino | ver `GUION_DEMO.md` |
+| 42:15 | 42:45 | 31 | ¿Preguntas? | Los tres | — |
+| 42:45 | 43:15 | 32 | ¡Gracias por venir! | Los tres | — |
 
 ## Qué dice cada uno
 
@@ -299,7 +298,7 @@ Respaldo: docs/report/estudio_derivado.md
 
 > Todos los nodos ejecutan el mismo binario y reciben su rol al conectarse; eso es lo que habilita Strategy-Switch.
 
-- Todo O.N.O. está escrito en Rust (si preguntan por qué, apéndice A8). Cada máquina corre el mismo binario, `node`. No hay una imagen de worker y otra de servidor.
+- Todo O.N.O. está escrito en Rust (si preguntan por qué, apéndice A5). Cada máquina corre el mismo binario, `node`. No hay una imagen de worker y otra de servidor.
 - **→** El orchestrator es el plano de control y vive dentro de la interfaz de terminal o de la biblioteca de Python. Se conecta con cada nodo mediante un handshake Connect/Accept.
 - **→** Le manda a cada nodo su especificación y su rol, worker o servidor. Cada extremo recibe un handle tipado que solo permite los mensajes de ese rol, y el compilador rechaza el resto.
 - **→** Los gradientes y los parámetros viajan entre nodos, en f16 y sin copias; el orchestrator queda fuera del plano de datos.
@@ -378,7 +377,7 @@ Respaldo: docs/report/resultados.md (modelo del tiempo total de entrenamiento)
 - S es el tamaño del modelo, lo que pesa un gradiente, y R es el ancho de banda de cada placa de red. Mandar S por una placa tarda S/R. A la izquierda, Parameter Server con un servidor; a la derecha, el anillo.
 - **→** En PS, los cuatro gradientes entran por la misma placa del servidor, uno detrás del otro, y después salen los cuatro modelos actualizados: 8 veces S/R. En general, 2·N_W·S/R, que crece linealmente con los workers. El servidor es el cuello de botella.
 - **→** En el anillo, cada worker manda solo un fragmento de tamaño S/N_W por paso, y todos transmiten a la vez. Son 2(N_W − 1) pasos: con 4 workers, 6 pasos de S/4R, o sea 1,5·S/R. En general, 2(1 − 1/N_W)·S/R, que nunca supera 2S/R por más workers que sumemos.
-- Supuestos, si preguntan: el mismo R en todos los nodos, placas full-duplex y latencias de cola despreciables. La derivación con varios servidores está en el apéndice A6.
+- Supuestos, si preguntan: el mismo R en todos los nodos, placas full-duplex y latencias de cola despreciables.
 
 **Pase:** «Si lo graficamos en función de los workers…»
 
@@ -457,13 +456,13 @@ Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_t
 
 ### 30:00 → 31:15 · 27 · Resultados: exactitud
 
-**Lorenzo Minervino** · 01:15 · en pantalla: «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa» «salvedad: WildStore»
+**Lorenzo Minervino** · 01:15 · en pantalla: «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa»
 
 > Strategy-Switch fue el mejor balance de esta campaña; la salvedad sobre WildStore es parte del resultado.
 
 - La exactitud final sobre el conjunto de prueba de MNIST. All-Reduce, PS sincrónico y Strategy-Switch se superponen arriba.
 - **→** PS asincrónico cae al sumar workers, hasta valores cercanos al azar desde 8 workers: es el client drift en acción. Strategy-Switch, en cambio, conserva la exactitud de los sincrónicos con tiempos cercanos a los del asincrónico.
-- **→** La salvedad, dicha por nosotros antes de que pregunten: PS asincrónico corrió con WildStore, que hace escrituras sin protección al estilo Hogwild!. Con estos datos no podemos separar el drift del efecto de esas escrituras. Repetirlo con BlockingStore es trabajo futuro.
+- La salvedad, dicha por nosotros antes de que pregunten: PS asincrónico corrió con WildStore, que hace escrituras sin protección al estilo Hogwild!. Con estos datos no podemos separar el drift del efecto de esas escrituras.
 - Alcance: estas conclusiones valen para MNIST, LeNet-5 y este entorno.
 
 **Pase:** «¿Qué queda por hacer?»
@@ -472,14 +471,14 @@ Respaldo: docs/report/resultados.md (salvedad final) · conclusiones_capitulo4.m
 
 ### 31:15 → 32:00 · 28 · Trabajos futuros
 
-**Lorenzo Minervino** · 00:45 · en pantalla: tolerancia a fallos · PS asincrónico con BlockingStore · convolución según el tamaño · más arquitecturas · compresión
+**Lorenzo Minervino** · 00:45 · en pantalla: tolerancia a fallos · convolución según el tamaño · más arquitecturas
 
 > El sistema quedó listo para retomarse, y varias líneas ya tienen el diseño especificado.
 
 - Las líneas abiertas, ordenadas por relevancia. Varias ya tienen el diseño especificado en el repositorio.
-- **→** Tolerancia a fallos: es imprescindible para escalar, y el comportamiento por entidad ya está especificado. También, repetir PS asincrónico con BlockingStore para separar el efecto del drift del de las escrituras concurrentes.
+- **→** Tolerancia a fallos: es imprescindible para escalar, y el comportamiento por entidad ya está especificado.
 - **→** Elegir el algoritmo de convolución según el tamaño de las matrices, como contamos antes.
-- **→** Ampliar el motor a otras arquitecturas y medir de forma aislada la compresión de gradientes.
+- **→** Ampliar el motor a otras arquitecturas.
 
 **Pase:** «Y ahora, vamos a verlo funcionando.»
 
@@ -554,47 +553,11 @@ Respaldo: docs/report/solucion.md (Separación de planos · Compresión de gradi
 - **→** All-Reduce: el orden del anillo que minimiza la latencia total es un circuito hamiltoniano de costo mínimo, resuelto en forma exacta con programación dinámica sobre subconjuntos (Held y Karp, 1962).
 - **→** Parameter Server: se eligen los k servidores que minimizan la mayor latencia worker–servidor, por backtracking. Y el optimizador con estado se aplica después de agregar: si cada worker aplicara Adam sobre su gradiente local, acumularían momentos distintos y las réplicas divergirían.
 
-**Pase:** «Y el criterio para detener el entrenamiento no es el mismo que dispara el switch.»
+**Pase:** Traspaso: «Lorenzo cuenta por qué elegimos Rust.»
 
 Respaldo: docs/report/solucion.md (Selección de topología · Ubicación del optimizador) · código: orchestrator/src/calculator/
 
-### 37:30 → 38:30 · A5 · A5 · Detención temprana y disparador
-
-**Marcos Bianchi Fernández** · 01:00 · en pantalla: —
-
-> Dos criterios distintos sobre la misma señal.
-
-- Ambos usan la pérdida de entrenamiento máxima para evitar una pasada de evaluación por ronda y para ser conservadores.
-
-**Pase:** Traspaso: «Lorenzo cuenta la derivación completa de d_sync.»
-
-Respaldo: docs/report/solucion.md (Plano de Control y Orquestación) · código: orchestrator/src/sessions/
-
-### 38:30 → 39:30 · A6 · A6 · Derivación de d_sync
-
-**Lorenzo Minervino** · 01:00 · en pantalla: —
-
-> La derivación completa del modelo analítico, incluido Parameter Server con varios servidores.
-
-- Con N_S = N_W, Multi-PS alcanza 2S/R, el mismo límite que AR cuando N_W crece.
-
-**Pase:** «Lo que más aprendimos en el camino.»
-
-Respaldo: docs/report/resultados.md
-
-### 39:30 → 41:00 · A7 · A7 · Lecciones: errores silenciosos
-
-**Lorenzo Minervino** · 01:30 · en pantalla: —
-
-> La lección central de ingeniería del trabajo.
-
-- Conviene tener una medición end-to-end desde temprano. Otra lección: «make it work, make it right, make it fast».
-
-**Pase:** «¿Y por qué Rust?»
-
-Respaldo: docs/report/riesgos.md (Lecciones aprendidas)
-
-### 41:00 → 42:00 · A8 · A8 · ¿Por qué Rust?
+### 37:30 → 38:30 · A5 · A5 · ¿Por qué Rust?
 
 **Lorenzo Minervino** · 01:00 · en pantalla: —
 
@@ -602,15 +565,40 @@ Respaldo: docs/report/riesgos.md (Lecciones aprendidas)
 
 - Todo O.N.O. está escrito en Rust, incluida la biblioteca de redes neuronales.
 - **→** Da control de bajo nivel, como C o C++, pero sin recolector de basura y con la seguridad de memoria verificada al compilar.
-- **→** En concurrencia, el compilador rechaza las condiciones de carrera sobre memoria compartida (*fearless concurrency*): ninguna llegó a la rama principal. Las comunicaciones son async, sobre tokio.
+- **→** En concurrencia, el compilador rechaza las condiciones de carrera sobre memoria compartida (*fearless concurrency*): ninguna llegó a la rama principal.
 - Si preguntan por las dificultades: el compilador no verifica la coordinación distribuida. Esa fue la dificultad real, sobre todo en All-Reduce.
 - Si preguntan por `unsafe`: está acotado y marcado, por ejemplo en WildStore (Hogwild!) y en la codificación de mensajes.
 
-**Pase:** «Veamos cómo terminó el entrenamiento.» Pasar a la página de la demo (ver GUION_DEMO.md).
+**Pase:** «Lo que más aprendimos en el camino.»
 
 Respaldo: docs/report/herramientas.md (Rust) · riesgos.md (complejidad de la implementación distribuida en Rust)
 
-### 44:00 → 44:30 · 30 · ¿Preguntas?
+### 38:30 → 40:00 · A6 · A6 · Lecciones: errores silenciosos
+
+**Lorenzo Minervino** · 01:30 · en pantalla: —
+
+> La lección central de ingeniería del trabajo.
+
+- Conviene tener una medición end-to-end desde temprano. Otra lección: «make it work, make it right, make it fast».
+
+**Pase:** «Veamos cómo terminó el entrenamiento.»
+
+Respaldo: docs/report/riesgos.md (Lecciones aprendidas)
+
+### 40:00 → 40:15 · 30 · ¿Y la demo?
+
+**Lorenzo Minervino** · 00:15 · en pantalla: —
+
+> Volver al entrenamiento que lanzamos y ver qué aprendió el modelo.
+
+- Volvemos al entrenamiento que lanzamos. Cuando la TUI diga FINISHED, guardamos el modelo y lo cargamos en la página, que mide su exactitud y permite dibujar números.
+- Los pasos exactos están en presentation/demo/INSTRUCCIONES.md.
+
+**Pase:** «Con esto terminamos. ¿Preguntas?»
+
+Respaldo: presentation/demo/INSTRUCCIONES.md · presentation/GUION_DEMO.md
+
+### 42:15 → 42:45 · 31 · ¿Preguntas?
 
 **Los tres** · 00:30 · en pantalla: —
 
@@ -618,13 +606,13 @@ Respaldo: docs/report/herramientas.md (Rust) · riesgos.md (complejidad de la im
 
 - Volver de la página de la demo y abrir las preguntas.
 - Preguntas probables: WildStore o BlockingStore; por qué 10 Mbps; por qué la pérdida de entrenamiento y no la de validación; tolerancia a fallos; uso de herramientas de IA, declarado en el informe.
-- Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 32 (A1) al 42 (A11).
+- Para volver a una diapositiva: tecla G (índice) o número + Enter. El apéndice va del 33 (A1) al 41 (A9).
 
 **Pase:** «¡Gracias por venir!»
 
 Respaldo: docs/report/conclusiones.md
 
-### 44:30 → 45:00 · 31 · ¡Gracias por venir!
+### 42:45 → 43:15 · 32 · ¡Gracias por venir!
 
 **Los tres** · 00:30 · en pantalla: —
 
@@ -638,7 +626,7 @@ Respaldo: docs/report/agradecimientos.md
 
 ## Respaldo (si falla la demo o para preguntas)
 
-### A9 · A9 · Grabación de Strategy-Switch
+### A7 · A7 · Grabación de Strategy-Switch
 
 > Respaldo si falla la demo: el cambio de estrategia grabado en una ejecución anterior.
 
@@ -646,7 +634,7 @@ Respaldo: docs/report/agradecimientos.md
 
 Respaldo: presentation/captures/rec/ · presentation/captures/configs/training_strategy_switch.json
 
-### A10 · A10 · Capturas de la TUI
+### A8 · A8 · Capturas de la TUI
 
 > Capturas de respaldo de las pantallas principales.
 
@@ -655,7 +643,7 @@ Respaldo: presentation/captures/rec/ · presentation/captures/configs/training_s
 
 Respaldo: presentation/captures/raw/
 
-### A11 · A11 · Topologías en la TUI
+### A9 · A9 · Topologías en la TUI
 
 > La topología que dibuja la TUI es la que construyó el orchestrator, y cambia en vivo cuando Strategy-Switch promueve un nodo.
 
