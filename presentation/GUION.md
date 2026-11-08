@@ -39,8 +39,8 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 18:30 | 19:15 | 15 | Medición del drift | Marcos Bianchi Fernández | «E: épocas sin sincronización» «E = 1: ≈ −1 punto de exactitud» «mayor caída con más nodos» «sin ganancia de tiempo» |
 | 19:15 | 21:00 | 16 | Arquitectura del sistema | Marcos Bianchi Fernández | «mismo binario en cada nodo» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos» |
 | 21:00 | 22:00 | 17 | Biblioteca de ML propia | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
-| 22:00 | 23:15 | 18 | Implementación de la convolución | Alejo Ordoñez | «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño» |
-| 23:15 | 23:45 | 19 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora» |
+| 22:00 | 22:30 | 18 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora» |
+| 22:30 | 23:45 | 19 | Implementación de la convolución | Alejo Ordoñez | «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño» |
 | 23:45 | 24:45 | 20 | Tiempo de un entrenamiento | Lorenzo Minervino | «el cómputo se reparte» «sincronización: todos esperan» «una ronda por época» «d_sync determina la escalabilidad» |
 | 24:45 | 26:00 | 21 | Cálculo de d_sync | Lorenzo Minervino | «S: tamaño del modelo · R: ancho de banda» «PS: todo el tráfico por una placa» «crece con la cantidad de workers» «AR: transmisión simultánea» «acotado» |
 | 26:00 | 26:45 | 22 | Costo de sincronización | Lorenzo Minervino | «PS: crecimiento lineal» «cuello de botella: el servidor» «AR: acotado por 2S/R» |
@@ -322,7 +322,22 @@ Respaldo: docs/report/solucion.md (Nodo agnóstico de rol · Separación de plan
 
 Respaldo: machine_learning/src/models.rs · docs/report/solucion.md (Motor de Redes Neuronales)
 
-### 22:00 → 23:15 · 18 · Implementación de la convolución
+### 22:00 → 22:30 · 18 · Teorema de la convolución
+
+**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora»
+
+> La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.
+
+- Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto de Hadamard, es decir, punto a punto, de las transformadas.
+- **→** Entonces se transforman la entrada y el kernel, se multiplican punto a punto y se vuelve con la inversa.
+- **→** Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.
+- Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.
+
+**Pase:** «Veamos cómo la implementamos.»
+
+Respaldo: docs/report/trabajos_futuros.md (variación del modelo de cómputo de la convolución) · Mathieu et al., 2013 · commit d880f65 (conv_fft de ndarray_conv)
+
+### 22:30 → 23:45 · 19 · Implementación de la convolución
 
 **Alejo Ordoñez** · 01:15 · en pantalla: «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño»
 
@@ -334,24 +349,9 @@ Respaldo: machine_learning/src/models.rs · docs/report/solucion.md (Motor de Re
 - **→** Así, toda la convolución es una sola multiplicación de matrices, el kernel como fila por esa matriz, y la multiplicación de matrices está muy optimizada. Después reordenamos im2col y col2im para aprovechar mejor la caché.
 - **→** También probamos paralelizarla entre hilos y tampoco convino: más sobrecarga que beneficio, en MNIST y con modelos chicos. Con modelos, batches y kernels más grandes el balance podría invertirse, así que queda como trabajo futuro elegir el algoritmo según el tamaño de las matrices.
 
-**Pase:** «La variante de FFT se apoya en un resultado clásico.»
-
-Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajos_futuros.md · commits d880f65 (FFT), a60fa08 y 93ae0c8 (im2col)
-
-### 23:15 → 23:45 · 19 · Teorema de la convolución
-
-**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora»
-
-> La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.
-
-- Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto de Hadamard, es decir, punto a punto, de las transformadas.
-- **→** Entonces se transforman la entrada y el kernel, se multiplican punto a punto y se vuelve con la inversa.
-- **→** Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.
-- Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.
-
 **Pase:** Traspaso: «Ya vimos cómo está construido. ¿Cuánto esperamos que cueste sincronizar? Lorenzo.»
 
-Respaldo: docs/report/trabajos_futuros.md (variación del modelo de cómputo de la convolución) · Mathieu et al., 2013 · commit d880f65 (conv_fft de ndarray_conv)
+Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajos_futuros.md · commits d880f65 (FFT), a60fa08 y 93ae0c8 (im2col)
 
 ### 23:45 → 24:45 · 20 · Tiempo de un entrenamiento
 
