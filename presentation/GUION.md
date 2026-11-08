@@ -23,39 +23,39 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | Desde | Hasta | # | Diapositiva | Quién | En pantalla |
 |---|---|---|---|---|---|
 | 00:00 | 00:30 | 01 | Portada | Alejo Ordoñez | O.N.O. · entrenamiento distribuido · Rust |
-| 00:30 | 01:00 | 02 | Cronograma | Alejo Ordoñez | por qué distribuir · cómo sincronizar · cómo está construido · cuánto cuesta · resultados · demo en vivo |
-| 01:00 | 02:00 | 03 | ¿Qué es un modelo? | Alejo Ordoñez | «entrada → salida» «adentro: parámetros» «entrenar = ajustarlos» «GPT-3: 175 mil millones» |
-| 02:00 | 03:00 | 04 | Entrenar es caro | Alejo Ordoñez | «más datos» «más parámetros» «días de cómputo» «no entra en memoria» |
-| 03:00 | 04:00 | 05 | Una máquina buena es cara | Alejo Ordoñez | «escalar verticalmente» «$$$ · pocos la tienen» «tiene un techo» |
-| 04:00 | 05:00 | 06 | Podemos usar muchas | Alejo Ordoñez | «hardware común» «escalar horizontalmente» «unidas por la red» |
-| 05:00 | 06:45 | 07 | Paralelismo de modelo y de datos | Alejo Ordoñez | «modelo → se parte la red» «datos → se parte el dataset» «O.N.O. → datos» |
-| 06:45 | 08:30 | 08 | Client drift | Alejo Ordoñez | «misma réplica, distintos datos» «client drift» «sincronizar = promediar» «¿cómo sincronizar?» |
-| 08:30 | 09:15 | 09 | Cuatro formas de sincronizar | Alejo Ordoñez | Parameter Server · All-Reduce · PS asincrónico · Strategy-Switch · misma base |
-| 09:15 | 11:15 | 10 | Parameter Server | Marcos Bianchi Fernández | «servidor central» «pull θ» «push gradiente» «promedio + optimizador» «varios servidores: por capa» |
-| 11:15 | 13:30 | 11 | Ring All-Reduce | Marcos Bianchi Fernández | «sin centro» «N fragmentos» «reduce-scatter: sumar» «all-gather: copiar» «÷ N en cada worker» |
-| 13:30 | 15:15 | 12 | Parameter Server asincrónico | Marcos Bianchi Fernández | «sincrónico: espera al más lento» «asincrónico: sin barrera» «θ viejo → más drift» |
-| 15:15 | 16:45 | 13 | Strategy-Switch: la idea | Marcos Bianchi Fernández | «arranca con All-Reduce» «¿se estancó la pérdida?» «ventana de 6 · umbral 1 %» «pasa a PS asincrónico» |
-| 16:45 | 18:30 | 14 | Strategy-Switch en O.N.O. | Marcos Bianchi Fernández | «el orchestrator mide» «Upgrade · Switch» «un worker pasa a servidor» «mismo proceso, otro rol» |
-| 18:30 | 19:15 | 15 | El drift, medido | Marcos Bianchi Fernández | «E épocas sin sincronizar» «E = 1 → cerca de −1 punto» «más nodos, más caída» «sin ganancia de tiempo» |
-| 19:15 | 21:00 | 16 | La orquesta por dentro | Marcos Bianchi Fernández | «mismo binario en cada nodo» «orchestrator: control» «el rol llega al conectarse» «datos: de nodo a nodo» |
-| 21:00 | 22:00 | 17 | Una librería de ML desde cero | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
-| 22:00 | 23:15 | 18 | La convolución, a mano | Alejo Ordoñez | «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño» |
-| 23:15 | 23:45 | 19 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó» |
-| 23:45 | 24:45 | 20 | ¿Cuánto tarda entrenar? | Lorenzo Minervino | «repartimos el cómputo» «sincronizar: todos esperan» «una ronda por época» «d_sync decide cuánto escala» |
-| 24:45 | 26:00 | 21 | De dónde sale d_sync | Lorenzo Minervino | «S: el modelo · R: la red» «PS: todo por una placa» «crece con los workers» «AR: todos transmiten a la vez» «acotado» |
-| 26:00 | 26:45 | 22 | Sincronizar cuesta | Lorenzo Minervino | «PS: crece con N» «cuello de botella: el servidor» «AR: nunca supera 2S/R» |
-| 26:45 | 27:30 | 23 | También desde Python | Lorenzo Minervino | «PyO3 + maturin» «libera el GIL» «benchmarks en Python» |
-| 27:30 | 28:30 | 24 | Cómo medimos | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red lenta, a propósito» |
-| 28:30 | 29:30 | 25 | Resultados: sincrónicos | Lorenzo Minervino | «PS empeora desde 6 workers» «AR deja de mejorar» «como predijo el modelo» |
-| 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo sigue bajando» «¿pero aprende?» |
-| 30:00 | 31:15 | 27 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa» |
-| 31:15 | 32:00 | 28 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · convolución según el tamaño · más arquitecturas |
-| 32:00 | 32:30 | 29 | Ahora, la demo | Lorenzo Minervino | «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min entrenando» «después: el modelo, en el navegador» |
+| 00:30 | 01:00 | 02 | Cronograma | Alejo Ordoñez | motivación · sincronización · arquitectura · costo de sincronización · resultados · demostración en vivo |
+| 01:00 | 02:00 | 03 | Definición de modelo | Alejo Ordoñez | «entrada → salida» «parámetros internos» «entrenamiento: ajuste de parámetros» «GPT-3: 175 mil millones de parámetros» |
+| 02:00 | 03:00 | 04 | Costo del entrenamiento | Alejo Ordoñez | «más datos» «más parámetros» «días de cómputo» «excede la memoria» |
+| 03:00 | 04:00 | 05 | Escalado vertical | Alejo Ordoñez | «mayor capacidad en un solo equipo» «costo elevado · acceso limitado» «límite físico» |
+| 04:00 | 05:00 | 06 | Escalado horizontal | Alejo Ordoñez | «hardware de uso general» «más equipos en paralelo» «interconectados por red» |
+| 05:00 | 06:45 | 07 | Paralelismo de modelo y de datos | Alejo Ordoñez | «modelo: partición de la red» «datos: partición del dataset» «O.N.O.: paralelismo de datos» |
+| 06:45 | 08:30 | 08 | Client drift | Alejo Ordoñez | «réplicas iguales, datos distintos» «client drift» «sincronización: promedio de réplicas» «elección de la sincronización» |
+| 08:30 | 09:15 | 09 | Estrategias de sincronización | Alejo Ordoñez | Parameter Server · All-Reduce · PS asincrónico · Strategy-Switch · misma base |
+| 09:15 | 11:15 | 10 | Parameter Server | Marcos Bianchi Fernández | «servidor central» «pull θ» «push gradiente» «promedio + optimizador» «varios servidores: partición por capa» |
+| 11:15 | 13:30 | 11 | Ring All-Reduce | Marcos Bianchi Fernández | «sin nodo central» «N fragmentos» «reduce-scatter: suma» «all-gather: copia» «÷ N en cada worker» |
+| 13:30 | 15:15 | 12 | Parameter Server asincrónico | Marcos Bianchi Fernández | «sincrónico: espera al nodo más lento» «asincrónico: sin barrera» «θ desactualizado → mayor drift» |
+| 15:15 | 16:45 | 13 | Strategy-Switch: principio | Marcos Bianchi Fernández | «inicio en All-Reduce» «criterio: estabilización de la pérdida» «ventana de 6 · umbral 1 %» «cambio a PS asincrónico» |
+| 16:45 | 18:30 | 14 | Strategy-Switch en O.N.O. | Marcos Bianchi Fernández | «medición en el orchestrator» «Upgrade · Switch» «un worker promovido a servidor» «mismo proceso, nuevo rol» |
+| 18:30 | 19:15 | 15 | Medición del drift | Marcos Bianchi Fernández | «E: épocas sin sincronización» «E = 1: ≈ −1 punto de exactitud» «mayor caída con más nodos» «sin ganancia de tiempo» |
+| 19:15 | 21:00 | 16 | Arquitectura del sistema | Marcos Bianchi Fernández | «mismo binario en cada nodo» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos» |
+| 21:00 | 22:00 | 17 | Biblioteca de ML propia | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
+| 22:00 | 23:15 | 18 | Implementación de la convolución | Alejo Ordoñez | «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño» |
+| 23:15 | 23:45 | 19 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora» |
+| 23:45 | 24:45 | 20 | Tiempo de un entrenamiento | Lorenzo Minervino | «el cómputo se reparte» «sincronización: todos esperan» «una ronda por época» «d_sync determina la escalabilidad» |
+| 24:45 | 26:00 | 21 | Cálculo de d_sync | Lorenzo Minervino | «S: tamaño del modelo · R: ancho de banda» «PS: todo el tráfico por una placa» «crece con la cantidad de workers» «AR: transmisión simultánea» «acotado» |
+| 26:00 | 26:45 | 22 | Costo de sincronización | Lorenzo Minervino | «PS: crecimiento lineal» «cuello de botella: el servidor» «AR: acotado por 2S/R» |
+| 26:45 | 27:30 | 23 | Interfaz de Python | Lorenzo Minervino | «PyO3 + maturin» «liberación del GIL» «suite de benchmarks en Python» |
+| 27:30 | 28:30 | 24 | Metodología de medición | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red limitada deliberadamente» |
+| 28:30 | 29:30 | 25 | Resultados: sincrónicos | Lorenzo Minervino | «PS: degradación desde 6 workers» «AR: sin mejora desde 6 workers» «consistente con el modelo» |
+| 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo disminuye con más workers» «convergencia: a verificar» |
+| 30:00 | 31:15 | 27 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico: colapso de exactitud» |
+| 31:15 | 32:00 | 28 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · convolución según el tamaño · nuevas arquitecturas |
+| 32:00 | 32:30 | 29 | Demostración | Lorenzo Minervino | «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min de entrenamiento» «luego: el modelo, en el navegador» |
 | 32:30 | 33:45 | A1 | A1 · Por qué una base común | Alejo Ordoñez | — |
 | 33:45 | 35:00 | A2 | A2 · Modelo como buffer plano | Alejo Ordoñez | «capas = vistas» «particionar = delimitar rangos» «enviar sin copiar» |
-| 35:00 | 36:15 | A3 | A3 · Compresión con error feedback | Marcos Bianchi Fernández | «control: JSON» «datos: f16, sin copias» «solo lo que supera el umbral» «el resto, al residual» «error feedback» |
-| 36:15 | 37:30 | A4 | A4 · Topología por latencia | Marcos Bianchi Fernández | «10 pings por par» «anillo: viajante exacto» «servidor: menor latencia máxima» «optimizador después de agregar» |
-| 37:30 | 38:30 | A5 | A5 · ¿Por qué Rust? | Lorenzo Minervino | — |
+| 35:00 | 36:15 | A3 | A3 · Compresión con error feedback | Marcos Bianchi Fernández | «control: JSON» «datos: f16, sin copias» «envío de valores sobre el umbral» «el resto se acumula en el residual» «error feedback» |
+| 36:15 | 37:30 | A4 | A4 · Topología por latencia | Marcos Bianchi Fernández | «10 pings por par» «anillo: viajante, solución exacta» «servidor: menor latencia máxima» «optimizador después de agregar» |
+| 37:30 | 38:30 | A5 | A5 · Elección de Rust | Lorenzo Minervino | — |
 | 38:30 | 40:00 | A6 | A6 · Lecciones: errores silenciosos | Lorenzo Minervino | — |
 | 40:00 | 40:15 | 30 | ¿Y la demo? | Lorenzo Minervino | — |
 | 40:15 | 42:15 | — | Fin del entrenamiento y página de la demo | Lorenzo Minervino | ver `GUION_DEMO.md` |
@@ -79,7 +79,7 @@ Respaldo: docs/report/caratula.md · resumen.md
 
 ### 00:30 → 01:00 · 02 · Cronograma
 
-**Alejo Ordoñez** · 00:30 · en pantalla: por qué distribuir · cómo sincronizar · cómo está construido · cuánto cuesta · resultados · demo en vivo
+**Alejo Ordoñez** · 00:30 · en pantalla: motivación · sincronización · arquitectura · costo de sincronización · resultados · demostración en vivo
 
 > Mostrar el recorrido y quién cuenta cada parte.
 
@@ -91,9 +91,9 @@ Respaldo: docs/report/caratula.md · resumen.md
 
 Respaldo: —
 
-### 01:00 → 02:00 · 03 · ¿Qué es un modelo?
+### 01:00 → 02:00 · 03 · Definición de modelo
 
-**Alejo Ordoñez** · 01:00 · en pantalla: «entrada → salida» «adentro: parámetros» «entrenar = ajustarlos» «GPT-3: 175 mil millones»
+**Alejo Ordoñez** · 01:00 · en pantalla: «entrada → salida» «parámetros internos» «entrenamiento: ajuste de parámetros» «GPT-3: 175 mil millones de parámetros»
 
 > Un modelo es una función con parámetros ajustables; entrenar es encontrar esos valores a partir de ejemplos.
 
@@ -106,9 +106,9 @@ Respaldo: —
 
 Respaldo: LeNet-5: docs/report/experimentacion.md · GPT-3: Brown et al. (2020), no está en la bibliografía del informe
 
-### 02:00 → 03:00 · 04 · Entrenar es caro
+### 02:00 → 03:00 · 04 · Costo del entrenamiento
 
-**Alejo Ordoñez** · 01:00 · en pantalla: «más datos» «más parámetros» «días de cómputo» «no entra en memoria»
+**Alejo Ordoñez** · 01:00 · en pantalla: «más datos» «más parámetros» «días de cómputo» «excede la memoria»
 
 > Entrenar un modelo profundo cuesta en dos dimensiones: tiempo y memoria.
 
@@ -121,9 +121,9 @@ Respaldo: LeNet-5: docs/report/experimentacion.md · GPT-3: Brown et al. (2020),
 
 Respaldo: docs/report/problema.md (párrafo 1) · Ben-Nun y Hoefler (2019)
 
-### 03:00 → 04:00 · 05 · Una máquina buena es cara
+### 03:00 → 04:00 · 05 · Escalado vertical
 
-**Alejo Ordoñez** · 01:00 · en pantalla: «escalar verticalmente» «$$$ · pocos la tienen» «tiene un techo»
+**Alejo Ordoñez** · 01:00 · en pantalla: «mayor capacidad en un solo equipo» «costo elevado · acceso limitado» «límite físico»
 
 > Escalar con un solo equipo es caro y además tiene un límite.
 
@@ -135,9 +135,9 @@ Respaldo: docs/report/problema.md (párrafo 1) · Ben-Nun y Hoefler (2019)
 
 Respaldo: docs/report/problema.md (párrafo 1)
 
-### 04:00 → 05:00 · 06 · Podemos usar muchas
+### 04:00 → 05:00 · 06 · Escalado horizontal
 
-**Alejo Ordoñez** · 01:00 · en pantalla: «hardware común» «escalar horizontalmente» «unidas por la red»
+**Alejo Ordoñez** · 01:00 · en pantalla: «hardware de uso general» «más equipos en paralelo» «interconectados por red»
 
 > Sumar máquinas modestas es más accesible que comprar una que las iguale: eso es el entrenamiento distribuido.
 
@@ -151,7 +151,7 @@ Respaldo: docs/report/problema.md · introduccion.md
 
 ### 05:00 → 06:45 · 07 · Paralelismo de modelo y de datos
 
-**Alejo Ordoñez** · 01:45 · en pantalla: «modelo → se parte la red» «datos → se parte el dataset» «O.N.O. → datos»
+**Alejo Ordoñez** · 01:45 · en pantalla: «modelo: partición de la red» «datos: partición del dataset» «O.N.O.: paralelismo de datos»
 
 > Se puede partir el modelo o partir los datos; O.N.O. trabaja con paralelismo de datos.
 
@@ -166,7 +166,7 @@ Respaldo: docs/report/estado_del_arte.md (Paralelismo de datos, de modelo y de p
 
 ### 06:45 → 08:30 · 08 · Client drift
 
-**Alejo Ordoñez** · 01:45 · en pantalla: «misma réplica, distintos datos» «client drift» «sincronizar = promediar» «¿cómo sincronizar?»
+**Alejo Ordoñez** · 01:45 · en pantalla: «réplicas iguales, datos distintos» «client drift» «sincronización: promedio de réplicas» «elección de la sincronización»
 
 > Con paralelismo de datos cada réplica tira hacia el mínimo de su partición; por eso hay que sincronizarlas.
 
@@ -179,7 +179,7 @@ Respaldo: docs/report/estado_del_arte.md (Paralelismo de datos, de modelo y de p
 
 Respaldo: docs/report/resultados.md (PS asincrónico, client drift) · estado_del_arte.md (aprendizaje federado) · código: machine_learning/src/training/backprop_trainer.rs
 
-### 08:30 → 09:15 · 09 · Cuatro formas de sincronizar
+### 08:30 → 09:15 · 09 · Estrategias de sincronización
 
 **Alejo Ordoñez** · 00:45 · en pantalla: Parameter Server · All-Reduce · PS asincrónico · Strategy-Switch · misma base
 
@@ -197,7 +197,7 @@ Respaldo: docs/report/problema.md · introduccion.md · estado_del_arte.md
 
 ### 09:15 → 11:15 · 10 · Parameter Server
 
-**Marcos Bianchi Fernández** · 02:00 · en pantalla: «servidor central» «pull θ» «push gradiente» «promedio + optimizador» «varios servidores: por capa»
+**Marcos Bianchi Fernández** · 02:00 · en pantalla: «servidor central» «pull θ» «push gradiente» «promedio + optimizador» «varios servidores: partición por capa»
 
 > En Parameter Server un servidor concentra los parámetros y el estado del optimizador.
 
@@ -214,7 +214,7 @@ Respaldo: docs/report/solucion.md (Parameter Server) · código: worker/src/work
 
 ### 11:15 → 13:30 · 11 · Ring All-Reduce
 
-**Marcos Bianchi Fernández** · 02:15 · en pantalla: «sin centro» «N fragmentos» «reduce-scatter: sumar» «all-gather: copiar» «÷ N en cada worker»
+**Marcos Bianchi Fernández** · 02:15 · en pantalla: «sin nodo central» «N fragmentos» «reduce-scatter: suma» «all-gather: copia» «÷ N en cada worker»
 
 > En All-Reduce no hay servidor: los gradientes circulan por un anillo y todos terminan con el mismo promedio.
 
@@ -234,7 +234,7 @@ Respaldo: docs/report/solucion.md (Ring All-Reduce) · código: worker/src/middl
 
 ### 13:30 → 15:15 · 12 · Parameter Server asincrónico
 
-**Marcos Bianchi Fernández** · 01:45 · en pantalla: «sincrónico: espera al más lento» «asincrónico: sin barrera» «θ viejo → más drift»
+**Marcos Bianchi Fernández** · 01:45 · en pantalla: «sincrónico: espera al nodo más lento» «asincrónico: sin barrera» «θ desactualizado → mayor drift»
 
 > Sacar la barrera elimina la espera, pero los gradientes se calculan sobre parámetros desactualizados y el drift crece.
 
@@ -246,9 +246,9 @@ Respaldo: docs/report/solucion.md (Ring All-Reduce) · código: worker/src/middl
 
 Respaldo: docs/report/resultados.md (Parameter Server asincrónico) · estado_del_arte.md
 
-### 15:15 → 16:45 · 13 · Strategy-Switch: la idea
+### 15:15 → 16:45 · 13 · Strategy-Switch: principio
 
-**Marcos Bianchi Fernández** · 01:30 · en pantalla: «arranca con All-Reduce» «¿se estancó la pérdida?» «ventana de 6 · umbral 1 %» «pasa a PS asincrónico»
+**Marcos Bianchi Fernández** · 01:30 · en pantalla: «inicio en All-Reduce» «criterio: estabilización de la pérdida» «ventana de 6 · umbral 1 %» «cambio a PS asincrónico»
 
 > Strategy-Switch usa All-Reduce mientras los workers buscan el mínimo y pasa a PS asincrónico cuando la pérdida se estabiliza.
 
@@ -263,7 +263,7 @@ Respaldo: docs/report/estado_del_arte.md (Strategy-Switch) · solucion.md · có
 
 ### 16:45 → 18:30 · 14 · Strategy-Switch en O.N.O.
 
-**Marcos Bianchi Fernández** · 01:45 · en pantalla: «el orchestrator mide» «Upgrade · Switch» «un worker pasa a servidor» «mismo proceso, otro rol»
+**Marcos Bianchi Fernández** · 01:45 · en pantalla: «medición en el orchestrator» «Upgrade · Switch» «un worker promovido a servidor» «mismo proceso, nuevo rol»
 
 > Qué dispara el cambio, quién lo decide y cómo se transiciona, tal como está implementado.
 
@@ -278,9 +278,9 @@ Respaldo: docs/report/estado_del_arte.md (Strategy-Switch) · solucion.md · có
 
 Respaldo: docs/report/solucion.md (Strategy-Switch) · código: orchestrator/src/sessions/event_listener.rs, orchestrator/src/configs/adapter.rs
 
-### 18:30 → 19:15 · 15 · El drift, medido
+### 18:30 → 19:15 · 15 · Medición del drift
 
-**Marcos Bianchi Fernández** · 00:45 · en pantalla: «E épocas sin sincronizar» «E = 1 → cerca de −1 punto» «más nodos, más caída» «sin ganancia de tiempo»
+**Marcos Bianchi Fernández** · 00:45 · en pantalla: «E: épocas sin sincronización» «E = 1: ≈ −1 punto de exactitud» «mayor caída con más nodos» «sin ganancia de tiempo»
 
 > Demorar la sincronización es pagar drift.
 
@@ -292,9 +292,9 @@ Respaldo: docs/report/solucion.md (Strategy-Switch) · código: orchestrator/src
 
 Respaldo: docs/report/estudio_derivado.md
 
-### 19:15 → 21:00 · 16 · La orquesta por dentro
+### 19:15 → 21:00 · 16 · Arquitectura del sistema
 
-**Marcos Bianchi Fernández** · 01:45 · en pantalla: «mismo binario en cada nodo» «orchestrator: control» «el rol llega al conectarse» «datos: de nodo a nodo»
+**Marcos Bianchi Fernández** · 01:45 · en pantalla: «mismo binario en cada nodo» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos»
 
 > Todos los nodos ejecutan el mismo binario y reciben su rol al conectarse; eso es lo que habilita Strategy-Switch.
 
@@ -308,7 +308,7 @@ Respaldo: docs/report/estudio_derivado.md
 
 Respaldo: docs/report/solucion.md (Nodo agnóstico de rol · Separación de planos) · README.md (Architecture)
 
-### 21:00 → 22:00 · 17 · Una librería de ML desde cero
+### 21:00 → 22:00 · 17 · Biblioteca de ML propia
 
 **Alejo Ordoñez** · 01:00 · en pantalla: «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD»
 
@@ -322,9 +322,9 @@ Respaldo: docs/report/solucion.md (Nodo agnóstico de rol · Separación de plan
 
 Respaldo: machine_learning/src/models.rs · docs/report/solucion.md (Motor de Redes Neuronales)
 
-### 22:00 → 23:15 · 18 · La convolución, a mano
+### 22:00 → 23:15 · 18 · Implementación de la convolución
 
-**Alejo Ordoñez** · 01:15 · en pantalla: «FFT: no compensó» «im2col: ventana → columna» «una sola multiplicación» «en paralelo: tampoco» «futuro: según el tamaño»
+**Alejo Ordoñez** · 01:15 · en pantalla: «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño»
 
 > La convolución la implementamos a mano y probamos tres variantes; quedó la que la convierte en una multiplicación de matrices.
 
@@ -340,7 +340,7 @@ Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajo
 
 ### 23:15 → 23:45 · 19 · Teorema de la convolución
 
-**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernel chico: no compensó»
+**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora»
 
 > La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.
 
@@ -353,9 +353,9 @@ Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajo
 
 Respaldo: docs/report/trabajos_futuros.md (variación del modelo de cómputo de la convolución) · Mathieu et al., 2013 · commit d880f65 (conv_fft de ndarray_conv)
 
-### 23:45 → 24:45 · 20 · ¿Cuánto tarda entrenar?
+### 23:45 → 24:45 · 20 · Tiempo de un entrenamiento
 
-**Lorenzo Minervino** · 01:00 · en pantalla: «repartimos el cómputo» «sincronizar: todos esperan» «una ronda por época» «d_sync decide cuánto escala»
+**Lorenzo Minervino** · 01:00 · en pantalla: «el cómputo se reparte» «sincronización: todos esperan» «una ronda por época» «d_sync determina la escalabilidad»
 
 > El tiempo total tiene una parte que se reparte entre workers y otra que se paga por sincronizar; la segunda decide si conviene sumar máquinas.
 
@@ -368,9 +368,9 @@ Respaldo: docs/report/trabajos_futuros.md (variación del modelo de cómputo de 
 
 Respaldo: docs/report/resultados.md (modelo del tiempo total de entrenamiento)
 
-### 24:45 → 26:00 · 21 · De dónde sale d_sync
+### 24:45 → 26:00 · 21 · Cálculo de d_sync
 
-**Lorenzo Minervino** · 01:15 · en pantalla: «S: el modelo · R: la red» «PS: todo por una placa» «crece con los workers» «AR: todos transmiten a la vez» «acotado»
+**Lorenzo Minervino** · 01:15 · en pantalla: «S: tamaño del modelo · R: ancho de banda» «PS: todo el tráfico por una placa» «crece con la cantidad de workers» «AR: transmisión simultánea» «acotado»
 
 > Contar transferencias alcanza para derivar d_sync: en PS todo pasa por la placa del servidor; en el anillo, todos transmiten en paralelo.
 
@@ -383,9 +383,9 @@ Respaldo: docs/report/resultados.md (modelo del tiempo total de entrenamiento)
 
 Respaldo: docs/report/resultados.md (derivación de d_sync)
 
-### 26:00 → 26:45 · 22 · Sincronizar cuesta
+### 26:00 → 26:45 · 22 · Costo de sincronización
 
-**Lorenzo Minervino** · 00:45 · en pantalla: «PS: crece con N» «cuello de botella: el servidor» «AR: nunca supera 2S/R»
+**Lorenzo Minervino** · 00:45 · en pantalla: «PS: crecimiento lineal» «cuello de botella: el servidor» «AR: acotado por 2S/R»
 
 > El modelo predice que, con un servidor, PS empeora al sumar workers, mientras que All-Reduce queda acotado.
 
@@ -397,9 +397,9 @@ Respaldo: docs/report/resultados.md (derivación de d_sync)
 
 Respaldo: docs/report/resultados.md (derivación de d_sync) · experimentacion.md (S, R)
 
-### 26:45 → 27:30 · 23 · También desde Python
+### 26:45 → 27:30 · 23 · Interfaz de Python
 
-**Lorenzo Minervino** · 00:45 · en pantalla: «PyO3 + maturin» «libera el GIL» «benchmarks en Python»
+**Lorenzo Minervino** · 00:45 · en pantalla: «PyO3 + maturin» «liberación del GIL» «suite de benchmarks en Python»
 
 > orchestra-py expone el mismo orchestrator desde Python; sobre ella escribimos toda la suite de benchmarks.
 
@@ -411,9 +411,9 @@ Respaldo: docs/report/resultados.md (derivación de d_sync) · experimentacion.m
 
 Respaldo: docs/report/solucion.md (Interfaz de Python como crate separado) · orchestra-py/local.py
 
-### 27:30 → 28:30 · 24 · Cómo medimos
+### 27:30 → 28:30 · 24 · Metodología de medición
 
-**Lorenzo Minervino** · 01:00 · en pantalla: «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red lenta, a propósito»
+**Lorenzo Minervino** · 01:00 · en pantalla: «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red limitada deliberadamente»
 
 > Fijamos todo salvo la estrategia, y forzamos una red lenta para que las diferencias se vean.
 
@@ -428,7 +428,7 @@ Respaldo: docs/report/experimentacion.md (Pruebas automatizadas · Entorno de ex
 
 ### 28:30 → 29:30 · 25 · Resultados: sincrónicos
 
-**Lorenzo Minervino** · 01:00 · en pantalla: «PS empeora desde 6 workers» «AR deja de mejorar» «como predijo el modelo»
+**Lorenzo Minervino** · 01:00 · en pantalla: «PS: degradación desde 6 workers» «AR: sin mejora desde 6 workers» «consistente con el modelo»
 
 > Lo medido coincide con lo que predice el modelo analítico.
 
@@ -443,7 +443,7 @@ Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_t
 
 ### 29:30 → 30:00 · 26 · Resultados: asincrónicos
 
-**Lorenzo Minervino** · 00:30 · en pantalla: «el tiempo sigue bajando» «¿pero aprende?»
+**Lorenzo Minervino** · 00:30 · en pantalla: «el tiempo disminuye con más workers» «convergencia: a verificar»
 
 > En velocidad pura, los dos asincrónicos ganan.
 
@@ -456,7 +456,7 @@ Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_t
 
 ### 30:00 → 31:15 · 27 · Resultados: exactitud
 
-**Lorenzo Minervino** · 01:15 · en pantalla: «Strategy-Switch ≈ sincrónicos» «PS asincrónico colapsa»
+**Lorenzo Minervino** · 01:15 · en pantalla: «Strategy-Switch ≈ sincrónicos» «PS asincrónico: colapso de exactitud»
 
 > Strategy-Switch fue el mejor balance de esta campaña; la salvedad sobre WildStore es parte del resultado.
 
@@ -471,7 +471,7 @@ Respaldo: docs/report/resultados.md (salvedad final) · conclusiones_capitulo4.m
 
 ### 31:15 → 32:00 · 28 · Trabajos futuros
 
-**Lorenzo Minervino** · 00:45 · en pantalla: tolerancia a fallos · convolución según el tamaño · más arquitecturas
+**Lorenzo Minervino** · 00:45 · en pantalla: tolerancia a fallos · convolución según el tamaño · nuevas arquitecturas
 
 > El sistema quedó listo para retomarse, y varias líneas ya tienen el diseño especificado.
 
@@ -484,9 +484,9 @@ Respaldo: docs/report/resultados.md (salvedad final) · conclusiones_capitulo4.m
 
 Respaldo: docs/report/trabajos_futuros.md
 
-### 32:00 → 32:30 · 29 · Ahora, la demo
+### 32:00 → 32:30 · 29 · Demostración
 
-**Lorenzo Minervino** · 00:30 · en pantalla: «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min entrenando» «después: el modelo, en el navegador»
+**Lorenzo Minervino** · 00:30 · en pantalla: «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min de entrenamiento» «luego: el modelo, en el navegador»
 
 > Lanzar el entrenamiento real en tres computadoras y aprovechar los diez minutos para contar el apéndice.
 
@@ -529,7 +529,7 @@ Respaldo: docs/report/solucion.md (Motor de Redes Neuronales · Modelo como buff
 
 ### 35:00 → 36:15 · A3 · A3 · Compresión con error feedback
 
-**Marcos Bianchi Fernández** · 01:15 · en pantalla: «control: JSON» «datos: f16, sin copias» «solo lo que supera el umbral» «el resto, al residual» «error feedback»
+**Marcos Bianchi Fernández** · 01:15 · en pantalla: «control: JSON» «datos: f16, sin copias» «envío de valores sobre el umbral» «el resto se acumula en el residual» «error feedback»
 
 > Separar control de datos y comprimir sin perder la información acumulada.
 
@@ -545,7 +545,7 @@ Respaldo: docs/report/solucion.md (Separación de planos · Compresión de gradi
 
 ### 36:15 → 37:30 · A4 · A4 · Topología por latencia
 
-**Marcos Bianchi Fernández** · 01:15 · en pantalla: «10 pings por par» «anillo: viajante exacto» «servidor: menor latencia máxima» «optimizador después de agregar»
+**Marcos Bianchi Fernández** · 01:15 · en pantalla: «10 pings por par» «anillo: viajante, solución exacta» «servidor: menor latencia máxima» «optimizador después de agregar»
 
 > Ninguna diferencia de tiempo debería venir del orden en que el usuario escribió las direcciones.
 
@@ -557,7 +557,7 @@ Respaldo: docs/report/solucion.md (Separación de planos · Compresión de gradi
 
 Respaldo: docs/report/solucion.md (Selección de topología · Ubicación del optimizador) · código: orchestrator/src/calculator/
 
-### 37:30 → 38:30 · A5 · A5 · ¿Por qué Rust?
+### 37:30 → 38:30 · A5 · A5 · Elección de Rust
 
 **Lorenzo Minervino** · 01:00 · en pantalla: —
 

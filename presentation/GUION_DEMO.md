@@ -6,7 +6,7 @@ Tres computadoras entrenan en vivo LeNet-5 sobre MNIST con Strategy-Switch, dura
 
 | Diapositiva | Tiempo | Qué pasa | Quién |
 |---|---|---|---|
-| 29 · Ahora, la demo | 0:30 | Lanza el entrenamiento en la TUI y muestra el anillo de All-Reduce | Lorenzo |
+| 29 · Demostración | 0:30 | Lanza el entrenamiento en la TUI y muestra el anillo de All-Reduce | Lorenzo |
 | A1–A2 | 2:30 | Base común, buffer plano | Alejo |
 | A3–A4 | 2:30 | Compresión y topología | Marcos |
 | A5–A6 | 2:30 | ¿Por qué Rust?, lecciones | Lorenzo |
