@@ -331,7 +331,7 @@ Respaldo: machine_learning/src/models.rs · docs/report/solucion.md (Motor de Re
 - Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto de Hadamard, es decir, punto a punto, de las transformadas.
 - **→** Entonces se transforman la entrada y el kernel, se multiplican punto a punto y se vuelve con la inversa.
 - Si preguntan por el costo: con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.
-- Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.
+- Si preguntan: las redes no invierten el kernel, es una correlación. El teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.
 
 **Pase:** «Veamos cómo la implementamos.»
 
