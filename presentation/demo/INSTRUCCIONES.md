@@ -61,7 +61,7 @@ python3 presentation/tools/smooth_labels.py datasets/mnist/mnist_train_labels.bi
 
 Hay que repetirlo cada vez que cambie la red.
 
-**Los tres.** Conéctense a la misma red y anoten su IP:
+**Los tres.** Conéctense a la misma red y anoten su IP. `make node` la muestra al arrancar, o la pueden ver antes con:
 
 ```bash
 ip -4 route get 1.1.1.1 | grep -oP 'src \K\S+'
@@ -105,7 +105,7 @@ Tiene que responder `HTTP/1.0 200 OK`. Al terminar, cierren el servidor con `Ctr
 make node
 ```
 
-Tiene que mostrar `listening at 0.0.0.0:40000`, y `orchestrator connected` cuando Ale lance el entrenamiento. La terminal queda ocupada: déjenla abierta hasta el final.
+Primero muestra la dirección que va en `training.json`, por ejemplo `node address for training.json: 192.168.0.150:40000`. Después tiene que mostrar `listening at 0.0.0.0:40000`, y `orchestrator connected` cuando Ale lance el entrenamiento. La terminal queda ocupada: déjenla abierta hasta el final.
 
 ## 4. Lanzar el entrenamiento
 
@@ -139,11 +139,11 @@ Si se olvidan, la TUI ya guardó una copia sola con un nombre al azar. Se ve con
 **Ale:**
 
 ```bash
-xdg-open presentation/demo/index.html
+make presentation
 xdg-open .
 ```
 
-El primer comando abre la página y el segundo, la carpeta del repositorio.
+El primer comando abre la presentación y la página de la demo, sin internet. El segundo abre la carpeta del repositorio.
 
 1. Arrastrá `demo.safetensors` a la página. También podés hacer clic en el recuadro y elegirlo.
 2. Esperá unos 12 segundos, hasta que diga cuántas de las 10.000 imágenes clasificó bien. La exactitud aparece en grande: esperen cerca del 99 %.
