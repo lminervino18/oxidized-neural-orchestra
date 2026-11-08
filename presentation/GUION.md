@@ -47,7 +47,7 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 26:45 | 27:30 | 23 | Interfaz de Python | Lorenzo Minervino | «PyO3 + maturin» «liberación del GIL» «suite de benchmarks en Python» |
 | 27:30 | 28:30 | 24 | Metodología de medición | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red limitada deliberadamente» |
 | 28:30 | 29:30 | 25 | Resultados: sincrónicos | Lorenzo Minervino | «PS: degradación desde 6 workers» «AR: sin mejora desde 6 workers» «consistente con el modelo» |
-| 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo disminuye con más workers» «convergencia: a verificar» |
+| 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo disminuye con más workers» «¿converge el modelo?» |
 | 30:00 | 31:15 | 27 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico: colapso de exactitud» |
 | 31:15 | 32:00 | 28 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · convolución según el tamaño · nuevas arquitecturas |
 | 32:00 | 32:30 | 29 | Demostración | Lorenzo Minervino | «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min de entrenamiento» «luego: el modelo, en el navegador» |
@@ -443,7 +443,7 @@ Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_t
 
 ### 29:30 → 30:00 · 26 · Resultados: asincrónicos
 
-**Lorenzo Minervino** · 00:30 · en pantalla: «el tiempo disminuye con más workers» «convergencia: a verificar»
+**Lorenzo Minervino** · 00:30 · en pantalla: «el tiempo disminuye con más workers» «¿converge el modelo?»
 
 > En velocidad pura, los dos asincrónicos ganan.
 
