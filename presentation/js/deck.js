@@ -151,7 +151,7 @@
     if (el.hasAttribute("data-wipe")) gsap.set(el, { clipPath: "inset(0 0% 0 0)" });
   }
 
-  function applyStep(slide, step, animate) {
+  function applyStep(slide, step, animate, entering = false) {
     const v = view(slide);
     const fx = animate && !instant();
     v.steppers.forEach((el) => {
@@ -165,7 +165,10 @@
       if (fx && s === step) gsap.fromTo(el, { autoAlpha: 0, x: -10 }, { autoAlpha: target, x: 0, duration: 0.35, overwrite: true });
       else gsap.set(el, { autoAlpha: target, x: 0, overwrite: true });
     });
-    v.diagrams.forEach((d) => d.go(Math.min(step, d.steps), animate && !instant()));
+    v.diagrams.forEach((d) => {
+      const target = Math.min(step, d.steps);
+      if (entering || target !== d.step) d.go(target, animate && !instant());
+    });
   }
 
 
@@ -182,7 +185,7 @@
     if (fresh && !instant()) v.anims.forEach((el, i) => appear(v, el, 0.08 + i * 0.07));
     else v.anims.forEach((el) => settle(v, el, true));
 
-    applyStep(slide, step, fresh);
+    applyStep(slide, step, fresh, true);
     startAmbient(slide);
   }
 

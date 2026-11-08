@@ -166,6 +166,7 @@
 
     return {
       steps,
+      get step() { return current; },
       go(step, animate) {
         if (running) { running.kill(); running = null; }
         const reduced = window.ONO_MOTION === "reduced";
