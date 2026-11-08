@@ -38,9 +38,9 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Cronograma" data-section="inicio" data-speaker="Alejo Ordoñez" data-time="0:30" data-keywords="por qué distribuir · cómo sincronizar · cómo está construido · cuánto cuesta · resultados · demo en vivo">
+<section class="slide" data-title="Cronograma" data-section="inicio" data-speaker="Alejo Ordoñez" data-time="0:30" data-keywords="motivación · sincronización · arquitectura · costo de sincronización · resultados · demostración en vivo">
   <div class="kicker"><span class="path">00 · cronograma</span></div>
-  <h2 data-anim>De qué <em>vamos a hablar</em></h2>
+  <h2 data-anim>Contenido de la <em>presentación</em></h2>
   <div class="body">
     <div class="col"><div class="diagram" data-diagram="agenda"></div></div>
   </div>
@@ -56,16 +56,16 @@
   </aside>
 </section>
 
-<section class="slide" data-title="¿Qué es un modelo?" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
-  <div class="kicker"><span class="path">01 · por qué distribuir</span></div>
-  <h2 data-anim>¿Qué es un <em>modelo</em>?</h2>
+<section class="slide" data-title="Definición de modelo" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
+  <div class="kicker"><span class="path">01 · motivación</span></div>
+  <h2 data-anim>Definición de <em>modelo</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="blackbox"></div></div>
     <div class="kws-col">
       <span class="kw" data-anim>entrada → salida</span>
-      <span class="kw on" data-step="1">adentro: parámetros</span>
-      <span class="kw warn" data-step="2">entrenar = ajustarlos</span>
-      <span class="kw grad" data-step="3">GPT-3: 175 mil millones</span>
+      <span class="kw on" data-step="1">parámetros internos</span>
+      <span class="kw warn" data-step="2">entrenamiento: ajuste de parámetros</span>
+      <span class="kw grad" data-step="3">GPT-3: 175 mil millones de parámetros</span>
     </div>
   </div>
   <aside class="notes">
@@ -81,16 +81,16 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Entrenar es caro" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
-  <div class="kicker"><span class="path">01 · por qué distribuir</span></div>
-  <h2 data-anim>Entrenar es <em>caro</em></h2>
+<section class="slide" data-title="Costo del entrenamiento" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
+  <div class="kicker"><span class="path">01 · motivación</span></div>
+  <h2 data-anim>Costo del <em>entrenamiento</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="cost"></div></div>
     <div class="kws-col">
       <span class="kw grad" data-step="1">más datos</span>
       <span class="kw" data-step="1">más parámetros</span>
       <span class="kw warn" data-step="2">días de cómputo</span>
-      <span class="kw bad" data-step="3">no entra en memoria</span>
+      <span class="kw bad" data-step="3">excede la memoria</span>
     </div>
   </div>
   <aside class="notes">
@@ -106,15 +106,15 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Una máquina buena es cara" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
-  <div class="kicker"><span class="path">01 · por qué distribuir</span></div>
-  <h2 data-anim>Una sola máquina buena es <em>cara</em></h2>
+<section class="slide" data-title="Escalado vertical" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
+  <div class="kicker"><span class="path">01 · motivación</span></div>
+  <h2 data-anim>Escalado <em>vertical</em>: costo y límite</h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="scaleup"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>escalar verticalmente</span>
-      <span class="kw grad" data-step="1">$$$ · pocos la tienen</span>
-      <span class="kw bad" data-step="2">tiene un techo</span>
+      <span class="kw" data-anim>mayor capacidad en un solo equipo</span>
+      <span class="kw grad" data-step="1">costo elevado · acceso limitado</span>
+      <span class="kw bad" data-step="2">límite físico</span>
     </div>
   </div>
   <aside class="notes">
@@ -129,15 +129,15 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Podemos usar muchas" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
-  <div class="kicker"><span class="path">01 · por qué distribuir</span></div>
-  <h2 data-anim>Mejor: <em>muchas</em> máquinas</h2>
+<section class="slide" data-title="Escalado horizontal" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:00">
+  <div class="kicker"><span class="path">01 · motivación</span></div>
+  <h2 data-anim>Escalado <em>horizontal</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="scaleout"></div></div>
     <div class="kws-col">
-      <span class="kw" data-step="1">hardware común</span>
-      <span class="kw" data-step="1">escalar horizontalmente</span>
-      <span class="kw on" data-step="2">unidas por la red</span>
+      <span class="kw" data-step="1">hardware de uso general</span>
+      <span class="kw" data-step="1">más equipos en paralelo</span>
+      <span class="kw on" data-step="2">interconectados por red</span>
     </div>
   </div>
   <aside class="notes">
@@ -153,14 +153,14 @@
 </section>
 
 <section class="slide" data-title="Paralelismo de modelo y de datos" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:45">
-  <div class="kicker"><span class="path">02 · cómo repartir</span></div>
-  <h2 data-anim>¿Repartimos <em>el modelo</em> o <em>los datos</em>?</h2>
+  <div class="kicker"><span class="path">02 · paralelismo</span></div>
+  <h2 data-anim>Paralelismo de <em>modelo</em> y de <em>datos</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="parallelism"></div></div>
     <div class="kws-col">
-      <span class="kw" data-step="1">modelo → se parte la red</span>
-      <span class="kw grad" data-step="2">datos → se parte el dataset</span>
-      <span class="kw on" data-step="3">O.N.O. → datos</span>
+      <span class="kw" data-step="1">modelo: partición de la red</span>
+      <span class="kw grad" data-step="2">datos: partición del dataset</span>
+      <span class="kw on" data-step="3">O.N.O.: paralelismo de datos</span>
     </div>
   </div>
   <aside class="notes">
@@ -177,15 +177,15 @@
 </section>
 
 <section class="slide" data-title="Client drift" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="1:45">
-  <div class="kicker"><span class="path">02 · cómo repartir</span></div>
-  <h2 data-anim>Cada uno aprende <em>su</em> partición</h2>
+  <div class="kicker"><span class="path">02 · paralelismo</span></div>
+  <h2 data-anim>Divergencia entre réplicas: <em>client drift</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="drift"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>misma réplica, distintos datos</span>
+      <span class="kw" data-anim>réplicas iguales, datos distintos</span>
       <span class="kw warn" data-step="1">client drift</span>
-      <span class="kw" data-step="2">sincronizar = promediar</span>
-      <span class="kw on" data-step="3">¿cómo sincronizar?</span>
+      <span class="kw" data-step="2">sincronización: promedio de réplicas</span>
+      <span class="kw on" data-step="3">elección de la sincronización</span>
     </div>
   </div>
   <aside class="notes">
@@ -201,9 +201,9 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Cuatro formas de sincronizar" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="0:45" data-keywords="Parameter Server · All-Reduce · PS asincrónico · Strategy-Switch · misma base">
+<section class="slide" data-title="Estrategias de sincronización" data-section="por qué distribuir" data-speaker="Alejo Ordoñez" data-time="0:45" data-keywords="Parameter Server · All-Reduce · PS asincrónico · Strategy-Switch · misma base">
   <div class="kicker"><span class="path">03 · alternativas</span></div>
-  <h2 data-anim>¿Cómo <em>sincronizamos</em>?</h2>
+  <h2 data-anim>Estrategias de <em>sincronización</em></h2>
   <div class="body">
     <div class="col"><div class="diagram" data-diagram="alternatives"></div></div>
   </div>
@@ -233,7 +233,7 @@
       <span class="kw" data-step="1">pull θ</span>
       <span class="kw grad" data-step="3">push gradiente</span>
       <span class="kw" data-step="4">promedio + optimizador</span>
-      <span class="kw ps" data-step="5">varios servidores: por capa</span>
+      <span class="kw ps" data-step="5">varios servidores: partición por capa</span>
     </div>
   </div>
   <aside class="notes">
@@ -257,10 +257,10 @@
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="ring"></div></div>
     <div class="kws-col">
-      <span class="kw ar" data-anim>sin centro</span>
+      <span class="kw ar" data-anim>sin nodo central</span>
       <span class="kw" data-step="1">N fragmentos</span>
-      <span class="kw" data-step="2">reduce-scatter: sumar</span>
-      <span class="kw" data-step="5">all-gather: copiar</span>
+      <span class="kw" data-step="2">reduce-scatter: suma</span>
+      <span class="kw" data-step="5">all-gather: copia</span>
       <span class="kw on" data-step="8">÷ N en cada worker</span>
     </div>
   </div>
@@ -284,13 +284,13 @@
 
 <section class="slide" data-title="Parameter Server asincrónico" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:45">
   <div class="kicker"><span class="path">04 · estrategias</span></div>
-  <h2 data-anim>PS <em>asincrónico</em>: nadie espera</h2>
+  <h2 data-anim>Parameter Server <em>asincrónico</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="syncasync"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>sincrónico: espera al más lento</span>
+      <span class="kw" data-anim>sincrónico: espera al nodo más lento</span>
       <span class="kw on" data-step="1">asincrónico: sin barrera</span>
-      <span class="kw warn" data-step="1">θ viejo → más drift</span>
+      <span class="kw warn" data-step="1">θ desactualizado → mayor drift</span>
     </div>
   </div>
   <aside class="notes">
@@ -305,16 +305,16 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Strategy-Switch: la idea" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:30">
+<section class="slide" data-title="Strategy-Switch: principio" data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:30">
   <div class="kicker"><span class="path">05 · strategy-switch</span></div>
-  <h2 data-anim><em>Strategy-Switch</em>: lo mejor de los dos</h2>
+  <h2 data-anim><em>Strategy-Switch</em>: estrategia híbrida</h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="sswindow"></div></div>
     <div class="kws-col">
-      <span class="kw ar" data-anim>arranca con All-Reduce</span>
-      <span class="kw" data-step="1">¿se estancó la pérdida?</span>
+      <span class="kw ar" data-anim>inicio en All-Reduce</span>
+      <span class="kw" data-step="1">criterio: estabilización de la pérdida</span>
       <span class="kw" data-step="1">ventana de 6 · umbral 1 %</span>
-      <span class="kw ps" data-step="2">pasa a PS asincrónico</span>
+      <span class="kw ps" data-step="2">cambio a PS asincrónico</span>
     </div>
   </div>
   <aside class="notes">
@@ -332,14 +332,14 @@
 
 <section class="slide" data-title="Strategy-Switch en O.N.O." data-section="estrategias" data-speaker="Marcos Bianchi Fernández" data-time="1:45">
   <div class="kicker"><span class="path">05 · strategy-switch</span></div>
-  <h2 data-anim>El cambio, <em>sin reiniciar</em></h2>
+  <h2 data-anim>Cambio de estrategia <em>sin reinicio</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="ssflow"></div></div>
     <div class="kws-col">
-      <span class="kw" data-step="1">el orchestrator mide</span>
+      <span class="kw" data-step="1">medición en el orchestrator</span>
       <span class="kw ss" data-step="2">Upgrade · Switch</span>
-      <span class="kw ps" data-step="3">un worker pasa a servidor</span>
-      <span class="kw on" data-step="4">mismo proceso, otro rol</span>
+      <span class="kw ps" data-step="3">un worker promovido a servidor</span>
+      <span class="kw on" data-step="4">mismo proceso, nuevo rol</span>
     </div>
   </div>
   <aside class="notes">
@@ -357,18 +357,18 @@
   </aside>
 </section>
 
-<section class="slide" data-title="El drift, medido" data-section="estudio derivado" data-speaker="Marcos Bianchi Fernández" data-time="0:45">
+<section class="slide" data-title="Medición del drift" data-section="estudio derivado" data-speaker="Marcos Bianchi Fernández" data-time="0:45">
   <div class="kicker"><span class="path">06 · estudio derivado</span></div>
-  <h2 data-anim>El drift, <em>medido</em></h2>
+  <h2 data-anim>Medición del <em>drift</em></h2>
   <div class="body">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/oe_ar_acc.png" alt="Exactitud final con distintas cantidades de epochs offline en All-Reduce">
         <figcaption>Figura del informe · All-Reduce · exactitud vs. nodos para E = 0 a 4</figcaption></figure>
     </div>
     <div class="kws-col">
-      <span class="kw" data-anim>E épocas sin sincronizar</span>
-      <span class="kw warn" data-step="1">E = 1 → cerca de −1 punto</span>
-      <span class="kw warn" data-step="1">más nodos, más caída</span>
+      <span class="kw" data-anim>E: épocas sin sincronización</span>
+      <span class="kw warn" data-step="1">E = 1: ≈ −1 punto de exactitud</span>
+      <span class="kw warn" data-step="1">mayor caída con más nodos</span>
       <span class="kw bad" data-step="2">sin ganancia de tiempo</span>
     </div>
   </div>
@@ -384,16 +384,16 @@
   </aside>
 </section>
 
-<section class="slide" data-title="La orquesta por dentro" data-section="construcción" data-speaker="Marcos Bianchi Fernández" data-time="1:45">
+<section class="slide" data-title="Arquitectura del sistema" data-section="construcción" data-speaker="Marcos Bianchi Fernández" data-time="1:45">
   <div class="kicker"><span class="path">07 · arquitectura</span></div>
-  <h2 data-anim>La orquesta <em>por dentro</em></h2>
+  <h2 data-anim>Arquitectura <em>del sistema</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="arch"></div></div>
     <div class="kws-col">
       <span class="kw" data-anim>mismo binario en cada nodo</span>
       <span class="kw" data-step="1">orchestrator: control</span>
-      <span class="kw on" data-step="2">el rol llega al conectarse</span>
-      <span class="kw grad" data-step="3">datos: de nodo a nodo</span>
+      <span class="kw on" data-step="2">rol asignado al conectarse</span>
+      <span class="kw grad" data-step="3">datos: directamente entre nodos</span>
     </div>
   </div>
   <aside class="notes">
@@ -412,9 +412,9 @@
 
 <!-- ═════════════════════════ ALEJO · el motor de redes neuronales ═════════════════════════ -->
 
-<section class="slide" data-title="Una librería de ML desde cero" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:00">
+<section class="slide" data-title="Biblioteca de ML propia" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:00">
   <div class="kicker"><span class="path">08 · motor de ML</span></div>
-  <h2 data-anim>Una librería de ML <em>desde cero</em></h2>
+  <h2 data-anim>Biblioteca de ML <em>propia</em></h2>
   <div class="body">
     <div class="col wide" style="justify-content:center">
       <pre class="code-block" data-anim data-type style="font-size:25px"><span class="c">// basado en machine_learning/src/models.rs</span>
@@ -447,17 +447,17 @@
   </aside>
 </section>
 
-<section class="slide" data-title="La convolución, a mano" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:15">
+<section class="slide" data-title="Implementación de la convolución" data-section="construcción" data-speaker="Alejo Ordoñez" data-time="1:15">
   <div class="kicker"><span class="path">08 · motor de ML</span></div>
-  <h2 data-anim>La convolución, <em>a mano</em></h2>
+  <h2 data-anim>Implementación de <em>la convolución</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="im2col"></div></div>
     <div class="kws-col">
-      <span class="kw bad" data-step="1">FFT: no compensó</span>
+      <span class="kw bad" data-step="1">FFT: sin mejora</span>
       <span class="kw" data-step="2">im2col: ventana → columna</span>
-      <span class="kw on" data-step="3">una sola multiplicación</span>
-      <span class="kw bad" data-step="4">en paralelo: tampoco</span>
-      <span class="kw ss" data-step="4">futuro: según el tamaño</span>
+      <span class="kw on" data-step="3">una única multiplicación de matrices</span>
+      <span class="kw bad" data-step="4">paralelización: sin mejora</span>
+      <span class="kw ss" data-step="4">trabajo futuro: según el tamaño</span>
     </div>
   </div>
   <aside class="notes">
@@ -489,7 +489,7 @@
       <span class="kw" data-step="1">convolución → producto ⊙</span>
       <span class="kw ps" data-step="2">directa: n² · k²</span>
       <span class="kw ar" data-step="2">con FFT: n² · log n</span>
-      <span class="kw bad" data-step="2">kernel chico: no compensó</span>
+      <span class="kw bad" data-step="2">kernels pequeños: sin mejora</span>
     </div>
   </div>
   <aside class="notes">
@@ -507,16 +507,16 @@
 
 <!-- ═════════════════════════ LORENZO · costo de sincronizar, experimentos y resultados ═════════════════════════ -->
 
-<section class="slide" data-title="¿Cuánto tarda entrenar?" data-section="costo de sincronizar" data-speaker="Lorenzo Minervino" data-time="1:00">
-  <div class="kicker"><span class="path">09 · costo de sincronizar</span></div>
-  <h2 data-anim>¿Cuánto tarda <em>entrenar</em>?</h2>
+<section class="slide" data-title="Tiempo de un entrenamiento" data-section="costo de sincronizar" data-speaker="Lorenzo Minervino" data-time="1:00">
+  <div class="kicker"><span class="path">09 · costo de sincronización</span></div>
+  <h2 data-anim>Tiempo de un <em>entrenamiento</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="tcost"></div></div>
     <div class="kws-col">
-      <span class="kw on" data-step="1">repartimos el cómputo</span>
-      <span class="kw warn" data-step="2">sincronizar: todos esperan</span>
+      <span class="kw on" data-step="1">el cómputo se reparte</span>
+      <span class="kw warn" data-step="2">sincronización: todos esperan</span>
       <span class="kw" data-step="3">una ronda por época</span>
-      <span class="kw ps" data-step="3">d<sub>sync</sub> decide cuánto escala</span>
+      <span class="kw ps" data-step="3">d<sub>sync</sub> determina la escalabilidad</span>
     </div>
   </div>
   <aside class="notes">
@@ -532,16 +532,16 @@
   </aside>
 </section>
 
-<section class="slide" data-title="De dónde sale d_sync" data-section="costo de sincronizar" data-speaker="Lorenzo Minervino" data-time="1:15">
-  <div class="kicker"><span class="path">09 · costo de sincronizar</span></div>
-  <h2 data-anim>¿De dónde sale <em>d<sub>sync</sub></em>?</h2>
+<section class="slide" data-title="Cálculo de d_sync" data-section="costo de sincronizar" data-speaker="Lorenzo Minervino" data-time="1:15">
+  <div class="kicker"><span class="path">09 · costo de sincronización</span></div>
+  <h2 data-anim>Cálculo de <em>d<sub>sync</sub></em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="dsyncwhy"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>S: el modelo · R: la red</span>
-      <span class="kw ps" data-step="1">PS: todo por una placa</span>
-      <span class="kw warn" data-step="1">crece con los workers</span>
-      <span class="kw ar" data-step="2">AR: todos transmiten a la vez</span>
+      <span class="kw" data-anim>S: tamaño del modelo · R: ancho de banda</span>
+      <span class="kw ps" data-step="1">PS: todo el tráfico por una placa</span>
+      <span class="kw warn" data-step="1">crece con la cantidad de workers</span>
+      <span class="kw ar" data-step="2">AR: transmisión simultánea</span>
       <span class="kw on" data-step="2">acotado</span>
     </div>
   </div>
@@ -558,15 +558,15 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Sincronizar cuesta" data-section="costo de sincronizar" data-speaker="Lorenzo Minervino" data-time="0:45">
-  <div class="kicker"><span class="path">09 · costo de sincronizar</span></div>
-  <h2 data-anim>Sincronizar <em>cuesta</em></h2>
+<section class="slide" data-title="Costo de sincronización" data-section="costo de sincronizar" data-speaker="Lorenzo Minervino" data-time="0:45">
+  <div class="kicker"><span class="path">09 · costo de sincronización</span></div>
+  <h2 data-anim>Costo de <em>sincronización</em></h2>
   <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="dsync"></div></div>
+    <div class="col wide"><div class="diagram framed" data-diagram="dsync"></div></div>
     <div class="kws-col">
-      <span class="kw ps" data-step="1">PS: crece con N</span>
+      <span class="kw ps" data-step="1">PS: crecimiento lineal</span>
       <span class="kw warn" data-step="1">cuello de botella: el servidor</span>
-      <span class="kw ar" data-step="2">AR: nunca supera 2S/R</span>
+      <span class="kw ar" data-step="2">AR: acotado por 2S/R</span>
     </div>
   </div>
   <aside class="notes">
@@ -581,9 +581,9 @@
   </aside>
 </section>
 
-<section class="slide" data-title="También desde Python" data-section="construcción" data-speaker="Lorenzo Minervino" data-time="0:45">
+<section class="slide" data-title="Interfaz de Python" data-section="construcción" data-speaker="Lorenzo Minervino" data-time="0:45">
   <div class="kicker"><span class="path">10 · experimentos</span></div>
-  <h2 data-anim>El mismo sistema, <em>desde Python</em></h2>
+  <h2 data-anim>Interfaz de <em>Python</em></h2>
   <div class="body center">
     <div class="col wide">
       <pre class="code-block" data-anim data-type style="font-size:24px"><span class="c"># orchestra-py · basado en local.py</span>
@@ -600,8 +600,8 @@
     </div>
     <div class="kws-col">
       <span class="kw" data-anim>PyO3 + maturin</span>
-      <span class="kw" data-anim>libera el GIL</span>
-      <span class="kw on" data-anim>benchmarks en Python</span>
+      <span class="kw" data-anim>liberación del GIL</span>
+      <span class="kw on" data-anim>suite de benchmarks en Python</span>
     </div>
   </div>
   <aside class="notes">
@@ -616,16 +616,16 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Cómo medimos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:00">
+<section class="slide" data-title="Metodología de medición" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:00">
   <div class="kicker"><span class="path">10 · experimentos</span></div>
-  <h2 data-anim>Cómo <em>medimos</em></h2>
+  <h2 data-anim>Metodología de <em>medición</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="testbed"></div></div>
     <div class="kws-col">
       <span class="kw" data-anim>MNIST · LeNet-5</span>
       <span class="kw ar" data-anim>1 contenedor = 1 nodo</span>
       <span class="kw" data-step="1">de 2 a 16 workers</span>
-      <span class="kw warn" data-step="2">red lenta, a propósito</span>
+      <span class="kw warn" data-step="2">red limitada deliberadamente</span>
     </div>
   </div>
   <aside class="notes">
@@ -643,16 +643,16 @@
 
 <section class="slide" data-title="Resultados: sincrónicos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:00">
   <div class="kicker"><span class="path">11 · resultados</span></div>
-  <h2 data-anim>Sincrónicos: <em>tiempo</em></h2>
+  <h2 data-anim>Tiempo: algoritmos <em>sincrónicos</em></h2>
   <div class="body">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/execution_time_per_nodes_ar_vs_ps.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para All-Reduce y Parameter Server">
         <figcaption>Figura del informe · eje Y: tiempo en segundos · eje X: workers</figcaption></figure>
     </div>
     <div class="kws-col">
-      <span class="kw ps" data-step="1">PS empeora desde 6 workers</span>
-      <span class="kw ar" data-step="2">AR deja de mejorar</span>
-      <span class="kw on" data-step="2">como predijo el modelo</span>
+      <span class="kw ps" data-step="1">PS: degradación desde 6 workers</span>
+      <span class="kw ar" data-step="2">AR: sin mejora desde 6 workers</span>
+      <span class="kw on" data-step="2">consistente con el modelo</span>
     </div>
   </div>
   <aside class="notes">
@@ -670,15 +670,15 @@
 
 <section class="slide" data-title="Resultados: asincrónicos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="0:30">
   <div class="kicker"><span class="path">11 · resultados</span></div>
-  <h2 data-anim>Sin barrera: <em>más rápido</em></h2>
+  <h2 data-anim>Tiempo: algoritmos <em>asincrónicos</em></h2>
   <div class="body">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/execution_times_async_parameter_server_and_strategy_switch.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para Parameter Server asincrónico y Strategy-Switch">
         <figcaption>Figura del informe · PS asincrónico y Strategy-Switch · eje Y: tiempo en segundos</figcaption></figure>
     </div>
     <div class="kws-col">
-      <span class="kw on" data-anim>el tiempo sigue bajando</span>
-      <span class="kw warn" data-step="1">¿pero aprende?</span>
+      <span class="kw on" data-anim>el tiempo disminuye con más workers</span>
+      <span class="kw warn" data-step="1">convergencia: a verificar</span>
     </div>
   </div>
   <aside class="notes">
@@ -694,7 +694,7 @@
 
 <section class="slide" data-title="Resultados: exactitud" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:15">
   <div class="kicker"><span class="path">11 · resultados</span></div>
-  <h2 data-anim>Exactitud: <em>¿quién aprende?</em></h2>
+  <h2 data-anim>Exactitud <em>final</em></h2>
   <div class="body">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/accuracies.png" alt="Exactitud final sobre el conjunto de prueba de MNIST en función de la cantidad de workers para las cuatro estrategias">
@@ -702,7 +702,7 @@
     </div>
     <div class="kws-col">
       <span class="kw ss" data-step="1">Strategy-Switch ≈ sincrónicos</span>
-      <span class="kw bad" data-step="1">PS asincrónico colapsa</span>
+      <span class="kw bad" data-step="1">PS asincrónico: colapso de exactitud</span>
     </div>
   </div>
   <aside class="notes">
@@ -718,8 +718,8 @@
   </aside>
 </section>
 
-<section class="slide" data-title="Trabajos futuros" data-section="cierre" data-speaker="Lorenzo Minervino" data-time="0:45" data-keywords="tolerancia a fallos · convolución según el tamaño · más arquitecturas">
-  <div class="kicker"><span class="path">12 · lo que sigue</span></div>
+<section class="slide" data-title="Trabajos futuros" data-section="cierre" data-speaker="Lorenzo Minervino" data-time="0:45" data-keywords="tolerancia a fallos · convolución según el tamaño · nuevas arquitecturas">
+  <div class="kicker"><span class="path">12 · trabajos futuros</span></div>
   <h2 data-anim>Trabajos <em>futuros</em></h2>
   <div class="body center">
     <div class="col">
@@ -727,8 +727,8 @@
         <div class="term-bar">~/oxidized-neural-orchestra</div>
         <p class="term-line cmd" data-type>cat TODO.md</p>
         <p class="term-line todo" data-step="1" data-type>tolerancia a fallos</p>
-        <p class="term-line todo" data-step="2" data-type>convolución: elegir el algoritmo según el tamaño</p>
-        <p class="term-line todo" data-step="3" data-type>más arquitecturas: U-Net, recurrentes</p>
+        <p class="term-line todo" data-step="2" data-type>convolución: selección del algoritmo según el tamaño</p>
+        <p class="term-line todo" data-step="3" data-type>nuevas arquitecturas: U-Net, recurrentes</p>
       </div>
     </div>
   </div>
@@ -747,15 +747,15 @@
 
 <!-- ═════════════════════════ DEMO · se lanza el entrenamiento y, mientras corre, se cuenta el apéndice ═════════════════════════ -->
 
-<section class="slide" data-title="Ahora, la demo" data-section="demo" data-speaker="Lorenzo Minervino" data-time="0:30">
-  <div class="kicker"><span class="path">13 · demo</span></div>
-  <h2 data-anim>Ahora, <em>la demo</em></h2>
+<section class="slide" data-title="Demostración" data-section="demo" data-speaker="Lorenzo Minervino" data-time="0:30">
+  <div class="kicker"><span class="path">13 · demostración</span></div>
+  <h2 data-anim><em>Demostración</em> en vivo</h2>
   <div class="body center">
     <div class="kws-col" style="flex:1;align-items:center">
       <span class="kw" data-anim>3 computadoras</span>
       <span class="kw ss" data-anim>Strategy-Switch · MNIST</span>
-      <span class="kw warn" data-anim>≈ 10 min entrenando</span>
-      <span class="kw on" data-anim>después: el modelo, en el navegador</span>
+      <span class="kw warn" data-anim>≈ 10 min de entrenamiento</span>
+      <span class="kw on" data-anim>luego: el modelo, en el navegador</span>
     </div>
   </div>
   <aside class="notes">
@@ -776,7 +776,7 @@
 
 <section class="slide" data-title="A1 · Por qué una base común" data-section="apéndice" data-appendix data-speaker="Alejo Ordoñez" data-time="1:15">
   <div class="kicker"><span class="path">A1 · el problema de comparar</span></div>
-  <h2 data-anim>Comparar sobre frameworks distintos <em>mezcla efectos</em></h2>
+  <h2 data-anim>La comparación entre frameworks <em>mezcla efectos</em></h2>
   <div class="body">
     <div class="col">
       <p class="txt" data-anim>TensorFlow (<code>tf.distribute.Strategy</code>) y PyTorch (<code>DistributedDataParallel</code>) envuelven la sincronización en <strong>una sola llamada</strong>, que fija cuatro decisiones:</p>
@@ -831,8 +831,8 @@
     <div class="kws-col">
       <span class="kw" data-anim>control: JSON</span>
       <span class="kw" data-anim>datos: f16, sin copias</span>
-      <span class="kw grad" data-step="1">solo lo que supera el umbral</span>
-      <span class="kw" data-step="2">el resto, al residual</span>
+      <span class="kw grad" data-step="1">envío de valores sobre el umbral</span>
+      <span class="kw" data-step="2">el resto se acumula en el residual</span>
       <span class="kw on" data-step="3">error feedback</span>
     </div>
   </div>
@@ -852,12 +852,12 @@
 
 <section class="slide" data-title="A4 · Topología por latencia" data-section="apéndice" data-appendix data-speaker="Marcos Bianchi Fernández" data-time="1:15">
   <div class="kicker"><span class="path">A4 · coordinación</span></div>
-  <h2 data-anim>La topología sale de <em>la red medida</em></h2>
+  <h2 data-anim>Topología a partir de <em>la latencia medida</em></h2>
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="topo"></div></div>
     <div class="kws-col">
       <span class="kw" data-anim>10 pings por par</span>
-      <span class="kw ar" data-step="1">anillo: viajante exacto</span>
+      <span class="kw ar" data-step="1">anillo: viajante, solución exacta</span>
       <span class="kw ps" data-step="2">servidor: menor latencia máxima</span>
       <span class="kw" data-step="2">optimizador después de agregar</span>
     </div>
@@ -876,9 +876,9 @@
 
 <!-- ═════════════════════════ CIERRE ═════════════════════════ -->
 
-<section class="slide" data-title="A5 · ¿Por qué Rust?" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:00">
+<section class="slide" data-title="A5 · Elección de Rust" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:00">
   <div class="kicker"><span class="path">A5 · herramientas</span></div>
-  <h2 data-anim>¿Por qué <em>Rust</em>?</h2>
+  <h2 data-anim>Elección del lenguaje: <em>Rust</em></h2>
   <div class="body center">
     <div class="col">
       <div class="term" data-anim>
@@ -906,7 +906,7 @@
 
 <section class="slide" data-title="A6 · Lecciones: errores silenciosos" data-section="apéndice" data-appendix data-speaker="Lorenzo Minervino" data-time="1:30">
   <div class="kicker"><span class="path">A6 · lecciones aprendidas</span></div>
-  <h2 data-anim>La instrumentación <em>detecta</em>: tres errores silenciosos</h2>
+  <h2 data-anim>Detección de <em>errores silenciosos</em></h2>
   <div class="body">
     <div class="col">
       <div class="grid-3">
@@ -982,7 +982,7 @@
 </section>
 
 <section class="slide" data-title="A7 · Grabación de Strategy-Switch" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
-  <div class="kicker"><span class="path">A7 · respaldo si falla la demo</span></div>
+  <div class="kicker"><span class="path">A7 · respaldo de la demostración</span></div>
   <h2 data-anim>Grabación de <em>Strategy-Switch</em> en la TUI</h2>
   <div class="body" style="flex-direction:column;gap:0">
     <div class="tui" data-tui-player data-crop="0,0,190,36" style="width:1380px"><canvas></canvas></div>
@@ -1002,7 +1002,7 @@
 </section>
 
 <section class="slide" data-title="A8 · Capturas de la TUI" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
-  <div class="kicker"><span class="path">A8 · respaldo si falla la demo</span></div>
+  <div class="kicker"><span class="path">A8 · respaldo de la demostración</span></div>
   <h2 data-anim>La TUI: <em>configuración</em> y <em>dashboard</em></h2>
   <div class="body" style="gap:34px">
     <div class="col narrow"><div class="tui" data-tui="menu" data-crop="50,0,90,26"><canvas></canvas><div class="tui-cap">menú principal</div></div>
@@ -1018,7 +1018,7 @@
 </section>
 
 <section class="slide" data-title="A9 · Topologías en la TUI" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
-  <div class="kicker"><span class="path">A9 · respaldo si falla la demo</span></div>
+  <div class="kicker"><span class="path">A9 · respaldo de la demostración</span></div>
   <h2 data-anim>Las tres topologías, <em>en la TUI</em></h2>
   <div class="body">
     <div class="col wide">
@@ -1032,7 +1032,7 @@
     <div class="kws-col">
       <span class="kw ar" data-anim>anillo de All-Reduce</span>
       <span class="kw ps" data-step="1">Parameter Server</span>
-      <span class="kw ss" data-step="2">el switch, en vivo</span>
+      <span class="kw ss" data-step="2">el cambio de estrategia, en vivo</span>
     </div>
   </div>
   <aside class="notes">

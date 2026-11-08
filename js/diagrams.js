@@ -1136,7 +1136,7 @@
     add(memG, "rect", { x: 840, y: 454, width: 220, height: 24, rx: 3, fill: "none", stroke: C.lineStrong, "stroke-width": 1.5 });
     const memFill = add(memG, "rect", { x: 843, y: 457, width: 214, height: 18, rx: 2, fill: C.param });
     const memOver = add(memG, "rect", { x: 1057, y: 457, width: 40, height: 18, rx: 2, fill: C.bad });
-    const memNo = label(memG, 950, 514, "no entra", { fill: C.bad, "font-size": 24 });
+    const memNo = label(memG, 950, 514, "excede", { fill: C.bad, "font-size": 24 });
 
     gsap.set(cards.slice(3), { autoAlpha: 0 });
     gsap.set([big.g, ...days, memNo], { autoAlpha: 0 });
@@ -1976,12 +1976,12 @@
     const tl = gsap.timeline();
     const Y = 230;
     const items = [
-      ["por qué distribuir", "Alejo"],
-      ["cómo sincronizar", "Marcos"],
-      ["cómo está construido", "Marcos y Alejo"],
-      ["cuánto cuesta", "Lorenzo"],
+      ["motivación", "Alejo"],
+      ["sincronización", "Marcos"],
+      ["arquitectura", "Marcos y Alejo"],
+      ["costo de sincronización", "Lorenzo"],
       ["resultados", "Lorenzo"],
-      ["demo en vivo", "los tres"],
+      ["demostración", "los tres"],
     ];
     const xs = items.map((_, k) => 150 + k * 268);
     const line = add(svg, "line", { x1: 80, y1: Y, x2: 1560, y2: Y, stroke: C.lineStrong, "stroke-width": 3 });
