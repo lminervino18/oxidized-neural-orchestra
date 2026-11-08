@@ -36,19 +36,19 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 13:30 | 15:15 | 12 | Parameter Server asincrónico | Marcos Bianchi Fernández | «sincrónico: espera al nodo más lento» «asincrónico: sin barrera» «θ desactualizado → mayor drift» |
 | 15:15 | 16:45 | 13 | Strategy-Switch: principio | Marcos Bianchi Fernández | «inicio en All-Reduce» «criterio: estabilización de la pérdida» «ventana de 6 · umbral 1 %» «cambio a PS asincrónico» |
 | 16:45 | 18:30 | 14 | Strategy-Switch en O.N.O. | Marcos Bianchi Fernández | «medición en el orchestrator» «Upgrade · Switch» «un worker promovido a servidor» «mismo proceso, nuevo rol» |
-| 18:30 | 19:15 | 15 | Medición del drift | Marcos Bianchi Fernández | «E: épocas sin sincronización» «E = 1: ≈ −1 punto de exactitud» «mayor caída con más nodos» «sin ganancia de tiempo» |
-| 19:15 | 21:00 | 16 | Arquitectura del sistema | Marcos Bianchi Fernández | «mismo binario en cada nodo» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos» |
+| 18:30 | 19:15 | 15 | Medición del drift | Marcos Bianchi Fernández | «E: epochs sin sincronización» «E = 1: ≈ −1 punto de accuracy» «mayor caída con más nodos» «sin ganancia de tiempo» |
+| 19:15 | 21:00 | 16 | Arquitectura del sistema | Marcos Bianchi Fernández | «nodo agnóstico de rol» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos» |
 | 21:00 | 22:00 | 17 | Biblioteca de ML propia | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
 | 22:00 | 22:30 | 18 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora» |
 | 22:30 | 23:45 | 19 | Implementación de la convolución | Alejo Ordoñez | «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño» |
-| 23:45 | 24:45 | 20 | Tiempo de un entrenamiento | Lorenzo Minervino | «el cómputo se reparte» «sincronización: todos esperan» «una ronda por época» «d_sync determina la escalabilidad» |
+| 23:45 | 24:45 | 20 | Tiempo de un entrenamiento | Lorenzo Minervino | «el cómputo se reparte» «sincronización: todos esperan» «una ronda por epoch» «d_sync determina la escalabilidad» |
 | 24:45 | 26:00 | 21 | Cálculo de d_sync | Lorenzo Minervino | «S: tamaño del modelo · R: ancho de banda» «PS: todo el tráfico por una placa» «crece con la cantidad de workers» «AR: transmisión simultánea» «acotado» |
 | 26:00 | 26:45 | 22 | Costo de sincronización | Lorenzo Minervino | «PS: crecimiento lineal» «cuello de botella: el servidor» «AR: acotado por 2S/R» |
 | 26:45 | 27:30 | 23 | Interfaz de Python | Lorenzo Minervino | «PyO3 + maturin» «liberación del GIL» «suite de benchmarks en Python» |
 | 27:30 | 28:30 | 24 | Metodología de medición | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red limitada deliberadamente» |
 | 28:30 | 29:30 | 25 | Resultados: sincrónicos | Lorenzo Minervino | «PS: degradación desde 6 workers» «AR: sin mejora desde 6 workers» «consistente con el modelo» |
 | 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo disminuye con más workers» «¿converge el modelo?» |
-| 30:00 | 31:15 | 27 | Resultados: exactitud | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico: colapso de exactitud» |
+| 30:00 | 31:15 | 27 | Resultados: accuracy | Lorenzo Minervino | «Strategy-Switch ≈ sincrónicos» «PS asincrónico: colapso de accuracy» |
 | 31:15 | 32:00 | 28 | Trabajos futuros | Lorenzo Minervino | tolerancia a fallos · convolución según el tamaño · nuevas arquitecturas |
 | 32:00 | 32:30 | 29 | Demostración | Lorenzo Minervino | «3 computadoras» «Strategy-Switch · MNIST» «≈ 10 min de entrenamiento» «luego: el modelo, en el navegador» |
 | 32:30 | 33:45 | A1 | A1 · Por qué una base común | Alejo Ordoñez | — |
@@ -113,7 +113,7 @@ Respaldo: LeNet-5: docs/report/experimentacion.md · GPT-3: Brown et al. (2020),
 > Entrenar un modelo profundo cuesta en dos dimensiones: tiempo y memoria.
 
 - Un modelo chico con pocos datos entrena rápido: la barra se llena enseguida.
-- **→** Pero los modelos útiles crecen: más datos y más parámetros. Cada época recorre todo el dataset y actualiza todos los parámetros.
+- **→** Pero los modelos útiles crecen: más datos y más parámetros. Cada epoch recorre todo el dataset y actualiza todos los parámetros.
 - **→** Sobre conjuntos grandes, un entrenamiento completo puede tardar días en una sola máquina.
 - **→** La otra dimensión es la memoria: el dataset, el modelo y sus estados intermedios pueden no entrar en un solo dispositivo.
 
@@ -171,7 +171,7 @@ Respaldo: docs/report/estado_del_arte.md (Paralelismo de datos, de modelo y de p
 > Con paralelismo de datos cada réplica tira hacia el mínimo de su partición; por eso hay que sincronizarlas.
 
 - Los tres workers arrancan con la misma réplica del modelo. Las curvas de nivel son la pérdida sobre todo el dataset y la estrella es su mínimo. El dibujo es ilustrativo.
-- **→** Cada worker entrena con su partición, así que su gradiente apunta al mínimo de sus datos y no al global. En O.N.O. cada worker recorre al menos una época completa sobre su partición antes de sincronizar, y en ese tiempo las réplicas se separan. Eso se llama *client drift* (McMahan et al., 2017).
+- **→** Cada worker entrena con su partición, así que su gradiente apunta al mínimo de sus datos y no al global. En O.N.O. cada worker recorre al menos una epoch completa sobre su partición antes de sincronizar, y en ese tiempo las réplicas se separan. Eso se llama *client drift* (McMahan et al., 2017).
 - **→** La solución es sincronizar: se combinan los aportes de todos (en O.N.O., promediando gradientes) y todos siguen desde el mismo punto.
 - **→** Alternando entrenar y sincronizar, el conjunto converge al mínimo global. Cuanto más se demora la sincronización, más drift hay; lo medimos al final.
 
@@ -280,12 +280,12 @@ Respaldo: docs/report/solucion.md (Strategy-Switch) · código: orchestrator/src
 
 ### 18:30 → 19:15 · 15 · Medición del drift
 
-**Marcos Bianchi Fernández** · 00:45 · en pantalla: «E: épocas sin sincronización» «E = 1: ≈ −1 punto de exactitud» «mayor caída con más nodos» «sin ganancia de tiempo»
+**Marcos Bianchi Fernández** · 00:45 · en pantalla: «E: epochs sin sincronización» «E = 1: ≈ −1 punto de accuracy» «mayor caída con más nodos» «sin ganancia de tiempo»
 
 > Demorar la sincronización es pagar drift.
 
-- Es un estudio derivado, de mi monografía: All-Reduce con E épocas offline, es decir, E épocas extra sin sincronizar. Se corrió en una máquina de 4 núcleos con red hogareña emulada.
-- **→** Con una sola época offline (la mitad de sincronizaciones) la exactitud cae cerca de un punto porcentual, y la caída crece con la cantidad de nodos: las particiones son más chicas y más sesgadas.
+- Es un estudio derivado, de mi monografía: All-Reduce con E epochs offline, es decir, E epochs extra sin sincronizar. Se corrió en una máquina de 4 núcleos con red hogareña emulada.
+- **→** Con una sola epoch offline (la mitad de sincronizaciones) la accuracy cae cerca de un punto porcentual, y la caída crece con la cantidad de nodos: las particiones son más chicas y más sesgadas.
 - **→** Y en ese entorno no hubo ganancia de tiempo que lo compense.
 
 **Pase:** «Volviendo al sistema: ¿cómo está armado para cambiar de estrategia sin reiniciar?»
@@ -294,11 +294,11 @@ Respaldo: docs/report/estudio_derivado.md
 
 ### 19:15 → 21:00 · 16 · Arquitectura del sistema
 
-**Marcos Bianchi Fernández** · 01:45 · en pantalla: «mismo binario en cada nodo» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos»
+**Marcos Bianchi Fernández** · 01:45 · en pantalla: «nodo agnóstico de rol» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos»
 
-> Todos los nodos ejecutan el mismo binario y reciben su rol al conectarse; eso es lo que habilita Strategy-Switch.
+> Todos los nodos ejecutan el mismo programa y reciben su rol al conectarse; eso es lo que habilita Strategy-Switch.
 
-- Todo O.N.O. está escrito en Rust (si preguntan por qué, apéndice A5). Cada máquina corre el mismo binario, `node`. No hay una imagen de worker y otra de servidor.
+- Todo O.N.O. está escrito en Rust (si preguntan por qué, apéndice A5). Cada máquina corre el mismo ejecutable, `node`, que no tiene un rol fijo. No hay un programa de worker y otro de servidor.
 - **→** El orchestrator es el plano de control y vive dentro de la interfaz de terminal o de la biblioteca de Python. Se conecta con cada nodo mediante un handshake Connect/Accept.
 - **→** Le manda a cada nodo su especificación y su rol, worker o servidor. Cada extremo recibe un handle tipado que solo permite los mensajes de ese rol, y el compilador rechaza el resto.
 - **→** Los gradientes y los parámetros viajan entre nodos, en f16 y sin copias; el orchestrator queda fuera del plano de datos.
@@ -355,14 +355,14 @@ Respaldo: machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajo
 
 ### 23:45 → 24:45 · 20 · Tiempo de un entrenamiento
 
-**Lorenzo Minervino** · 01:00 · en pantalla: «el cómputo se reparte» «sincronización: todos esperan» «una ronda por época» «d_sync determina la escalabilidad»
+**Lorenzo Minervino** · 01:00 · en pantalla: «el cómputo se reparte» «sincronización: todos esperan» «una ronda por epoch» «d_sync determina la escalabilidad»
 
 > El tiempo total tiene una parte que se reparte entre workers y otra que se paga por sincronizar; la segunda decide si conviene sumar máquinas.
 
-- Ya vimos cómo funciona cada estrategia y cómo está construido; ahora, cuánto cuesta sincronizar. Arriba está la fórmula del informe y la vamos a armar término por término. Primero, una época entera en una sola máquina: T_epoch.
-- **→** Con N_W workers, cada uno procesa solo su partición: el cómputo de la época se divide, T_epoch/N_W. Esta es la parte que mejora al sumar máquinas.
-- **→** Pero al final de cada época hay que sincronizar, y mientras tanto nadie avanza: eso es d_sync. Esta parte no se divide.
-- **→** Se repite una vez por época, N_epochs veces, más un costo de arranque, d_init, que se paga una sola vez. Conclusión: si d_sync crece con la cantidad de workers, llega un punto en que sumar máquinas empeora.
+- Ya vimos cómo funciona cada estrategia y cómo está construido; ahora, cuánto cuesta sincronizar. Arriba está la fórmula del informe y la vamos a armar término por término. Primero, una epoch entera en una sola máquina: T_epoch.
+- **→** Con N_W workers, cada uno procesa solo su partición: el cómputo de la epoch se divide, T_epoch/N_W. Esta es la parte que mejora al sumar máquinas.
+- **→** Pero al final de cada epoch hay que sincronizar, y mientras tanto nadie avanza: eso es d_sync. Esta parte no se divide.
+- **→** Se repite una vez por epoch, N_epochs veces, más un costo de arranque, d_init, que se paga una sola vez. Conclusión: si d_sync crece con la cantidad de workers, llega un punto en que sumar máquinas empeora.
 
 **Pase:** «¿Y de qué depende d_sync? De cómo viajan los datos.»
 
@@ -417,7 +417,7 @@ Respaldo: docs/report/solucion.md (Interfaz de Python como crate separado) · or
 
 > Fijamos todo salvo la estrategia, y forzamos una red lenta para que las diferencias se vean.
 
-- Un clúster simulado en una sola máquina física: un contenedor de Docker por nodo, con un núcleo cada uno. Entrenamos LeNet-5 (61.706 parámetros) sobre MNIST completo, con Adam, hasta 48 épocas.
+- Un clúster simulado en una sola máquina física: un contenedor de Docker por nodo, con un núcleo cada uno. Entrenamos LeNet-5 (61.706 parámetros) sobre MNIST completo, con Adam, hasta 48 epochs.
 - **→** Variamos la cantidad de workers: 2, 4, 6, 8, 12 y 16. PS con un solo servidor.
 - **→** Limitamos la salida de cada contenedor a 10 Mbps con Pumba. ¿Por qué? Con un modelo chico, la red real es tan rápida que no se distinguen las estrategias. Bajando R, la transmisión queda en ≈ 0,1 s por ronda. Como referencia, en una sola máquina tarda 600 s.
 - Antes de medir tiempos validamos la corrección con pruebas unitarias, de integración y de aceptación en CI: la convergencia distribuida coincide con la secuencial.
@@ -432,7 +432,7 @@ Respaldo: docs/report/experimentacion.md (Pruebas automatizadas · Entorno de ex
 
 > Lo medido coincide con lo que predice el modelo analítico.
 
-- El tiempo total de entrenamiento según la cantidad de workers. Es la figura del informe, con los colores invertidos para el proyector, y el eje Y está en segundos.
+- El tiempo total de entrenamiento según la cantidad de workers. En el eje Y, el tiempo total en segundos; en el X, la cantidad de workers.
 - **→** Parameter Server con un servidor tiene su mínimo en 6 workers y desde ahí empeora: el servidor concentra todo el tráfico.
 - **→** All-Reduce no se degrada, pero deja de mejorar: el cómputo por worker baja y la sincronización se queda en 2S/R. Es lo que predijo el modelo de la diapositiva 22.
 - Lectura aproximada, por si preguntan: AR cerca de 290 s desde 6 workers; PS cerca de 340 s en 6 y algo más de 400 s en 16.
@@ -448,20 +448,20 @@ Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_t
 > En velocidad pura, los dos asincrónicos ganan.
 
 - Con PS asincrónico y Strategy-Switch, el tiempo sigue bajando al sumar workers, a diferencia de los sincrónicos.
-- **→** Pero acelerar no sirve de nada si el modelo no aprende. Hay que mirar la exactitud.
+- **→** Pero acelerar no sirve de nada si el modelo no aprende. Hay que mirar la accuracy.
 
-**Pase:** «Veamos la exactitud final.»
+**Pase:** «Veamos la accuracy final.»
 
 Respaldo: docs/report/resultados.md (Resultados obtenidos) · figura execution_times_async_parameter_server_and_strategy_switch.png
 
-### 30:00 → 31:15 · 27 · Resultados: exactitud
+### 30:00 → 31:15 · 27 · Resultados: accuracy
 
-**Lorenzo Minervino** · 01:15 · en pantalla: «Strategy-Switch ≈ sincrónicos» «PS asincrónico: colapso de exactitud»
+**Lorenzo Minervino** · 01:15 · en pantalla: «Strategy-Switch ≈ sincrónicos» «PS asincrónico: colapso de accuracy»
 
 > Strategy-Switch fue el mejor balance de esta campaña; la salvedad sobre WildStore es parte del resultado.
 
-- La exactitud final sobre el conjunto de prueba de MNIST. All-Reduce, PS sincrónico y Strategy-Switch se superponen arriba.
-- **→** PS asincrónico cae al sumar workers, hasta valores cercanos al azar desde 8 workers: es el client drift en acción. Strategy-Switch, en cambio, conserva la exactitud de los sincrónicos con tiempos cercanos a los del asincrónico.
+- La accuracy final sobre el conjunto de prueba de MNIST. All-Reduce, PS sincrónico y Strategy-Switch se superponen arriba.
+- **→** PS asincrónico cae al sumar workers, hasta valores cercanos al azar desde 8 workers: es el client drift en acción. Strategy-Switch, en cambio, conserva la accuracy de los sincrónicos con tiempos cercanos a los del asincrónico.
 - La salvedad, dicha por nosotros antes de que pregunten: PS asincrónico corrió con WildStore, que hace escrituras sin protección al estilo Hogwild!. Con estos datos no podemos separar el drift del efecto de esas escrituras.
 - Alcance: estas conclusiones valen para MNIST, LeNet-5 y este entorno.
 
@@ -493,7 +493,7 @@ Respaldo: docs/report/trabajos_futuros.md
 - Ahora lo vamos a ver funcionando: tres computadoras, cada una con un nodo, y el orchestrator en la TUI. Lanzamos Strategy-Switch sobre MNIST.
 - Tarda unos diez minutos. Mientras entrena contamos decisiones de diseño del apéndice y cada tanto miramos la TUI: el anillo, el momento del switch y la topología en estrella.
 - Cuando termine, guardamos el modelo y lo cargamos en una página web para probarlo dibujando números.
-- Si preguntan por qué siempre cambia de estrategia: las etiquetas de entrenamiento están suavizadas (ε = 0,1), así la pérdida tiene un piso y se estabiliza entre las épocas 14 y 16. La exactitud se mide contra las etiquetas originales.
+- Si preguntan por qué siempre cambia de estrategia: las etiquetas de entrenamiento están suavizadas (ε = 0,1), así la pérdida tiene un piso y se estabiliza entre las epochs 14 y 16. La accuracy se mide contra las etiquetas originales.
 - Los pasos exactos están en presentation/GUION_DEMO.md.
 
 **Pase:** Traspaso: «Mientras entrena, Alejo cuenta por qué tuvimos que construir una base común.»
@@ -564,8 +564,8 @@ Respaldo: docs/report/solucion.md (Selección de topología · Ubicación del op
 > Elegimos Rust por el control de bajo nivel con garantías de seguridad.
 
 - Todo O.N.O. está escrito en Rust, incluida la biblioteca de redes neuronales.
-- **→** Da control de bajo nivel, como C o C++, pero sin recolector de basura y con la seguridad de memoria verificada al compilar.
-- **→** En concurrencia, el compilador rechaza las condiciones de carrera sobre memoria compartida (*fearless concurrency*): ninguna llegó a la rama principal.
+- **→** Buscábamos un lenguaje de system programming, con control de bajo nivel como C o C++, y sin garbage collector: sus pausas no se pueden predecir y frenan el cómputo y la red.
+- **→** Y el compilador verifica dos cosas antes de ejecutar: la seguridad de memoria y que no haya data races sobre memoria compartida (*fearless concurrency*). Ninguno de esos errores llegó a la rama principal.
 - Si preguntan por las dificultades: el compilador no verifica la coordinación distribuida. Esa fue la dificultad real, sobre todo en All-Reduce.
 - Si preguntan por `unsafe`: está acotado y marcado, por ejemplo en WildStore (Hogwild!) y en la codificación de mensajes.
 
@@ -591,7 +591,7 @@ Respaldo: docs/report/riesgos.md (Lecciones aprendidas)
 
 > Volver al entrenamiento que lanzamos y ver qué aprendió el modelo.
 
-- Volvemos al entrenamiento que lanzamos. Cuando la TUI diga FINISHED, guardamos el modelo y lo cargamos en la página, que mide su exactitud y permite dibujar números.
+- Volvemos al entrenamiento que lanzamos. Cuando la TUI diga FINISHED, guardamos el modelo y lo cargamos en la página, que mide su accuracy y permite dibujar números.
 - Los pasos exactos están en presentation/demo/INSTRUCCIONES.md.
 
 **Pase:** «Con esto terminamos. ¿Preguntas?»
@@ -647,7 +647,7 @@ Respaldo: presentation/captures/raw/
 
 > La topología que dibuja la TUI es la que construyó el orchestrator, y cambia en vivo cuando Strategy-Switch promueve un nodo.
 
-- orchestui es la interfaz de terminal que embebe al orchestrator. Son capturas reales de una ejecución local con 4 nodos, fuera de la campaña experimental. Acá, el anillo de All-Reduce con la pérdida y la época de cada worker.
+- orchestui es la interfaz de terminal que embebe al orchestrator. Son capturas reales de una ejecución local con 4 nodos, fuera de la campaña experimental. Acá, el anillo de All-Reduce con la pérdida y la epoch de cada worker.
 - **→** La misma vista con Parameter Server: los workers a la izquierda y el servidor a la derecha.
 - **→** Strategy-Switch en el instante del cambio: el encabezado dice «switching W3 → PS» y la topología pasa de anillo a estrella.
 

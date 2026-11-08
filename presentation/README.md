@@ -98,9 +98,9 @@ python3 presentation/tools/ansi_to_capture.py
 
 ## Resultados y figuras
 
-Los resultados son las figuras originales del informe (`docs/report/figures/`), con los colores invertidos para proyectarlas sobre fondo negro, sin otros cambios. Los datos crudos de esas figuras no están en el repositorio, así que no se redibujaron. Los diagramas de las diapositivas 03 a 07 son conceptuales y no representan mediciones. Los gráficos que podrían confundirse con datos están identificados en pantalla:
-- El de costo de sincronización (21) usa las fórmulas del capítulo de Resultados con S/R ≈ 0,1 s.
-- El tiempo total (19), la derivación de d_sync (20, con N_W = 4) y la convolución (18, con una entrada de 4×4) son esquemas para explicar las fórmulas y el algoritmo, no mediciones.
+Los gráficos de resultados (diapositivas 15, 25, 26 y 27) se redibujan en `js/diagrams.js` con el estilo de la presentación. Los datos crudos no están en el repositorio, así que los valores se leyeron píxel a píxel de las figuras originales: `docs/report/figures/execution_time_per_nodes_ar_vs_ps.png`, `execution_times_async_parameter_server_and_strategy_switch.png`, `accuracies.png` y `oe_ar_acc.png`. En `accuracies.png`, All-Reduce y PS sincrónico quedan tapados por Strategy-Switch hasta 8 workers; ahí se usan los valores de Strategy-Switch, que coinciden a la resolución de la figura. Los diagramas de las diapositivas 03 a 07 son conceptuales y no representan mediciones. Los gráficos que podrían confundirse con datos están identificados en pantalla:
+- El de costo de sincronización (22) usa las fórmulas del capítulo de Resultados con S/R ≈ 0,1 s.
+- El tiempo total (20), la derivación de d_sync (21, con N_W = 4) y la convolución (19, con una entrada de 4×4) son esquemas para explicar las fórmulas y el algoritmo, no mediciones.
 - El paisaje de pérdida del *client drift* (08), la curva de pérdida de Strategy-Switch (13) y la compresión (A3) están marcados como ilustrativos.
 - Las latencias de la topología (A4) están marcadas como ilustrativas.
 
