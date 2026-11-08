@@ -98,7 +98,7 @@ El argumento es la carpeta que tiene `mnist_test_samples.bin` y `mnist_test_labe
 - **Al lanzar:** «Son tres computadoras, cada una con un nodo, y el orchestrator en la TUI. Arranca en All-Reduce: los tres en anillo.»
 - **Al ver el switch, cerca del minuto 1:30:** «Acá la pérdida se estabilizó, el orchestrator mandó Upgrade a un nodo y Switch al resto, y siguió en Parameter Server sin reiniciar nada.»
 - **En la página:** «Este archivo es el que acaba de salir de las tres computadoras. Lo corremos en el navegador sobre las 10.000 imágenes de prueba de MNIST, que el modelo no vio al entrenar.»
-- **Al dibujar:** «El dibujo se achica a 28×28 y se centra como las imágenes de MNIST: esa es la imagen que ve el modelo.»
+- **Al dibujar:** «El dibujo se achica a 28×28 y se centra como las imágenes de MNIST antes de pasar por el modelo.»
 
 ## Si algo falla
 
