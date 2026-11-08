@@ -29,7 +29,7 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 03:00 | 04:00 | 05 | Escalado vertical | Alejo Ordoñez | «mayor capacidad en un solo equipo» «costo elevado · acceso limitado» «límite físico» |
 | 04:00 | 05:00 | 06 | Escalado horizontal | Alejo Ordoñez | «hardware de uso general» «más equipos en paralelo» «interconectados por red» |
 | 05:00 | 06:45 | 07 | Paralelismo de modelo y de datos | Alejo Ordoñez | «modelo: partición de la red» «datos: partición del dataset» «O.N.O.: paralelismo de datos» |
-| 06:45 | 08:30 | 08 | Client drift | Alejo Ordoñez | «réplicas iguales, datos distintos» «client drift» «sincronización: promedio de réplicas» «elección de la sincronización» |
+| 06:45 | 08:30 | 08 | Client drift | Alejo Ordoñez | «réplicas iguales, datos distintos» «client drift» «sincronización: promedio de réplicas» «¿cómo sincronizar?» |
 | 08:30 | 09:15 | 09 | Estrategias de sincronización | Alejo Ordoñez | Parameter Server · All-Reduce · PS asincrónico · Strategy-Switch · misma base |
 | 09:15 | 11:15 | 10 | Parameter Server | Marcos Bianchi Fernández | «servidor central» «pull θ» «push gradiente» «promedio + optimizador» «varios servidores: partición por capa» |
 | 11:15 | 13:30 | 11 | Ring All-Reduce | Marcos Bianchi Fernández | «sin nodo central» «N fragmentos» «reduce-scatter: suma» «all-gather: copia» «÷ N en cada worker» |
@@ -39,8 +39,8 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 18:30 | 19:15 | 15 | Medición del drift | Marcos Bianchi Fernández | «E: epochs sin sincronización» «E = 1: ≈ −1 punto de accuracy» «mayor caída con más nodos» «sin ganancia de tiempo» |
 | 19:15 | 21:00 | 16 | Arquitectura del sistema | Marcos Bianchi Fernández | «nodo agnóstico de rol» «orchestrator: control» «rol asignado al conectarse» «datos: directamente entre nodos» |
 | 21:00 | 22:00 | 17 | Biblioteca de ML propia | Alejo Ordoñez | «sin PyTorch ni TensorFlow» «capas · pérdidas · optimizadores» «Adam · momentum · SGD» |
-| 22:00 | 22:30 | 18 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora» |
-| 22:30 | 23:45 | 19 | Implementación de la convolución | Alejo Ordoñez | «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño» |
+| 22:00 | 22:30 | 18 | Teorema de la convolución | Alejo Ordoñez | «convolución → producto ⊙» |
+| 22:30 | 23:45 | 19 | Implementación de la convolución | Alejo Ordoñez | «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «trabajo futuro: según el tamaño» |
 | 23:45 | 24:45 | 20 | Tiempo de un entrenamiento | Lorenzo Minervino | «el cómputo se reparte» «sincronización: todos esperan» «una ronda por epoch» «d_sync determina la escalabilidad» |
 | 24:45 | 26:00 | 21 | Cálculo de d_sync | Lorenzo Minervino | «S: tamaño del modelo · R: ancho de banda» «PS: todo el tráfico por una placa» «crece con la cantidad de workers» «AR: transmisión simultánea» «acotado» |
 | 26:00 | 26:45 | 22 | Costo de sincronización | Lorenzo Minervino | «PS: crecimiento lineal» «cuello de botella: el servidor» «AR: acotado por 2S/R» |
@@ -166,7 +166,7 @@ Respaldo: docs/report/estado_del_arte.md (Paralelismo de datos, de modelo y de p
 
 ### 06:45 → 08:30 · 08 · Client drift
 
-**Alejo Ordoñez** · 01:45 · en pantalla: «réplicas iguales, datos distintos» «client drift» «sincronización: promedio de réplicas» «elección de la sincronización»
+**Alejo Ordoñez** · 01:45 · en pantalla: «réplicas iguales, datos distintos» «client drift» «sincronización: promedio de réplicas» «¿cómo sincronizar?»
 
 > Con paralelismo de datos cada réplica tira hacia el mínimo de su partición; por eso hay que sincronizarlas.
 
@@ -324,13 +324,13 @@ Respaldo: machine_learning/src/models.rs · docs/report/solucion.md (Motor de Re
 
 ### 22:00 → 22:30 · 18 · Teorema de la convolución
 
-**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto ⊙» «directa: n² · k²» «con FFT: n² · log n» «kernels pequeños: sin mejora»
+**Alejo Ordoñez** · 00:30 · en pantalla: «convolución → producto ⊙»
 
 > La FFT se probó por este resultado clásico: convierte la convolución en un producto, a cambio de pagar las transformadas.
 
 - Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto de Hadamard, es decir, punto a punto, de las transformadas.
 - **→** Entonces se transforman la entrada y el kernel, se multiplican punto a punto y se vuelve con la inversa.
-- **→** Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.
+- Si preguntan por el costo: con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.
 - Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.
 
 **Pase:** «Veamos cómo la implementamos.»
@@ -339,7 +339,7 @@ Respaldo: docs/report/trabajos_futuros.md (variación del modelo de cómputo de 
 
 ### 22:30 → 23:45 · 19 · Implementación de la convolución
 
-**Alejo Ordoñez** · 01:15 · en pantalla: «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «paralelización: sin mejora» «trabajo futuro: según el tamaño»
+**Alejo Ordoñez** · 01:15 · en pantalla: «FFT: sin mejora» «im2col: ventana → columna» «una única multiplicación de matrices» «trabajo futuro: según el tamaño»
 
 > La convolución la implementamos a mano y probamos tres variantes; quedó la que la convierte en una multiplicación de matrices.
 
@@ -347,7 +347,8 @@ Respaldo: docs/report/trabajos_futuros.md (variación del modelo de cómputo de 
 - **→** Primero la implementamos con transformadas rápidas de Fourier. Con nuestros datasets y modelos chicos, como los de MNIST, el costo de transformar superaba la ganancia.
 - **→** Lo que quedó es im2col: cada ventana donde se apoya el kernel se copia como una columna de una matriz.
 - **→** Así, toda la convolución es una sola multiplicación de matrices, el kernel como fila por esa matriz, y la multiplicación de matrices está muy optimizada. Después reordenamos im2col y col2im para aprovechar mejor la caché.
-- **→** También probamos paralelizarla entre hilos y tampoco convino: más sobrecarga que beneficio, en MNIST y con modelos chicos. Con modelos, batches y kernels más grandes el balance podría invertirse, así que queda como trabajo futuro elegir el algoritmo según el tamaño de las matrices.
+- **→** Con modelos, batches y kernels más grandes ese balance podría invertirse, así que queda como trabajo futuro elegir el algoritmo según el tamaño de las matrices.
+- Si preguntan: también probamos paralelizarla entre hilos y no convino, porque con modelos chicos la sobrecarga superaba el beneficio.
 
 **Pase:** Traspaso: «Ya vimos cómo está construido. ¿Cuánto esperamos que cueste sincronizar? Lorenzo.»
 
@@ -564,7 +565,7 @@ Respaldo: docs/report/solucion.md (Selección de topología · Ubicación del op
 > Elegimos Rust por el control de bajo nivel con garantías de seguridad.
 
 - Todo O.N.O. está escrito en Rust, incluida la biblioteca de redes neuronales.
-- **→** Buscábamos un lenguaje de system programming, con control de bajo nivel como C o C++, y sin garbage collector: sus pausas no se pueden predecir y frenan el cómputo y la red.
+- **→** Buscábamos un lenguaje de systems programming, con control de bajo nivel como C o C++, y sin garbage collector: sus pausas no se pueden predecir y frenan el cómputo y la red.
 - **→** Y el compilador verifica dos cosas antes de ejecutar: la seguridad de memoria y que no haya data races sobre memoria compartida (*fearless concurrency*). Ninguno de esos errores llegó a la rama principal.
 - Si preguntan por las dificultades: el compilador no verifica la coordinación distribuida. Esa fue la dificultad real, sobre todo en All-Reduce.
 - Si preguntan por `unsafe`: está acotado y marcado, por ejemplo en WildStore (Hogwild!) y en la codificación de mensajes.

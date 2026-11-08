@@ -718,7 +718,7 @@ body.reduced .kicker .path::after { animation: none; }
       <span class="kw" data-anim>réplicas iguales, datos distintos</span>
       <span class="kw warn" data-step="1">client drift</span>
       <span class="kw" data-step="2">sincronización: promedio de réplicas</span>
-      <span class="kw on" data-step="3">elección de la sincronización</span>
+      <span class="kw on" data-step="3">¿cómo sincronizar?</span>
     </div>
   </div>
   <aside class="notes">
@@ -985,14 +985,9 @@ body.reduced .kicker .path::after { animation: none; }
       <p class="txt" data-anim>La transformada de Fourier de una convolución es el <strong>producto de Hadamard</strong> (<code>⊙</code>, punto a punto) de las transformadas:</p>
       <div class="formula" data-anim style="font-size:44px">F{A * B} = F{A} ⊙ F{B}</div>
       <div class="formula" data-step="1" style="font-size:44px">A * B = F<span class="sup">−1</span>{F{A} ⊙ F{B}}</div>
-      <p class="txt" data-step="1">Con la transformada discreta, <code>*</code> es la convolución circular.</p>
-      <p class="txt" data-step="2">Costo para una imagen de n×n y un kernel de k×k.</p>
     </div>
     <div class="kws-col">
       <span class="kw" data-step="1">convolución → producto ⊙</span>
-      <span class="kw ps" data-step="2">directa: n² · k²</span>
-      <span class="kw ar" data-step="2">con FFT: n² · log n</span>
-      <span class="kw bad" data-step="2">kernels pequeños: sin mejora</span>
     </div>
   </div>
   <aside class="notes">
@@ -1000,7 +995,7 @@ body.reduced .kicker .path::after { animation: none; }
     <ul class="n-oral">
       <li>Probamos FFT por este resultado: la transformada de Fourier de una convolución es el producto de Hadamard, es decir, punto a punto, de las transformadas.</li>
       <li><b>→</b> Entonces se transforman la entrada y el kernel, se multiplican punto a punto y se vuelve con la inversa.</li>
-      <li><b>→</b> Con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.</li>
+      <li>Si preguntan por el costo: con una imagen de n×n y un kernel de k×k, la directa cuesta n² por k², y con FFT, n² por log n. En teoría gana con kernels grandes; con los kernels chicos de nuestros modelos, no compensó.</li>
       <li>Si preguntan: la transformada discreta da convolución circular, así que para la lineal se completa con ceros, y así se usó. Las redes tampoco invierten el kernel, es una correlación: el teorema vale igual con un conjugado, y como el kernel se aprende, no cambia nada.</li>
     </ul>
     <p class="n-trans">«Veamos cómo la implementamos.»</p>
@@ -1017,7 +1012,6 @@ body.reduced .kicker .path::after { animation: none; }
       <span class="kw bad" data-step="1">FFT: sin mejora</span>
       <span class="kw" data-step="2">im2col: ventana → columna</span>
       <span class="kw on" data-step="3">una única multiplicación de matrices</span>
-      <span class="kw bad" data-step="4">paralelización: sin mejora</span>
       <span class="kw ss" data-step="4">trabajo futuro: según el tamaño</span>
     </div>
   </div>
@@ -1028,7 +1022,8 @@ body.reduced .kicker .path::after { animation: none; }
       <li><b>→</b> Primero la implementamos con transformadas rápidas de Fourier. Con nuestros datasets y modelos chicos, como los de MNIST, el costo de transformar superaba la ganancia.</li>
       <li><b>→</b> Lo que quedó es im2col: cada ventana donde se apoya el kernel se copia como una columna de una matriz.</li>
       <li><b>→</b> Así, toda la convolución es una sola multiplicación de matrices, el kernel como fila por esa matriz, y la multiplicación de matrices está muy optimizada. Después reordenamos im2col y col2im para aprovechar mejor la caché.</li>
-      <li><b>→</b> También probamos paralelizarla entre hilos y tampoco convino: más sobrecarga que beneficio, en MNIST y con modelos chicos. Con modelos, batches y kernels más grandes el balance podría invertirse, así que queda como trabajo futuro elegir el algoritmo según el tamaño de las matrices.</li>
+      <li><b>→</b> Con modelos, batches y kernels más grandes ese balance podría invertirse, así que queda como trabajo futuro elegir el algoritmo según el tamaño de las matrices.</li>
+      <li>Si preguntan: también probamos paralelizarla entre hilos y no convino, porque con modelos chicos la sobrecarga superaba el beneficio.</li>
     </ul>
     <p class="n-trans">Traspaso: «Ya vimos cómo está construido. ¿Cuánto esperamos que cueste sincronizar? Lorenzo.»</p>
     <p class="n-src">machine_learning/src/arch/layers/conv/conv2d.rs · docs/report/trabajos_futuros.md · commits d880f65 (FFT), a60fa08 y 93ae0c8 (im2col)</p>
@@ -1405,7 +1400,7 @@ body.reduced .kicker .path::after { animation: none; }
       <div class="term" data-anim>
         <div class="term-bar">~/oxidized-neural-orchestra</div>
         <p class="term-line cmd" data-type>cargo build --release</p>
-        <p class="term-line ok" data-step="1" data-type>system programming sin garbage collector</p>
+        <p class="term-line ok" data-step="1" data-type>systems programming sin garbage collector</p>
         <p class="term-line ok" data-step="2" data-type>al compilar: memoria segura y sin data races</p>
       </div>
     </div>
@@ -1414,7 +1409,7 @@ body.reduced .kicker .path::after { animation: none; }
     <p class="n-idea">Elegimos Rust por el control de bajo nivel con garantías de seguridad.</p>
     <ul class="n-oral">
       <li>Todo O.N.O. está escrito en Rust, incluida la biblioteca de redes neuronales.</li>
-      <li><b>→</b> Buscábamos un lenguaje de system programming, con control de bajo nivel como C o C++, y sin garbage collector: sus pausas no se pueden predecir y frenan el cómputo y la red.</li>
+      <li><b>→</b> Buscábamos un lenguaje de systems programming, con control de bajo nivel como C o C++, y sin garbage collector: sus pausas no se pueden predecir y frenan el cómputo y la red.</li>
       <li><b>→</b> Y el compilador verifica dos cosas antes de ejecutar: la seguridad de memoria y que no haya data races sobre memoria compartida (<em>fearless concurrency</em>). Ninguno de esos errores llegó a la rama principal.</li>
       <li>Si preguntan por las dificultades: el compilador no verifica la coordinación distribuida. Esa fue la dificultad real, sobre todo en All-Reduce.</li>
       <li>Si preguntan por <code>unsafe</code>: está acotado y marcado, por ejemplo en WildStore (Hogwild!) y en la codificación de mensajes.</li>
