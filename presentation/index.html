@@ -309,7 +309,7 @@
   <div class="kicker"><span class="path">05 · strategy-switch</span></div>
   <h2 data-anim><em>Strategy-Switch</em>: estrategia híbrida</h2>
   <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="sswindow"></div></div>
+    <div class="col wide"><div class="diagram framed" data-diagram="sswindow"></div></div>
     <div class="kws-col">
       <span class="kw ar" data-anim>inicio en All-Reduce</span>
       <span class="kw" data-step="1">criterio: estabilización de la pérdida</span>
@@ -360,12 +360,12 @@
 <section class="slide" data-title="Medición del drift" data-section="estudio derivado" data-speaker="Marcos Bianchi Fernández" data-time="0:45">
   <div class="kicker"><span class="path">06 · estudio derivado</span></div>
   <h2 data-anim>Medición del <em>drift</em></h2>
-  <div class="body">
+  <div class="body center">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/oe_ar_acc.png" alt="Exactitud final con distintas cantidades de epochs offline en All-Reduce">
         <figcaption>Figura del informe · All-Reduce · exactitud vs. nodos para E = 0 a 4</figcaption></figure>
     </div>
-    <div class="kws-col">
+    <div class="kws-col" style="flex-basis:784px">
       <span class="kw" data-anim>E: épocas sin sincronización</span>
       <span class="kw warn" data-step="1">E = 1: ≈ −1 punto de exactitud</span>
       <span class="kw warn" data-step="1">mayor caída con más nodos</span>
@@ -644,12 +644,12 @@
 <section class="slide" data-title="Resultados: sincrónicos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:00">
   <div class="kicker"><span class="path">11 · resultados</span></div>
   <h2 data-anim>Tiempo: algoritmos <em>sincrónicos</em></h2>
-  <div class="body">
+  <div class="body center">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/execution_time_per_nodes_ar_vs_ps.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para All-Reduce y Parameter Server">
         <figcaption>Figura del informe · eje Y: tiempo en segundos · eje X: workers</figcaption></figure>
     </div>
-    <div class="kws-col">
+    <div class="kws-col" style="flex-basis:784px">
       <span class="kw ps" data-step="1">PS: degradación desde 6 workers</span>
       <span class="kw ar" data-step="2">AR: sin mejora desde 6 workers</span>
       <span class="kw on" data-step="2">consistente con el modelo</span>
@@ -671,12 +671,12 @@
 <section class="slide" data-title="Resultados: asincrónicos" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="0:30">
   <div class="kicker"><span class="path">11 · resultados</span></div>
   <h2 data-anim>Tiempo: algoritmos <em>asincrónicos</em></h2>
-  <div class="body">
+  <div class="body center">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/execution_times_async_parameter_server_and_strategy_switch.png" alt="Tiempo de entrenamiento en función de la cantidad de workers para Parameter Server asincrónico y Strategy-Switch">
-        <figcaption>Figura del informe · PS asincrónico y Strategy-Switch · eje Y: tiempo en segundos</figcaption></figure>
+        <figcaption>Figura del informe · PS asincrónico y Strategy-Switch · tiempo (s)</figcaption></figure>
     </div>
-    <div class="kws-col">
+    <div class="kws-col" style="flex-basis:784px">
       <span class="kw on" data-anim>el tiempo disminuye con más workers</span>
       <span class="kw warn" data-step="1">¿converge el modelo?</span>
     </div>
@@ -695,12 +695,12 @@
 <section class="slide" data-title="Resultados: exactitud" data-section="resultados" data-speaker="Lorenzo Minervino" data-time="1:15">
   <div class="kicker"><span class="path">11 · resultados</span></div>
   <h2 data-anim>Exactitud <em>final</em></h2>
-  <div class="body">
+  <div class="body center">
     <div class="col wide">
       <figure class="figure" data-anim data-wipe style="margin:0"><img src="assets/figures/accuracies.png" alt="Exactitud final sobre el conjunto de prueba de MNIST en función de la cantidad de workers para las cuatro estrategias">
-        <figcaption>Figura del informe · exactitud sobre el conjunto de prueba de MNIST vs. workers</figcaption></figure>
+        <figcaption>Figura del informe · exactitud en el conjunto de prueba de MNIST</figcaption></figure>
     </div>
-    <div class="kws-col">
+    <div class="kws-col" style="flex-basis:784px">
       <span class="kw ss" data-step="1">Strategy-Switch ≈ sincrónicos</span>
       <span class="kw bad" data-step="1">PS asincrónico: colapso de exactitud</span>
     </div>
@@ -727,7 +727,7 @@
         <div class="term-bar">~/oxidized-neural-orchestra</div>
         <p class="term-line cmd" data-type>cat TODO.md</p>
         <p class="term-line todo" data-step="1" data-type>tolerancia a fallos</p>
-        <p class="term-line todo" data-step="2" data-type>convolución: selección del algoritmo según el tamaño</p>
+        <p class="term-line todo" data-step="2" data-type>convolución: algoritmo según el tamaño</p>
         <p class="term-line todo" data-step="3" data-type>nuevas arquitecturas: U-Net, recurrentes</p>
       </div>
     </div>
@@ -827,7 +827,7 @@
   <div class="kicker"><span class="path">A3 · comunicación</span></div>
   <h2 data-anim>Dos planos y <em>compresión con memoria</em></h2>
   <div class="body">
-    <div class="col wide"><div class="diagram" data-diagram="compress"></div></div>
+    <div class="col wide"><div class="diagram framed" data-diagram="compress"></div></div>
     <div class="kws-col">
       <span class="kw" data-anim>control: JSON</span>
       <span class="kw" data-anim>datos: f16, sin copias</span>
@@ -1020,7 +1020,7 @@
 <section class="slide" data-title="A9 · Topologías en la TUI" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
   <div class="kicker"><span class="path">A9 · respaldo de la demostración</span></div>
   <h2 data-anim>Las tres topologías, <em>en la TUI</em></h2>
-  <div class="body">
+  <div class="body center">
     <div class="col wide">
       <div class="tui-stack" data-anim>
         <div class="tui" data-tui="ar_topo_mid" data-crop="24,4,140,38"><canvas></canvas></div>

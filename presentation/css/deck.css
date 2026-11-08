@@ -257,8 +257,7 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 .figure img {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: 590px;
+  height: 470px;
   object-fit: contain;
   filter: invert(1) hue-rotate(180deg) saturate(1.35) brightness(0.92);
 }

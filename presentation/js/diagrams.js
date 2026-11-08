@@ -937,6 +937,7 @@
     const title = label(svg, X0, 40, "|g| por componente", { "text-anchor": "start", fill: C.muted, "font-size": 19 });
     const badge = label(svg, X0 + 260, 40, "ilustrativo · r = 0,25", { "text-anchor": "start", fill: C.warn, "font-size": 18 });
     add(svg, "line", { x1: X0 - 10, y1: Y0, x2: X0 + 20 * (bw + gap), y2: Y0, stroke: C.lineStrong, "stroke-width": 1.5 });
+    add(svg, "line", { x1: X0 - 10, y1: Y0, x2: X0 - 10, y2: Y0 - H, stroke: C.lineStrong, "stroke-width": 1.5 });
 
     const bars = g1.map((m, i) => add(svg, "rect", { x: X0 + i * (bw + gap), y: sy(m), width: bw, height: m * H, rx: 2, fill: C.muted, opacity: 0.8 }));
     const thrLine = group(svg);
