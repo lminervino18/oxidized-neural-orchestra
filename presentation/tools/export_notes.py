@@ -40,7 +40,7 @@ def field(notes, cls):
 
 def plain(fragment):
     fragment = re.sub(r"<sub>(.*?)</sub>", r"_\1", fragment)
-    return html.unescape(re.sub(r"<[^>]+>", "", fragment)).strip()
+    return html.unescape(re.sub(r"<[^>]+>", "", fragment)).replace("\u00a0", " ").strip()
 
 
 def seconds(t):
