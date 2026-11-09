@@ -50,6 +50,8 @@
       tuisDrawn: false,
       texts: new Map(),
     };
+    balanceKeywords(slide);
+    hugColumn(slide);
     const stepAttr = v.steppers.map((el) => Number(el.dataset.step));
     const capAttr = v.captions.map((el) => Number(el.dataset.stepCaption));
     v.steps = Math.max(0, ...stepAttr, ...capAttr, ...v.diagrams.map((d) => d.steps));
@@ -65,6 +67,47 @@
     }
     views.set(slide, v);
     return v;
+  }
+
+  function balanceKeywords(slide) {
+    slide.querySelectorAll(".kw").forEach((kw) => {
+      const height = kw.offsetHeight;
+      kw.style.whiteSpace = "nowrap";
+      const oneLine = kw.offsetHeight;
+      kw.style.whiteSpace = "";
+      if (height <= oneLine) return;
+      const style = getComputedStyle(kw);
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const text = document.createRange();
+      text.selectNodeContents(kw);
+      const textWidth = () => (text.getBoundingClientRect().width * kw.offsetWidth) / kw.getBoundingClientRect().width;
+      const fits = () => kw.offsetHeight <= height && textWidth() <= kw.clientWidth - padding + 0.5;
+      let lo = kw.offsetWidth / 2, hi = kw.offsetWidth;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) / 2;
+        kw.style.width = `${mid}px`;
+        if (fits()) hi = mid; else lo = mid;
+      }
+      kw.style.width = `${Math.ceil(hi)}px`;
+    });
+  }
+
+  function hugColumn(slide) {
+    const body = slide.querySelector(".body");
+    const col = body && body.querySelector(":scope > .col");
+    if (!col || col.children.length !== 1 || !body.querySelector(":scope > .kws-col")) return;
+    const svg = col.querySelector(":scope > .diagram > svg");
+    const code = col.querySelector(":scope > .code-block");
+    if (svg) {
+      const vb = svg.viewBox.baseVal;
+      const drawn = Math.min(svg.clientWidth, (svg.clientHeight * vb.width) / vb.height);
+      col.style.flex = `0 1 ${Math.ceil(drawn + svg.parentElement.offsetWidth - svg.clientWidth)}px`;
+    } else if (code) {
+      code.style.width = "max-content";
+      col.style.flex = `0 1 ${Math.ceil(code.offsetWidth)}px`;
+      code.style.width = "";
+    } else return;
+    body.classList.add("hug");
   }
 
   function drawTuis(v, force) {

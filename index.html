@@ -25,8 +25,8 @@
       <dt>tutor</dt><dd>Ing. Ricardo Alfredo Veiga</dd>
       <dt>co-tutor</dt><dd>Dr. Ing. José Ignacio Alvarez-Hamelin</dd>
     </dl>
+    <div class="inst" data-anim>Trabajo Profesional · Ingeniería en Informática · FIUBA</div>
   </div>
-  <div class="inst" data-anim>Trabajo Profesional · Ingeniería en Informática · FIUBA</div>
   <aside class="notes">
     <p class="n-idea">Presentarnos y decir en una frase qué hicimos.</p>
     <ul class="n-oral">
@@ -113,7 +113,7 @@
     <div class="col wide"><div class="diagram" data-diagram="scaleup"></div></div>
     <div class="kws-col">
       <span class="kw" data-anim>mayor capacidad en un solo equipo</span>
-      <span class="kw grad" data-step="1">costo elevado · acceso limitado</span>
+      <span class="kw grad" data-step="1">costo elevado&nbsp;· acceso limitado</span>
       <span class="kw bad" data-step="2">límite físico</span>
     </div>
   </div>
@@ -313,7 +313,7 @@
     <div class="kws-col">
       <span class="kw ar" data-anim>inicio en All-Reduce</span>
       <span class="kw" data-step="1">criterio: estabilización de la pérdida</span>
-      <span class="kw" data-step="1">ventana de 6 · umbral 1 %</span>
+      <span class="kw" data-step="1">ventana de 6&nbsp;· umbral 1 %</span>
       <span class="kw ps" data-step="2">cambio a PS asincrónico</span>
     </div>
   </div>
@@ -337,7 +337,7 @@
     <div class="col wide"><div class="diagram" data-diagram="ssflow"></div></div>
     <div class="kws-col">
       <span class="kw" data-step="1">medición en el orchestrator</span>
-      <span class="kw ss" data-step="2">Upgrade · Switch</span>
+      <span class="kw ss" data-step="2">Upgrade&nbsp;· Switch</span>
       <span class="kw ps" data-step="3">un worker promovido a servidor</span>
       <span class="kw on" data-step="4">mismo proceso, nuevo rol</span>
     </div>
@@ -428,8 +428,8 @@
     </div>
     <div class="kws-col">
       <span class="kw on" data-anim>sin PyTorch ni TensorFlow</span>
-      <span class="kw" data-step="1">capas · pérdidas · optimizadores</span>
-      <span class="kw" data-step="1">Adam · momentum · SGD</span>
+      <span class="kw" data-step="1">capas&nbsp;· pérdidas&nbsp;· optimizadores</span>
+      <span class="kw" data-step="1">Adam&nbsp;· momentum&nbsp;· SGD</span>
     </div>
   </div>
   <aside class="notes">
@@ -530,7 +530,7 @@
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="dsyncwhy"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>S: tamaño del modelo · R: ancho de banda</span>
+      <span class="kw" data-anim>S: tamaño del modelo&nbsp;· R: ancho de banda</span>
       <span class="kw ps" data-step="1">PS: todo el tráfico por una placa</span>
       <span class="kw warn" data-step="1">crece con la cantidad de workers</span>
       <span class="kw ar" data-step="2">AR: transmisión simultánea</span>
@@ -614,7 +614,7 @@
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="testbed"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>MNIST · LeNet-5</span>
+      <span class="kw" data-anim>MNIST&nbsp;· LeNet-5</span>
       <span class="kw ar" data-anim>1 contenedor = 1 nodo</span>
       <span class="kw" data-step="1">de 2 a 16 workers</span>
       <span class="kw warn" data-step="2">red limitada deliberadamente</span>
@@ -736,7 +736,7 @@
   <div class="body center">
     <div class="kws-col" style="flex:1;max-width:none;align-items:center">
       <span class="kw" data-anim>3 computadoras</span>
-      <span class="kw ss" data-anim>Strategy-Switch · MNIST</span>
+      <span class="kw ss" data-anim>Strategy-Switch&nbsp;· MNIST</span>
       <span class="kw warn" data-anim>≈ 10 min de entrenamiento</span>
       <span class="kw on" data-anim>luego: el modelo, en el navegador</span>
     </div>
@@ -761,16 +761,16 @@
   <div class="kicker"><span class="path">A1 · el problema de comparar</span></div>
   <h2 data-anim>La comparación entre frameworks <em>mezcla efectos</em></h2>
   <div class="body">
-    <div class="col">
+    <div class="col" style="justify-content:center">
       <p class="txt" data-anim>TensorFlow (<code>tf.distribute.Strategy</code>) y PyTorch (<code>DistributedDataParallel</code>) envuelven la sincronización en <strong>una sola llamada</strong>, que fija cuatro decisiones:</p>
-      <div class="grid-2" style="gap:22px">
+      <div class="grid-2" style="gap:44px 22px">
         <div class="panel dim" data-anim><span class="panel-title">01 · régimen</span><p class="txt">¿Sincrónico o asincrónico?</p></div>
         <div class="panel dim" data-anim><span class="panel-title">02 · optimizador</span><p class="txt">¿Su estado vive en cada worker o en un nodo central?</p></div>
         <div class="panel dim" data-anim><span class="panel-title">03 · particionado</span><p class="txt">¿Cómo se reparten los parámetros?</p></div>
         <div class="panel dim" data-anim><span class="panel-title">04 · codificación</span><p class="txt">¿Cómo viajan los tensores?</p></div>
       </div>
     </div>
-    <div class="col narrow" style="justify-content:center">
+    <div class="col narrow" style="justify-content:center;flex-basis:600px">
       <div class="callout warn" data-anim><span class="label">el sesgo</span><span class="mono" style="font-size:28px">diferencia medida<br>= algoritmo<br>+ calidad de implementación<br>+ decisiones no parametrizables</span></div>
     </div>
   </div>
@@ -890,7 +890,7 @@
   <div class="kicker"><span class="path">A6 · lecciones aprendidas</span></div>
   <h2 data-anim>Detección de <em>errores silenciosos</em></h2>
   <div class="body">
-    <div class="col">
+    <div class="col" style="justify-content:center">
       <div class="lessons">
         <div class="panel"><span class="panel-title">all-reduce</span><p class="txt">Sumaba los gradientes en lugar de promediarlos: la tasa de aprendizaje efectiva escalaba con N<sub>W</sub>.</p></div>
         <div class="panel"><span class="panel-title">orchestrator</span><p class="txt">Al recuperar los pesos de los servidores no revertía el reparto de capas: modelo final desordenado.</p></div>
@@ -931,8 +931,8 @@
   <div class="titles">
     <div class="prompt" data-anim>~/oxidized-neural-orchestra $ preguntas<span class="cursor"></span></div>
     <h1 class="thanks" data-anim>¿<span class="o">Preguntas</span>?</h1>
+    <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   </div>
-  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   <aside class="notes">
     <p class="n-idea">Abrir la ronda de preguntas.</p>
     <ul class="n-oral">
@@ -951,8 +951,8 @@
   <div class="titles">
     <div class="prompt" data-anim>~/oxidized-neural-orchestra $ exit</div>
     <h1 class="thanks" data-anim>¡Gracias<br>por <span class="o">venir</span>!</h1>
+    <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   </div>
-  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   <aside class="notes">
     <p class="n-idea">Cerrar.</p>
     <ul class="n-oral">
@@ -966,9 +966,9 @@
 <section class="slide" data-title="A7 · Grabación de Strategy-Switch" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
   <div class="kicker"><span class="path">A7 · respaldo de la demostración</span></div>
   <h2 data-anim>Grabación de <em>Strategy-Switch</em> en la TUI</h2>
-  <div class="body" style="flex-direction:column;gap:0">
-    <div class="tui" data-tui-player data-crop="0,0,190,36" style="width:1380px"><canvas></canvas></div>
-    <div class="player" style="width:1380px">
+  <div class="body" style="flex-direction:column;align-items:center;gap:0">
+    <div class="tui" data-tui-player data-crop="0,0,190,36" style="width:1560px"><canvas></canvas></div>
+    <div class="player" style="width:1560px">
       <button class="btn" data-player-toggle>▶ reproducir</button>
       <button class="btn" data-player-speed>1×</button>
       <input type="range" min="0" value="0" step="1" data-player-range aria-label="Posición de la grabación">
@@ -989,7 +989,7 @@
   <div class="body" style="gap:34px">
     <div class="col narrow"><div class="tui" data-tui="menu" data-crop="50,0,90,26"><canvas></canvas><div class="tui-cap">menú principal</div></div>
       <div class="tui" data-tui="config_example" data-crop="30,2,110,26" style="margin-top:50px"><canvas></canvas><div class="tui-cap">[?] ejemplo inline de model.json</div></div></div>
-    <div class="col wide"><div class="tui" data-tui="ss_dash_finished"><canvas></canvas><div class="tui-cap">Strategy-Switch · dashboard al finalizar</div></div></div>
+    <div class="col wide" style="justify-content:center"><div class="tui" data-tui="ss_dash_finished"><canvas></canvas><div class="tui-cap">Strategy-Switch · dashboard al finalizar</div></div></div>
   </div>
   <aside class="notes">
     <p class="n-idea">Capturas de respaldo de las pantallas principales.</p>

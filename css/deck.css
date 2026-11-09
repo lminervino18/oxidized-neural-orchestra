@@ -129,6 +129,8 @@ h2 em, .hl { font-style: normal; color: var(--accent); }
 
 .body { flex: 1; display: flex; gap: 64px; margin-top: 52px; min-height: 0; }
 .body.center { align-items: center; }
+.body.hug { justify-content: center; }
+.body.hug > .kws-col { flex-shrink: 0; }
 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 26px; }
 .col.narrow { flex: 0 0 560px; }
 .col.wide { flex: 1.6; }
@@ -300,10 +302,10 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 
 
 .cover { padding: 0; }
-.cover .scene { position: absolute; left: 40px; top: 90px; width: 900px; height: 900px; }
-.cover .logo-wrap { position: absolute; left: 150px; top: 200px; width: 680px; height: 680px; }
+.cover .scene { position: absolute; left: 95px; top: 215px; width: 700px; height: 700px; }
+.cover .logo-wrap { position: absolute; left: 180px; top: 300px; width: 530px; height: 530px; }
 .cover .logo { width: 100%; height: 100%; mix-blend-mode: screen; display: block; }
-.cover .titles { position: absolute; left: 930px; top: 250px; width: 880px; }
+.cover .titles { position: absolute; left: 890px; top: 50%; transform: translateY(-50%); }
 .cover .prompt { font-family: var(--mono); font-size: 27px; color: var(--term-dim); margin-bottom: 28px; }
 .cover .prompt .cursor { display: inline-block; width: 12px; height: 24px; background: var(--term-dim); vertical-align: -4px; margin-left: 6px; }
 .cover h1 { font-size: 76px; line-height: 1.04; letter-spacing: -0.02em; }
@@ -312,7 +314,7 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 .cover .meta { margin-top: 54px; display: grid; grid-template-columns: auto 1fr; gap: 10px 26px; font-size: 28px; color: var(--text-2); }
 .cover .meta dt { font-family: var(--mono); font-size: 27px; color: var(--muted); padding-top: 3px; }
 .cover .meta dd { margin: 0; }
-.cover .inst { position: absolute; left: 930px; bottom: 110px; font-family: var(--mono); font-size: 27px; color: var(--muted); letter-spacing: 0.03em; }
+.cover .inst { margin-top: 56px; white-space: nowrap; font-family: var(--mono); font-size: 27px; color: var(--muted); letter-spacing: 0.03em; }
 
 
 .chrome {
@@ -435,7 +437,7 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 
 .code-block {
   font-family: var(--mono);
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.55;
   color: var(--text-2);
   background: var(--panel);

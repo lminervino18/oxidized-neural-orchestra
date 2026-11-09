@@ -137,6 +137,8 @@ h2 em, .hl { font-style: normal; color: var(--accent); }
 
 .body { flex: 1; display: flex; gap: 64px; margin-top: 52px; min-height: 0; }
 .body.center { align-items: center; }
+.body.hug { justify-content: center; }
+.body.hug > .kws-col { flex-shrink: 0; }
 .col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 26px; }
 .col.narrow { flex: 0 0 560px; }
 .col.wide { flex: 1.6; }
@@ -308,10 +310,10 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 
 
 .cover { padding: 0; }
-.cover .scene { position: absolute; left: 40px; top: 90px; width: 900px; height: 900px; }
-.cover .logo-wrap { position: absolute; left: 150px; top: 200px; width: 680px; height: 680px; }
+.cover .scene { position: absolute; left: 95px; top: 215px; width: 700px; height: 700px; }
+.cover .logo-wrap { position: absolute; left: 180px; top: 300px; width: 530px; height: 530px; }
 .cover .logo { width: 100%; height: 100%; mix-blend-mode: screen; display: block; }
-.cover .titles { position: absolute; left: 930px; top: 250px; width: 880px; }
+.cover .titles { position: absolute; left: 890px; top: 50%; transform: translateY(-50%); }
 .cover .prompt { font-family: var(--mono); font-size: 27px; color: var(--term-dim); margin-bottom: 28px; }
 .cover .prompt .cursor { display: inline-block; width: 12px; height: 24px; background: var(--term-dim); vertical-align: -4px; margin-left: 6px; }
 .cover h1 { font-size: 76px; line-height: 1.04; letter-spacing: -0.02em; }
@@ -320,7 +322,7 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 .cover .meta { margin-top: 54px; display: grid; grid-template-columns: auto 1fr; gap: 10px 26px; font-size: 28px; color: var(--text-2); }
 .cover .meta dt { font-family: var(--mono); font-size: 27px; color: var(--muted); padding-top: 3px; }
 .cover .meta dd { margin: 0; }
-.cover .inst { position: absolute; left: 930px; bottom: 110px; font-family: var(--mono); font-size: 27px; color: var(--muted); letter-spacing: 0.03em; }
+.cover .inst { margin-top: 56px; white-space: nowrap; font-family: var(--mono); font-size: 27px; color: var(--muted); letter-spacing: 0.03em; }
 
 
 .chrome {
@@ -443,7 +445,7 @@ code, .code { font-family: var(--mono); font-size: 0.9em; color: var(--term-dim)
 
 .code-block {
   font-family: var(--mono);
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.55;
   color: var(--text-2);
   background: var(--panel);
@@ -558,8 +560,8 @@ body.reduced .kicker .path::after { animation: none; }
       <dt>tutor</dt><dd>Ing. Ricardo Alfredo Veiga</dd>
       <dt>co-tutor</dt><dd>Dr. Ing. José Ignacio Alvarez-Hamelin</dd>
     </dl>
+    <div class="inst" data-anim>Trabajo Profesional · Ingeniería en Informática · FIUBA</div>
   </div>
-  <div class="inst" data-anim>Trabajo Profesional · Ingeniería en Informática · FIUBA</div>
   <aside class="notes">
     <p class="n-idea">Presentarnos y decir en una frase qué hicimos.</p>
     <ul class="n-oral">
@@ -646,7 +648,7 @@ body.reduced .kicker .path::after { animation: none; }
     <div class="col wide"><div class="diagram" data-diagram="scaleup"></div></div>
     <div class="kws-col">
       <span class="kw" data-anim>mayor capacidad en un solo equipo</span>
-      <span class="kw grad" data-step="1">costo elevado · acceso limitado</span>
+      <span class="kw grad" data-step="1">costo elevado&nbsp;· acceso limitado</span>
       <span class="kw bad" data-step="2">límite físico</span>
     </div>
   </div>
@@ -846,7 +848,7 @@ body.reduced .kicker .path::after { animation: none; }
     <div class="kws-col">
       <span class="kw ar" data-anim>inicio en All-Reduce</span>
       <span class="kw" data-step="1">criterio: estabilización de la pérdida</span>
-      <span class="kw" data-step="1">ventana de 6 · umbral 1 %</span>
+      <span class="kw" data-step="1">ventana de 6&nbsp;· umbral 1 %</span>
       <span class="kw ps" data-step="2">cambio a PS asincrónico</span>
     </div>
   </div>
@@ -870,7 +872,7 @@ body.reduced .kicker .path::after { animation: none; }
     <div class="col wide"><div class="diagram" data-diagram="ssflow"></div></div>
     <div class="kws-col">
       <span class="kw" data-step="1">medición en el orchestrator</span>
-      <span class="kw ss" data-step="2">Upgrade · Switch</span>
+      <span class="kw ss" data-step="2">Upgrade&nbsp;· Switch</span>
       <span class="kw ps" data-step="3">un worker promovido a servidor</span>
       <span class="kw on" data-step="4">mismo proceso, nuevo rol</span>
     </div>
@@ -961,8 +963,8 @@ body.reduced .kicker .path::after { animation: none; }
     </div>
     <div class="kws-col">
       <span class="kw on" data-anim>sin PyTorch ni TensorFlow</span>
-      <span class="kw" data-step="1">capas · pérdidas · optimizadores</span>
-      <span class="kw" data-step="1">Adam · momentum · SGD</span>
+      <span class="kw" data-step="1">capas&nbsp;· pérdidas&nbsp;· optimizadores</span>
+      <span class="kw" data-step="1">Adam&nbsp;· momentum&nbsp;· SGD</span>
     </div>
   </div>
   <aside class="notes">
@@ -1063,7 +1065,7 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="dsyncwhy"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>S: tamaño del modelo · R: ancho de banda</span>
+      <span class="kw" data-anim>S: tamaño del modelo&nbsp;· R: ancho de banda</span>
       <span class="kw ps" data-step="1">PS: todo el tráfico por una placa</span>
       <span class="kw warn" data-step="1">crece con la cantidad de workers</span>
       <span class="kw ar" data-step="2">AR: transmisión simultánea</span>
@@ -1147,7 +1149,7 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="body">
     <div class="col wide"><div class="diagram" data-diagram="testbed"></div></div>
     <div class="kws-col">
-      <span class="kw" data-anim>MNIST · LeNet-5</span>
+      <span class="kw" data-anim>MNIST&nbsp;· LeNet-5</span>
       <span class="kw ar" data-anim>1 contenedor = 1 nodo</span>
       <span class="kw" data-step="1">de 2 a 16 workers</span>
       <span class="kw warn" data-step="2">red limitada deliberadamente</span>
@@ -1269,7 +1271,7 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="body center">
     <div class="kws-col" style="flex:1;max-width:none;align-items:center">
       <span class="kw" data-anim>3 computadoras</span>
-      <span class="kw ss" data-anim>Strategy-Switch · MNIST</span>
+      <span class="kw ss" data-anim>Strategy-Switch&nbsp;· MNIST</span>
       <span class="kw warn" data-anim>≈ 10 min de entrenamiento</span>
       <span class="kw on" data-anim>luego: el modelo, en el navegador</span>
     </div>
@@ -1294,16 +1296,16 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="kicker"><span class="path">A1 · el problema de comparar</span></div>
   <h2 data-anim>La comparación entre frameworks <em>mezcla efectos</em></h2>
   <div class="body">
-    <div class="col">
+    <div class="col" style="justify-content:center">
       <p class="txt" data-anim>TensorFlow (<code>tf.distribute.Strategy</code>) y PyTorch (<code>DistributedDataParallel</code>) envuelven la sincronización en <strong>una sola llamada</strong>, que fija cuatro decisiones:</p>
-      <div class="grid-2" style="gap:22px">
+      <div class="grid-2" style="gap:44px 22px">
         <div class="panel dim" data-anim><span class="panel-title">01 · régimen</span><p class="txt">¿Sincrónico o asincrónico?</p></div>
         <div class="panel dim" data-anim><span class="panel-title">02 · optimizador</span><p class="txt">¿Su estado vive en cada worker o en un nodo central?</p></div>
         <div class="panel dim" data-anim><span class="panel-title">03 · particionado</span><p class="txt">¿Cómo se reparten los parámetros?</p></div>
         <div class="panel dim" data-anim><span class="panel-title">04 · codificación</span><p class="txt">¿Cómo viajan los tensores?</p></div>
       </div>
     </div>
-    <div class="col narrow" style="justify-content:center">
+    <div class="col narrow" style="justify-content:center;flex-basis:600px">
       <div class="callout warn" data-anim><span class="label">el sesgo</span><span class="mono" style="font-size:28px">diferencia medida<br>= algoritmo<br>+ calidad de implementación<br>+ decisiones no parametrizables</span></div>
     </div>
   </div>
@@ -1423,7 +1425,7 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="kicker"><span class="path">A6 · lecciones aprendidas</span></div>
   <h2 data-anim>Detección de <em>errores silenciosos</em></h2>
   <div class="body">
-    <div class="col">
+    <div class="col" style="justify-content:center">
       <div class="lessons">
         <div class="panel"><span class="panel-title">all-reduce</span><p class="txt">Sumaba los gradientes en lugar de promediarlos: la tasa de aprendizaje efectiva escalaba con N<sub>W</sub>.</p></div>
         <div class="panel"><span class="panel-title">orchestrator</span><p class="txt">Al recuperar los pesos de los servidores no revertía el reparto de capas: modelo final desordenado.</p></div>
@@ -1464,8 +1466,8 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="titles">
     <div class="prompt" data-anim>~/oxidized-neural-orchestra $ preguntas<span class="cursor"></span></div>
     <h1 class="thanks" data-anim>¿<span class="o">Preguntas</span>?</h1>
+    <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   </div>
-  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   <aside class="notes">
     <p class="n-idea">Abrir la ronda de preguntas.</p>
     <ul class="n-oral">
@@ -1484,8 +1486,8 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="titles">
     <div class="prompt" data-anim>~/oxidized-neural-orchestra $ exit</div>
     <h1 class="thanks" data-anim>¡Gracias<br>por <span class="o">venir</span>!</h1>
+    <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   </div>
-  <div class="inst" data-anim>github.com/lminervino18/oxidized-neural-orchestra</div>
   <aside class="notes">
     <p class="n-idea">Cerrar.</p>
     <ul class="n-oral">
@@ -1499,9 +1501,9 @@ body.reduced .kicker .path::after { animation: none; }
 <section class="slide" data-title="A7 · Grabación de Strategy-Switch" data-section="apéndice" data-appendix data-speaker="—" data-time="0:00">
   <div class="kicker"><span class="path">A7 · respaldo de la demostración</span></div>
   <h2 data-anim>Grabación de <em>Strategy-Switch</em> en la TUI</h2>
-  <div class="body" style="flex-direction:column;gap:0">
-    <div class="tui" data-tui-player data-crop="0,0,190,36" style="width:1380px"><canvas></canvas></div>
-    <div class="player" style="width:1380px">
+  <div class="body" style="flex-direction:column;align-items:center;gap:0">
+    <div class="tui" data-tui-player data-crop="0,0,190,36" style="width:1560px"><canvas></canvas></div>
+    <div class="player" style="width:1560px">
       <button class="btn" data-player-toggle>▶ reproducir</button>
       <button class="btn" data-player-speed>1×</button>
       <input type="range" min="0" value="0" step="1" data-player-range aria-label="Posición de la grabación">
@@ -1522,7 +1524,7 @@ body.reduced .kicker .path::after { animation: none; }
   <div class="body" style="gap:34px">
     <div class="col narrow"><div class="tui" data-tui="menu" data-crop="50,0,90,26"><canvas></canvas><div class="tui-cap">menú principal</div></div>
       <div class="tui" data-tui="config_example" data-crop="30,2,110,26" style="margin-top:50px"><canvas></canvas><div class="tui-cap">[?] ejemplo inline de model.json</div></div></div>
-    <div class="col wide"><div class="tui" data-tui="ss_dash_finished"><canvas></canvas><div class="tui-cap">Strategy-Switch · dashboard al finalizar</div></div></div>
+    <div class="col wide" style="justify-content:center"><div class="tui" data-tui="ss_dash_finished"><canvas></canvas><div class="tui-cap">Strategy-Switch · dashboard al finalizar</div></div></div>
   </div>
   <aside class="notes">
     <p class="n-idea">Capturas de respaldo de las pantallas principales.</p>
@@ -1843,9 +1845,9 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
   let svgCount = 0;
 
 
-  function svgRoot(container, w, h) {
+  function svgRoot(container, w, h, view = [0, 0, w, h]) {
     const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.setAttribute("viewBox", view.join(" "));
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
     svg.setAttribute("role", "img");
     container.appendChild(svg);
@@ -2024,7 +2026,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function syncasync(container) {
-    const svg = svgRoot(container, 1120, 660);
+    const svg = svgRoot(container, 1120, 660, [0, -8, 1120, 610]);
     const tl = gsap.timeline();
     const unit = 62;
     const x0 = 120;
@@ -2111,11 +2113,11 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function arch(container) {
-    const svg = svgRoot(container, 1100, 720);
+    const svg = svgRoot(container, 1100, 720, [64, -12, 972, 719]);
     const tl = gsap.timeline();
     const ui = group(svg);
-    add(ui, "rect", { x: 285, y: 14, width: 530, height: 64, rx: 5, fill: "#07100b", stroke: C.line, "stroke-width": 1.5 });
-    label(ui, 550, 47, "orchestui  ·  orchestra-py", { fill: C.text2, "font-size": 31 });
+    add(ui, "rect", { x: 285, y: 0, width: 530, height: 64, rx: 5, fill: "#07100b", stroke: C.line, "stroke-width": 1.5 });
+    label(ui, 550, 33, "orchestui  ·  orchestra-py", { fill: C.text2, "font-size": 31 });
     const orch = group(svg);
     add(orch, "rect", { x: 370, y: 92, width: 360, height: 92, rx: 6, fill: C.panel, stroke: C.accent, "stroke-width": 2.5 });
     label(orch, 550, 122, "orchestrator", { fill: C.text, "font-size": 32 });
@@ -2139,7 +2141,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     const dataY = 620;
     const data = group(svg);
     xs.slice(0, 3).forEach((x) => add(data, "path", { d: `M${x},550 C${x},${dataY + 40} ${910},${dataY + 40} 910,550`, fill: "none", stroke: C.lineStrong, "stroke-width": 2 }));
-    label(data, 550, 692, "plano de datos: gradientes y parámetros entre nodos", { fill: C.text2, "font-size": 31 });
+    label(data, 550, 680, "plano de datos: gradientes y parámetros entre nodos", { fill: C.text2, "font-size": 31 });
 
     show(tl, [ui, orch], 0.05, 0.4);
     show(tl, nodes.map((n) => n.g), 0.2, 0.4, { stagger: 0.08 });
@@ -2189,7 +2191,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function flatbuffer(container) {
-    const svg = svgRoot(container, 1100, 620);
+    const svg = svgRoot(container, 1100, 620, [48, 64, 1014, 529]);
     const tl = gsap.timeline();
     const layers = [["capa 1", 0.3], ["capa 2", 0.5], ["capa 3", 0.2]];
     const bx = 60;
@@ -2237,6 +2239,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     add(pk, "rect", { x: -70, y: -24, width: 140, height: 48, rx: 3, fill: "rgba(10,248,134,0.18)", stroke: C.accent, "stroke-width": 1.5 });
     label(pk, 0, 1, "&[u8]", { fill: C.accent, "font-size": 31 });
     const wireText = group(svg);
+    add(wireText, "rect", { x: 50, y: 194, width: 580, height: 90, fill: "#000" });
     const halo = { stroke: "#000", "stroke-width": 8, "paint-order": "stroke" };
     label(wireText, 60, 220, "bytes del tramo tal cual → red", { "text-anchor": "start", fill: C.text2, "font-size": 31, ...halo });
     label(wireText, 60, 258, "(bytemuck, sin copias)", { "text-anchor": "start", fill: C.text2, "font-size": 31, ...halo });
@@ -2263,7 +2266,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function ps(container) {
-    const svg = svgRoot(container, 1100, 720);
+    const svg = svgRoot(container, 1100, 720, [56, 30, 946, 690]);
     const tl = gsap.timeline();
     const FS = 31;
     const W = [{ x: 170, y: 120 }, { x: 170, y: 330 }, { x: 170, y: 540 }];
@@ -2306,10 +2309,10 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     });
 
     const counter = group(svg);
-    add(counter, "rect", { x: S0.x + SH + 14, y: S0.y - 28, width: 100, height: 56, rx: 4, fill: "#0b1810", stroke: C.grad, "stroke-width": 1.5 });
-    const cnt = [1, 2, 3].map((k) => label(counter, S0.x + SH + 64, S0.y + 1, `${k}/3`, { fill: C.grad, "font-size": FS }));
+    add(counter, "rect", { x: S0.x + 10, y: S0.y - 160, width: 100, height: 56, rx: 4, fill: "#0b1810", stroke: C.grad, "stroke-width": 1.5 });
+    const cnt = [1, 2, 3].map((k) => label(counter, S0.x + 60, S0.y - 131, `${k}/3`, { fill: C.grad, "font-size": FS }));
     const avg = richLabel(svg, S0.x, S0.y + 124, [["Σg / N"], ["W", "sub"], [" → Adam → θ′"]], { fill: C.accent, "font-size": FS });
-    const barrierNote = label(svg, S0.x + SH + 70, S0.y - 56, "barrier", { fill: C.text2, "font-size": FS });
+    const barrierNote = label(svg, S0.x - 70, S0.y - 131, "barrier", { fill: C.text2, "font-size": FS });
 
     const leg = legend(svg, 520, 690, [["grad", "gradiente"], ["param", "parámetros"]]);
 
@@ -2367,7 +2370,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function ring(container) {
-    const svg = svgRoot(container, 1100, 800);
+    const svg = svgRoot(container, 1100, 800, [36, 44, 1028, 736]);
     const tl = gsap.timeline();
     const n = 4;
     const cx = 550;
@@ -2505,7 +2508,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
   function dsync(container) {
     const VW = 1000;
-    const svg = svgRoot(container, VW, 700);
+    const svg = svgRoot(container, VW, 700, [-9, -6, 991, 698]);
     const tl = gsap.timeline();
     const FS = 31;
     const SR = 0.1;
@@ -2581,7 +2584,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function sswindow(container) {
-    const svg = svgRoot(container, 1100, 680);
+    const svg = svgRoot(container, 1100, 680, [11, 23, 1065, 651]);
     const tl = gsap.timeline();
     const E = 40;
     const W = 6;
@@ -2659,7 +2662,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function ssflow(container) {
-    const svg = svgRoot(container, 1100, 780);
+    const svg = svgRoot(container, 1100, 780, [54, 28, 1057, 750]);
     const tl = gsap.timeline();
     const cx = 470, cy = 470, R = 175;
     const angles = [-90, 0, 90, 180];
@@ -2678,7 +2681,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
       slots.push(add(win, "rect", { x: 694 + k * 44, y: 62, width: 28, height: 28, rx: 2, fill: C.ctrl, opacity: 0 }));
     }
     label(win, 690, 124, "pérdida máx. por ronda", { "text-anchor": "start", fill: C.text2, "font-size": 31 });
-    const sVal = label(svg, 820, 168, "s ≤ 1 %  →  cambiar", { fill: C.accent, "font-size": 31 });
+    const sVal = label(svg, 690, 168, "s ≤ 1 %  →  cambiar", { "text-anchor": "start", fill: C.accent, "font-size": 31 });
 
     const arcs = angles.map((a) => add(svg, "path", { d: arcPath(cx, cy, R, a + 22, a + 68), fill: "none", stroke: C.lineStrong, "stroke-width": 2.5, "marker-end": svg.ref("arrow-line") }));
     const ctrlLines = ringPos.map((p) => add(svg, "line", { x1: p.x, y1: p.y - 42, x2: 470, y2: 140, stroke: C.ctrl, "stroke-width": 1.5, "stroke-dasharray": "5 6", opacity: 0 }));
@@ -2757,7 +2760,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function compress(container) {
-    const svg = svgRoot(container, 1100, 760);
+    const svg = svgRoot(container, 1100, 760, [28, -1, 1074, 753]);
     const tl = gsap.timeline();
     const FS = 31;
     const g1 = [0.32, 0.9, 0.18, 0.55, 0.12, 0.7, 0.26, 0.44, 0.08, 0.95, 0.3, 0.2, 0.62, 0.14, 0.38, 0.5, 0.1, 0.78, 0.22, 0.34];
@@ -2822,7 +2825,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function topo(container) {
-    const svg = svgRoot(container, 1100, 670);
+    const svg = svgRoot(container, 1100, 670, [7, 4, 1085, 665]);
     const tl = gsap.timeline();
     const P = [{ x: 0, y: -170 }, { x: 170, y: -50 }, { x: 105, y: 150 }, { x: -105, y: 150 }, { x: -170, y: -50 }];
     const L = [
@@ -2892,7 +2895,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     tl.to(left.nodes, { attr: { stroke: C.ar }, duration: 0.3 }, "s0+=0.4");
     tl.to(ringNote, { autoAlpha: 1, duration: 0.3 }, "s0+=0.6");
     tl.addLabel("s1");
-    tl.to(right.nodes[center], { attr: { stroke: C.ps, fill: "rgba(61,139,230,0.2)" }, duration: 0.3 }, "s1");
+    tl.to(right.nodes[center], { attr: { stroke: C.ps, fill: "#102434" }, duration: 0.3 }, "s1");
     centerEdges.forEach(({ e, t }, i) => {
       tl.to(e, { attr: { stroke: C.ps, "stroke-width": 3.5 }, duration: 0.25 }, `s1+=${0.15 + i * 0.08}`);
       tl.to(t, { attr: { fill: C.text }, duration: 0.25 }, `s1+=${0.15 + i * 0.08}`);
@@ -2931,7 +2934,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function cost(container) {
-    const svg = svgRoot(container, 1100, 680);
+    const svg = svgRoot(container, 1100, 680, [48, 74, 1061, 570]);
     const tl = gsap.timeline();
 
     const cards = Array.from({ length: 12 }, (_, i) => add(svg, "rect", { x: 60, y: 548 - i * 36, width: 170, height: 26, rx: 3, fill: "#151105", stroke: C.grad, "stroke-width": 1.5 }));
@@ -3024,7 +3027,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function scaleup(container) {
-    const svg = svgRoot(container, 1100, 680);
+    const svg = svgRoot(container, 1100, 680, [108, 54, 884, 558]);
     const tl = gsap.timeline();
     const base = 600;
     const cx = 420;
@@ -3074,7 +3077,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function scaleout(container) {
-    const svg = svgRoot(container, 1100, 680);
+    const svg = svgRoot(container, 1100, 680, [108, 88, 884, 586]);
     const tl = gsap.timeline();
     const SW = { x: 550, y: 345 };
     const pos = [[190, 150], [420, 150], [680, 150], [910, 150], [190, 540], [420, 540], [680, 540], [910, 540]].map(([x, y]) => ({ x, y }));
@@ -3141,18 +3144,18 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     const tl = gsap.timeline();
     const MC = WORKER.slice(0, 3);
     const lx = [120, 275, 430];
-    const rx = [690, 850, 1010];
+    const rx = [661, 825, 989];
     const MY = 460;
     const FS = 31;
 
     function panel(x, title) {
       const g = group(svg);
-      const frame = add(g, "rect", { x, y: 10, width: 520, height: 680, rx: 8, fill: "none", stroke: C.line, "stroke-width": 2 });
-      label(g, x + 260, 54, title, { fill: C.text, "font-size": 32 });
+      const frame = add(g, "rect", { x, y: 10, width: 530, height: 680, rx: 8, fill: "none", stroke: C.line, "stroke-width": 2 });
+      label(g, x + 265, 54, title, { fill: C.text, "font-size": 32 });
       return { g, frame };
     }
-    const left = panel(15, "paralelismo de modelo");
-    const right = panel(565, "paralelismo de datos");
+    const left = panel(10, "paralelismo de modelo");
+    const right = panel(560, "paralelismo de datos");
 
     function machine(x, i) {
       const g = group(svg);
@@ -3173,14 +3176,14 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     const leftArrows = [0, 1].map((i) => add(svg, "line", { x1: lx[i] + 70, y1: MY + 75, x2: lx[i + 1] - 72, y2: MY + 75, stroke: C.lineStrong, "stroke-width": 2.5, "marker-end": svg.ref("arrow-line") }));
     const leftCap = label(svg, 275, 330, "se parte la red", { fill: C.text, "font-size": FS });
 
-    const SW = 150, SP = 160, SX = 565 + (520 - 3 * SP + (SP - SW)) / 2;
+    const SW = 150, SP = 164, SX = 560 + (530 - 3 * SP + (SP - SW)) / 2;
     const shards = rx.map((x, i) => {
       const g = group(svg);
       const r = add(g, "rect", { x: SX + i * SP, y: 118, width: SW, height: 50, rx: 3, fill: "#151105", stroke: C.grad, "stroke-width": 1.8 });
       label(g, SX + i * SP + SW / 2, 144, `datos ${i}`, { fill: C.text2, "font-size": FS });
       return { g, r, dx: x - (SX + i * SP + SW / 2) };
     });
-    const dsNote = label(svg, 850, 206, "un dataset", { fill: C.text2, "font-size": FS });
+    const dsNote = label(svg, 825, 206, "un dataset", { fill: C.text2, "font-size": FS });
     const rightMachines = rx.map((x, i) => machine(x, i));
     const replicas = rx.map((x) => {
       const g = group(svg);
@@ -3188,10 +3191,10 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
       label(g, x, MY + 126, "modelo", { fill: C.text2, "font-size": FS });
       return g;
     });
-    const rightCap = label(svg, 850, 330, "se parte el dataset", { fill: C.text, "font-size": FS });
+    const rightCap = label(svg, 825, 330, "se parte el dataset", { fill: C.text, "font-size": FS });
     const badge = group(svg);
-    add(badge, "rect", { x: 750, y: 150, width: 200, height: 68, rx: 6, fill: "rgba(10,248,134,0.14)", stroke: C.accent, "stroke-width": 2.5 });
-    label(badge, 850, 185, "O.N.O.", { fill: C.accent, "font-size": 34 });
+    add(badge, "rect", { x: 725, y: 150, width: 200, height: 68, rx: 6, fill: "rgba(10,248,134,0.14)", stroke: C.accent, "stroke-width": 2.5 });
+    label(badge, 825, 185, "O.N.O.", { fill: C.accent, "font-size": 34 });
 
     show(tl, [left.g, right.g], 0.05, 0.35);
     show(tl, [...layers, ...layerEdges, netNote], 0.2, 0.4, { stagger: 0.05 });
@@ -3209,7 +3212,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     tl.to(dsNote, { autoAlpha: 0, duration: 0.2 }, "s1");
     shards.forEach((s, i) => {
       tl.to(s.r, { attr: { stroke: MC[i] }, duration: 0.25 }, `s1+=${i * 0.08}`);
-      tl.to(s.g, { x: s.dx, y: MY - 60 - 120, duration: 0.8, ease: "power2.inOut" }, `s1+=${0.2 + i * 0.1}`);
+      tl.to(s.g, { x: s.dx, y: MY - 60 - 140, duration: 0.8, ease: "power2.inOut" }, `s1+=${0.2 + i * 0.1}`);
     });
     tl.to(replicas, { autoAlpha: 1, duration: 0.35, stagger: 0.1 }, "s1+=0.8");
     tl.to(rightCap, { autoAlpha: 1, duration: 0.3 }, "s1+=1.1");
@@ -3245,7 +3248,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function drift(container) {
-    const svg = svgRoot(container, 1100, 700);
+    const svg = svgRoot(container, 1100, 700, [8, -6, 999, 713]);
     const tl = gsap.timeline();
     const M = [{ x: 300, y: 500 }, { x: 800, y: 440 }, { x: 560, y: 200 }];
     const G = { x: (M[0].x + M[1].x + M[2].x) / 3, y: (M[0].y + M[1].y + M[2].y) / 3 };
@@ -3278,21 +3281,24 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     const badge = label(svg, 20, 30, "ilustrativo", { "text-anchor": "start", fill: C.warn, "font-size": 31 });
     const star = group(svg);
     add(star, "path", { d: starPath(G.x, G.y, 17, 7), fill: C.accent });
-    label(star, G.x + 28, G.y - 26, "mínimo global", { "text-anchor": "start", fill: C.accent, "font-size": 31 });
+    const halo = { stroke: "#000", "stroke-width": 8, "paint-order": "stroke" };
+    label(star, G.x + 28, G.y - 26, "mínimo global", { "text-anchor": "start", fill: C.accent, "font-size": 31, ...halo });
 
     const minima = M.map((m, i) => {
       const g = group(svg);
       add(g, "path", { d: `M${m.x - 11},${m.y - 11} L${m.x + 11},${m.y + 11} M${m.x + 11},${m.y - 11} L${m.x - 11},${m.y + 11}`, stroke: WORKER[i], "stroke-width": 3.5 });
-      label(g, m.x, m.y + (i === 2 ? -34 : 36), `mínimo de los datos ${i}`, { fill: WORKER[i], "font-size": 31 });
+      const beside = i === 2;
+      label(g, beside ? m.x + 26 : m.x, beside ? m.y + 2 : m.y + 36, `mínimo de los datos ${i}`, { "text-anchor": beside ? "start" : "middle", fill: WORKER[i], "font-size": 31, ...halo });
       return g;
     });
 
     const trails = rounds.map((rd, r) => rd.paths.map((pts, i) => add(svg, "path", { d: pathOf(pts), fill: "none", stroke: WORKER[i], "stroke-width": r === 0 ? 3 : 2, "stroke-linecap": "round", "stroke-linejoin": "round" })));
     const syncs = rounds.map((rd) => rd.paths.map((pts) => add(svg, "line", { x1: pts[K].x, y1: pts[K].y, x2: rd.avg.x, y2: rd.avg.y, stroke: C.ctrl, "stroke-width": 1.8, "stroke-dasharray": "5 6" })));
+    [...minima, star].forEach((g) => svg.appendChild(g));
     const ends0 = rounds[0].paths.map((p) => p[K]);
     const avg0 = rounds[0].avg;
     const tri = add(svg, "path", { d: `${pathOf(ends0)}Z`, fill: "rgba(255,209,102,0.08)", stroke: C.warn, "stroke-width": 2, "stroke-dasharray": "8 6" });
-    const triLabel = label(svg, avg0.x, avg0.y + 6, "client drift", { fill: C.warn, "font-size": 34 });
+    const triLabel = label(svg, avg0.x, avg0.y + 6, "client drift", { fill: C.warn, "font-size": 34, ...halo });
 
     const workers = WORKER.slice(0, 3).map((c) => {
       const g = group(svg);
@@ -3457,7 +3463,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function testbed(container) {
-    const svg = svgRoot(container, 1100, 680);
+    const svg = svgRoot(container, 1100, 680, [18, 28, 1064, 625]);
     const tl = gsap.timeline();
     const FS = 31;
     const busY = 486;
@@ -3470,7 +3476,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
     const nodes = Array.from({ length: 16 }, (_, i) => {
       const row = i < 8 ? 0 : 1;
-      const x = 105 + (i % 8) * 120 + row * 60;
+      const x = 100 + (i % 8) * 120 + row * 60;
       const y = row ? 290 : 130;
       const pipe = add(svg, "line", { x1: x, y1: y + 90, x2: x, y2: busY, stroke: C.lineStrong, "stroke-width": 7 });
       const g = group(svg);
@@ -3517,7 +3523,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
   }
 
   function tcost(container) {
-    const svg = svgRoot(container, 1100, 600);
+    const svg = svgRoot(container, 1100, 600, [9, -1, 1079, 612]);
     const tl = gsap.timeline();
     const X0 = 210, W = 170, SYNC = 80, INIT = 60, H = 46;
     const lanes = [214, 286, 358, 430];
@@ -3608,12 +3614,12 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function dsyncwhy(container) {
-    const svg = svgRoot(container, 1100, 760);
+    const svg = svgRoot(container, 1100, 760, [-2, -1, 1104, 753]);
     const tl = gsap.timeline();
     const N = 4;
     const FS = 31;
 
-    add(svg, "line", { x1: 550, y1: 20, x2: 550, y2: 740, stroke: C.line, "stroke-width": 1.5 });
+    add(svg, "line", { x1: 550, y1: 20, x2: 550, y2: 568, stroke: C.line, "stroke-width": 1.5 });
     const psTitle = label(svg, 275, 36, "Parameter Server", { fill: C.text, "font-size": 34 });
     const arTitle = label(svg, 825, 36, "Ring All-Reduce", { fill: C.text, "font-size": 34 });
 
@@ -3645,8 +3651,8 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
     function formula(cx, parts) {
       const g = group(svg);
-      add(g, "rect", { x: cx - 270, y: 588, width: 540, height: 84, fill: C.panel, stroke: C.lineStrong, "stroke-width": 1.5 });
-      add(g, "rect", { x: cx - 270, y: 588, width: 6, height: 84, fill: C.accent });
+      add(g, "rect", { x: cx - 265, y: 588, width: 530, height: 84, fill: C.panel, stroke: C.lineStrong, "stroke-width": 1.5 });
+      add(g, "rect", { x: cx - 265, y: 588, width: 6, height: 84, fill: C.accent });
       richLabel(g, cx + 3, 632, parts, { fill: C.text, "font-size": 42 });
       return g;
     }
@@ -3711,7 +3717,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function im2col(container) {
-    const svg = svgRoot(container, 1100, 760);
+    const svg = svgRoot(container, 1100, 760, [48, 2, 1061, 738]);
     const tl = gsap.timeline();
     const FS = 31;
     const IN = 60, CELL = 44;
@@ -3829,7 +3835,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
   }
 
   function agenda(container) {
-    const svg = svgRoot(container, 1640, 460);
+    const svg = svgRoot(container, 1640, 460, [42, 63, 1575, 329]);
     const tl = gsap.timeline();
     const Y = 230;
     const items = [
@@ -3868,7 +3874,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
 
   function blackbox(container) {
-    const svg = svgRoot(container, 1100, 640);
+    const svg = svgRoot(container, 1100, 640, [-1, -57, 1102, 669]);
     const tl = gsap.timeline();
     const BX = 380, BY = 120, BW = 340, BH = 240, MID = BY + BH / 2;
     const FS = 31;
@@ -3902,7 +3908,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     label(svg, 960, MID + 122, "salida", { fill: C.text2, "font-size": FS });
     const expected = label(svg, 960, BY - 28, "esperado: 7", { fill: C.text2, "font-size": FS });
     const error = add(svg, "path", { d: `M960,${BY - 54} C960,${BY - 124} ${BX + BW + 30},${BY - 124} ${BX + BW - 30},${BY - 6}`, fill: "none", stroke: C.warn, "stroke-width": 3, "stroke-dasharray": "8 7", "marker-end": svg.ref("arrow-muted") });
-    const errorLabel = label(svg, 848, BY - 68, "error", { fill: C.warn, "font-size": FS });
+    const errorLabel = label(svg, 875, BY - 142, "error", { fill: C.warn, "font-size": FS });
 
     const llm = group(svg);
     const LY = 556;
@@ -3962,11 +3968,12 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
 
   function lineChart(container, spec) {
     const VW = 1000;
-    const svg = svgRoot(container, VW, 700);
+    const svg = svgRoot(container, VW, 700, [-9, -6, 991, 698]);
     const tl = gsap.timeline();
     const FS = 31;
     const entryW = (s) => 48 + 14 + s.name.length * 0.6 * FS;
-    const rowW = (row) => row.reduce((sum, s) => sum + entryW(s) + 44, -44);
+    const GAP = 36;
+    const rowW = (row) => row.reduce((sum, s) => sum + entryW(s) + GAP, -GAP);
     const perRow = rowW(spec.series) > VW - 20 ? Math.ceil(spec.series.length / 2) : spec.series.length;
     const rows = [];
     for (let i = 0; i < spec.series.length; i += perRow) rows.push(spec.series.slice(i, i + perRow));
@@ -3985,7 +3992,7 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
         add(head, "line", { x1: x, y1: y, x2: x + 48, y2: y, stroke: s.color, "stroke-width": 5, ...(s.dash ? { "stroke-dasharray": "10 6" } : {}) });
         add(head, "circle", { cx: x + 24, cy: y, r: 8, fill: s.color, stroke: "#000", "stroke-width": 2 });
         label(head, x + 62, y + 1, s.name, { "text-anchor": "start", fill: C.text, "font-size": FS });
-        x += entryW(s) + 44;
+        x += entryW(s) + GAP;
       });
     });
 
@@ -4297,6 +4304,8 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
       tuisDrawn: false,
       texts: new Map(),
     };
+    balanceKeywords(slide);
+    hugColumn(slide);
     const stepAttr = v.steppers.map((el) => Number(el.dataset.step));
     const capAttr = v.captions.map((el) => Number(el.dataset.stepCaption));
     v.steps = Math.max(0, ...stepAttr, ...capAttr, ...v.diagrams.map((d) => d.steps));
@@ -4312,6 +4321,47 @@ window.ONO_TUI = {"cols":190,"captured":"28/10/2026","palette":["#c8d0c8","#00be
     }
     views.set(slide, v);
     return v;
+  }
+
+  function balanceKeywords(slide) {
+    slide.querySelectorAll(".kw").forEach((kw) => {
+      const height = kw.offsetHeight;
+      kw.style.whiteSpace = "nowrap";
+      const oneLine = kw.offsetHeight;
+      kw.style.whiteSpace = "";
+      if (height <= oneLine) return;
+      const style = getComputedStyle(kw);
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const text = document.createRange();
+      text.selectNodeContents(kw);
+      const textWidth = () => (text.getBoundingClientRect().width * kw.offsetWidth) / kw.getBoundingClientRect().width;
+      const fits = () => kw.offsetHeight <= height && textWidth() <= kw.clientWidth - padding + 0.5;
+      let lo = kw.offsetWidth / 2, hi = kw.offsetWidth;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) / 2;
+        kw.style.width = `${mid}px`;
+        if (fits()) hi = mid; else lo = mid;
+      }
+      kw.style.width = `${Math.ceil(hi)}px`;
+    });
+  }
+
+  function hugColumn(slide) {
+    const body = slide.querySelector(".body");
+    const col = body && body.querySelector(":scope > .col");
+    if (!col || col.children.length !== 1 || !body.querySelector(":scope > .kws-col")) return;
+    const svg = col.querySelector(":scope > .diagram > svg");
+    const code = col.querySelector(":scope > .code-block");
+    if (svg) {
+      const vb = svg.viewBox.baseVal;
+      const drawn = Math.min(svg.clientWidth, (svg.clientHeight * vb.width) / vb.height);
+      col.style.flex = `0 1 ${Math.ceil(drawn + svg.parentElement.offsetWidth - svg.clientWidth)}px`;
+    } else if (code) {
+      code.style.width = "max-content";
+      col.style.flex = `0 1 ${Math.ceil(code.offsetWidth)}px`;
+      code.style.width = "";
+    } else return;
+    body.classList.add("hug");
   }
 
   function drawTuis(v, force) {
