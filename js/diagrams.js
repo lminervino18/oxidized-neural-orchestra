@@ -904,7 +904,7 @@
     tl.addLabel("s2");
 
     tl.to([...arcs, ...ctrlLines, ...cmdLabels, phase1], { autoAlpha: 0, duration: 0.35 }, "s2");
-    tl.to(nodes[3].circle, { attr: { opacity: 0 }, duration: 0.3 }, "s2+=0.2");
+    tl.to(nodes[3].circle, { autoAlpha: 0, duration: 0.3 }, "s2+=0.2");
     tl.to(nodes[3].name, { autoAlpha: 0, duration: 0.2 }, "s2+=0.2");
     tl.to([srvBox, srvName, srvSub], { attr: { opacity: 1 }, duration: 0.35 }, "s2+=0.35");
     nodes.forEach((nd, i) => tl.to(nd.g, { x: psPos[i].x, y: psPos[i].y, duration: 0.9, ease: "power2.inOut" }, "s2+=0.3"));
