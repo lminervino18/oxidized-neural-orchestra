@@ -1127,7 +1127,6 @@ body.reduced .kicker .path::after { animation: none; }
     </div>
     <div class="kws-col">
       <span class="kw" data-anim>PyO3 + maturin</span>
-      <span class="kw" data-anim>liberación del GIL</span>
       <span class="kw on" data-anim>suite de benchmarks en Python</span>
     </div>
   </div>
@@ -1135,7 +1134,7 @@ body.reduced .kicker .path::after { animation: none; }
     <p class="n-idea">orchestra-py expone el mismo orchestrator desde Python; sobre ella escribimos toda la suite de benchmarks.</p>
     <ul class="n-oral">
       <li>Además de la interfaz de terminal, hay una biblioteca de Python con la misma funcionalidad. Este fragmento es la API real: se arma un entrenamiento con Strategy-Switch y un servidor, y se lanza con <code>orchestrate</code>.</li>
-      <li>Es un módulo nativo hecho con PyO3 y maturin, y libera el GIL mientras entrena. La suite de benchmarks de la campaña está escrita sobre esta interfaz.</li>
+      <li>Es un módulo nativo hecho con PyO3 y maturin. La suite de benchmarks de la campaña está escrita sobre esta interfaz.</li>
       <li>Si preguntan por qué es un crate aparte: anotar los tipos existentes con #[pyclass] chocaba con genéricos, variantes de enum y Clone.</li>
     </ul>
     <p class="n-trans">«Con esto armamos los experimentos.»</p>
@@ -1431,7 +1430,7 @@ body.reduced .kicker .path::after { animation: none; }
         <div class="panel"><span class="panel-title">orchestrator</span><p class="txt">Al recuperar los pesos de los servidores no revertía el reparto de capas: modelo final desordenado.</p></div>
         <div class="panel"><span class="panel-title">strategy-switch</span><p class="txt">Al conmutar, los fragmentos se asignaban en otro orden que el usado por el worker.</p></div>
       </div>
-      <p class="txt lessons-close">Ninguno rompía una prueba unitaria: cada componente hacía bien lo suyo. Los encontró la suite de benchmarks <strong>end-to-end</strong>.</p>
+      <p class="txt lessons-close">Ninguno hacía fallar una prueba unitaria: cada componente hacía bien lo suyo. Los encontró la suite de benchmarks <strong>end-to-end</strong>.</p>
     </div>
   </div>
   <aside class="notes">
