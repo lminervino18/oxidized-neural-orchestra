@@ -44,7 +44,7 @@ Cada **→** marca que hay que avanzar una etapa (flecha derecha) antes de decir
 | 23:45 | 24:45 | 20 | Tiempo de un entrenamiento | Lorenzo Minervino | «el cómputo se reparte» «sincronización: todos esperan» «una ronda por epoch» «d_sync determina la escalabilidad» |
 | 24:45 | 26:00 | 21 | Cálculo de d_sync | Lorenzo Minervino | «S: tamaño del modelo · R: ancho de banda» «PS: todo el tráfico por una placa» «crece con la cantidad de workers» «AR: transmisión simultánea» «acotado» |
 | 26:00 | 26:45 | 22 | Costo de sincronización | Lorenzo Minervino | «PS: crecimiento lineal» «cuello de botella: el servidor» «AR: acotado por 2S/R» |
-| 26:45 | 27:30 | 23 | Interfaz de Python | Lorenzo Minervino | «PyO3 + maturin» «liberación del GIL» «suite de benchmarks en Python» |
+| 26:45 | 27:30 | 23 | Interfaz de Python | Lorenzo Minervino | «PyO3 + maturin» «suite de benchmarks en Python» |
 | 27:30 | 28:30 | 24 | Metodología de medición | Lorenzo Minervino | «MNIST · LeNet-5» «1 contenedor = 1 nodo» «de 2 a 16 workers» «red limitada deliberadamente» |
 | 28:30 | 29:30 | 25 | Resultados: sincrónicos | Lorenzo Minervino | «PS: degradación desde 6 workers» «AR: sin mejora desde 6 workers» «consistente con el modelo» |
 | 29:30 | 30:00 | 26 | Resultados: asincrónicos | Lorenzo Minervino | «el tiempo disminuye con más workers» «¿converge el modelo?» |
@@ -400,12 +400,12 @@ Respaldo: docs/report/resultados.md (derivación de d_sync) · experimentacion.m
 
 ### 26:45 → 27:30 · 23 · Interfaz de Python
 
-**Lorenzo Minervino** · 00:45 · en pantalla: «PyO3 + maturin» «liberación del GIL» «suite de benchmarks en Python»
+**Lorenzo Minervino** · 00:45 · en pantalla: «PyO3 + maturin» «suite de benchmarks en Python»
 
 > orchestra-py expone el mismo orchestrator desde Python; sobre ella escribimos toda la suite de benchmarks.
 
 - Además de la interfaz de terminal, hay una biblioteca de Python con la misma funcionalidad. Este fragmento es la API real: se arma un entrenamiento con Strategy-Switch y un servidor, y se lanza con `orchestrate`.
-- Es un módulo nativo hecho con PyO3 y maturin, y libera el GIL mientras entrena. La suite de benchmarks de la campaña está escrita sobre esta interfaz.
+- Es un módulo nativo hecho con PyO3 y maturin. La suite de benchmarks de la campaña está escrita sobre esta interfaz.
 - Si preguntan por qué es un crate aparte: anotar los tipos existentes con #[pyclass] chocaba con genéricos, variantes de enum y Clone.
 
 **Pase:** «Con esto armamos los experimentos.»
