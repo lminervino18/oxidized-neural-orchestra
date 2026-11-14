@@ -71,3 +71,8 @@ issue.md
 
 # Local analysis docs (not for the repo)
 notebooks/mnist/conclusion.md
+
+# Live demo configs and fallback model
+!presentation/demo/configs/model.json
+!presentation/demo/configs/training.json
+!presentation/demo/respaldo.safetensors

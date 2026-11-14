@@ -10,6 +10,27 @@ use crate::{
     sessions::{ConvergenceTracker, LossRecorder, WorkerRequest},
 };
 
+/// Computes the epochs the workers may run after a strategy switch, so that the
+/// whole session stays within `max_epochs`.
+///
+/// A worker can start another round before the switch reaches it, so that round is
+/// counted as already done.
+///
+/// # Args
+/// * `max_epochs` - The maximum epochs of the whole session.
+/// * `epochs_done` - The epochs completed by every worker.
+/// * `round` - The epochs in a training round.
+///
+/// # Returns
+/// The epochs left, or `None` if there is no room left for switching.
+fn epochs_after_switch(
+    max_epochs: NonZeroUsize,
+    epochs_done: usize,
+    round: usize,
+) -> Option<NonZeroUsize> {
+    NonZeroUsize::new(max_epochs.get().saturating_sub(epochs_done + round))
+}
+
 /// The main loop over the training events in the system.
 pub struct EventListener<'a> {
     cancel_rx: Receiver<()>,
@@ -20,6 +41,7 @@ pub struct EventListener<'a> {
 
     // Training state
     workers_left: usize,
+    epochs_done: usize,
     loss_recorder: LossRecorder,
     switch_tracking: Option<StrategySwitchTracking>,
     convergence_tracker: Option<ConvergenceTracker>,
@@ -63,6 +85,7 @@ impl<'a> EventListener<'a> {
             event_tx,
             switch_tracking,
             workers_left: nworkers,
+            epochs_done: 0,
             stop_reason: None,
         }
     }
@@ -156,6 +179,7 @@ impl<'a> EventListener<'a> {
         };
 
         self.loss_recorder.clear();
+        self.epochs_done += losses.len();
 
         if let Some(ref mut tracker) = self.convergence_tracker {
             tracker.record(loss);
@@ -172,15 +196,23 @@ impl<'a> EventListener<'a> {
             let StrategySwitchTracking {
                 tracker,
                 post_actions,
+                max_epochs,
             } = switch_tracking;
 
             tracker.record(loss);
 
             if tracker.should_switch() {
-                info!("strategy switch triggered");
+                let remaining = epochs_after_switch(*max_epochs, self.epochs_done, losses.len());
                 let taken = mem::take(post_actions);
-                self.broadcast_switch(taken).await;
                 self.switch_tracking = None;
+
+                match remaining {
+                    Some(remaining) => {
+                        info!("strategy switch triggered, {remaining} epochs left");
+                        self.broadcast_switch(taken, remaining).await;
+                    }
+                    None => info!("strategy switch skipped, no epochs left after it"),
+                }
             }
         }
     }
@@ -189,20 +221,29 @@ impl<'a> EventListener<'a> {
     ///
     /// # Args
     /// * `post_actions` - The action that each worker needs to take in order to switch algorithm.
-    async fn broadcast_switch(&mut self, post_actions: Vec<WorkerPostAction>) {
+    /// * `max_epochs` - The epochs each worker may run after the switch.
+    async fn broadcast_switch(
+        &mut self,
+        post_actions: Vec<WorkerPostAction>,
+        max_epochs: NonZeroUsize,
+    ) {
         for (worker_id, (tx, action)) in self.req_txs.iter_mut().zip(post_actions).enumerate() {
             let req = match action {
                 WorkerPostAction::Switch {
                     server_addrs,
                     server_sizes,
                     server_ordering,
-                    trainer_spec,
-                } => WorkerRequest::Switch {
-                    server_addrs,
-                    server_sizes,
-                    server_ordering,
-                    trainer_spec: Box::new(trainer_spec),
-                },
+                    mut trainer_spec,
+                } => {
+                    trainer_spec.max_epochs = max_epochs;
+
+                    WorkerRequest::Switch {
+                        server_addrs,
+                        server_sizes,
+                        server_ordering,
+                        trainer_spec: Box::new(trainer_spec),
+                    }
+                }
                 WorkerPostAction::Upgrade { spec, ranges } => {
                     let event = TrainingEvent::Upgrading { worker_id };
                     let _ = self.event_tx.send(event).await;
@@ -226,5 +267,38 @@ impl<'a> EventListener<'a> {
         for tx in self.req_txs.iter_mut() {
             let _ = tx.send(req.clone()).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroUsize;
+
+    use super::epochs_after_switch;
+
+    fn epochs(n: usize) -> NonZeroUsize {
+        NonZeroUsize::new(n).unwrap()
+    }
+
+    #[test]
+    fn switch_leaves_the_remaining_epochs_minus_the_round_in_flight() {
+        assert_eq!(epochs_after_switch(epochs(32), 15, 1), Some(epochs(16)));
+    }
+
+    #[test]
+    fn a_worker_one_round_ahead_never_exceeds_max_epochs() {
+        let left = epochs_after_switch(epochs(32), 15, 1).unwrap().get();
+        assert_eq!(15 + 1 + left, 32);
+    }
+
+    #[test]
+    fn switch_is_skipped_when_no_epochs_are_left() {
+        assert_eq!(epochs_after_switch(epochs(16), 15, 1), None);
+    }
+
+    #[test]
+    fn offline_epochs_count_as_a_whole_round() {
+        assert_eq!(epochs_after_switch(epochs(20), 15, 3), Some(epochs(2)));
+        assert_eq!(epochs_after_switch(epochs(20), 18, 3), None);
     }
 }

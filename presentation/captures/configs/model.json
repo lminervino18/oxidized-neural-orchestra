@@ -1,0 +1,6 @@
+{
+  "layers": [
+    { "dense": { "output_size": 512, "init": "xavier", "act_fn": { "sigmoid": { "amp": 1.0 } } } },
+    { "dense": { "output_size": 10, "init": "xavier", "act_fn": "softmax" } }
+  ]
+}

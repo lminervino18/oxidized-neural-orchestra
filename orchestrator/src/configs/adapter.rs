@@ -252,6 +252,7 @@ impl Adapter {
         let tracking = StrategySwitchTracking {
             tracker,
             post_actions,
+            max_epochs: trainer_spec.max_epochs,
         };
 
         let adapt = OrchAdapt {
