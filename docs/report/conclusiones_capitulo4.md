@@ -1,0 +1,12 @@
+\newpage
+## Conclusiones del capítulo
+
+El análisis teórico y empírico de las distintas estrategias de entrenamiento distribuido permite extraer tres conclusiones principales sobre la gestión de tiempo y convergencia:
+
+**El cuello de botella es la sincronización centralizada.** En escenarios con ancho de banda restringido, centralizar la comunicación en Parameter Server sincrónico escala de forma deficiente y aumenta el tiempo total de entrenamiento al agregar nodos luego de pasar un umbral. La topología descentralizada de Ring All-Reduce soluciona el escalado, pero no elimina el costo de sincronización: su delay por epoch tiende a $2S/R$ al agregar workers, de modo que la aceleración alcanzable sigue acotada.
+
+**Existe un *trade-off* directo entre asincronismo y convergencia en Parameter Server asincrónico.** Eliminar los bloqueos de sincronización en Parameter Server asincrónico reduce radicalmente los tiempos de ejecución, pero a costa de destruir por completo la convergencia del modelo en este experimento. El comportamiento es consistente con un fuerte *client drift* en las primeras etapas del entrenamiento, con la salvedad, señalada en la Sección \ref{sec:resultados-obtenidos}, de que esta variante se ejecutó con la actualización libre de bloqueos y no puede descartarse que las escrituras concurrentes contribuyan al colapso.
+
+**Superioridad de la estrategia híbrida.** Strategy-Switch resultó ser la estrategia más eficiente de las evaluadas sobre MNIST. Al comportarse de forma sincrónica durante la fase crítica del entrenamiento y lograr que los mínimos locales en los que se posicionan los workers se consensuen hasta cierto punto, logra mantener la convergencia del entrenamiento. A su vez, al conmutar al esquema asincrónico luego de ese consenso, rompe el *trade-off* que sí paga Parameter Server asincrónico. La estrategia logra la exactitud de los métodos sincrónicos, equivalentes a la ejecución serial en cuanto a convergencia, en una fracción del tiempo, lo que la ubica, empíricamente, como la mejor alternativa evaluada en esta comparativa.
+
+La observación transversal es que el sistema cumplió su propósito: validada la corrección de las estrategias por la vía de su convergencia, las diferencias de tiempo, throughput y escalabilidad pueden atribuirse al algoritmo y no a su implementación, con la única excepción ya señalada para Parameter Server asincrónico, que era exactamente el problema que este trabajo se propuso resolver.
