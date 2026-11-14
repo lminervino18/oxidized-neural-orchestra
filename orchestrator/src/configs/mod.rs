@@ -57,6 +57,8 @@ pub struct ServerAdapt {
 pub struct StrategySwitchTracking {
     pub tracker: SwitchTracker,
     pub post_actions: Vec<WorkerPostAction>,
+    /// The maximum epochs of the whole session, before and after the switch.
+    pub max_epochs: NonZeroUsize,
 }
 
 /// The adaptated values for session initialization.

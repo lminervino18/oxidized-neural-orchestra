@@ -1,0 +1,11 @@
+{
+  "layers": [
+    { "conv": { "input_dim": [1, 28, 28], "kernel_dim": [6, 1, 5], "stride": 1, "padding": 2, "init": "xavier", "act_fn": { "tanh": { "amp": 1.0 } } } },
+    { "max_pooling": { "input_dim": [6, 28, 28], "filter_size": 2, "stride": 2, "padding": 0 } },
+    { "conv": { "input_dim": [6, 14, 14], "kernel_dim": [16, 6, 5], "stride": 1, "padding": 0, "init": "xavier", "act_fn": { "tanh": { "amp": 1.0 } } } },
+    { "max_pooling": { "input_dim": [16, 10, 10], "filter_size": 2, "stride": 2, "padding": 0 } },
+    { "dense": { "output_size": 120, "init": "xavier", "act_fn": { "tanh": { "amp": 1.0 } } } },
+    { "dense": { "output_size": 84, "init": "xavier", "act_fn": { "tanh": { "amp": 1.0 } } } },
+    { "dense": { "output_size": 10, "init": "xavier", "act_fn": "softmax" } }
+  ]
+}

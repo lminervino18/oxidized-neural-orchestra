@@ -10,6 +10,7 @@ NODES   ?= 5
 SERVERS ?= 2
 ARGS    ?=
 PYTHON  ?= .venv/bin/python
+OPEN    ?= $(if $(shell command -v xdg-open 2>/dev/null),xdg-open,open)
 CARGO_RELEASE := $(if $(filter 1,$(RELEASE)),--release,)
 DOCKER_RELEASE := $(if $(filter 1,$(RELEASE)),--release,)
 
@@ -44,7 +45,11 @@ py-build: ## Compile the orchestra-py extension into the venv
 	cd orchestra-py && ../.venv/bin/maturin develop $(CARGO_RELEASE)
 
 # ── Run: components ───────────────────────────────────────
-node: ## Run one node (PORT=40000)
+node: ## Run one node (PORT=40000) and print its address
+	@addr=$$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($$i == "src") { print $$(i + 1); exit }}'); \
+	[ -n "$$addr" ] || addr=$$(hostname -I 2>/dev/null | awk '{print $$1}'); \
+	[ -n "$$addr" ] || addr=$$(ipconfig getifaddr en0 2>/dev/null); \
+	echo "node address for training.json: $${addr:-unknown}:$(PORT)"
 	PORT=$(PORT) RUST_LOG=info cargo run -p node $(CARGO_RELEASE)
 
 orchestui: ## Launch the TUI (loads model.json / training.json)
@@ -91,6 +96,11 @@ py-fmt: ## Format Python with ruff
 
 check: fmt-check lint test ## CI-style: Rust format check + clippy + tests
 
+# ── Presentation ─────────────────────────────────────
+presentation: ## Open the slides and the demo page locally, without internet
+	$(OPEN) presentation/dist/ono-defensa.html
+	$(OPEN) presentation/demo/index.html
+
 # ── Clean ─────────────────────────────────────────────────
 clean: ## Remove build artifacts and temp outputs
 	cargo clean
@@ -99,4 +109,4 @@ clean: ## Remove build artifacts and temp outputs
 
 .PHONY: help venv install install-dev dataset build py-build node orchestui \
         orchestui-cluster orchestra-py cluster-up cluster-down \
-        bench bench-plots test fmt fmt-check lint py-lint py-fmt check clean
+        bench bench-plots test fmt fmt-check lint py-lint py-fmt check presentation clean
